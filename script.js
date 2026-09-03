@@ -54,50 +54,43 @@ function chartGridColor() { return isDark() ? 'rgba(255,255,255,0.04)' : '#f1f5f
 function renderStarCards() {
     const data = [
         {
-            icon: 'fa-solid fa-clipboard-list',
-            bg: 'bg-indigo-50', iconColor: 'text-indigo-600',
-            value: '48',
-            label: 'Total Servis Hari Ini',
-            change: '+8 dari kemarin', up: true
-        },
-        {
-            icon: 'fa-solid fa-arrow-down',
-            bg: 'bg-blue-50', iconColor: 'text-blue-600',
-            value: '12',
-            label: 'Servis Masuk',
-            change: null, up: null
-        },
-        {
-            icon: 'fa-solid fa-wrench',
-            bg: 'bg-cyan-50', iconColor: 'text-cyan-600',
-            value: '18',
-            label: 'Sedang Dikerjakan',
-            change: null, up: null
-        },
-        {
-            icon: 'fa-solid fa-clock',
-            bg: 'bg-amber-50', iconColor: 'text-amber-600',
-            value: '7',
-            label: 'Menunggu',
-            change: null, up: null
-        },
-        {
-            icon: 'fa-solid fa-circle-check',
-            bg: 'bg-emerald-50', iconColor: 'text-emerald-600',
-            value: '11',
-            label: 'Siap Diambil',
-            change: null, up: null
-        },
-        {
             icon: 'fa-solid fa-coins',
-            bg: 'bg-green-50', iconColor: 'text-green-600',
+            bg: 'bg-indigo-50', iconColor: 'text-indigo-600',
             value: formatRupiah(12500000),
-            label: 'Omzet Hari Ini',
+            label: 'Omset Hari Ini',
             change: '+12% dari kemarin', up: true
+        },
+        {
+            icon: 'fa-solid fa-chart-line',
+            bg: 'bg-green-50', iconColor: 'text-green-600',
+            value: formatRupiah(8750000),
+            label: 'Laba Kotor',
+            change: null, up: null
+        },
+        {
+            icon: 'fa-solid fa-receipt',
+            bg: 'bg-red-50', iconColor: 'text-red-600',
+            value: formatRupiah(3750000),
+            label: 'Total Beban',
+            change: null, up: null
+        },
+        {
+            icon: 'fa-solid fa-sack-dollar',
+            bg: 'bg-emerald-50', iconColor: 'text-emerald-600',
+            value: formatRupiah(5000000),
+            label: 'Laba Bersih',
+            change: '+8% dari bulan lalu', up: true
+        },
+        {
+            icon: 'fa-solid fa-bullseye',
+            bg: 'bg-amber-50', iconColor: 'text-amber-600',
+            value: formatRupiah(15000000),
+            label: 'Target Gaji (CTS)',
+            change: 'Tercapai 83%', up: true
         },
     ];
 
-    document.getElementById('statCards').innerHTML = data.map(c => `
+    document.getElementById('starCards').innerHTML = data.map(c => `
         <div class="star-card">
             <div class="icon-wrap ${c.bg} ${c.iconColor}"><i class="${c.icon}"></i></div>
             <div>
