@@ -1,10 +1,8 @@
 /* ============================================
-   ServisKu v3 — Desktop App Layout
+   ServisKu v3 — Desktop App + Mobile
    ============================================ */
 
-/* Reset */
 *, *::before, *::after { box-sizing: border-box; }
-
 html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 
 /* Scrollbar */
@@ -21,23 +19,44 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 
 .app-window {
     background: #ffffff;
-    border-radius: 12px;
-    box-shadow:
-        0 0 0 1px rgba(0,0,0,0.08),
-        0 20px 60px rgba(0,0,0,0.12),
-        0 4px 16px rgba(0,0,0,0.06);
+    border-radius: 0;
+    box-shadow: none;
     max-height: 100vh;
+    height: 100%;
 }
+
+/* SM+ : desktop look */
+@media (min-width: 640px) {
+    .app-window {
+        border-radius: 12px;
+        box-shadow:
+            0 0 0 1px rgba(0,0,0,0.08),
+            0 20px 60px rgba(0,0,0,0.12),
+            0 4px 16px rgba(0,0,0,0.06);
+        max-height: calc(100vh - 24px);
+    }
+}
+@media (min-width: 768px) {
+    .app-window {
+        border-radius: 16px;
+        max-height: calc(100vh - 32px);
+    }
+}
+
 .dark .app-window {
     background: #111118;
-    box-shadow:
-        0 0 0 1px rgba(255,255,255,0.06),
-        0 20px 60px rgba(0,0,0,0.5),
-        0 4px 16px rgba(0,0,0,0.3);
+}
+@media (min-width: 640px) {
+    .dark .app-window {
+        box-shadow:
+            0 0 0 1px rgba(255,255,255,0.06),
+            0 20px 60px rgba(0,0,0,0.5),
+            0 4px 16px rgba(0,0,0,0.3);
+    }
 }
 
 /* ============================================
-   TITLE BAR
+   TITLE BAR (desktop only)
    ============================================ */
 
 .title-bar {
@@ -50,8 +69,7 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 }
 
 .traffic-light {
-    width: 12px;
-    height: 12px;
+    width: 12px; height: 12px;
     border-radius: 50%;
     display: inline-block;
     cursor: pointer;
@@ -69,8 +87,47 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .app-sidebar {
     background: linear-gradient(180deg, #13141a 0%, #0f1015 100%);
     border-right: 1px solid rgba(255,255,255,0.04);
+    z-index: 40;
 }
 
+/* Desktop: always visible */
+@media (min-width: 640px) {
+    .app-sidebar {
+        position: relative !important;
+        transform: none !important;
+        transition: none !important;
+    }
+}
+
+/* Mobile: slide-in from left */
+@media (max-width: 639px) {
+    .sidebar-mobile {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        transform: translateX(-100%);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 4px 0 24px rgba(0,0,0,0.3);
+    }
+    .sidebar-mobile.open {
+        transform: translateX(0);
+    }
+}
+
+.sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.4);
+    z-index: 35;
+    backdrop-filter: blur(2px);
+}
+.sidebar-overlay.show {
+    display: block;
+}
+
+/* Nav links */
 .nav-link {
     display: flex;
     align-items: center;
@@ -126,7 +183,10 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     background: #ffffff;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
-    padding: 16px;
+    padding: 14px;
+}
+@media (min-width: 640px) {
+    .panel { padding: 16px; }
 }
 .dark .panel {
     background: #16171d;
@@ -139,7 +199,10 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     text-transform: uppercase;
     letter-spacing: 0.06em;
     color: #9ca3af;
-    margin-bottom: 14px;
+    margin-bottom: 12px;
+}
+@media (min-width: 640px) {
+    .panel-title { margin-bottom: 14px; }
 }
 
 /* ============================================
@@ -150,13 +213,16 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     background: #ffffff;
     border: 1px solid #e5e7eb;
     border-radius: 10px;
-    padding: 14px 16px;
+    padding: 12px 14px;
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 10px;
     transition: all 0.15s ease;
     position: relative;
     overflow: hidden;
+}
+@media (min-width: 640px) {
+    .star-card { padding: 14px 16px; gap: 12px; }
 }
 .dark .star-card {
     background: #16171d;
@@ -166,32 +232,43 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     box-shadow: 0 4px 16px rgba(0,0,0,0.06);
 }
 .star-card .icon-wrap {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 34px; height: 34px;
+    border-radius: 9px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
+    font-size: 14px;
     flex-shrink: 0;
 }
+@media (min-width: 640px) {
+    .star-card .icon-wrap { width: 38px; height: 38px; border-radius: 10px; font-size: 15px; }
+}
 .star-card .value {
-    font-size: 19px;
+    font-size: 16px;
     font-weight: 800;
     color: #0f172a;
     line-height: 1.15;
 }
+@media (min-width: 640px) {
+    .star-card .value { font-size: 19px; }
+}
 .dark .star-card .value { color: #f1f5f9; }
 .star-card .label {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 500;
     color: #94a3b8;
-    margin-top: 2px;
+    margin-top: 1px;
+}
+@media (min-width: 640px) {
+    .star-card .label { font-size: 11px; margin-top: 2px; }
 }
 .star-card .change {
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 600;
-    margin-top: 3px;
+    margin-top: 2px;
+}
+@media (min-width: 640px) {
+    .star-card .change { font-size: 10.5px; margin-top: 3px; }
 }
 .change.up   { color: #16a34a; }
 .change.down { color: #dc2626; }
@@ -201,27 +278,33 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
    ============================================ */
 
 .insight-card {
-    padding: 14px 16px;
+    padding: 12px 14px;
     border-radius: 10px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
 }
+@media (min-width: 640px) {
+    .insight-card { padding: 14px 16px; }
+}
 .dark .insight-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
 .insight-card .insight-val {
-    font-size: 22px;
+    font-size: 18px;
     font-weight: 800;
     line-height: 1.2;
 }
+@media (min-width: 640px) {
+    .insight-card .insight-val { font-size: 22px; }
+}
 .dark .insight-card .insight-val { color: #f1f5f9; }
 .insight-card .insight-label {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 500;
     color: #94a3b8;
     margin-top: 2px;
 }
 
 /* ============================================
-   STATUS BAR
+   STATUS BAR (desktop only)
    ============================================ */
 
 .status-bar {
@@ -231,6 +314,44 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .dark .status-bar {
     background: #111118;
     border-top-color: rgba(255,255,255,0.04);
+}
+
+/* ============================================
+   MOBILE BOTTOM NAV
+   ============================================ */
+
+.mobile-nav {
+    background: #ffffff;
+    border-top: 1px solid #e5e7eb;
+}
+.dark .mobile-nav {
+    background: #13141a;
+    border-top-color: rgba(255,255,255,0.04);
+}
+
+.mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 10px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 500;
+    color: #94a3b8;
+    background: none;
+    border: none;
+    cursor: pointer;
+    transition: all 0.12s ease;
+    -webkit-tap-highlight-color: transparent;
+}
+.mobile-nav-item i { font-size: 16px; }
+.mobile-nav-item.active {
+    color: #6366f1;
+    font-weight: 700;
+}
+.mobile-nav-item:active {
+    transform: scale(0.92);
 }
 
 /* ============================================

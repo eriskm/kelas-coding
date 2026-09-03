@@ -2,7 +2,7 @@
 <html lang="id" class="h-full">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>ServisKu - POS Service HP</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
@@ -24,35 +24,35 @@
     </script>
 </head>
 
-<body class="h-full bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-[#0a0a0f] dark:via-[#12121a] dark:to-[#0a0a0f] font-sans antialiased text-gray-800 dark:text-gray-200 transition-colors flex items-center justify-center p-4">
+<body class="h-full bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-[#0a0a0f] dark:via-[#12121a] dark:to-[#0a0a0f] font-sans antialiased text-gray-800 dark:text-gray-200 transition-colors sm:flex sm:items-center sm:justify-center sm:p-3 md:p-4">
 
     <!-- ========== APP WINDOW ========== -->
-    <div class="app-window w-full h-full flex flex-col overflow-hidden">
+    <div class="app-window w-full h-full sm:w-full sm:h-[calc(100vh-24px)] md:h-[calc(100vh-32px)] flex flex-col overflow-hidden sm:rounded-xl md:rounded-2xl">
 
-        <!-- ===== TITLE BAR ===== -->
-        <div class="title-bar h-11 flex items-center justify-between px-4 flex-shrink-0 select-none">
-            <!-- Left: Traffic lights -->
+        <!-- ===== TITLE BAR (hidden on mobile) ===== -->
+        <div class="title-bar h-11 hidden sm:flex items-center justify-between px-4 flex-shrink-0 select-none">
             <div class="flex items-center gap-2">
                 <span class="traffic-light tl-red"></span>
                 <span class="traffic-light tl-yellow"></span>
                 <span class="traffic-light tl-green"></span>
             </div>
-            <!-- Center: App title -->
             <div class="flex items-center gap-2">
                 <div class="w-5 h-5 bg-brand-500 rounded flex items-center justify-center">
                     <i class="fa-solid fa-mobile-screen-button text-white text-[9px]"></i>
                 </div>
                 <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">ServisKu — POS & Service Management</span>
             </div>
-            <!-- Right: empty spacer -->
             <div class="w-16"></div>
         </div>
 
         <!-- ===== APP BODY ===== -->
-        <div class="flex flex-1 min-h-0">
+        <div class="flex flex-1 min-h-0 relative">
+
+            <!-- Sidebar overlay for mobile -->
+            <div id="sidebarOverlay" class="sidebar-overlay sm:hidden" onclick="toggleSidebar(false)"></div>
 
             <!-- ========== SIDEBAR ========== -->
-            <aside class="app-sidebar w-[220px] flex-shrink-0 flex flex-col">
+            <aside id="appSidebar" class="app-sidebar w-[240px] sm:w-[220px] flex-shrink-0 flex flex-col sidebar-mobile">
 
                 <!-- User Profile -->
                 <div class="px-4 py-4 border-b border-white/5">
@@ -107,31 +107,40 @@
             <div class="app-main flex-1 flex flex-col min-w-0">
 
                 <!-- ===== TOPBAR ===== -->
-                <header class="app-topbar h-12 flex items-center justify-between px-6 flex-shrink-0">
-                    <!-- Left: Welcome -->
-                    <h1 class="text-[13.5px] font-semibold text-gray-700 dark:text-gray-200">
-                        Selamat datang, <span class="text-brand-500">Admin</span>
-                    </h1>
-                    <!-- Right: Date + Time + Weather + Theme + Notification -->
-                    <div class="flex items-center gap-3">
-                        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                <header class="app-topbar h-12 flex items-center justify-between px-4 sm:px-6 flex-shrink-0">
+                    <!-- Left: hamburger + Welcome -->
+                    <div class="flex items-center gap-2.5">
+                        <button id="toggleSidebarBtn" class="sm:hidden w-8 h-8 rounded-lg flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition text-gray-600 dark:text-gray-300" onclick="toggleSidebar(true)">
+                            <i class="fa-solid fa-bars text-base"></i>
+                        </button>
+                        <h1 class="text-[13px] sm:text-[13.5px] font-semibold text-gray-700 dark:text-gray-200">
+                            Selamat datang, <span class="text-brand-500">Admin</span>
+                        </h1>
+                    </div>
+                    <!-- Right -->
+                    <div class="flex items-center gap-2 sm:gap-3">
+                        <!-- Date — hidden on very small screens -->
+                        <div class="hidden md:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                             <i class="fa-regular fa-calendar"></i>
                             <span id="currentDate">—</span>
                         </div>
-                        <div class="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+                        <div class="hidden md:block w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+                        <!-- Time -->
                         <div class="flex items-center gap-1.5 text-xs">
                             <i class="fa-regular fa-clock text-gray-400"></i>
-                            <span id="currentTime" class="font-mono font-semibold text-gray-700 dark:text-gray-200">00:00:00</span>
+                            <span id="currentTime" class="font-mono font-semibold text-gray-700 dark:text-gray-200">00:00</span>
                         </div>
-                        <div class="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
-                        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md bg-gray-100 dark:bg-white/5">
+                        <!-- Weather — hidden on small -->
+                        <div class="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md bg-gray-100 dark:bg-white/5">
                             <i class="fa-solid fa-cloud-sun text-amber-400 text-[11px]"></i>
                             <span>32°C</span>
                         </div>
+                        <!-- Theme toggle -->
                         <button id="toggleTheme" class="w-7 h-7 rounded-md flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition text-gray-500 dark:text-gray-400">
                             <i class="fa-solid fa-moon text-xs dark:hidden"></i>
                             <i class="fa-solid fa-sun text-xs hidden dark:inline"></i>
                         </button>
+                        <!-- Notification -->
                         <button class="relative w-7 h-7 rounded-md flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition text-gray-500 dark:text-gray-400">
                             <i class="fa-solid fa-bell text-xs"></i>
                             <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
@@ -143,27 +152,27 @@
                 <div class="app-content flex-1 overflow-y-auto">
 
                     <!-- Star Cards -->
-                    <div class="px-5 pt-5 pb-4">
-                        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3" id="starCards"></div>
+                    <div class="px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="starCards"></div>
                     </div>
 
                     <!-- Quick Actions + Insight -->
-                    <div class="px-5 pb-4">
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    <div class="px-3 sm:px-5 pb-3 sm:pb-4">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                             <div class="panel">
                                 <h3 class="panel-title">Aksi Cepat</h3>
-                                <div class="grid grid-cols-2 gap-2.5" id="quickActions"></div>
+                                <div class="grid grid-cols-2 gap-2 sm:gap-2.5" id="quickActions"></div>
                             </div>
                             <div class="panel">
                                 <h3 class="panel-title">Insight Hari Ini</h3>
-                                <div class="grid grid-cols-2 gap-2.5" id="insightCards"></div>
+                                <div class="grid grid-cols-2 gap-2 sm:gap-2.5" id="insightCards"></div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Two Large Charts -->
-                    <div class="px-5 pb-5">
-                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                    <div class="px-3 sm:px-5 pb-4 sm:pb-5">
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                             <div class="panel">
                                 <h3 class="panel-title">Statistik Status Transaksi</h3>
                                 <div id="chartStatusTransaksi"></div>
@@ -178,20 +187,44 @@
                 </div>
 
                 <!-- ===== STATUS BAR ===== -->
-                <div class="status-bar h-7 flex items-center justify-between px-5 flex-shrink-0 text-[10.5px] text-gray-500 dark:text-gray-500">
+                <div class="status-bar h-7 hidden sm:flex items-center justify-between px-5 flex-shrink-0 text-[10.5px] text-gray-500 dark:text-gray-500">
                     <div class="flex items-center gap-4">
                         <span class="flex items-center gap-1.5">
                             <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                             Online
                         </span>
                         <span>Servis aktif: <b class="text-gray-700 dark:text-gray-300">48</b></span>
-                        <span>Teknisi online: <b class="text-gray-700 dark:text-gray-300">4</b></span>
+                        <span>Teknisi: <b class="text-gray-700 dark:text-gray-300">4</b></span>
                     </div>
                     <div class="flex items-center gap-4">
                         <span>v1.0.0</span>
                         <span>&copy; 2026 ServisKu</span>
                     </div>
                 </div>
+
+                <!-- Mobile Bottom Nav -->
+                <nav class="mobile-nav sm:hidden flex items-center justify-around h-14 flex-shrink-0">
+                    <button class="mobile-nav-item active" data-page="transaksi">
+                        <i class="fa-solid fa-money-bill-transfer"></i>
+                        <span>Transaksi</span>
+                    </button>
+                    <button class="mobile-nav-item" data-page="pelanggan">
+                        <i class="fa-solid fa-users"></i>
+                        <span>Pelanggan</span>
+                    </button>
+                    <button class="mobile-nav-item" data-page="sparepart">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Sparepart</span>
+                    </button>
+                    <button class="mobile-nav-item" data-page="keuangan">
+                        <i class="fa-solid fa-coins"></i>
+                        <span>Keuangan</span>
+                    </button>
+                    <button class="mobile-nav-item" data-page="akun">
+                        <i class="fa-solid fa-user-gear"></i>
+                        <span>Akun</span>
+                    </button>
+                </nav>
             </div>
         </div>
     </div>

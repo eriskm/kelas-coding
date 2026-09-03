@@ -1,6 +1,22 @@
 /* ============================================
-   ServisKu v2 — Dashboard Logic & Dummy Data
+   ServisKu v3 — Dashboard Logic & Dummy Data
    ============================================ */
+
+// ─────────────────────────────────────────────
+// SIDEBAR TOGGLE (mobile)
+// ─────────────────────────────────────────────
+
+function toggleSidebar(open) {
+    const sidebar = document.getElementById('appSidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    if (open) {
+        sidebar.classList.add('open');
+        overlay.classList.add('show');
+    } else {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('show');
+    }
+}
 
 // ─────────────────────────────────────────────
 // LIVE CLOCK & DATE
@@ -26,7 +42,6 @@ function initTheme() {
     document.getElementById('toggleTheme').addEventListener('click', () => {
         document.documentElement.classList.toggle('dark');
         localStorage.setItem('theme', document.documentElement.classList.contains('dark') ? 'dark' : 'light');
-        // update charts untuk dark mode
         updateChartTheme();
     });
 }
@@ -44,7 +59,6 @@ function isDark() {
     return document.documentElement.classList.contains('dark');
 }
 
-function chartTextColor() { return isDark() ? '#94a3b8' : '#64748b'; }
 function chartGridColor() { return isDark() ? 'rgba(255,255,255,0.04)' : '#f1f5f9'; }
 
 // ─────────────────────────────────────────────
@@ -116,8 +130,8 @@ function renderQuickActions() {
     ];
 
     document.getElementById('quickActions').innerHTML = actions.map(a => `
-        <button class="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold ${a.bg} ${a.hover} ${a.text} transition-all hover:-translate-y-0.5 hover:shadow-lg cursor-pointer border-0">
-            <i class="${a.icon}"></i> ${a.label}
+        <button class="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-[11.5px] sm:text-[13px] font-semibold ${a.bg} ${a.hover} ${a.text} transition-all active:scale-95 cursor-pointer border-0">
+            <i class="${a.icon}"></i> <span class="truncate">${a.label}</span>
         </button>
     `).join('');
 }
@@ -128,10 +142,10 @@ function renderQuickActions() {
 
 function renderInsights() {
     const items = [
-        { value: '18',     label: 'Sedang Dikerjakan', color: 'text-cyan-600' },
-        { value: '3',      label: 'Servis Terlambat',   color: 'text-red-500' },
-        { value: '5',      label: 'Menunggu Approval',  color: 'text-amber-600' },
-        { value: formatRupiah(2650000), label: 'Total Piutang', color: 'text-rose-600' },
+        { value: '18',     label: 'Dikerjakan',   color: 'text-cyan-600' },
+        { value: '3',      label: 'Terlambat',     color: 'text-red-500' },
+        { value: '5',      label: 'Menunggu Acc',  color: 'text-amber-600' },
+        { value: formatRupiah(2650000), label: 'Piutang', color: 'text-rose-600' },
     ];
 
     document.getElementById('insightCards').innerHTML = items.map(it => `
@@ -143,75 +157,14 @@ function renderInsights() {
 }
 
 // ─────────────────────────────────────────────
-// TECHNICIAN LIST
-// ─────────────────────────────────────────────
-
-const technicians = [
-    { name: 'Budi Santoso',   active: 4, total: 6, color: '#3b82f6' },
-    { name: 'Andi Wijaya',    active: 3, total: 5, color: '#10b981' },
-    { name: 'Rizky Pratama',  active: 2, total: 4, color: '#f59e0b' },
-    { name: 'Dedi Kurnia',    active: 1, total: 3, color: '#8b5cf6' },
-];
-
-function renderTechnicians() {
-    document.getElementById('technicianList').innerHTML = technicians.map(t => {
-        const pct = Math.round((t.active / t.total) * 100);
-        return `
-            <div class="flex items-center gap-3">
-                <div class="w-2 h-2 rounded-full flex-shrink-0" style="background:${t.color}"></div>
-                <div class="flex-1 min-w-0">
-                    <div class="flex items-center justify-between mb-1">
-                        <span class="text-[12.5px] font-medium text-gray-700 dark:text-gray-300 truncate">${t.name}</span>
-                        <span class="text-[11px] text-gray-400 ml-2 flex-shrink-0">${t.active}/${t.total}</span>
-                    </div>
-                    <div class="h-[5px] bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                        <div class="h-full rounded-full transition-all" style="width:${pct}%; background:${t.color}"></div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// ─────────────────────────────────────────────
-// STATUS SUMMARY
-// ─────────────────────────────────────────────
-
-function renderStatusSummary() {
-    const statuses = [
-        { label: 'Masuk',           count: 12, color: '#3b82f6' },
-        { label: 'Diagnosa',        count: 5,  color: '#8b5cf6' },
-        { label: 'Menunggu Acc',    count: 5,  color: '#f59e0b' },
-        { label: 'Menunggu Part',   count: 4,  color: '#f97316' },
-        { label: 'Perbaikan',       count: 10, color: '#06b6d4' },
-        { label: 'QC',              count: 4,  color: '#6366f1' },
-        { label: 'Siap Diambil',    count: 7,  color: '#22c55e' },
-        { label: 'Selesai',         count: 12, color: '#16a34a' },
-    ];
-
-    const total = statuses.reduce((s, x) => s + x.count, 0) || 1;
-
-    document.getElementById('statusSummary').innerHTML = statuses.map(s => {
-        const pct = Math.round((s.count / total) * 100);
-        return `
-            <div>
-                <div class="flex items-center justify-between mb-1">
-                    <span class="text-[11.5px] font-medium text-gray-600 dark:text-gray-400">${s.label}</span>
-                    <span class="text-[11.5px] font-bold text-gray-800 dark:text-gray-200">${s.count}</span>
-                </div>
-                <div class="h-[7px] bg-gray-100 dark:bg-gray-700 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full" style="width:${pct}%; background:${s.color}"></div>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
-
-// ─────────────────────────────────────────────
 // CHARTS
 // ─────────────────────────────────────────────
 
-let omzetChart, servisChart, statusChart, kerusakanChart;
+let statusChart, kerusakanChart;
+
+function getChartHeight() {
+    return window.innerWidth < 640 ? 220 : 270;
+}
 
 function getCommonOpts() {
     return {
@@ -224,63 +177,48 @@ function getCommonOpts() {
 function initCharts() {
     const co = getCommonOpts();
 
-    // 1. Omzet 7 Hari
-    omzetChart = new ApexCharts(document.querySelector('#chartOmzet'), {
+    // Status Donut
+    statusChart = new ApexCharts(document.querySelector('#chartStatusTransaksi'), {
         ...co,
-        chart: { ...co.chart, type: 'area', height: 260 },
-        series: [{ name: 'Omzet', data: [2800000, 3200000, 2500000, 4100000, 3600000, 2900000, 3800000] }],
-        xaxis: { categories: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'], labels: { style: { fontSize: '11px' } } },
-        yaxis: { labels: { formatter: v => 'Rp' + (v / 1000000).toFixed(1) + 'jt', style: { fontSize: '11px' } } },
-        colors: ['#6366f1'],
-        fill: { type: 'gradient', gradient: { opacityFrom: 0.4, opacityTo: 0.05 } },
-        stroke: { curve: 'smooth', width: 2.5 },
-        dataLabels: { enabled: false },
-        tooltip: { y: { formatter: v => 'Rp ' + v.toLocaleString('id-ID') } },
-    });
-    omzetChart.render();
-
-    // 2. Servis/Hari
-    servisChart = new ApexCharts(document.querySelector('#chartServis'), {
-        ...co,
-        chart: { ...co.chart, type: 'bar', height: 260 },
-        series: [{ name: 'Servis', data: [8, 12, 6, 10, 14, 9, 12] }],
-        xaxis: { categories: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'], labels: { style: { fontSize: '11px' } } },
-        yaxis: { labels: { style: { fontSize: '11px' } } },
-        colors: ['#10b981'],
-        plotOptions: { bar: { borderRadius: 6, columnWidth: '50%' } },
-        dataLabels: { enabled: false },
-    });
-    servisChart.render();
-
-    // 3. Status Donut
-    statusChart = new ApexCharts(document.querySelector('#chartStatus'), {
-        ...co,
-        chart: { ...co.chart, type: 'donut', height: 270 },
+        chart: { ...co.chart, type: 'donut', height: getChartHeight() },
         series: [12, 5, 5, 4, 10, 4, 7, 12],
         labels: ['Masuk', 'Diagnosa', 'Menunggu Acc', 'Menunggu Part', 'Perbaikan', 'QC', 'Siap Diambil', 'Selesai'],
         colors: ['#3b82f6', '#8b5cf6', '#f59e0b', '#f97316', '#06b6d4', '#6366f1', '#22c55e', '#16a34a'],
         plotOptions: { pie: { donut: { size: '62%' } } },
-        legend: { position: 'bottom', fontSize: '10.5px', itemMargin: { horizontal: 6, vertical: 3 } },
+        legend: { position: 'bottom', fontSize: '10px', itemMargin: { horizontal: 6, vertical: 3 } },
         dataLabels: { enabled: false },
+        responsive: [{
+            breakpoint: 640,
+            options: {
+                legend: { fontSize: '9px', itemMargin: { horizontal: 4, vertical: 2 } },
+            }
+        }],
     });
     statusChart.render();
 
-    // 4. Jenis Kerusakan
+    // Jenis Kerusakan
     kerusakanChart = new ApexCharts(document.querySelector('#chartKerusakan'), {
         ...co,
-        chart: { ...co.chart, type: 'bar', height: 280 },
+        chart: { ...co.chart, type: 'bar', height: getChartHeight() },
         series: [{ name: 'Jumlah', data: [14, 9, 7, 5, 4, 3] }],
-        xaxis: { categories: ['Layar Pecah', 'Baterai', 'Charging', 'Speaker', 'Kamera', 'Water'], labels: { style: { fontSize: '11px' }, rotate: -30 } },
-        yaxis: { labels: { style: { fontSize: '11px' } } },
+        xaxis: { categories: ['Layar', 'Baterai', 'Charging', 'Speaker', 'Kamera', 'Water'], labels: { style: { fontSize: '10px' }, rotate: -30 } },
+        yaxis: { labels: { style: { fontSize: '10px' } } },
         colors: ['#ef4444'],
-        plotOptions: { bar: { borderRadius: 6, columnWidth: '50%' } },
+        plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
         dataLabels: { enabled: false },
+        responsive: [{
+            breakpoint: 640,
+            options: {
+                xaxis: { labels: { style: { fontSize: '9px' } } },
+                yaxis: { labels: { style: { fontSize: '9px' } } },
+            }
+        }],
     });
     kerusakanChart.render();
 }
 
 function updateChartTheme() {
-    [omzetChart, servisChart, statusChart, kerusakanChart].forEach(c => {
+    [statusChart, kerusakanChart].forEach(c => {
         if (c) c.updateOptions({ theme: { mode: isDark() ? 'dark' : 'light' }, grid: { borderColor: chartGridColor() } });
     });
 }
@@ -295,6 +233,17 @@ function initNav() {
         link.addEventListener('click', function (e) {
             e.preventDefault();
             links.forEach(l => l.classList.remove('active'));
+            this.classList.add('active');
+            // close sidebar on mobile after click
+            if (window.innerWidth < 640) toggleSidebar(false);
+        });
+    });
+
+    // Mobile bottom nav
+    const mobileItems = document.querySelectorAll('.mobile-nav-item');
+    mobileItems.forEach(item => {
+        item.addEventListener('click', function () {
+            mobileItems.forEach(i => i.classList.remove('active'));
             this.classList.add('active');
         });
     });
@@ -312,8 +261,6 @@ document.addEventListener('DOMContentLoaded', function () {
     renderStarCards();
     renderQuickActions();
     renderInsights();
-    renderTechnicians();
-    renderStatusSummary();
     initCharts();
     initNav();
 });
