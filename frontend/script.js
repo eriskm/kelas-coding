@@ -137,7 +137,6 @@ function renderQuickActions() {
         </button>
     `).join('');
 }
-
 // ─────────────────────────────────────────────
 // RENDER: INSIGHT CARDS (dari API overview)
 // ─────────────────────────────────────────────
@@ -145,10 +144,21 @@ function renderQuickActions() {
 async function renderInsights() {
     const data = await apiGet('/overview');
     const items = data.insight;
+    const iconMap = {
+        'Dikerjakan': 'fa-wrench',
+        'Terlambat': 'fa-clock',
+        'Menunggu Acc': 'fa-hourglass-half',
+        'Piutang': 'fa-hand-holding-dollar',
+    };
     document.getElementById('insightCards').innerHTML = items.map(it => `
         <div class="insight-card">
-            <div class="insight-val ${it.color}">${it.value}</div>
-            <div class="insight-label">${it.label}</div>
+            <span class="insight-icon ${it.color}">
+                <i class="fa-solid ${iconMap[it.label] || 'fa-chart-simple'}"></i>
+            </span>
+            <div class="insight-body">
+                <div class="insight-val ${it.color}">${it.value}</div>
+                <div class="insight-label">${it.label}</div>
+            </div>
         </div>
     `).join('');
 }

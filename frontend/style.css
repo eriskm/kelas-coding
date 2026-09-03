@@ -279,10 +279,10 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 
 .qa-card {
     display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 7px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
     padding: 11px 13px;
     border-radius: 9px;
     background: #f9fafb;
@@ -291,11 +291,11 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     transition: all 0.15s ease;
     -webkit-tap-highlight-color: transparent;
     text-align: left;
-    min-height: 86px;
+    min-height: 54px;
 }
 .dark .qa-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
 @media (min-width: 640px) {
-    .qa-card { padding: 12.5px 14px; gap: 9px; min-height: 94px; }
+    .qa-card { padding: 12.5px 14px; gap: 11px; min-height: 60px; }
 }
 .qa-card:hover {
     box-shadow: 0 4px 14px rgba(0,0,0,0.06);
@@ -333,29 +333,54 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     border-radius: 9px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
-    min-height: 86px;
+    min-height: 54px;
     display: flex;
-    flex-direction: column;
-    justify-content: space-between;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 10px;
+    text-align: left;
 }
 @media (min-width: 640px) {
-    .insight-card { padding: 12.5px 14px; min-height: 94px; }
+    .insight-card { padding: 12.5px 14px; gap: 11px; min-height: 60px; }
 }
 .dark .insight-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
+.insight-card .insight-icon {
+    width: 31px;
+    height: 31px;
+    border-radius: 8px;
+    background: currentColor;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 13.5px;
+    flex-shrink: 0;
+}
+.insight-card .insight-icon i { color: #fff; }
+@media (min-width: 640px) {
+    .insight-card .insight-icon { width: 34px; height: 34px; border-radius: 9px; font-size: 14.5px; }
+}
+.insight-card .insight-body {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
 .insight-card .insight-val {
     font-size: 16px;
     font-weight: 800;
-    line-height: 1.2;
+    line-height: 1.15;
 }
 @media (min-width: 640px) {
     .insight-card .insight-val { font-size: 19.5px; }
 }
 .dark .insight-card .insight-val { color: #f1f5f9; }
 .insight-card .insight-label {
-    font-size: 10px;
+    font-size: 10.5px;
     font-weight: 500;
     color: #94a3b8;
-    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 /* ============================================
@@ -505,16 +530,11 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     margin-bottom: 26px;
 }
 .login-logo {
-    width: 56px; height: 56px;
+    width: 76px;
+    height: 76px;
     margin: 0 auto 14px;
-    border-radius: 16px;
-    background: linear-gradient(135deg, #6366f1, #a855f7);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 24px;
-    color: #fff;
-    box-shadow: 0 10px 30px rgba(99, 102, 241, 0.5);
+    object-fit: contain;
+    display: block;
 }
 .login-title {
     font-size: 26px;
