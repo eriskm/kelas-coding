@@ -179,20 +179,28 @@ function getCommonOpts() {
 function initCharts() {
     const co = getCommonOpts();
 
-    // Status Donut
+    // Statistik Status Transaksi — Smooth Line Chart
     statusChart = new ApexCharts(document.querySelector('#chartStatusTransaksi'), {
         ...co,
-        chart: { ...co.chart, type: 'donut', height: getChartHeight() },
-        series: [12, 5, 5, 4, 10, 4, 7, 12],
-        labels: ['Masuk', 'Diagnosa', 'Menunggu Acc', 'Menunggu Part', 'Perbaikan', 'QC', 'Siap Diambil', 'Selesai'],
-        colors: ['#3b82f6', '#8b5cf6', '#f59e0b', '#f97316', '#06b6d4', '#6366f1', '#22c55e', '#16a34a'],
-        plotOptions: { pie: { donut: { size: '62%' } } },
-        legend: { position: 'bottom', fontSize: '10px', itemMargin: { horizontal: 6, vertical: 3 } },
+        chart: { ...co.chart, type: 'area', height: getChartHeight(), toolbar: { show: false } },
+        series: [
+            { name: 'Masuk',    data: [12, 10, 14, 13, 16, 15, 18] },
+            { name: 'Selesai',  data: [8, 9, 11, 10, 12, 13, 12] },
+            { name: 'Pending',  data: [4, 3, 5, 6, 5, 4, 7] },
+        ],
+        xaxis: { categories: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'], labels: { style: { fontSize: '10px' } } },
+        yaxis: { labels: { style: { fontSize: '10px' } } },
+        colors: ['#3b82f6', '#22c55e', '#f59e0b'],
+        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02 } },
+        stroke: { curve: 'smooth', width: 3 },
         dataLabels: { enabled: false },
+        legend: { position: 'top', fontSize: '10.5px', horizontalAlign: 'left' },
+        tooltip: { y: { formatter: v => v + ' unit' } },
         responsive: [{
             breakpoint: 640,
             options: {
-                legend: { fontSize: '9px', itemMargin: { horizontal: 4, vertical: 2 } },
+                chart: { height: 220 },
+                legend: { fontSize: '9px' },
             }
         }],
     });
