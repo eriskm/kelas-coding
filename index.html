@@ -24,135 +24,175 @@
     </script>
 </head>
 
-<body class="h-full bg-gray-100 dark:bg-[#0f1117] font-sans antialiased text-gray-800 dark:text-gray-200 transition-colors">
+<body class="h-full bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-[#0a0a0f] dark:via-[#12121a] dark:to-[#0a0a0f] font-sans antialiased text-gray-800 dark:text-gray-200 transition-colors flex items-center justify-center p-4">
 
-    <div class="flex h-full">
+    <!-- ========== APP WINDOW ========== -->
+    <div class="app-window w-full h-full flex flex-col overflow-hidden">
 
-        <!-- ========== SIDEBAR ========== -->
-        <aside class="w-[230px] min-h-screen flex-shrink-0 fixed h-full z-30 bg-white dark:bg-[#16181d] border-r border-gray-200 dark:border-white/5 flex flex-col">
-
-            <!-- Logo -->
-            <div class="px-5 py-5 flex items-center gap-3">
-                <div class="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center shadow-md shadow-brand-500/30">
-                    <i class="fa-solid fa-mobile-screen-button text-white text-sm"></i>
-                </div>
-                <span class="font-extrabold text-lg tracking-tight dark:text-white">ServisKu</span>
+        <!-- ===== TITLE BAR ===== -->
+        <div class="title-bar h-11 flex items-center justify-between px-4 flex-shrink-0 select-none">
+            <!-- Left: Traffic lights -->
+            <div class="flex items-center gap-2">
+                <span class="traffic-light tl-red"></span>
+                <span class="traffic-light tl-yellow"></span>
+                <span class="traffic-light tl-green"></span>
             </div>
-
-            <!-- Nav Menu -->
-            <nav class="flex-1 px-3 py-2 space-y-1" id="sidebarNav">
-                <a href="#" class="nav-link active" data-page="transaksi">
-                    <i class="fa-solid fa-money-bill-transfer"></i>
-                    <span>Transaksi</span>
-                </a>
-                <a href="#" class="nav-link" data-page="pelanggan">
-                    <i class="fa-solid fa-users"></i>
-                    <span>Pelanggan</span>
-                </a>
-                <a href="#" class="nav-link" data-page="garansi">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <span>Garansi</span>
-                </a>
-                <a href="#" class="nav-link" data-page="sparepart">
-                    <i class="fa-solid fa-microchip"></i>
-                    <span>Sparepart</span>
-                </a>
-                <a href="#" class="nav-link" data-page="keuangan">
-                    <i class="fa-solid fa-coins"></i>
-                    <span>Keuangan</span>
-                </a>
-            </nav>
-
-            <!-- Admin Area -->
-            <div class="px-3 pb-4 mt-auto">
-                <div class="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
-                    Admin Area
+            <!-- Center: App title -->
+            <div class="flex items-center gap-2">
+                <div class="w-5 h-5 bg-brand-500 rounded flex items-center justify-center">
+                    <i class="fa-solid fa-mobile-screen-button text-white text-[9px]"></i>
                 </div>
-                <a href="#" class="nav-link" data-page="akun">
-                    <i class="fa-solid fa-user-gear"></i>
-                    <span>Kelola Akun</span>
-                </a>
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">ServisKu — POS & Service Management</span>
             </div>
-        </aside>
+            <!-- Right: empty spacer -->
+            <div class="w-16"></div>
+        </div>
 
-        <!-- ========== MAIN AREA ========== -->
-        <div class="flex-1 ml-[230px] flex flex-col min-h-full">
+        <!-- ===== APP BODY ===== -->
+        <div class="flex flex-1 min-h-0">
 
-            <!-- ===== TOPBAR ===== -->
-            <header class="h-16 bg-white dark:bg-[#16181d] border-b border-gray-200 dark:border-white/5 flex items-center justify-between px-6 sticky top-0 z-20">
+            <!-- ========== SIDEBAR ========== -->
+            <aside class="app-sidebar w-[220px] flex-shrink-0 flex flex-col">
 
-                <!-- Left: Welcome -->
-                <h1 class="text-[15px] font-semibold dark:text-white">
-                    Selamat datang, <span id="adminName" class="text-brand-500">Admin</span> 👋
-                </h1>
-
-                <!-- Right: DateTime + Weather + Mode + Notification -->
-                <div class="flex items-center gap-4">
-
-                    <!-- Jam & Tanggal -->
-                    <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-                        <i class="fa-regular fa-calendar"></i>
-                        <span id="currentDate">—</span>
-                        <span class="text-gray-300 dark:text-gray-600">|</span>
-                        <i class="fa-regular fa-clock"></i>
-                        <span id="currentTime" class="font-mono font-semibold text-gray-700 dark:text-gray-200">00:00:00</span>
-                    </div>
-
-                    <!-- Cuaca -->
-                    <div class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5">
-                        <i class="fa-solid fa-cloud-sun text-amber-400"></i>
-                        <span>32°C</span>
-                    </div>
-
-                    <!-- Dark / Light Mode Toggle -->
-                    <button id="toggleTheme" class="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 transition text-gray-600 dark:text-gray-300">
-                        <i class="fa-solid fa-moon text-sm dark:hidden"></i>
-                        <i class="fa-solid fa-sun text-sm hidden dark:inline"></i>
-                    </button>
-
-                    <!-- Notification -->
-                    <button class="relative w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 transition text-gray-600 dark:text-gray-300">
-                        <i class="fa-solid fa-bell text-sm"></i>
-                        <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold">3</span>
-                    </button>
-                </div>
-            </header>
-
-            <!-- ===== MAIN CONTENT ===== -->
-            <main class="flex-1 p-6" id="mainContent">
-
-                <!-- ===== STAR CARDS (5 Financial) ===== -->
-                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6" id="starCards"></div>
-
-                <!-- ===== QUICK ACTIONS + INSIGHT ===== -->
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
-
-                    <!-- Aksi Cepat -->
-                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
-                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Aksi Cepat</h3>
-                        <div class="grid grid-cols-2 gap-3" id="quickActions"></div>
-                    </div>
-
-                    <!-- Insight Hari Ini -->
-                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
-                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Insight Hari Ini</h3>
-                        <div class="grid grid-cols-2 gap-3" id="insightCards"></div>
+                <!-- User Profile -->
+                <div class="px-4 py-4 border-b border-white/5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-brand-500/20">
+                            A
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-[13px] font-semibold text-white truncate" id="adminName">Admin</div>
+                            <div class="text-[10.5px] text-gray-500">Administrator</div>
+                        </div>
                     </div>
                 </div>
 
-                <!-- ===== TWO LARGE CHARTS ===== -->
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
-                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Statistik Status Transaksi</h3>
-                        <div id="chartStatusTransaksi"></div>
+                <!-- Nav Menu -->
+                <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" id="sidebarNav">
+                    <a href="#" class="nav-link active" data-page="transaksi">
+                        <i class="fa-solid fa-money-bill-transfer"></i>
+                        <span>Transaksi</span>
+                    </a>
+                    <a href="#" class="nav-link" data-page="pelanggan">
+                        <i class="fa-solid fa-users"></i>
+                        <span>Pelanggan</span>
+                    </a>
+                    <a href="#" class="nav-link" data-page="garansi">
+                        <i class="fa-solid fa-shield-halved"></i>
+                        <span>Garansi</span>
+                    </a>
+                    <a href="#" class="nav-link" data-page="sparepart">
+                        <i class="fa-solid fa-microchip"></i>
+                        <span>Sparepart</span>
+                    </a>
+                    <a href="#" class="nav-link" data-page="keuangan">
+                        <i class="fa-solid fa-coins"></i>
+                        <span>Keuangan</span>
+                    </a>
+                </nav>
+
+                <!-- Admin Area -->
+                <div class="px-3 pb-3 mt-auto">
+                    <div class="px-3 py-2 text-[9.5px] font-bold uppercase tracking-[0.12em] text-gray-600">
+                        Admin Area
                     </div>
-                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
-                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Tren Kerusakan Minggu Ini</h3>
-                        <div id="chartKerusakan"></div>
+                    <a href="#" class="nav-link" data-page="akun">
+                        <i class="fa-solid fa-user-gear"></i>
+                        <span>Kelola Akun</span>
+                    </a>
+                </div>
+            </aside>
+
+            <!-- ========== MAIN CONTENT AREA ========== -->
+            <div class="app-main flex-1 flex flex-col min-w-0">
+
+                <!-- ===== TOPBAR ===== -->
+                <header class="app-topbar h-12 flex items-center justify-between px-6 flex-shrink-0">
+                    <!-- Left: Welcome -->
+                    <h1 class="text-[13.5px] font-semibold text-gray-700 dark:text-gray-200">
+                        Selamat datang, <span class="text-brand-500">Admin</span>
+                    </h1>
+                    <!-- Right: Date + Time + Weather + Theme + Notification -->
+                    <div class="flex items-center gap-3">
+                        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+                            <i class="fa-regular fa-calendar"></i>
+                            <span id="currentDate">—</span>
+                        </div>
+                        <div class="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+                        <div class="flex items-center gap-1.5 text-xs">
+                            <i class="fa-regular fa-clock text-gray-400"></i>
+                            <span id="currentTime" class="font-mono font-semibold text-gray-700 dark:text-gray-200">00:00:00</span>
+                        </div>
+                        <div class="w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
+                        <div class="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md bg-gray-100 dark:bg-white/5">
+                            <i class="fa-solid fa-cloud-sun text-amber-400 text-[11px]"></i>
+                            <span>32°C</span>
+                        </div>
+                        <button id="toggleTheme" class="w-7 h-7 rounded-md flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition text-gray-500 dark:text-gray-400">
+                            <i class="fa-solid fa-moon text-xs dark:hidden"></i>
+                            <i class="fa-solid fa-sun text-xs hidden dark:inline"></i>
+                        </button>
+                        <button class="relative w-7 h-7 rounded-md flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition text-gray-500 dark:text-gray-400">
+                            <i class="fa-solid fa-bell text-xs"></i>
+                            <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[8px] w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
+                        </button>
                     </div>
+                </header>
+
+                <!-- ===== SCROLLABLE CONTENT ===== -->
+                <div class="app-content flex-1 overflow-y-auto">
+
+                    <!-- Star Cards -->
+                    <div class="px-5 pt-5 pb-4">
+                        <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3" id="starCards"></div>
+                    </div>
+
+                    <!-- Quick Actions + Insight -->
+                    <div class="px-5 pb-4">
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                            <div class="panel">
+                                <h3 class="panel-title">Aksi Cepat</h3>
+                                <div class="grid grid-cols-2 gap-2.5" id="quickActions"></div>
+                            </div>
+                            <div class="panel">
+                                <h3 class="panel-title">Insight Hari Ini</h3>
+                                <div class="grid grid-cols-2 gap-2.5" id="insightCards"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Two Large Charts -->
+                    <div class="px-5 pb-5">
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-3">
+                            <div class="panel">
+                                <h3 class="panel-title">Statistik Status Transaksi</h3>
+                                <div id="chartStatusTransaksi"></div>
+                            </div>
+                            <div class="panel">
+                                <h3 class="panel-title">Tren Kerusakan Minggu Ini</h3>
+                                <div id="chartKerusakan"></div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
-            </main>
+                <!-- ===== STATUS BAR ===== -->
+                <div class="status-bar h-7 flex items-center justify-between px-5 flex-shrink-0 text-[10.5px] text-gray-500 dark:text-gray-500">
+                    <div class="flex items-center gap-4">
+                        <span class="flex items-center gap-1.5">
+                            <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+                            Online
+                        </span>
+                        <span>Servis aktif: <b class="text-gray-700 dark:text-gray-300">48</b></span>
+                        <span>Teknisi online: <b class="text-gray-700 dark:text-gray-300">4</b></span>
+                    </div>
+                    <div class="flex items-center gap-4">
+                        <span>v1.0.0</span>
+                        <span>&copy; 2026 ServisKu</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 
