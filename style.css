@@ -212,17 +212,17 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .star-card {
     background: #ffffff;
     border: 1px solid #e5e7eb;
-    border-radius: 12px;
-    padding: 14px 16px;
+    border-radius: 11px;
+    padding: 13px 15px;
     display: flex;
     align-items: flex-start;
-    gap: 12px;
+    gap: 11px;
     transition: all 0.15s ease;
     position: relative;
     overflow: hidden;
 }
 @media (min-width: 640px) {
-    .star-card { padding: 17px 20px; gap: 15px; }
+    .star-card { padding: 15px 18px; gap: 13px; }
 }
 .dark .star-card {
     background: #16171d;
@@ -232,43 +232,43 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     box-shadow: 0 4px 16px rgba(0,0,0,0.06);
 }
 .star-card .icon-wrap {
-    width: 41px; height: 41px;
-    border-radius: 11px;
+    width: 37px; height: 37px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 17px;
+    font-size: 15px;
     flex-shrink: 0;
 }
 @media (min-width: 640px) {
-    .star-card .icon-wrap { width: 46px; height: 46px; border-radius: 12px; font-size: 18px; }
+    .star-card .icon-wrap { width: 41px; height: 41px; border-radius: 11px; font-size: 16px; }
 }
 .star-card .value {
-    font-size: 19px;
+    font-size: 17px;
     font-weight: 800;
     color: #0f172a;
     line-height: 1.15;
 }
 @media (min-width: 640px) {
-    .star-card .value { font-size: 23px; }
+    .star-card .value { font-size: 20.5px; }
 }
 .dark .star-card .value { color: #f1f5f9; }
 .star-card .label {
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 500;
     color: #94a3b8;
     margin-top: 2px;
 }
 @media (min-width: 640px) {
-    .star-card .label { font-size: 13px; margin-top: 3px; }
+    .star-card .label { font-size: 12px; margin-top: 3px; }
 }
 .star-card .change {
-    font-size: 11.5px;
+    font-size: 10.5px;
     font-weight: 600;
     margin-top: 3px;
 }
 @media (min-width: 640px) {
-    .star-card .change { font-size: 12.5px; margin-top: 4px; }
+    .star-card .change { font-size: 11.5px; margin-top: 4px; }
 }
 .change.up   { color: #16a34a; }
 .change.down { color: #dc2626; }
@@ -282,20 +282,20 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     flex-direction: column;
     align-items: flex-start;
     justify-content: space-between;
-    gap: 8px;
-    padding: 12px 14px;
-    border-radius: 10px;
+    gap: 7px;
+    padding: 11px 13px;
+    border-radius: 9px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
     cursor: pointer;
     transition: all 0.15s ease;
     -webkit-tap-highlight-color: transparent;
     text-align: left;
-    min-height: 96px;
+    min-height: 86px;
 }
 .dark .qa-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
 @media (min-width: 640px) {
-    .qa-card { padding: 14px 16px; gap: 10px; min-height: 104px; }
+    .qa-card { padding: 12.5px 14px; gap: 9px; min-height: 94px; }
 }
 .qa-card:hover {
     box-shadow: 0 4px 14px rgba(0,0,0,0.06);
@@ -303,25 +303,25 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 }
 .qa-card:active { transform: scale(0.96); }
 .qa-card-icon {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
+    width: 31px;
+    height: 31px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 15px;
+    font-size: 13.5px;
     color: #fff;
 }
 @media (min-width: 640px) {
-    .qa-card-icon { width: 38px; height: 38px; border-radius: 10px; font-size: 16px; }
+    .qa-card-icon { width: 34px; height: 34px; border-radius: 9px; font-size: 14.5px; }
 }
 .qa-card-label {
-    font-size: 12.5px;
+    font-size: 11.5px;
     font-weight: 700;
     line-height: 1.2;
 }
 @media (min-width: 640px) {
-    .qa-card-label { font-size: 13px; }
+    .qa-card-label { font-size: 12px; }
 }
 
 /* ============================================
@@ -329,30 +329,30 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
    ============================================ */
 
 .insight-card {
-    padding: 12px 14px;
-    border-radius: 10px;
+    padding: 11px 13px;
+    border-radius: 9px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
-    min-height: 96px;
+    min-height: 86px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
 }
 @media (min-width: 640px) {
-    .insight-card { padding: 14px 16px; min-height: 104px; }
+    .insight-card { padding: 12.5px 14px; min-height: 94px; }
 }
 .dark .insight-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
 .insight-card .insight-val {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 800;
     line-height: 1.2;
 }
 @media (min-width: 640px) {
-    .insight-card .insight-val { font-size: 22px; }
+    .insight-card .insight-val { font-size: 19.5px; }
 }
 .dark .insight-card .insight-val { color: #f1f5f9; }
 .insight-card .insight-label {
-    font-size: 10.5px;
+    font-size: 10px;
     font-weight: 500;
     color: #94a3b8;
     margin-top: 2px;
