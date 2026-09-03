@@ -1,6 +1,8 @@
 /* ============================================
-   ServisKu v3 — Dashboard Logic & Dummy Data
+   BOSS SF — Dashboard Logic (fetch dari FastAPI)
    ============================================ */
+
+const API_BASE = '/api';
 
 // ─────────────────────────────────────────────
 // SIDEBAR TOGGLE (mobile)
@@ -52,7 +54,7 @@ function initTheme() {
 
 function formatRupiah(val) {
     if (val >= 1000000) return 'Rp ' + (val / 1000000).toFixed(1).replace('.0', '') + 'jt';
-    return 'Rp ' + val.toLocaleString('id-ID');
+    return 'Rp ' + (val || 0).toLocaleString('id-ID');
 }
 
 function isDark() {
@@ -62,62 +64,49 @@ function isDark() {
 function chartGridColor() { return isDark() ? 'rgba(255,255,255,0.04)' : '#f1f5f9'; }
 
 // ─────────────────────────────────────────────
-// STAT CARDS (Star Cards)
+// API LAYER
 // ─────────────────────────────────────────────
 
-function renderStarCards() {
-    const data = [
-        {
-            icon: 'fa-solid fa-coins',
-            bg: 'bg-indigo-50', iconColor: 'text-indigo-600',
-            value: formatRupiah(12500000),
-            label: 'Omset Hari Ini',
-            change: '+12% dari kemarin', up: true
-        },
-        {
-            icon: 'fa-solid fa-chart-line',
-            bg: 'bg-green-50', iconColor: 'text-green-600',
-            value: formatRupiah(8750000),
-            label: 'Laba Kotor',
-            change: null, up: null
-        },
-        {
-            icon: 'fa-solid fa-receipt',
-            bg: 'bg-red-50', iconColor: 'text-red-600',
-            value: formatRupiah(3750000),
-            label: 'Total Beban',
-            change: null, up: null
-        },
-        {
-            icon: 'fa-solid fa-sack-dollar',
-            bg: 'bg-emerald-50', iconColor: 'text-emerald-600',
-            value: formatRupiah(5000000),
-            label: 'Laba Bersih',
-            change: '+8% dari bulan lalu', up: true
-        },
-        {
-            icon: 'fa-solid fa-bullseye',
-            bg: 'bg-amber-50', iconColor: 'text-amber-600',
-            value: formatRupiah(15000000),
-            label: 'Target Gaji (CTS)',
-            change: 'Tercapai 83%', up: true
-        },
-    ];
+async function apiGet(path) {
+    const res = await fetch(API_BASE + path);
+    if (!res.ok) throw new Error('API error ' + res.status);
+    return res.json();
+}
 
-    document.getElementById('starCards').innerHTML = data.map(c => `
-        <div class="star-card">
-            <div class="icon-wrap ${c.bg} ${c.iconColor}"><i class="${c.icon}"></i></div>
-            <div>
-                <div class="value">${c.value}</div>
-                <div class="label">${c.label}</div>
-                ${c.change ? `<div class="change ${c.up ? 'up' : 'down'}"><i class="fa-solid fa-arrow-${c.up ? 'up' : 'down'}" style="font-size:9px;margin-right:2px"></i>${c.change}</div>` : ''}
+// Ikon & warna untuk tiap kartu statistik
+const STAR_META = [
+    { icon: 'fa-coins',                 bg: 'bg-indigo-50',   color: 'text-indigo-600' },
+    { icon: 'fa-chart-line',            bg: 'bg-green-50',    color: 'text-green-600' },
+    { icon: 'fa-receipt',               bg: 'bg-red-50',      color: 'text-red-600' },
+    { icon: 'fa-sack-dollar',           bg: 'bg-emerald-50',  color: 'text-emerald-600' },
+    { icon: 'fa-bullseye',              bg: 'bg-amber-50',    color: 'text-amber-600' },
+];
+
+// ─────────────────────────────────────────────
+// RENDER: STAR CARDS (dari API overview)
+// ─────────────────────────────────────────────
+
+async function renderStarCards() {
+    const data = await apiGet('/overview');
+    const cards = data.star_cards.map((c, i) => {
+        const m = STAR_META[i] || {};
+        const cvalue = typeof c.value === 'number' && c.value >= 1000 ? formatRupiah(c.value) : c.value;
+        return `
+            <div class="star-card">
+                <div class="icon-wrap ${m.bg} ${m.color}"><i class="fa-solid ${m.icon}"></i></div>
+                <div>
+                    <div class="value">${cvalue}</div>
+                    <div class="label">${c.label}</div>
+                    ${c.change ? `<div class="change ${c.up ? 'up' : 'down'}"><i class="fa-solid fa-arrow-${c.up ? 'up' : 'down'}" style="font-size:9px;margin-right:2px"></i>${c.change}</div>` : ''}
+                </div>
             </div>
-        </div>
-    `).join('');
+        `;
+    }).join('');
+    document.getElementById('starCards').innerHTML = cards;
 }
 
 // ─────────────────────────────────────────────
-// QUICK ACTIONS
+// RENDER: QUICK ACTIONS
 // ─────────────────────────────────────────────
 
 function renderQuickActions() {
@@ -139,17 +128,12 @@ function renderQuickActions() {
 }
 
 // ─────────────────────────────────────────────
-// INSIGHT CARDS
+// RENDER: INSIGHT CARDS (dari API overview)
 // ─────────────────────────────────────────────
 
-function renderInsights() {
-    const items = [
-        { value: '18',     label: 'Dikerjakan',   color: 'text-cyan-600' },
-        { value: '3',      label: 'Terlambat',     color: 'text-red-500' },
-        { value: '5',      label: 'Menunggu Acc',  color: 'text-amber-600' },
-        { value: formatRupiah(2650000), label: 'Piutang', color: 'text-rose-600' },
-    ];
-
+async function renderInsights() {
+    const data = await apiGet('/overview');
+    const items = data.insight;
     document.getElementById('insightCards').innerHTML = items.map(it => `
         <div class="insight-card">
             <div class="insight-val ${it.color}">${it.value}</div>
@@ -176,19 +160,19 @@ function getCommonOpts() {
     };
 }
 
-function initCharts() {
+async function initCharts() {
     const co = getCommonOpts();
+    const [statusData, damageData] = await Promise.all([
+        apiGet('/statistics/status'),
+        apiGet('/statistics/damage'),
+    ]);
 
     // Statistik Status Transaksi — Smooth Line Chart
     statusChart = new ApexCharts(document.querySelector('#chartStatusTransaksi'), {
         ...co,
         chart: { ...co.chart, type: 'area', height: getChartHeight(), toolbar: { show: false } },
-        series: [
-            { name: 'Masuk',    data: [12, 10, 14, 13, 16, 15, 18] },
-            { name: 'Selesai',  data: [8, 9, 11, 10, 12, 13, 12] },
-            { name: 'Pending',  data: [4, 3, 5, 6, 5, 4, 7] },
-        ],
-        xaxis: { categories: ['Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab', 'Min'], labels: { style: { fontSize: '10px' } } },
+        series: statusData.series,
+        xaxis: { categories: statusData.categories, labels: { style: { fontSize: '10px' } } },
         yaxis: { labels: { style: { fontSize: '10px' } } },
         colors: ['#3b82f6', '#22c55e', '#f59e0b'],
         fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02 } },
@@ -198,20 +182,17 @@ function initCharts() {
         tooltip: { y: { formatter: v => v + ' unit' } },
         responsive: [{
             breakpoint: 640,
-            options: {
-                chart: { height: 220 },
-                legend: { fontSize: '9px' },
-            }
+            options: { chart: { height: 220 }, legend: { fontSize: '9px' } },
         }],
     });
     statusChart.render();
 
-    // Tren Kerusakan Minggu Ini — Horizontal Bar dengan gradasi
+    // Tren Kerusakan Minggu Ini — Horizontal Bar
     kerusakanChart = new ApexCharts(document.querySelector('#chartKerusakan'), {
         ...co,
         chart: { ...co.chart, type: 'bar', height: getChartHeight(), toolbar: { show: false } },
-        series: [{ name: 'Unit', data: [14, 9, 7, 5, 4, 3] }],
-        xaxis: { categories: ['Layar Pecah', 'Baterai', 'Charging', 'Speaker', 'Kamera', 'Water'] },
+        series: [{ name: 'Unit', data: damageData.data }],
+        xaxis: { categories: damageData.categories },
         yaxis: { labels: { style: { fontSize: '10px' } } },
         colors: ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#06b6d4', '#8b5cf6'],
         plotOptions: { bar: { borderRadius: 6, columnWidth: '55%', horizontal: true, distributed: true } },
@@ -250,12 +231,10 @@ function initNav() {
             e.preventDefault();
             links.forEach(l => l.classList.remove('active'));
             this.classList.add('active');
-            // close sidebar on mobile after click
             if (window.innerWidth < 640) toggleSidebar(false);
         });
     });
 
-    // Mobile bottom nav
     const mobileItems = document.querySelectorAll('.mobile-nav-item');
     mobileItems.forEach(item => {
         item.addEventListener('click', function () {
@@ -269,14 +248,16 @@ function initNav() {
 // INIT
 // ─────────────────────────────────────────────
 
-document.addEventListener('DOMContentLoaded', function () {
+document.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     updateClock();
     setInterval(updateClock, 1000);
-
-    renderStarCards();
-    renderQuickActions();
-    renderInsights();
-    initCharts();
     initNav();
+    renderQuickActions();
+
+    try {
+        await Promise.all([renderStarCards(), renderInsights(), initCharts()]);
+    } catch (err) {
+        console.error('Gagal memuat data dari API:', err);
+    }
 });
