@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id" class="h-full">
 <head>
     <meta charset="UTF-8">
@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="style.css?v=3">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -25,6 +25,43 @@
 </head>
 
 <body class="h-full bg-gradient-to-br from-gray-200 via-gray-100 to-gray-200 dark:from-[#0a0a0f] dark:via-[#12121a] dark:to-[#0a0a0f] font-sans antialiased text-gray-800 dark:text-gray-200 transition-colors sm:flex sm:items-center sm:justify-center sm:p-3 md:p-4">
+
+    <!-- ========== LOGIN SCREEN (overlay) ========== -->
+    <div id="loginScreen" class="login-screen">
+        <div class="bg-blob blob-1"></div>
+        <div class="bg-blob blob-2"></div>
+        <div class="bg-blob blob-3"></div>
+
+        <div class="login-card">
+            <div class="login-brand">
+                <div class="login-logo"><i class="fa-solid fa-mobile-screen-button"></i></div>
+                <h1 class="login-title">BOSS SF</h1>
+                <p class="login-subtitle">Service System</p>
+            </div>
+
+            <form id="loginForm" autocomplete="off">
+                <div class="login-field">
+                    <i class="fa-solid fa-user"></i>
+                    <input type="text" id="loginUsername" placeholder="Username" required>
+                </div>
+                <div class="login-field">
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" id="loginPasscode" placeholder="Passcode" required>
+                    <button type="button" class="pw-toggle" id="pwToggle"><i class="fa-solid fa-eye"></i></button>
+                </div>
+                <div id="loginError" class="login-error hidden">
+                    <i class="fa-solid fa-circle-exclamation"></i>
+                    <span id="loginErrorText"></span>
+                </div>
+                <button type="submit" class="login-btn" id="loginBtn">
+                    <span id="loginBtnText">Masuk</span>
+                    <i class="fa-solid fa-arrow-right-to-bracket login-btn-icon" id="loginBtnIcon"></i>
+                </button>
+            </form>
+
+            <p class="login-hint"><i class="fa-regular fa-circle-question"></i> Akun default: <b>superadmin</b> / passcode <b>Admin4100</b></p>
+        </div>
+    </div>
 
     <!-- ========== APP WINDOW ========== -->
     <div class="app-window w-full h-full sm:w-full sm:h-[calc(100vh-24px)] md:h-[calc(100vh-32px)] flex flex-col overflow-hidden sm:rounded-xl md:rounded-2xl">
@@ -100,6 +137,10 @@
                         <i class="fa-solid fa-user-gear"></i>
                         <span>Kelola Akun</span>
                     </a>
+                    <a href="#" class="nav-link" id="logoutLink">
+                        <i class="fa-solid fa-right-from-bracket"></i>
+                        <span>Keluar</span>
+                    </a>
                 </div>
             </aside>
 
@@ -119,10 +160,10 @@
                     </div>
                     <!-- Right -->
                     <div class="flex items-center gap-2 sm:gap-3">
-                        <!-- Date — hidden on very small screens -->
+                        <!-- Date â€” hidden on very small screens -->
                         <div class="hidden md:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
                             <i class="fa-regular fa-calendar"></i>
-                            <span id="currentDate">—</span>
+                            <span id="currentDate">â€”</span>
                         </div>
                         <div class="hidden md:block w-px h-4 bg-gray-200 dark:bg-gray-700"></div>
                         <!-- Time -->
@@ -130,10 +171,10 @@
                             <i class="fa-regular fa-clock text-gray-400"></i>
                             <span id="currentTime" class="font-mono font-semibold text-gray-700 dark:text-gray-200">00:00</span>
                         </div>
-                        <!-- Weather — hidden on small -->
+                        <!-- Weather â€” hidden on small -->
                         <div class="hidden sm:flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 px-2 py-1 rounded-md bg-gray-100 dark:bg-white/5">
                             <i class="fa-solid fa-cloud-sun text-amber-400 text-[11px]"></i>
-                            <span>32°C</span>
+                            <span>32Â°C</span>
                         </div>
                         <!-- Theme toggle -->
                         <button id="toggleTheme" class="w-7 h-7 rounded-md flex items-center justify-center hover:bg-gray-100 dark:hover:bg-white/10 transition text-gray-500 dark:text-gray-400">
@@ -229,6 +270,6 @@
         </div>
     </div>
 
-    <script src="script.js"></script>
+    <script src="script.js?v=3"></script>
 </body>
 </html>

@@ -16,6 +16,32 @@ from sqlalchemy.orm import relationship
 from database import Base
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(80), unique=True, index=True, nullable=False)
+    display_name = Column(String(120), nullable=False)
+    role = Column(String(40), default="ADMIN")
+    passcode_hash = Column(String(255), nullable=False)
+    passcode_salt = Column(String(64), nullable=False)
+    active = Column(Integer, default=1)
+    last_login = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class AuthToken(Base):
+    __tablename__ = "auth_tokens"
+
+    id = Column(Integer, primary_key=True, index=True)
+    token = Column(String(64), unique=True, index=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+
+    user = relationship("User")
+
+
 class Customer(Base):
     __tablename__ = "customers"
 

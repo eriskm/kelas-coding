@@ -8,15 +8,29 @@ Layer:
 """
 import os
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import FileResponse
 
 from database import Base, engine
-from routers import dashboard, orders, customers
+from routers import dashboard, orders, customers, auth
+from routers.auth import get_authenticated_user
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
+
+
+class NoCacheStaticFiles(StaticFiles):
+    """StaticFiles yang selalu memaksa browser mengambil versi terbaru (no-cache)."""
+
+    async def get_response(self, path: str, scope):
+        response = await super().get_response(path, scope)
+        if isinstance(response, FileResponse):
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+        return response
 
 app = FastAPI(
     title="BOSS SF - Service System API",
@@ -43,9 +57,10 @@ def on_startup():
 
 
 # ---------- Mount routers ----------
-app.include_router(dashboard.router)
-app.include_router(orders.router)
-app.include_router(customers.router)
+app.include_router(auth.router)
+app.include_router(dashboard.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(orders.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(customers.router, dependencies=[Depends(get_authenticated_user)])
 
 
 # ---------- Mount frontend (static) ----------
@@ -59,4 +74,4 @@ def root():
 
 
 if os.path.isdir(FRONTEND_DIR):
-    app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+    app.mount("/static", NoCacheStaticFiles(directory=FRONTEND_DIR), name="static")

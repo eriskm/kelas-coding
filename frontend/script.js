@@ -4,6 +4,11 @@
 
 const API_BASE = '/api';
 
+// Auth helpers
+function getToken() { return localStorage.getItem('bsf_token'); }
+function setToken(t) { localStorage.setItem('bsf_token', t); }
+function clearToken() { localStorage.removeItem('bsf_token'); }
+
 // ─────────────────────────────────────────────
 // SIDEBAR TOGGLE (mobile)
 // ─────────────────────────────────────────────
@@ -68,10 +73,16 @@ function chartGridColor() { return isDark() ? 'rgba(255,255,255,0.04)' : '#f1f5f
 // ─────────────────────────────────────────────
 
 async function apiGet(path) {
-    const res = await fetch(API_BASE + path);
+    const headers = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE + path, { headers });
+    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
     if (!res.ok) throw new Error('API error ' + res.status);
     return res.json();
 }
+
+class AuthError extends Error {}
 
 // Ikon & warna untuk tiap kartu statistik
 const STAR_META = [
@@ -245,6 +256,120 @@ function initNav() {
 }
 
 // ─────────────────────────────────────────────
+// LOGIN FLOW
+// ─────────────────────────────────────────────
+
+function showLogin() {
+    document.getElementById('loginScreen').classList.remove('hidden-login');
+}
+
+function hideLogin() {
+    document.getElementById('loginScreen').classList.add('hidden-login');
+}
+
+function setLoginError(msg) {
+    const box = document.getElementById('loginError');
+    document.getElementById('loginErrorText').textContent = msg;
+    box.classList.remove('hidden');
+}
+
+function clearLoginError() {
+    document.getElementById('loginError').classList.add('hidden');
+}
+
+function setAdminUI(user) {
+    const name = user.display_name || 'Administrator';
+    const initial = name.charAt(0).toUpperCase();
+    document.getElementById('adminName').textContent = name;
+    const avatar = document.querySelector('#appSidebar .rounded-full.flex');
+    if (avatar) avatar.textContent = initial;
+    const welcome = document.querySelector('.app-topbar h1 span.text-brand-500');
+    if (welcome) welcome.textContent = user.display_name || 'Admin';
+}
+
+async function loadDashboard() {
+    await Promise.all([renderStarCards(), renderInsights(), initCharts()]);
+}
+
+async function checkSession() {
+    if (!getToken()) return null;
+    try {
+        const res = await fetch(API_BASE + '/auth/me', { headers: { 'Authorization': 'Bearer ' + getToken() } });
+        if (!res.ok) { clearToken(); return null; }
+        return res.json();
+    } catch (e) {
+        clearToken();
+        return null;
+    }
+}
+
+async function handleLogin(e) {
+    e.preventDefault();
+    clearLoginError();
+    const username = document.getElementById('loginUsername').value.trim();
+    const passcode = document.getElementById('loginPasscode').value;
+    if (!username || !passcode) { setLoginError('Username dan passcode wajib diisi.'); return; }
+
+    const btn = document.getElementById('loginBtn');
+    const btnText = document.getElementById('loginBtnText');
+    const btnIcon = document.getElementById('loginBtnIcon');
+    btn.disabled = true;
+    btnText.textContent = 'Memeriksa...';
+    btnIcon.classList.remove('fa-arrow-right-to-bracket');
+    btnIcon.classList.add('fa-circle-notch', 'fa-spin');
+
+    try {
+        const res = await fetch(API_BASE + '/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, passcode }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            throw new Error(data.detail || 'Login gagal, coba lagi.');
+        }
+        setToken(data.token);
+        setAdminUI(data.user);
+        hideLogin();
+        await loadDashboard();
+    } catch (err) {
+        setLoginError(err.message);
+    } finally {
+        btn.disabled = false;
+        btnText.textContent = 'Masuk';
+        btnIcon.classList.add('fa-arrow-right-to-bracket');
+        btnIcon.classList.remove('fa-circle-notch', 'fa-spin');
+    }
+}
+
+async function handleLogout(e) {
+    e.preventDefault();
+    if (getToken()) {
+        try {
+            await fetch(API_BASE + '/auth/logout', { method: 'POST', headers: { 'Authorization': 'Bearer ' + getToken() } });
+        } catch (_) { /* abaikan */ }
+    }
+    clearToken();
+    location.reload();
+}
+
+function initLogin() {
+    const form = document.getElementById('loginForm');
+    const pwToggle = document.getElementById('pwToggle');
+    const pwInput = document.getElementById('loginPasscode');
+    const logoutLink = document.getElementById('logoutLink');
+
+    form.addEventListener('submit', handleLogin);
+    logoutLink.addEventListener('click', handleLogout);
+
+    pwToggle.addEventListener('click', () => {
+        const show = pwInput.type === 'password';
+        pwInput.type = show ? 'text' : 'password';
+        pwToggle.innerHTML = `<i class="fa-solid ${show ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
+    });
+}
+
+// ─────────────────────────────────────────────
 // INIT
 // ─────────────────────────────────────────────
 
@@ -254,10 +379,18 @@ document.addEventListener('DOMContentLoaded', async function () {
     setInterval(updateClock, 1000);
     initNav();
     renderQuickActions();
+    initLogin();
 
-    try {
-        await Promise.all([renderStarCards(), renderInsights(), initCharts()]);
-    } catch (err) {
-        console.error('Gagal memuat data dari API:', err);
+    const user = await checkSession();
+    if (user) {
+        setAdminUI(user);
+        hideLogin();
+        try {
+            await loadDashboard();
+        } catch (err) {
+            console.error('Gagal memuat data dari API:', err);
+        }
+    } else {
+        showLogin();
     }
 });

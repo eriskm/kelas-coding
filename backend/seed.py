@@ -1,13 +1,35 @@
 """Seed database dengan data dummy untuk tampilan dashboard."""
+import secrets
 from datetime import datetime, date, timedelta
 
 from database import SessionLocal, Base, engine
-from models import Customer, ServiceOrder, Payment
+from models import Customer, ServiceOrder, Payment, User
+from routers.auth import hash_passcode
+
+SUPERADMIN_USERNAME = "superadmin"
+SUPERADMIN_PASSCODE = "Admin4100"
 
 
 def seed():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
+
+    # ---------- Super Admin (idempotent) ----------
+    admin = db.query(User).filter(User.username == SUPERADMIN_USERNAME).first()
+    if not admin:
+        salt = secrets.token_hex(16)
+        db.add(
+            User(
+                username=SUPERADMIN_USERNAME,
+                display_name="Administrator",
+                role="SUPERADMIN",
+                passcode_hash=hash_passcode(SUPERADMIN_PASSCODE, salt),
+                passcode_salt=salt,
+                active=1,
+            )
+        )
+        db.commit()
+        print("Super admin dibuat.")
 
     if db.query(Customer).count() > 0:
         print("Database sudah berisi data, skip seeding.")
