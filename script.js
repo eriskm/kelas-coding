@@ -123,10 +123,9 @@ function renderStarCards() {
 function renderQuickActions() {
     const actions = [
         { icon: 'fa-solid fa-plus',             label: 'Servis Baru',   bg: 'bg-indigo-500',  hover: 'hover:bg-indigo-600',  text: 'text-white' },
-        { icon: 'fa-solid fa-user-plus',        label: 'Customer Baru', bg: 'bg-emerald-500', hover: 'hover:bg-emerald-600', text: 'text-white' },
-        { icon: 'fa-solid fa-money-bill-wave',  label: 'Transaksi Baru',bg: 'bg-amber-500',   hover: 'hover:bg-amber-600',   text: 'text-white' },
-        { icon: 'fa-solid fa-hand-holding-dollar', label: 'Tambahan Pembayaran', bg: 'bg-purple-500', hover: 'hover:bg-purple-600', text: 'text-white' },
-        { icon: 'fa-solid fa-microchip',        label: 'Tambah Sparepart', bg: 'bg-cyan-600', hover: 'hover:bg-cyan-700',   text: 'text-white' },
+        { icon: 'fa-solid fa-cash-register',    label: 'Input Kas',     bg: 'bg-emerald-500', hover: 'hover:bg-emerald-600', text: 'text-white' },
+        { icon: 'fa-solid fa-money-check-dollar', label: 'Input Beban', bg: 'bg-amber-500',   hover: 'hover:bg-amber-600',   text: 'text-white' },
+        { icon: 'fa-solid fa-microchip',        label: 'Sparepart',     bg: 'bg-cyan-600',    hover: 'hover:bg-cyan-700',    text: 'text-white' },
     ];
 
     document.getElementById('quickActions').innerHTML = actions.map(a => `
