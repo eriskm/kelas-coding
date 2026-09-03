@@ -122,18 +122,18 @@ function renderStarCards() {
 
 function renderQuickActions() {
     const actions = [
-        { icon: 'fa-solid fa-plus',                label: 'Servis Baru',  bg: 'bg-indigo-500',  hover: 'hover:bg-indigo-600',  light: 'bg-white/20' },
-        { icon: 'fa-solid fa-cash-register',       label: 'Input Kas',    bg: 'bg-emerald-500', hover: 'hover:bg-emerald-600', light: 'bg-white/20' },
-        { icon: 'fa-solid fa-money-check-dollar',  label: 'Input Beban',  bg: 'bg-amber-500',   hover: 'hover:bg-amber-600',   light: 'bg-white/20' },
-        { icon: 'fa-solid fa-microchip',           label: 'Sparepart',    bg: 'bg-cyan-600',    hover: 'hover:bg-cyan-700',    light: 'bg-white/20' },
+        { icon: 'fa-solid fa-plus',                label: 'Servis Baru', bg: 'bg-indigo-500',  color: 'text-indigo-600' },
+        { icon: 'fa-solid fa-cash-register',       label: 'Input Kas',   bg: 'bg-emerald-500', color: 'text-emerald-600' },
+        { icon: 'fa-solid fa-money-check-dollar',  label: 'Input Beban', bg: 'bg-amber-500',   color: 'text-amber-600' },
+        { icon: 'fa-solid fa-microchip',           label: 'Sparepart',   bg: 'bg-cyan-600',    color: 'text-cyan-600' },
     ];
 
     document.getElementById('quickActions').innerHTML = actions.map(a => `
-        <button class="qa-action ${a.bg} ${a.hover}">
-            <span class="qa-action-icon ${a.light}">
+        <button class="qa-card" style="border:none">
+            <span class="qa-card-icon ${a.bg}">
                 <i class="${a.icon}"></i>
             </span>
-            <span class="qa-action-label">${a.label}</span>
+            <span class="qa-card-label ${a.color}">${a.label}</span>
         </button>
     `).join('');
 }
