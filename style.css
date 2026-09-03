@@ -281,6 +281,7 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     display: flex;
     flex-direction: column;
     align-items: flex-start;
+    justify-content: space-between;
     gap: 8px;
     padding: 12px 14px;
     border-radius: 10px;
@@ -290,10 +291,11 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     transition: all 0.15s ease;
     -webkit-tap-highlight-color: transparent;
     text-align: left;
+    min-height: 96px;
 }
 .dark .qa-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
 @media (min-width: 640px) {
-    .qa-card { padding: 14px 16px; gap: 10px; }
+    .qa-card { padding: 14px 16px; gap: 10px; min-height: 104px; }
 }
 .qa-card:hover {
     box-shadow: 0 4px 14px rgba(0,0,0,0.06);
@@ -331,9 +333,13 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     border-radius: 10px;
     background: #f9fafb;
     border: 1px solid #e5e7eb;
+    min-height: 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
 }
 @media (min-width: 640px) {
-    .insight-card { padding: 14px 16px; }
+    .insight-card { padding: 14px 16px; min-height: 104px; }
 }
 .dark .insight-card { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
 .insight-card .insight-val {
