@@ -7,316 +7,148 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <script>
         tailwind.config = {
+            darkMode: 'class',
             theme: {
                 extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
-                        sidebar: '#0f172a',
-                        'sidebar-hover': '#1e293b',
-                        'sidebar-active': '#3b82f6',
-                        primary: '#3b82f6',
-                        'primary-dark': '#2563eb',
+                        brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' },
                     }
                 }
             }
         }
     </script>
 </head>
-<body class="h-full bg-gray-50 font-sans antialiased">
+
+<body class="h-full bg-gray-100 dark:bg-[#0f1117] font-sans antialiased text-gray-800 dark:text-gray-200 transition-colors">
 
     <div class="flex h-full">
 
-        <!-- SIDEBAR -->
-        <aside id="sidebar" class="w-[220px] min-h-screen bg-sidebar text-white flex-shrink-0 flex flex-col fixed h-full z-30">
+        <!-- ========== SIDEBAR ========== -->
+        <aside class="w-[230px] min-h-screen flex-shrink-0 fixed h-full z-30 bg-white dark:bg-[#16181d] border-r border-gray-200 dark:border-white/5 flex flex-col">
+
             <!-- Logo -->
-            <div class="px-5 py-4 flex items-center gap-3 border-b border-white/10">
-                <div class="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+            <div class="px-5 py-5 flex items-center gap-3">
+                <div class="w-9 h-9 bg-brand-500 rounded-xl flex items-center justify-center shadow-md shadow-brand-500/30">
                     <i class="fa-solid fa-mobile-screen-button text-white text-sm"></i>
                 </div>
-                <span class="font-bold text-lg tracking-tight">ServisKu</span>
+                <span class="font-extrabold text-lg tracking-tight dark:text-white">ServisKu</span>
             </div>
 
-            <!-- Nav -->
-            <nav class="flex-1 overflow-y-auto py-3 text-sm" id="sidebarNav">
-                <!-- Dashboard -->
-                <a href="#" class="nav-link active" data-page="dashboard">
-                    <i class="fa-solid fa-gauge-high w-5 text-center"></i>
-                    <span>Dashboard</span>
+            <!-- Nav Menu -->
+            <nav class="flex-1 px-3 py-2 space-y-1" id="sidebarNav">
+                <a href="#" class="nav-link active" data-page="transaksi">
+                    <i class="fa-solid fa-money-bill-transfer"></i>
+                    <span>Transaksi</span>
                 </a>
-
-                <!-- Service -->
-                <div class="nav-section">Service</div>
-                <a href="#" class="nav-link" data-page="service-all">
-                    <i class="fa-solid fa-clipboard-list w-5 text-center"></i>
-                    <span>Semua Service</span>
+                <a href="#" class="nav-link" data-page="pelanggan">
+                    <i class="fa-solid fa-users"></i>
+                    <span>Pelanggan</span>
                 </a>
-                <a href="#" class="nav-link" data-page="service-received">
-                    <i class="fa-solid fa-inbox w-5 text-center"></i>
-                    <span>Servis Masuk</span>
+                <a href="#" class="nav-link" data-page="garansi">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <span>Garansi</span>
                 </a>
-                <a href="#" class="nav-link" data-page="service-repair">
-                    <i class="fa-solid fa-wrench w-5 text-center"></i>
-                    <span>Dikerjakan</span>
-                </a>
-                <a href="#" class="nav-link" data-page="service-waiting">
-                    <i class="fa-solid fa-clock-rotate-left w-5 text-center"></i>
-                    <span>Menunggu Part</span>
-                </a>
-                <a href="#" class="nav-link" data-page="service-qc">
-                    <i class="fa-solid fa-magnifying-glass w-5 text-center"></i>
-                    <span>QC</span>
-                </a>
-                <a href="#" class="nav-link" data-page="service-ready">
-                    <i class="fa-solid fa-circle-check w-5 text-center"></i>
-                    <span>Siap Diambil</span>
-                </a>
-                <a href="#" class="nav-link" data-page="service-done">
-                    <i class="fa-solid fa-flag-checkered w-5 text-center"></i>
-                    <span>Selesai</span>
-                </a>
-
-                <!-- Customer -->
-                <div class="nav-section">Customer</div>
-                <a href="#" class="nav-link" data-page="customer-list">
-                    <i class="fa-solid fa-users w-5 text-center"></i>
-                    <span>Daftar Customer</span>
-                </a>
-                <a href="#" class="nav-link" data-page="customer-new">
-                    <i class="fa-solid fa-user-plus w-5 text-center"></i>
-                    <span>Customer Baru</span>
-                </a>
-
-                <!-- Inventory -->
-                <div class="nav-section">Inventory</div>
-                <a href="#" class="nav-link" data-page="inv-sparepart">
-                    <i class="fa-solid fa-microchip w-5 text-center"></i>
+                <a href="#" class="nav-link" data-page="sparepart">
+                    <i class="fa-solid fa-microchip"></i>
                     <span>Sparepart</span>
                 </a>
-                <a href="#" class="nav-link" data-page="inv-stock">
-                    <i class="fa-solid fa-boxes-stacked w-5 text-center"></i>
-                    <span>Stok</span>
-                </a>
-                <a href="#" class="nav-link" data-page="inv-adjust">
-                    <i class="fa-solid fa-sliders w-5 text-center"></i>
-                    <span>Stock Adjustment</span>
-                </a>
-
-                <!-- Transaksi -->
-                <div class="nav-section">Transaksi</div>
-                <a href="#" class="nav-link" data-page="trx-sale">
-                    <i class="fa-solid fa-cart-shopping w-5 text-center"></i>
-                    <span>Penjualan</span>
-                </a>
-                <a href="#" class="nav-link" data-page="trx-payment">
-                    <i class="fa-solid fa-money-bill-wave w-5 text-center"></i>
-                    <span>Pembayaran</span>
-                </a>
-                <a href="#" class="nav-link" data-page="trx-receivable">
-                    <i class="fa-solid fa-receipt w-5 text-center"></i>
-                    <span>Piutang</span>
-                </a>
-
-                <!-- Laporan -->
-                <div class="nav-section">Laporan</div>
-                <a href="#" class="nav-link" data-page="rpt-service">
-                    <i class="fa-solid fa-chart-bar w-5 text-center"></i>
-                    <span>Laporan Servis</span>
-                </a>
-                <a href="#" class="nav-link" data-page="rpt-sale">
-                    <i class="fa-solid fa-chart-line w-5 text-center"></i>
-                    <span>Laporan Penjualan</span>
-                </a>
-                <a href="#" class="nav-link" data-page="rpt-tech">
-                    <i class="fa-solid fa-hard-hat w-5 text-center"></i>
-                    <span>Laporan Teknisi</span>
-                </a>
-                <a href="#" class="nav-link" data-page="rpt-part">
-                    <i class="fa-solid fa-cubes w-5 text-center"></i>
-                    <span>Laporan Sparepart</span>
-                </a>
-                <a href="#" class="nav-link" data-page="rpt-finance">
-                    <i class="fa-solid fa-coins w-5 text-center"></i>
-                    <span>Laporan Keuangan</span>
-                </a>
-
-                <!-- Pengaturan -->
-                <div class="nav-section">Pengaturan</div>
-                <a href="#" class="nav-link" data-page="set-user">
-                    <i class="fa-solid fa-user-gear w-5 text-center"></i>
-                    <span>User</span>
-                </a>
-                <a href="#" class="nav-link" data-page="set-tech">
-                    <i class="fa-solid fa-users-gear w-5 text-center"></i>
-                    <span>Teknisi</span>
-                </a>
-                <a href="#" class="nav-link" data-page="set-store">
-                    <i class="fa-solid fa-store w-5 text-center"></i>
-                    <span>Toko</span>
-                </a>
-                <a href="#" class="nav-link" data-page="set-printer">
-                    <i class="fa-solid fa-print w-5 text-center"></i>
-                    <span>Printer</span>
-                </a>
-                <a href="#" class="nav-link" data-page="set-system">
-                    <i class="fa-solid fa-gear w-5 text-center"></i>
-                    <span>System Settings</span>
+                <a href="#" class="nav-link" data-page="keuangan">
+                    <i class="fa-solid fa-coins"></i>
+                    <span>Keuangan</span>
                 </a>
             </nav>
 
-            <!-- Sidebar Footer -->
-            <div class="px-4 py-3 border-t border-white/10 text-xs text-gray-400">
-                v1.0.0 &copy; 2026
+            <!-- Admin Area -->
+            <div class="px-3 pb-4 mt-auto">
+                <div class="px-3 py-2 text-[10px] font-bold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                    Admin Area
+                </div>
+                <a href="#" class="nav-link" data-page="akun">
+                    <i class="fa-solid fa-user-gear"></i>
+                    <span>Kelola Akun</span>
+                </a>
             </div>
         </aside>
 
-        <!-- MAIN AREA -->
-        <div class="flex-1 ml-[220px] flex flex-col min-h-full">
+        <!-- ========== MAIN AREA ========== -->
+        <div class="flex-1 ml-[230px] flex flex-col min-h-full">
 
-            <!-- TOPBAR -->
-            <header class="h-14 bg-white border-b border-gray-200 flex items-center justify-between px-6 sticky top-0 z-20">
+            <!-- ===== TOPBAR ===== -->
+            <header class="h-16 bg-white dark:bg-[#16181d] border-b border-gray-200 dark:border-white/5 flex items-center justify-between px-6 sticky top-0 z-20">
+
+                <!-- Left: Welcome -->
+                <h1 class="text-[15px] font-semibold dark:text-white">
+                    Selamat datang, <span id="adminName" class="text-brand-500">Admin</span> 👋
+                </h1>
+
+                <!-- Right: DateTime + Weather + Mode + Notification -->
                 <div class="flex items-center gap-4">
-                    <button id="toggleSidebar" class="lg:hidden text-gray-500 hover:text-gray-700">
-                        <i class="fa-solid fa-bars text-lg"></i>
-                    </button>
-                    <div class="relative">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
-                        <input type="text" placeholder="Cari servis, customer..."
-                            class="pl-9 pr-4 py-2 bg-gray-100 rounded-lg text-sm w-64 focus:outline-none focus:ring-2 focus:ring-primary/30 focus:bg-white transition">
+
+                    <!-- Jam & Tanggal -->
+                    <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                        <i class="fa-regular fa-calendar"></i>
+                        <span id="currentDate">—</span>
+                        <span class="text-gray-300 dark:text-gray-600">|</span>
+                        <i class="fa-regular fa-clock"></i>
+                        <span id="currentTime" class="font-mono font-semibold text-gray-700 dark:text-gray-200">00:00:00</span>
                     </div>
-                </div>
-                <div class="flex items-center gap-4">
-                    <button class="relative text-gray-500 hover:text-gray-700">
-                        <i class="fa-solid fa-bell text-lg"></i>
-                        <span class="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center font-bold">3</span>
-                    </button>
-                    <div class="flex items-center gap-2 cursor-pointer">
-                        <div class="w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white text-sm font-bold">A</div>
-                        <span class="text-sm font-medium text-gray-700">Admin</span>
-                        <i class="fa-solid fa-chevron-down text-xs text-gray-400"></i>
+
+                    <!-- Cuaca -->
+                    <div class="flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400 px-3 py-1.5 rounded-lg bg-gray-50 dark:bg-white/5">
+                        <i class="fa-solid fa-cloud-sun text-amber-400"></i>
+                        <span>32°C</span>
                     </div>
+
+                    <!-- Dark / Light Mode Toggle -->
+                    <button id="toggleTheme" class="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 transition text-gray-600 dark:text-gray-300">
+                        <i class="fa-solid fa-moon text-sm dark:hidden"></i>
+                        <i class="fa-solid fa-sun text-sm hidden dark:inline"></i>
+                    </button>
+
+                    <!-- Notification -->
+                    <button class="relative w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 dark:bg-white/10 hover:bg-gray-200 dark:hover:bg-white/15 transition text-gray-600 dark:text-gray-300">
+                        <i class="fa-solid fa-bell text-sm"></i>
+                        <span class="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-[9px] w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold">3</span>
+                    </button>
                 </div>
             </header>
 
-            <!-- MAIN CONTENT -->
+            <!-- ===== MAIN CONTENT ===== -->
             <main class="flex-1 p-6" id="mainContent">
 
-                <!-- PAGE: Dashboard -->
-                <div id="page-dashboard" class="page-content">
+                <!-- ===== STAR CARDS (5 Financial) ===== -->
+                <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6" id="starCards"></div>
 
-                    <!-- Quick Actions -->
-                    <div class="flex items-center gap-2 mb-6 flex-wrap">
-                        <button class="quick-action bg-primary hover:bg-primary-dark text-white">
-                            <i class="fa-solid fa-plus"></i> Servis Baru
-                        </button>
-                        <button class="quick-action bg-emerald-500 hover:bg-emerald-600 text-white">
-                            <i class="fa-solid fa-user-plus"></i> Customer Baru
-                        </button>
-                        <button class="quick-action bg-amber-500 hover:bg-amber-600 text-white">
-                            <i class="fa-solid fa-money-bill-wave"></i> Transaksi Baru
-                        </button>
-                        <button class="quick-action bg-purple-500 hover:bg-purple-600 text-white">
-                            <i class="fa-solid fa-hand-holding-dollar"></i> Tambahan Pembayaran
-                        </button>
-                        <button class="quick-action bg-cyan-600 hover:bg-cyan-700 text-white">
-                            <i class="fa-solid fa-microchip"></i> Tambah Sparepart
-                        </button>
+                <!-- ===== QUICK ACTIONS + INSIGHT ===== -->
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4 mb-6">
+
+                    <!-- Aksi Cepat -->
+                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Aksi Cepat</h3>
+                        <div class="grid grid-cols-2 gap-3" id="quickActions"></div>
                     </div>
 
-                    <!-- Stat Cards -->
-                    <div class="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4 mb-6" id="statCards">
-                        <!-- Dihitung dari JS -->
+                    <!-- Insight Hari Ini -->
+                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Insight Hari Ini</h3>
+                        <div class="grid grid-cols-2 gap-3" id="insightCards"></div>
                     </div>
+                </div>
 
-                    <!-- Row: Table + Monitoring -->
-                    <div class="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
-
-                        <!-- Service Orders Table -->
-                        <div class="xl:col-span-2 bg-white rounded-xl border border-gray-200 overflow-hidden">
-                            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-                                <h2 class="font-semibold text-gray-800">Servis Terbaru</h2>
-                                <a href="#" class="text-sm text-primary hover:underline">Lihat Semua</a>
-                            </div>
-                            <div class="overflow-x-auto">
-                                <table class="w-full text-sm">
-                                    <thead>
-                                        <tr class="bg-gray-50 text-gray-500 text-xs uppercase">
-                                            <th class="text-left px-5 py-3 font-medium">No Servis</th>
-                                            <th class="text-left px-5 py-3 font-medium">Pelanggan</th>
-                                            <th class="text-left px-5 py-3 font-medium">Device</th>
-                                            <th class="text-left px-5 py-3 font-medium">Teknisi</th>
-                                            <th class="text-left px-5 py-3 font-medium">Status</th>
-                                            <th class="text-right px-5 py-3 font-medium">Estimasi</th>
-                                            <th class="text-right px-5 py-3 font-medium">Waktu</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="serviceTableBody" class="divide-y divide-gray-100">
-                                        <!-- Dihitung dari JS -->
-                                    </tbody>
-                                </table>
-                            </div>
-                        </div>
-
-                        <!-- Monitoring Panel -->
-                        <div class="flex flex-col gap-4">
-                            <!-- Teknisi Aktif -->
-                            <div class="bg-white rounded-xl border border-gray-200 p-5">
-                                <h2 class="font-semibold text-gray-800 mb-4">Teknisi Aktif</h2>
-                                <div id="technicianList" class="space-y-3">
-                                    <!-- Dari JS -->
-                                </div>
-                            </div>
-                            <!-- Status Ring -->
-                            <div class="bg-white rounded-xl border border-gray-200 p-5 flex-1">
-                                <h2 class="font-semibold text-gray-800 mb-4">Ringkasan Status</h2>
-                                <div id="statusSummary" class="space-y-2">
-                                    <!-- Dari JS -->
-                                </div>
-                            </div>
-                        </div>
+                <!-- ===== TWO LARGE CHARTS ===== -->
+                <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Statistik Status Transaksi</h3>
+                        <div id="chartStatusTransaksi"></div>
                     </div>
-
-                    <!-- Charts Row 1 -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Omzet 7 Hari Terakhir</h2>
-                            <div id="chartOmzet"></div>
-                        </div>
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Jumlah Servis / Hari</h2>
-                            <div id="chartServis"></div>
-                        </div>
-                    </div>
-
-                    <!-- Charts Row 2 -->
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Berdasarkan Status</h2>
-                            <div id="chartStatus"></div>
-                        </div>
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Servis per Teknisi</h2>
-                            <div id="chartTeknisi"></div>
-                        </div>
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Merk HP Masuk</h2>
-                            <div id="chartMerk"></div>
-                        </div>
-                    </div>
-
-                    <!-- Charts Row 3 -->
-                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Jenis Kerusakan Paling Sering</h2>
-                            <div id="chartKerusakan"></div>
-                        </div>
-                        <div class="bg-white rounded-xl border border-gray-200 p-5">
-                            <h2 class="font-semibold text-gray-800 mb-3">Piutang Pelanggan</h2>
-                            <div class="space-y-3" id="piutangList">
-                                <!-- Dari JS -->
-                            </div>
-                        </div>
+                    <div class="bg-white dark:bg-[#16181d] rounded-2xl border border-gray-200 dark:border-white/5 p-5">
+                        <h3 class="text-sm font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-4">Tren Kerusakan Minggu Ini</h3>
+                        <div id="chartKerusakan"></div>
                     </div>
                 </div>
 
