@@ -212,17 +212,17 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .star-card {
     background: #ffffff;
     border: 1px solid #e5e7eb;
-    border-radius: 10px;
-    padding: 12px 14px;
+    border-radius: 12px;
+    padding: 14px 16px;
     display: flex;
     align-items: flex-start;
-    gap: 10px;
+    gap: 12px;
     transition: all 0.15s ease;
     position: relative;
     overflow: hidden;
 }
 @media (min-width: 640px) {
-    .star-card { padding: 14px 16px; gap: 12px; }
+    .star-card { padding: 17px 20px; gap: 15px; }
 }
 .dark .star-card {
     background: #16171d;
@@ -232,43 +232,43 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     box-shadow: 0 4px 16px rgba(0,0,0,0.06);
 }
 .star-card .icon-wrap {
-    width: 34px; height: 34px;
-    border-radius: 9px;
+    width: 41px; height: 41px;
+    border-radius: 11px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 14px;
+    font-size: 17px;
     flex-shrink: 0;
 }
 @media (min-width: 640px) {
-    .star-card .icon-wrap { width: 38px; height: 38px; border-radius: 10px; font-size: 15px; }
+    .star-card .icon-wrap { width: 46px; height: 46px; border-radius: 12px; font-size: 18px; }
 }
 .star-card .value {
-    font-size: 16px;
+    font-size: 19px;
     font-weight: 800;
     color: #0f172a;
     line-height: 1.15;
 }
 @media (min-width: 640px) {
-    .star-card .value { font-size: 19px; }
+    .star-card .value { font-size: 23px; }
 }
 .dark .star-card .value { color: #f1f5f9; }
 .star-card .label {
-    font-size: 10.5px;
+    font-size: 12px;
     font-weight: 500;
     color: #94a3b8;
-    margin-top: 1px;
-}
-@media (min-width: 640px) {
-    .star-card .label { font-size: 11px; margin-top: 2px; }
-}
-.star-card .change {
-    font-size: 10px;
-    font-weight: 600;
     margin-top: 2px;
 }
 @media (min-width: 640px) {
-    .star-card .change { font-size: 10.5px; margin-top: 3px; }
+    .star-card .label { font-size: 13px; margin-top: 3px; }
+}
+.star-card .change {
+    font-size: 11.5px;
+    font-weight: 600;
+    margin-top: 3px;
+}
+@media (min-width: 640px) {
+    .star-card .change { font-size: 12.5px; margin-top: 4px; }
 }
 .change.up   { color: #16a34a; }
 .change.down { color: #dc2626; }
