@@ -122,15 +122,18 @@ function renderStarCards() {
 
 function renderQuickActions() {
     const actions = [
-        { icon: 'fa-solid fa-plus',             label: 'Servis Baru',   bg: 'bg-indigo-500',  hover: 'hover:bg-indigo-600',  text: 'text-white' },
-        { icon: 'fa-solid fa-cash-register',    label: 'Input Kas',     bg: 'bg-emerald-500', hover: 'hover:bg-emerald-600', text: 'text-white' },
-        { icon: 'fa-solid fa-money-check-dollar', label: 'Input Beban', bg: 'bg-amber-500',   hover: 'hover:bg-amber-600',   text: 'text-white' },
-        { icon: 'fa-solid fa-microchip',        label: 'Sparepart',     bg: 'bg-cyan-600',    hover: 'hover:bg-cyan-700',    text: 'text-white' },
+        { icon: 'fa-solid fa-plus',                label: 'Servis Baru',  bg: 'bg-indigo-500',  hover: 'hover:bg-indigo-600',  light: 'bg-white/20' },
+        { icon: 'fa-solid fa-cash-register',       label: 'Input Kas',    bg: 'bg-emerald-500', hover: 'hover:bg-emerald-600', light: 'bg-white/20' },
+        { icon: 'fa-solid fa-money-check-dollar',  label: 'Input Beban',  bg: 'bg-amber-500',   hover: 'hover:bg-amber-600',   light: 'bg-white/20' },
+        { icon: 'fa-solid fa-microchip',           label: 'Sparepart',    bg: 'bg-cyan-600',    hover: 'hover:bg-cyan-700',    light: 'bg-white/20' },
     ];
 
     document.getElementById('quickActions').innerHTML = actions.map(a => `
-        <button class="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 sm:py-2.5 rounded-lg text-[11.5px] sm:text-[13px] font-semibold ${a.bg} ${a.hover} ${a.text} transition-all active:scale-95 cursor-pointer border-0">
-            <i class="${a.icon}"></i> <span class="truncate">${a.label}</span>
+        <button class="qa-action ${a.bg} ${a.hover}">
+            <span class="qa-action-icon ${a.light}">
+                <i class="${a.icon}"></i>
+            </span>
+            <span class="qa-action-label">${a.label}</span>
         </button>
     `).join('');
 }
