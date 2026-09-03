@@ -206,21 +206,27 @@ function initCharts() {
     });
     statusChart.render();
 
-    // Jenis Kerusakan
+    // Tren Kerusakan Minggu Ini — Horizontal Bar dengan gradasi
     kerusakanChart = new ApexCharts(document.querySelector('#chartKerusakan'), {
         ...co,
-        chart: { ...co.chart, type: 'bar', height: getChartHeight() },
-        series: [{ name: 'Jumlah', data: [14, 9, 7, 5, 4, 3] }],
-        xaxis: { categories: ['Layar', 'Baterai', 'Charging', 'Speaker', 'Kamera', 'Water'], labels: { style: { fontSize: '10px' }, rotate: -30 } },
+        chart: { ...co.chart, type: 'bar', height: getChartHeight(), toolbar: { show: false } },
+        series: [{ name: 'Unit', data: [14, 9, 7, 5, 4, 3] }],
+        xaxis: { categories: ['Layar Pecah', 'Baterai', 'Charging', 'Speaker', 'Kamera', 'Water'] },
         yaxis: { labels: { style: { fontSize: '10px' } } },
-        colors: ['#ef4444'],
-        plotOptions: { bar: { borderRadius: 6, columnWidth: '55%' } },
-        dataLabels: { enabled: false },
+        colors: ['#ef4444', '#f97316', '#f59e0b', '#22c55e', '#06b6d4', '#8b5cf6'],
+        plotOptions: { bar: { borderRadius: 6, columnWidth: '55%', horizontal: true, distributed: true } },
+        dataLabels: { enabled: true, formatter: v => v + 'x', style: { fontSize: '10px', fontWeight: 700 } },
+        grid: { borderColor: chartGridColor(), xaxis: { lines: { show: true } } },
+        legend: { show: false },
+        stroke: { show: false },
+        fill: { opacity: 1 },
+        tooltip: { y: { formatter: v => v + ' unit' } },
         responsive: [{
             breakpoint: 640,
             options: {
                 xaxis: { labels: { style: { fontSize: '9px' } } },
                 yaxis: { labels: { style: { fontSize: '9px' } } },
+                dataLabels: { style: { fontSize: '8px' } },
             }
         }],
     });
