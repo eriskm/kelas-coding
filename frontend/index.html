@@ -8,7 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=6">
+    <link rel="stylesheet" href="style.css?v=9">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -108,6 +108,10 @@
                         <i class="fa-solid fa-money-bill-transfer"></i>
                         <span>Transaksi</span>
                     </a>
+                    <a href="#" class="nav-link" data-page="servisbaru">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>Servis Baru</span>
+                    </a>
                     <a href="#" class="nav-link" data-page="pelanggan">
                         <i class="fa-solid fa-users"></i>
                         <span>Pelanggan</span>
@@ -190,6 +194,8 @@
                 <!-- ===== SCROLLABLE CONTENT ===== -->
                 <div class="app-content flex-1 overflow-y-auto">
 
+                    <div id="pageDashboard">
+
                     <!-- Star Cards -->
                     <div class="px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
                         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="starCards"></div>
@@ -222,6 +228,152 @@
                             </div>
                         </div>
                     </div>
+
+                    </div><!-- /pageDashboard -->
+
+                    <!-- ===== PAGE: PENERIMAAN UNIT BARU ===== -->
+                    <section id="pageReceive" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+
+                        <!-- header -->
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                    <span class="receive-title-icon"><i class="fa-solid fa-truck-ramp-box"></i></span>
+                                    Penerimaan Unit Baru
+                                </h2>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftarkan unit servis konsumen baru ke sistem</p>
+                            </div>
+                            <button type="button" onclick="showDashboard()" class="receive-back-btn">
+                                <i class="fa-solid fa-arrow-left"></i> Kembali
+                            </button>
+                        </div>
+
+                        <form id="receiveForm" autocomplete="off">
+
+                            <!-- PANEL 1: Data Konsumen -->
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-user-check"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Data Konsumen</h3>
+                                        <span class="text-[10.5px] text-gray-400">Nomor WhatsApp dipakai untuk History Cerdas</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                    <div class="field">
+                                        <label class="field-label" for="rcName">Nama Konsumen <b class="text-red-500">*</b></label>
+                                        <input class="receive-input" type="text" id="rcName" placeholder="cth. Andi Pratama" required>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcPhone">No. WhatsApp</label>
+                                        <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="numeric">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- History Cerdas -->
+                            <div id="smartHistory" class="hidden">
+                                <div class="receive-panel receive-panel-glow">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico history-ico"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">History Cerdas</h3>
+                                            <span class="text-[10.5px] text-gray-400">Riwayat servis konsumen ini sebelumnya</span>
+                                        </div>
+                                    </div>
+                                    <div id="smartHistoryList" class="mt-2"></div>
+                                </div>
+                            </div>
+
+                            <!-- PANEL 2: Identitas, Diagnosa & Checklist Unit -->
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Identitas, Diagnosa & Checklist Unit</h3>
+                                        <span class="text-[10.5px] text-gray-400">Informasi perangkat yang diterima</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                    <div class="field">
+                                        <label class="field-label" for="rcDevice">Device / Model HP <b class="text-red-500">*</b></label>
+                                        <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" required>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcPassword">Password / Pola</label>
+                                        <div class="relative">
+                                            <input class="receive-input" type="text" id="rcPassword" placeholder="cth. 1234">
+                                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300"><i class="fa-solid fa-lock"></i></span>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcDamage">Analisa Kerusakan</label>
+                                        <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi"></textarea>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcPlan">Rencana Perbaikan</label>
+                                        <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- PANEL 3: Estimasi Biaya & Penugasan Teknisi -->
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-calculator"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Estimasi Biaya & Penugasan Teknisi</h3>
+                                        <span class="text-[10.5px] text-gray-400">Biaya perkiraan, deposit & teknisi penanggung jawab</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
+                                    <div class="field">
+                                        <label class="field-label" for="rcEstimate">Estimasi Biaya</label>
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                            <input class="receive-input pl-9" type="number" id="rcEstimate" min="0" placeholder="500000">
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcDp">DP (Deposit Awal)</label>
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                            <input class="receive-input pl-9" type="number" id="rcDp" min="0" placeholder="100000">
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcTechnician">Teknisi Penanggung Jawab</label>
+                                        <select class="receive-input" id="rcTechnician">
+                                            <option value="">— Pilih Teknisi —</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="rcStatus">Status Awal Pengerjaan</label>
+                                        <select class="receive-input" id="rcStatus">
+                                            <option value="ANALISA" selected>Analisa</option>
+                                            <option value="KONFIRMASI">Konfirmasi</option>
+                                            <option value="WAIT PART">Wait Part</option>
+                                            <option value="REPAIR">Repair</option>
+                                            <option value="DONE">Done</option>
+                                            <option value="CASH">Cash</option>
+                                            <option value="FILED">Filed</option>
+                                            <option value="CANCEL">Cancel</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- submit + feedback -->
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                                <button type="submit" id="receiveSubmitBtn" class="receive-submit-btn">
+                                    <i class="fa-solid fa-check-double"></i>
+                                    <span id="receiveSubmitText">Terima dan Daftarkan Unit Servis</span>
+                                </button>
+                                <div id="receiveFeedback" class="hidden receive-feedback"></div>
+                            </div>
+
+                        </form>
+                    </section>
 
                 </div>
 
@@ -268,6 +420,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=6"></script>
+    <script src="script.js?v=9"></script>
 </body>
 </html>

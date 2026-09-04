@@ -1,4 +1,7 @@
 """Service orders endpoints."""
+import random
+from datetime import date, datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 
@@ -7,6 +10,68 @@ from models import ServiceOrder, Customer
 import schemas
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
+
+TECHNICIANS = ["Budi", "Andi", "Rizky", "Dedi", "Fajar"]
+
+
+def _generate_no_servis() -> str:
+    return "SV-" + datetime.now().strftime("%Y%m%d") + "-" + str(random.randint(1000, 9999))
+
+
+@router.get("/technicians")
+def list_technicians():
+    return TECHNICIANS
+
+
+@router.get("/history/{phone}")
+def order_history(phone: str, db: Session = Depends(get_db_session)):
+    customers = db.query(Customer).filter(Customer.phone == phone).all()
+    if not customers:
+        return []
+    cids = [c.id for c in customers]
+    return (
+        db.query(ServiceOrder)
+        .filter(ServiceOrder.customer_id.in_(cids))
+        .order_by(ServiceOrder.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+
+@router.post("/receive", response_model=schemas.ServiceOrderOut, status_code=201)
+def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_session)):
+    """Daftarkan unit servis baru (buat customer + service order sekaligus)."""
+    customer = None
+    if data.customer_phone:
+        customer = (
+            db.query(Customer)
+            .filter(Customer.phone == data.customer_phone)
+            .order_by(Customer.id.desc())
+            .first()
+        )
+    if not customer:
+        customer = Customer(name=data.customer_name, phone=data.customer_phone)
+        db.add(customer)
+        db.commit()
+        db.refresh(customer)
+
+    order = ServiceOrder(
+        no_servis=_generate_no_servis(),
+        customer_id=customer.id,
+        device=data.device,
+        damagetype=data.damagetype,
+        device_password=data.device_password,
+        repair_plan=data.repair_plan,
+        technician=data.technician,
+        status=data.status,
+        estimate=data.estimate or 0,
+        payment=data.dp or 0,
+        service_date=date.today(),
+    )
+    db.add(order)
+    db.commit()
+    db.refresh(order)
+    return order
 
 
 @router.get("", response_model=list[schemas.ServiceOrderList])

@@ -52,8 +52,24 @@ app.add_middleware(
 def on_startup():
     """Buat tabel + seed dummy jika database masih kosong."""
     Base.metadata.create_all(bind=engine)
+    _migrate_schema()
     from seed import seed as run_seed
     run_seed()
+
+
+def _migrate_schema():
+    """Tambah kolom baru pada tabel yang sudah ada (migrasi ringan)."""
+    from sqlalchemy import text
+
+    migrations = [
+        ("service_orders", "device_password", "VARCHAR(120)"),
+        ("service_orders", "repair_plan", "TEXT"),
+    ]
+    with engine.begin() as conn:
+        for table, column, dtype in migrations:
+            cols = [r[1] for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
+            if column not in cols:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {dtype}"))
 
 
 # ---------- Mount routers ----------

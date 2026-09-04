@@ -65,6 +65,8 @@ class ServiceOrder(Base):
     brand = Column(String(60))
     model = Column(String(60))
     damagetype = Column(String(120))
+    device_password = Column(String(120))
+    repair_plan = Column(Text)
     technician = Column(String(60))
     status = Column(String(30), default="RECEIVED")
     estimate = Column(Float, default=0)

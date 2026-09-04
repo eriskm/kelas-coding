@@ -37,11 +37,27 @@ class ServiceOrderBase(BaseModel):
     brand: Optional[str] = None
     model: Optional[str] = None
     damagetype: Optional[str] = None
+    device_password: Optional[str] = None
+    repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: Optional[str] = "RECEIVED"
     estimate: Optional[float] = 0
     payment: Optional[float] = 0
     service_date: Optional[date] = None
+
+
+class ServiceReceiveIn(BaseModel):
+    """Payload lengkap pendaftaran unit servis baru."""
+    customer_name: str
+    customer_phone: Optional[str] = None
+    device: str
+    device_password: Optional[str] = None
+    damagetype: Optional[str] = None
+    repair_plan: Optional[str] = None
+    estimate: Optional[float] = 0
+    dp: Optional[float] = 0
+    technician: Optional[str] = None
+    status: Optional[str] = "ANALISA"
 
 
 class ServiceOrderCreate(ServiceOrderBase):
@@ -54,6 +70,8 @@ class ServiceOrderUpdate(BaseModel):
     brand: Optional[str] = None
     model: Optional[str] = None
     damagetype: Optional[str] = None
+    device_password: Optional[str] = None
+    repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: Optional[str] = None
     estimate: Optional[float] = None
@@ -76,6 +94,8 @@ class ServiceOrderList(BaseModel):
     brand: Optional[str] = None
     model: Optional[str] = None
     damagetype: Optional[str] = None
+    device_password: Optional[str] = None
+    repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: str
     estimate: float

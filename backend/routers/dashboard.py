@@ -23,6 +23,7 @@ def get_overview(db: Session = Depends(get_db_session)):
 
     omset = sum(o.payment for o in orders)
     piutang = sum(o.estimate - o.payment for o in orders if o.estimate > o.payment)
+    cash = sum(1 for o in orders if o.payment > 0)
 
     # dummy finansial (karena belum ada tabel expenses)
     laba_kotor = 8750000
@@ -39,10 +40,10 @@ def get_overview(db: Session = Depends(get_db_session)):
             {"label": "Target Gaji (CTS)", "value": target_gaji, "change": "Tercapai 83%", "up": True},
         ],
         "insight": [
-            {"value": active, "label": "Dikerjakan", "color": "text-cyan-600"},
-            {"value": 3, "label": "Terlambat", "color": "text-red-500"},
-            {"value": pending, "label": "Menunggu Acc", "color": "text-amber-600"},
-            {"value": round(piutang), "label": "Piutang", "color": "text-rose-600"},
+            {"value": total, "label": "Unit Masuk", "color": "text-cyan-600"},
+            {"value": done, "label": "Unit Selesai", "color": "text-green-600"},
+            {"value": cash, "label": "Unit Cash", "color": "text-emerald-600"},
+            {"value": pending, "label": "Unit Pending", "color": "text-amber-600"},
         ],
         "stats": {"total": total, "done": done, "active": active, "pending": pending, "ready": ready},
     }

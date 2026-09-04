@@ -26,6 +26,28 @@ function toggleSidebar(open) {
 }
 
 // ─────────────────────────────────────────────
+// PAGE NAVIGATION (dashboard <-> servis baru)
+// ─────────────────────────────────────────────
+
+function setActiveNav(active, items) {
+    items.forEach(l => l.classList.toggle('active', l.dataset.page === active));
+}
+
+function showPage(name) {
+    const isDash = name === 'dashboard';
+    document.getElementById('pageDashboard').classList.toggle('hidden', !isDash);
+    document.getElementById('pageReceive').classList.toggle('hidden', isDash);
+    const navs = document.querySelectorAll('.nav-link');
+    const mobiles = document.querySelectorAll('.mobile-nav-item');
+    setActiveNav(isDash ? 'transaksi' : 'servisbaru', navs);
+    setActiveNav(isDash ? 'transaksi' : null, mobiles);
+    if (window.innerWidth < 640) toggleSidebar(false);
+}
+
+function showDashboard() { showPage('dashboard'); }
+function openServisBaru() { showPage('receive'); }
+
+// ─────────────────────────────────────────────
 // LIVE CLOCK & DATE
 // ─────────────────────────────────────────────
 
@@ -84,6 +106,24 @@ async function apiGet(path) {
 
 class AuthError extends Error {}
 
+async function apiPost(path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE + path, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(body || {}),
+    });
+    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
+    if (!res.ok) {
+        let detail = 'Gagal menyimpan data (HTTP ' + res.status + ')';
+        try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
+        throw new Error(detail);
+    }
+    return res.json();
+}
+
 // Ikon & warna untuk tiap kartu statistik
 const STAR_META = [
     { icon: 'fa-coins',                 bg: 'bg-indigo-50',   color: 'text-indigo-600' },
@@ -102,6 +142,19 @@ async function renderStarCards() {
     const cards = data.star_cards.map((c, i) => {
         const m = STAR_META[i] || {};
         const cvalue = typeof c.value === 'number' && c.value >= 1000 ? formatRupiah(c.value) : c.value;
+        const featured = i === 4 ? ' star-card-featured' : '';
+        if (featured) {
+            return `
+                <div class="star-card${featured}">
+                    <div class="icon-wrap icon-wrap-featured"><i class="fa-solid fa-bullseye"></i></div>
+                    <div>
+                        <div class="value-featured">${cvalue}</div>
+                        <div class="label-featured">${c.label}</div>
+                        <div class="change up featured-change"><i class="fa-solid fa-arrow-up" style="font-size:9px;margin-right:2px"></i>${c.change || 'Prioritas Utama'}</div>
+                    </div>
+                </div>
+            `;
+        }
         return `
             <div class="star-card">
                 <div class="icon-wrap ${m.bg} ${m.color}"><i class="fa-solid ${m.icon}"></i></div>
@@ -128,14 +181,18 @@ function renderQuickActions() {
         { icon: 'fa-solid fa-microchip',           label: 'Sparepart',   bg: 'bg-cyan-600',    color: 'text-cyan-600' },
     ];
 
-    document.getElementById('quickActions').innerHTML = actions.map(a => `
-        <button class="qa-card" style="border:none">
-            <span class="qa-card-icon ${a.bg}">
-                <i class="${a.icon}"></i>
-            </span>
-            <span class="qa-card-label ${a.color}">${a.label}</span>
-        </button>
-    `).join('');
+    document.getElementById('quickActions').innerHTML = actions.map((a, i) => {
+        const featured = i === 0 ? ' qa-card-featured' : '';
+        const go = i === 0 ? ' onclick="openServisBaru()"' : '';
+        return `
+            <button class="qa-card${featured}"${go} style="border:none">
+                <span class="qa-card-icon ${a.bg}">
+                    <i class="${a.icon}"></i>
+                </span>
+                <span class="qa-card-label ${a.color}">${a.label}</span>
+            </button>
+        `;
+    }).join('');
 }
 // ─────────────────────────────────────────────
 // RENDER: INSIGHT CARDS (dari API overview)
@@ -145,10 +202,10 @@ async function renderInsights() {
     const data = await apiGet('/overview');
     const items = data.insight;
     const iconMap = {
-        'Dikerjakan': 'fa-wrench',
-        'Terlambat': 'fa-clock',
-        'Menunggu Acc': 'fa-hourglass-half',
-        'Piutang': 'fa-hand-holding-dollar',
+        'Unit Masuk': 'fa-right-to-bracket',
+        'Unit Selesai': 'fa-circle-check',
+        'Unit Cash': 'fa-money-bill-wave',
+        'Unit Pending': 'fa-hourglass-half',
     };
     document.getElementById('insightCards').innerHTML = items.map(it => `
         <div class="insight-card">
@@ -250,8 +307,12 @@ function initNav() {
     links.forEach(link => {
         link.addEventListener('click', function (e) {
             e.preventDefault();
-            links.forEach(l => l.classList.remove('active'));
-            this.classList.add('active');
+            const page = this.dataset.page;
+            if (page === 'servisbaru') {
+                showPage('receive');
+            } else {
+                showPage('dashboard');
+            }
             if (window.innerWidth < 640) toggleSidebar(false);
         });
     });
@@ -383,12 +444,92 @@ function initLogin() {
 // INIT
 // ─────────────────────────────────────────────
 
+async function loadSmartHistory() {
+    const phone = document.getElementById('rcPhone').value.trim();
+    const box = document.getElementById('smartHistory');
+    const list = document.getElementById('smartHistoryList');
+    if (!phone) { box.classList.add('hidden'); return; }
+    try {
+        const rows = await apiGet('/orders/history/' + encodeURIComponent(phone));
+        box.classList.remove('hidden');
+        if (!rows.length) {
+            list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-plus"></i> Konsumen baru - belum ada riwayat servis</div>`;
+            return;
+        }
+        list.innerHTML = rows.map(o => `
+            <div class="history-item">
+                <div class="history-top">
+                    <span class="history-no">${o.no_servis}</span>
+                    <span class="history-status st-${(o.status || '').toLowerCase().replace(/ /g, '')}">${o.status}</span>
+                </div>
+                <div class="history-dev"><i class="fa-solid fa-mobile-screen-button"></i> ${o.device}${o.model ? ' - ' + o.model : ''}</div>
+                <div class="history-meta">
+                    <span><i class="fa-regular fa-calendar"></i> ${o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID') : ''}</span>
+                    <span><i class="fa-solid fa-tags"></i> ${formatRupiah(o.estimate)}</span>
+                </div>
+            </div>
+        `).join('');
+    } catch (e) {
+        box.classList.remove('hidden');
+        list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-triangle-exclamation"></i> Gagal memuat riwayat</div>`;
+    }
+}
+
+async function initReceivePage() {
+    try {
+        const techs = await apiGet('/orders/technicians');
+        const sel = document.getElementById('rcTechnician');
+        sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+    } catch (_) {}
+
+    const phoneEl = document.getElementById('rcPhone');
+    phoneEl.addEventListener('change', loadSmartHistory);
+    phoneEl.addEventListener('keyup', function () { if (this.value.trim().length >= 4) loadSmartHistory(); });
+
+    document.getElementById('receiveForm').addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const btn = document.getElementById('receiveSubmitBtn');
+        const txt = document.getElementById('receiveSubmitText');
+        const fb = document.getElementById('receiveFeedback');
+        fb.classList.add('hidden');
+        btn.disabled = true;
+        txt.textContent = 'Menyimpan...';
+        try {
+            const res = await apiPost('/orders/receive', {
+                customer_name: document.getElementById('rcName').value.trim(),
+                customer_phone: phoneEl.value.trim(),
+                device: document.getElementById('rcDevice').value.trim(),
+                device_password: document.getElementById('rcPassword').value.trim(),
+                damagetype: document.getElementById('rcDamage').value.trim(),
+                repair_plan: document.getElementById('rcPlan').value.trim(),
+                estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
+                dp: parseFloat(document.getElementById('rcDp').value) || 0,
+                technician: document.getElementById('rcTechnician').value,
+                status: document.getElementById('rcStatus').value,
+            });
+            fb.classList.remove('hidden');
+            fb.classList.add('success');
+            fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Unit berhasil didaftarkan! No. Servis: <b>${res.no_servis}</b>`;
+            this.reset();
+            document.getElementById('smartHistory').classList.add('hidden');
+        } catch (err) {
+            fb.classList.remove('hidden');
+            fb.classList.add('error');
+            fb.textContent = err.message;
+        } finally {
+            btn.disabled = false;
+            txt.textContent = 'Terima dan Daftarkan Unit Servis';
+        }
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     updateClock();
     setInterval(updateClock, 1000);
     initNav();
     renderQuickActions();
+    initReceivePage();
     initLogin();
 
     const user = await checkSession();
