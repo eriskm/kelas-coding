@@ -1,14 +1,15 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>BOSS SF - Service System</title>
+    <link rel="icon" type="image/png" href="/static/assets/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="style.css?v=9">
+    <link rel="stylesheet" href="/static/style.css?v=10">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -16,7 +17,7 @@
                 extend: {
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
-                        brand: { 50:'#eef2ff', 100:'#e0e7ff', 500:'#6366f1', 600:'#4f46e5', 700:'#4338ca' },
+                        brand: { 50:'#fef2f2', 100:'#fee2e2', 500:'#dc2626', 600:'#b91c1c', 700:'#991b1b' },
                     }
                 }
             }
@@ -32,34 +33,55 @@
         <div class="bg-blob blob-2"></div>
         <div class="bg-blob blob-3"></div>
 
+        <div class="login-wrap">
         <div class="login-card">
             <div class="login-brand">
-                <img src="assets/logo.png" alt="Logo Toko" class="login-logo">
-                <h1 class="login-title">BOSS SF</h1>
+                <img src="/static/assets/logo.png" alt="Logo Toko" class="login-logo">
+                <h1 class="login-title">BOSS <span>SF</span></h1>
                 <p class="login-subtitle">Service System</p>
             </div>
 
-            <form id="loginForm" autocomplete="off">
+            <h2 class="welcome-title">Selamat Datang Kembali!</h2>
+            <p class="welcome-sub">Masuk untuk mengakses sistem BOSS SF</p>
+
+            <form id="loginForm" autocomplete="off" novalidate>
                 <div class="login-field">
-                    <i class="fa-solid fa-user"></i>
+                    <label class="sr-only" for="loginUsername">Username</label>
+                    <i class="fa-solid fa-user" aria-hidden="true"></i>
                     <input type="text" id="loginUsername" placeholder="Username" required>
                 </div>
                 <div class="login-field">
-                    <i class="fa-solid fa-lock"></i>
+                    <label class="sr-only" for="loginPasscode">Passcode</label>
+                    <i class="fa-solid fa-lock" aria-hidden="true"></i>
                     <input type="password" id="loginPasscode" placeholder="Passcode" required>
-                    <button type="button" class="pw-toggle" id="pwToggle"><i class="fa-solid fa-eye"></i></button>
+                    <button type="button" class="pw-toggle" id="pwToggle" aria-label="Tampilkan passcode"><i class="fa-solid fa-eye"></i></button>
                 </div>
                 <div id="loginError" class="login-error hidden">
                     <i class="fa-solid fa-circle-exclamation"></i>
                     <span id="loginErrorText"></span>
                 </div>
+                <div class="login-row">
+                    <label class="remember">
+                        <input type="checkbox" id="rememberMe" checked>
+                        <span class="checkmark" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+                        <span>Ingat Saya</span>
+                    </label>
+                    <button type="button" class="forgot-link" id="forgotLink">Lupa Password?</button>
+                </div>
                 <button type="submit" class="login-btn" id="loginBtn">
-                    <span id="loginBtnText">Masuk</span>
+                    <span id="loginBtnText">Login</span>
                     <i class="fa-solid fa-arrow-right-to-bracket login-btn-icon" id="loginBtnIcon"></i>
                 </button>
             </form>
 
-            <p class="login-hint"><i class="fa-regular fa-circle-question"></i> Akun default: <b>superadmin</b> / passcode <b>Admin4100</b></p>
+            <div class="login-divider"><span>atau masuk dengan</span></div>
+            <div class="social-row">
+                <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-brands fa-google"></i></button>
+                <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-brands fa-microsoft"></i></button>
+                <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-solid fa-fingerprint"></i></button>
+            </div>
+        </div>
+        <p class="login-footer">&copy; 2026 <b>BOSS SF</b> - Service System</p>
         </div>
     </div>
 
@@ -74,7 +96,7 @@
                 <span class="traffic-light tl-green"></span>
             </div>
             <div class="flex items-center gap-2">
-                <img src="assets/logo.png" alt="Logo Toko" class="w-5 h-5 object-contain">
+                <img src="/static/assets/logo.png" alt="Logo Toko" class="w-5 h-5 object-contain">
                 <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">BOSS SF</span>
             </div>
             <div class="w-16"></div>
@@ -92,7 +114,7 @@
                 <!-- User Profile -->
                 <div class="px-4 py-4 border-b border-white/5">
                     <div class="flex items-center gap-3">
-                        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-purple-600 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-brand-500/20">
+                        <div class="w-9 h-9 rounded-full bg-gradient-to-br from-brand-500 to-red-800 flex items-center justify-center text-white text-sm font-bold shadow-lg shadow-brand-500/20">
                             A
                         </div>
                         <div class="min-w-0">
@@ -104,13 +126,17 @@
 
                 <!-- Nav Menu -->
                 <nav class="flex-1 px-3 py-3 space-y-0.5 overflow-y-auto" id="sidebarNav">
-                    <a href="#" class="nav-link active" data-page="transaksi">
-                        <i class="fa-solid fa-money-bill-transfer"></i>
-                        <span>Transaksi</span>
+                    <a href="#" class="nav-link active" data-page="dashboard">
+                        <i class="fa-solid fa-gauge-high"></i>
+                        <span>Dashboard</span>
                     </a>
                     <a href="#" class="nav-link" data-page="servisbaru">
                         <i class="fa-solid fa-plus"></i>
                         <span>Servis Baru</span>
+                    </a>
+                    <a href="#" class="nav-link" data-page="transaksi">
+                        <i class="fa-solid fa-money-bill-transfer"></i>
+                        <span>Transaksi</span>
                     </a>
                     <a href="#" class="nav-link" data-page="pelanggan">
                         <i class="fa-solid fa-users"></i>
@@ -206,49 +232,778 @@
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                             <div class="panel">
                                 <h3 class="panel-title">Aksi Cepat</h3>
-                                <div class="grid grid-cols-2 gap-2 sm:gap-3" id="quickActions"></div>
+                                <div class="action-row" id="quickActions"></div>
                             </div>
                             <div class="panel">
                                 <h3 class="panel-title">Insight Hari Ini</h3>
-                                <div class="grid grid-cols-2 gap-2 sm:gap-2.5" id="insightCards"></div>
+                                <div class="metric-row" id="insightCards"></div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Two Large Charts -->
+                    <!-- Dashboard Analytics (ref: konten.png) -->
                     <div class="px-3 sm:px-5 pb-4 sm:pb-5">
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
-                            <div class="panel">
-                                <h3 class="panel-title">Statistik Status Transaksi</h3>
+                            <!-- KIRI: Statistik Status Transaksi -->
+                            <div class="panel dash-card dash-left">
+                                <div class="dash-card-head">
+                                    <h3 class="dash-card-title"><span class="dash-card-bar"></span>Statistik Status Transaksi</h3>
+                                    <select id="statusRange" class="range-pill range-select" aria-label="Periode">
+                                        <option value="7" selected>7 Hari Terakhir</option>
+                                    </select>
+                                </div>
                                 <div id="chartStatusTransaksi"></div>
+                                <div class="status-mini-grid" id="statusMiniGrid"></div>
+                                <div class="insight-banner insight-blue" id="insightStatus"></div>
                             </div>
-                            <div class="panel">
-                                <h3 class="panel-title">Tren Kerusakan Minggu Ini</h3>
-                                <div id="chartKerusakan"></div>
+                            <!-- KANAN: Tren Kerusakan Minggu Ini -->
+                            <div class="panel dash-card">
+                                <div class="dash-card-head">
+                                    <h3 class="dash-card-title"><span class="dash-fire"><i class="fa-solid fa-fire"></i></span>Tren Kerusakan Minggu Ini</h3>
+                                    <button type="button" class="detail-btn" onclick="showTransaksi()">Detail Lengkap <i class="fa-solid fa-arrow-up-right"></i></button>
+                                </div>
+                                <div class="damage-rank" id="damageRank"></div>
+                                <div class="highlight-row" id="damageHighlight"></div>
+                                <div class="insight-banner insight-amber" id="insightDamage"></div>
                             </div>
                         </div>
                     </div>
 
                     </div><!-- /pageDashboard -->
 
-                    <!-- ===== PAGE: PENERIMAAN UNIT BARU ===== -->
-                    <section id="pageReceive" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+                    <!-- ===== PAGE: TRANSAKSI ===== -->
+                    <section id="pageTransaksi" class="hidden px-3 sm:px-5 py-3 sm:py-4 space-y-3">
 
-                        <!-- header -->
-                        <div class="flex items-center justify-between">
+                        <div class="flex items-center justify-between flex-wrap gap-3">
                             <div>
                                 <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
-                                    <span class="receive-title-icon"><i class="fa-solid fa-truck-ramp-box"></i></span>
-                                    Penerimaan Unit Baru
+                                    <i class="fa-solid fa-money-bill-transfer text-brand-500"></i>
+                                    Transaksi
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftarkan unit servis konsumen baru ke sistem</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftar seluruh transaksi servis</p>
                             </div>
-                            <button type="button" onclick="showDashboard()" class="receive-back-btn">
-                                <i class="fa-solid fa-arrow-left"></i> Kembali
+                            <div class="tx-toolbar">
+                                <div class="tx-search-wrap">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="txSearch" class="receive-input" placeholder="Cari device, nama, WA, teknisi..." autocomplete="off">
+                                </div>
+                                <input type="date" id="txDateFilter" class="receive-input" aria-label="Filter tanggal" title="Filter tanggal">
+                                <button type="button" onclick="showServisBaru()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
+                                    <i class="fa-solid fa-plus"></i> Servis Baru
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="panel overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="tx-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Tanggal</th>
+                                            <th>Device</th>
+                                            <th>User / WA</th>
+                                            <th>Status</th>
+                                            <th>Kerusakan</th>
+                                            <th>Perbaikan</th>
+                                            <th>Teknisi</th>
+                                            <th class="text-right">Laba</th>
+                                            <th class="text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="txBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="txEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-inbox text-3xl mb-2 block opacity-40"></i>
+                                Belum ada transaksi.
+                            </div>
+                            <div id="txLoading" class="text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
+                            </div>
+                            <div id="txPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 py-2 border-t border-gray-100 dark:border-white/5">
+                                <div id="txInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                                <div id="txPageBtns" class="flex items-center gap-1.5"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== PAGE: PELANGGAN ===== -->
+                    <section id="pagePelanggan" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                    <i class="fa-solid fa-users text-brand-500"></i>
+                                    Pelanggan
+                                </h2>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Master data pelanggan & riwayat servis terakhir</p>
+                            </div>
+                            <div class="tx-toolbar">
+                                <div class="tx-search-wrap">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="plSearch" class="receive-input" placeholder="Cari nama atau No. WA..." autocomplete="off">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="panel overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="tx-table pl-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Nama Konsumen</th>
+                                            <th>No. WhatsApp</th>
+                                            <th>Device Terakhir</th>
+                                            <th>Tindakan Terakhir</th>
+                                            <th class="text-right">Harga Terakhir</th>
+                                            <th class="text-center">Total Servis</th>
+                                            <th>Terakhir Servis</th>
+                                            <th class="text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="plBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="plEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-users text-3xl mb-2 block opacity-40"></i>
+                                Belum ada pelanggan.
+                            </div>
+                            <div id="plLoading" class="text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
+                            </div>
+                            <div id="plPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div id="plInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                                <div id="plPageBtns" class="flex items-center gap-1.5"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: HISTORI PELANGGAN ===== -->
+                    <section id="pageHistory" class="float-window" role="dialog" aria-label="Histori Servis Pelanggan">
+                        <div class="float-titlebar" id="histTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title" id="histTitle">Histori Servis</h2>
+                                    <p class="float-sub" id="histSub">Riwayat seluruh transaksi servis pelanggan</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closePlHist()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <div id="histSummary"></div>
+                            <div class="panel receive-panel">
+                                <div class="overflow-x-auto">
+                                    <table class="tx-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>No</th>
+                                                <th>No. Servis</th>
+                                                <th>Tanggal</th>
+                                                <th>Device</th>
+                                                <th>Tindakan</th>
+                                                <th class="text-right">Harga</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="plHistBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== PAGE: GARANSI ===== -->
+                    <section id="pageGaransi" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                    <i class="fa-solid fa-shield-halved text-brand-500"></i>
+                                    Garansi
+                                </h2>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftar garansi servis pelanggan</p>
+                            </div>
+                        </div>
+
+                        <div class="gr-top-row">
+                            <div class="gr-kpi-grid" id="grKpi"></div>
+                            <div class="tx-toolbar gr-tools">
+                                <div class="tx-search-wrap gr-search">
+                                    <i class="fa-solid fa-magnifying-glass"></i>
+                                    <input type="text" id="grSearch" class="receive-input" placeholder="Cari Nama User, No. WA, atau Device..." autocomplete="off">
+                                </div>
+                                <input type="date" id="grDateFilter" class="receive-input" aria-label="Filter tanggal" title="Garansi berlaku pada tanggal">
+                                <select id="grStatusFilter" class="receive-input" aria-label="Filter status">
+                                    <option value="">Semua Status</option>
+                                    <option value="aktif">Aktif</option>
+                                    <option value="segera">Akan Berakhir</option>
+                                    <option value="expired">Expired</option>
+                                    <option value="klaim">Klaim</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="panel overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="tx-table gr-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Nama User</th>
+                                            <th>Device</th>
+                                            <th>Tgl Mulai</th>
+                                            <th>Tgl Akhir</th>
+                                            <th>Status</th>
+                                            <th class="text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="grBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="grEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-shield-halved text-3xl mb-2 block opacity-40"></i>
+                                Belum ada data garansi.
+                            </div>
+                            <div id="grLoading" class="text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
+                            </div>
+                            <div id="grPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div id="grInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                                <div id="grPageBtns" class="flex items-center gap-1.5"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: DETAIL GARANSI ===== -->
+                    <section id="pageWarranty" class="float-window" role="dialog" aria-label="Detail Garansi">
+                        <div class="float-titlebar" id="warrantyTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title" id="warrantyTitle">Detail Garansi</h2>
+                                    <p class="float-sub" id="warrantySub">Informasi lengkap garansi servis</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeGrDetail()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <div id="warrantySummary"></div>
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Detail Servis Sebelumnya</h3>
+                                        <span class="text-[10.5px] text-gray-400">Pekerjaan yang dicover garansi ini</span>
+                                    </div>
+                                </div>
+                                <div class="rc-cust-grid" id="warrantyDetail"></div>
+                            </div>
+                            <div id="warrantyClaim"></div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: KLAIM GARANSI ===== -->
+                    <section id="pageClaim" class="float-window" role="dialog" aria-label="Klaim Garansi">
+                        <div class="float-titlebar" id="claimTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-file-circle-plus"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title">Klaim Garansi</h2>
+                                    <p class="float-sub" id="claimSub">Form pengajuan klaim (tahap UI, tersimpan lokal)</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeGrClaim()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <form id="claimForm" autocomplete="off">
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-id-card"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Identitas Pelanggan</h3>
+                                            <span class="text-[10.5px] text-gray-400">Otomatis dari data garansi</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="clName">Nama User</label>
+                                            <input class="receive-input" type="text" id="clName" readonly>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clPhone">No. WhatsApp</label>
+                                            <input class="receive-input" type="text" id="clPhone" readonly>
+                                        </div>
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="clDevice">Device</label>
+                                            <input class="receive-input" type="text" id="clDevice" readonly>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel receive-panel mt-3">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Data Klaim</h3>
+                                            <span class="text-[10.5px] text-gray-400">Keluhan dan penanganan klaim</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="clKeluhan">Keluhan / Kerusakan Saat Klaim <b class="text-red-500">*</b></label>
+                                            <textarea class="receive-input" id="clKeluhan" rows="2" placeholder="cth. LCD bergaris setelah 2 minggu pemakaian" required></textarea>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clTgl">Tanggal Klaim</label>
+                                            <input class="receive-input" type="date" id="clTgl">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clTindakan">Tindakan</label>
+                                            <select class="receive-input" id="clTindakan">
+                                                <option value="Diagnosa ulang">Diagnosa ulang</option>
+                                                <option value="Perbaikan ulang">Perbaikan ulang</option>
+                                                <option value="Ganti sparepart">Ganti sparepart</option>
+                                                <option value="Eskalasi teknisi senior">Eskalasi teknisi senior</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clStatus">Status Klaim</label>
+                                            <select class="receive-input" id="clStatus">
+                                                <option value="Diajukan" selected>Diajukan</option>
+                                                <option value="Diproses">Diproses</option>
+                                                <option value="Selesai">Selesai</option>
+                                                <option value="Ditolak">Ditolak</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
+                                    <button type="submit" id="claimSubmitBtn" class="receive-submit-btn">
+                                        <i class="fa-solid fa-check-double"></i>
+                                        <span id="claimSubmitText">Ajukan Klaim</span>
+                                    </button>
+                                    <div id="claimFeedback" class="hidden receive-feedback"></div>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <!-- ===== PAGE: SPAREPART ===== -->
+                    <section id="pageSparepart" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                    <i class="fa-solid fa-microchip text-brand-500"></i>
+                                    Sparepart
+                                </h2>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Stok & harga sparepart toko</p>
+                            </div>
+                        </div>
+
+                        <div class="panel overflow-hidden">
+                            <div class="px-4 pt-4">
+                                <div class="relative">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                                    <input type="text" id="spSearch" class="receive-input pl-9" placeholder="Cari jenis, merek, device, kategori..." autocomplete="off">
+                                </div>
+                            </div>
+                            <div class="overflow-x-auto mt-3">
+                                <table class="tx-table sp-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Tgl Masuk</th>
+                                            <th>Kategori</th>
+                                            <th>Merek</th>
+                                            <th>Jenis Barang</th>
+                                            <th>Device</th>
+                                            <th class="text-center">Qty</th>
+                                            <th class="text-right">Beli</th>
+                                            <th class="text-right">Jual</th>
+                                            <th class="text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="spBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="spEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>
+                                Belum ada data sparepart.
+                            </div>
+                            <div id="spLoading" class="text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
+                            </div>
+                            <div id="spPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div id="spInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                                <div id="spPageBtns" class="flex items-center gap-1.5"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== PAGE: KEUANGAN ===== -->
+                    <section id="pageKeuangan" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                    <i class="fa-solid fa-coins text-brand-500"></i>
+                                    Keuangan
+                                </h2>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola arus kas, pengeluaran, dan alokasi profit BOSS SF.</p>
+                            </div>
+                        </div>
+
+                        <!-- Buku Kas + Alokasi -->
+                        <div class="grid grid-cols-1 lg:grid-cols-5 gap-2.5 sm:gap-3">
+                            <div class="panel lg:col-span-3 ku-kas-panel">
+                                <h3 class="panel-title">Buku Kas</h3>
+                                <p class="ku-sub">Ringkasan arus kas berdasarkan transaksi keuangan.</p>
+                                <div class="overflow-x-auto">
+                                    <table class="tx-table cash-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Uraian</th>
+                                                <th class="numeric-c cash-num">Debit</th>
+                                                <th class="numeric-c cash-num">Kredit</th>
+                                                <th class="numeric-r cash-num">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuKasBody"></tbody>
+                                    </table>
+                                </div>
+                                <form id="kuKasForm" autocomplete="off" class="ku-kas-form">
+                                    <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] gap-2.5 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+                                        <select class="receive-input" id="kuKasJenis">
+                                            <option value="Masuk" selected>Masuk</option>
+                                            <option value="Keluar">Keluar</option>
+                                        </select>
+                                        <select class="receive-input" id="kuKasKategori">
+                                            <option value="Penjualan Service" selected>Penjualan Service</option>
+                                            <option value="Modal Part">Modal Part</option>
+                                            <option value="Modal Jasa">Modal Jasa</option>
+                                            <option value="Beban Gaji">Beban Gaji</option>
+                                            <option value="Beban Operasional">Beban Operasional</option>
+                                            <option value="Lainnya">Lainnya</option>
+                                        </select>
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                            <input class="receive-input pl-9" type="number" id="kuKasNominal" min="1" placeholder="Nominal" required>
+                                        </div>
+                                        <button type="submit" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent justify-center col-span-2 lg:col-span-1">
+                                            <i class="fa-solid fa-plus"></i> Tambah
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="panel lg:col-span-2">
+                                <h3 class="panel-title">Alokasi Profit</h3>
+                                <div id="kuDonut"></div>
+                                <div class="al-list" id="kuAllocList"></div>
+                                <div class="al-total"><span>Total Profit</span><b id="kuTotalProfit"></b></div>
+                            </div>
+                        </div>
+
+                        <!-- Riwayat -->
+                        <div class="panel overflow-hidden">
+                            <h3 class="panel-title px-0">Riwayat Transaksi</h3>
+                            <div class="overflow-x-auto">
+                                <table class="tx-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>No</th>
+                                            <th>Tanggal</th>
+                                            <th>Jenis</th>
+                                            <th>Kategori</th>
+                                            <th>Keterangan</th>
+                                            <th class="text-right">Nominal</th>
+                                            <th class="text-center">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="kuBody"></tbody>
+                                </table>
+                            </div>
+                            <div id="kuEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                                <i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>
+                                Belum ada riwayat transaksi.
+                            </div>
+                            <div id="kuPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div id="kuInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                                <div id="kuPageBtns" class="flex items-center gap-1.5"></div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== PAGE: AKUN ===== -->
+                    <section id="pageAkun" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div>
+                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                    <i class="fa-solid fa-user-gear text-brand-500"></i>
+                                    Kelola Akun
+                                </h2>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola akun pengguna dan hak akses sistem BOSS SF</p>
+                            </div>
+                            <button type="button" onclick="showFormAkun()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
+                                <i class="fa-solid fa-plus"></i> Tambah Akun
                             </button>
                         </div>
 
+                        <!-- Account Summary -->
+                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
+                            <div class="panel flex items-center gap-4 p-4 rounded-xl">
+                                <div class="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
+                                    <i class="fa-solid fa-users text-lg"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">TOTAL AKUN</div>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-white">5</div>
+                                </div>
+                            </div>
+                            <div class="panel flex items-center gap-4 p-4 rounded-xl">
+                                <div class="w-10 h-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400">
+                                    <i class="fa-solid fa-user-check text-lg"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">AKUN AKTIF</div>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-white">4</div>
+                                </div>
+                            </div>
+                            <div class="panel flex items-center gap-4 p-4 rounded-xl">
+                                <div class="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400">
+                                    <i class="fa-solid fa-user-shield text-lg"></i>
+                                </div>
+                                <div>
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">ADMIN</div>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-white">2</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Search & Filter -->
+                        <div class="panel p-3">
+                            <div class="flex flex-col sm:flex-row gap-3">
+                                <div class="relative flex-1">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                                    <input type="text" class="receive-input pl-9 w-full" placeholder="Cari Nama / Username..." autocomplete="off">
+                                </div>
+                                <select class="receive-input sm:w-48">
+                                    <option value="">Semua Role</option>
+                                    <option value="Admin">Admin</option>
+                                    <option value="Teknisi">Teknisi</option>
+                                </select>
+                                <select class="receive-input sm:w-48">
+                                    <option value="">Semua Status</option>
+                                    <option value="Aktif">Aktif</option>
+                                    <option value="Nonaktif">Nonaktif</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <!-- Data Table -->
+                        <div class="panel overflow-hidden">
+                            <div class="overflow-x-auto">
+                                <table class="tx-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th class="w-12 text-center">No</th>
+                                            <th>Nama</th>
+                                            <th>Username</th>
+                                            <th class="text-center">Role</th>
+                                            <th class="text-center">Status</th>
+                                            <th>Terakhir Login</th>
+                                            <th class="text-center w-24">Aksi</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr class="tx-row">
+                                            <td class="text-center text-gray-500">1</td>
+                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Andi Pratama</td>
+                                            <td class="text-gray-500">andi_admin</td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">Admin</span></td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
+                                            <td class="text-gray-500 text-[11px]">Hari ini, 08:30</td>
+                                            <td class="text-center">
+                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr class="tx-row bg-gray-50/50 dark:bg-white/[0.02]">
+                                            <td class="text-center text-gray-500">2</td>
+                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Budi Santoso</td>
+                                            <td class="text-gray-500">budi_super</td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">Admin</span></td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
+                                            <td class="text-gray-500 text-[11px]">Kemarin, 14:15</td>
+                                            <td class="text-center">
+                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr class="tx-row">
+                                            <td class="text-center text-gray-500">3</td>
+                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Citra Kirana</td>
+                                            <td class="text-gray-500">citra_tek</td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Teknisi</span></td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
+                                            <td class="text-gray-500 text-[11px]">Hari ini, 09:05</td>
+                                            <td class="text-center">
+                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr class="tx-row bg-gray-50/50 dark:bg-white/[0.02]">
+                                            <td class="text-center text-gray-500">4</td>
+                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Doni Setiawan</td>
+                                            <td class="text-gray-500">doni_tek</td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Teknisi</span></td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
+                                            <td class="text-gray-500 text-[11px]">Hari ini, 10:20</td>
+                                            <td class="text-center">
+                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            </td>
+                                        </tr>
+                                        <tr class="tx-row">
+                                            <td class="text-center text-gray-500">5</td>
+                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Eko Wahyudi</td>
+                                            <td class="text-gray-500">eko_tek</td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Teknisi</span></td>
+                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400">Nonaktif</span></td>
+                                            <td class="text-gray-500 text-[11px]">12 Ags 2026, 16:45</td>
+                                            <td class="text-center">
+                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan 1-5 dari 5 akun</div>
+                                <div class="flex items-center gap-1.5">
+                                    <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
+                                    <button class="w-7 h-7 rounded flex items-center justify-center bg-brand-500 text-white font-bold text-xs">1</button>
+                                    <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: FORM AKUN ===== -->
+                    <section id="pageFormAkun" class="float-window" role="dialog" aria-label="Form Akun">
+                        <div class="float-titlebar" id="akunTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-user-plus"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title">Tambah Akun</h2>
+                                    <p class="float-sub">Tambahkan akun pengguna baru ke sistem</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeFormAkun()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div class="float-body">
+                            <form id="akunForm" autocomplete="off">
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-id-card"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Informasi Akun</h3>
+                                            <span class="text-[10.5px] text-gray-400">Detail data akun dan kredensial login</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="akNama">Nama Lengkap <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="akNama" placeholder="cth. Budi Santoso" required>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="akUsername">Username <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="akUsername" placeholder="cth. budi_admin" required>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="akPassword">Password <b class="text-red-500">*</b></label>
+                                            <div class="relative">
+                                                <input class="receive-input" type="password" id="akPassword" placeholder="Masukkan password (opsional saat edit)">
+                                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300"><i class="fa-solid fa-lock"></i></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="panel receive-panel mt-3.5">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-user-shield"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Hak Akses & Status</h3>
+                                            <span class="text-[10.5px] text-gray-400">Tentukan role dan status keaktifan akun</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="akRole">Role</label>
+                                            <select class="receive-input" id="akRole">
+                                                <option value="Admin">Admin</option>
+                                                <option value="Teknisi" selected>Teknisi</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="akStatus">Status</label>
+                                            <select class="receive-input" id="akStatus">
+                                                <option value="Aktif" selected>Aktif</option>
+                                                <option value="Nonaktif">Nonaktif</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
+                                    <button type="button" onclick="closeFormAkun()" class="receive-back-btn flex-1 justify-center sm:flex-none">
+                                        Batal
+                                    </button>
+                                    <button type="submit" class="receive-submit-btn flex-1 justify-center">
+                                        <i class="fa-solid fa-save"></i>
+                                        <span>Simpan Akun</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: SERVIS BARU ===== -->
+                    <section id="pageReceive" class="float-window" role="dialog" aria-label="Servis Baru">
+                        <div class="float-titlebar" id="receiveTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-truck-ramp-box"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title">Servis Baru</h2>
+                                    <p class="float-sub">Daftarkan unit servis konsumen baru ke sistem</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeServisBaru()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+
+                        <div class="float-body">
                         <form id="receiveForm" autocomplete="off">
+
+                            <!-- PROGRESS STEPPER -->
+                            <ol id="rcSteps" class="rc-steps" aria-label="Alur penerimaan unit">
+                                <li class="rc-step is-active" data-step="1"><span class="rc-dot">1</span><span class="rc-step-label">Data Konsumen</span></li>
+                                <li class="rc-step" data-step="2"><span class="rc-dot">2</span><span class="rc-step-label">Diagnostik</span></li>
+                                <li class="rc-step" data-step="3"><span class="rc-dot">3</span><span class="rc-step-label">Estimasi &amp; Penugasan</span></li>
+                                <li class="rc-step" data-step="4"><span class="rc-dot">4</span><span class="rc-step-label">Siap Eksekusi</span></li>
+                            </ol>
+
+                            <div class="rc-layout">
+                            <div class="rc-main">
 
                             <!-- PANEL 1: Data Konsumen -->
                             <div class="panel receive-panel">
@@ -265,25 +1020,13 @@
                                         <input class="receive-input" type="text" id="rcName" placeholder="cth. Andi Pratama" required>
                                     </div>
                                     <div class="field">
-                                        <label class="field-label" for="rcPhone">No. WhatsApp</label>
-                                        <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="numeric">
+                                        <label class="field-label" for="rcPhone">No. WhatsApp <b class="text-red-500">*</b></label>
+                                        <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="tel" autocomplete="off" required>
                                     </div>
                                 </div>
                             </div>
 
-                            <!-- History Cerdas -->
-                            <div id="smartHistory" class="hidden">
-                                <div class="receive-panel receive-panel-glow">
-                                    <div class="receive-panel-head">
-                                        <span class="receive-head-ico history-ico"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
-                                        <div>
-                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">History Cerdas</h3>
-                                            <span class="text-[10.5px] text-gray-400">Riwayat servis konsumen ini sebelumnya</span>
-                                        </div>
-                                    </div>
-                                    <div id="smartHistoryList" class="mt-2"></div>
-                                </div>
-                            </div>
+                            <!-- History Cerdas: panel samping (rc-side) -->
 
                             <!-- PANEL 2: Identitas, Diagnosa & Checklist Unit -->
                             <div class="panel receive-panel">
@@ -294,7 +1037,7 @@
                                         <span class="text-[10.5px] text-gray-400">Informasi perangkat yang diterima</span>
                                     </div>
                                 </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
                                     <div class="field">
                                         <label class="field-label" for="rcDevice">Device / Model HP <b class="text-red-500">*</b></label>
                                         <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" required>
@@ -302,17 +1045,34 @@
                                     <div class="field">
                                         <label class="field-label" for="rcPassword">Password / Pola</label>
                                         <div class="relative">
-                                            <input class="receive-input" type="text" id="rcPassword" placeholder="cth. 1234">
-                                            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300"><i class="fa-solid fa-lock"></i></span>
+                                            <input class="receive-input pr-10" type="password" id="rcPassword" placeholder="cth. 1234" autocomplete="off">
+                                            <button type="button" id="rcPwToggle" class="rc-pw-toggle" aria-label="Tampilkan password"><i class="fa-solid fa-eye"></i></button>
                                         </div>
                                     </div>
                                     <div class="field">
-                                        <label class="field-label" for="rcDamage">Analisa Kerusakan</label>
-                                        <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi"></textarea>
+                                        <label class="field-label" for="rcImei">IMEI / Serial Number</label>
+                                        <input class="receive-input" type="text" id="rcImei" placeholder="cth. 356938035643809" inputmode="numeric" autocomplete="off">
+                                    </div>
+                                    <div class="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                    <div class="field">
+                                        <label class="field-label" for="rcDamage">Analisa Kerusakan <b class="text-red-500">*</b></label>
+                                        <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi" required></textarea>
                                     </div>
                                     <div class="field">
-                                        <label class="field-label" for="rcPlan">Rencana Perbaikan</label>
+                                        <label class="field-label" for="rcPlan">Rencana Tindakan Perbaikan</label>
                                         <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
+                                    </div>
+                                </div>
+                                </div>
+                                <div class="rc-check-wrap">
+                                    <p class="field-label rc-check-title">Checklist Unit <span class="rc-check-sub">(kondisi saat diterima — tahap UI, belum tersimpan ke database)</span></p>
+                                    <div class="rc-check-grid">
+                                        <label class="rc-check"><input type="checkbox" id="rcCheckLcd"><span>Kondisi LCD</span></label>
+                                        <label class="rc-check"><input type="checkbox" id="rcCheckFrame"><span>Frame / Casing</span></label>
+                                        <label class="rc-check"><input type="checkbox" id="rcCheckCamera"><span>Kamera</span></label>
+                                        <label class="rc-check"><input type="checkbox" id="rcCheckButton"><span>Tombol</span></label>
+                                        <label class="rc-check"><input type="checkbox" id="rcCheckCharging"><span>Charging</span></label>
+                                        <label class="rc-check"><input type="checkbox" id="rcCheckKit"><span>Kelengkapan</span></label>
                                     </div>
                                 </div>
                             </div>
@@ -364,7 +1124,7 @@
                             </div>
 
                             <!-- submit + feedback -->
-                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
+                            <div class="rc-submit flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
                                 <button type="submit" id="receiveSubmitBtn" class="receive-submit-btn">
                                     <i class="fa-solid fa-check-double"></i>
                                     <span id="receiveSubmitText">Terima dan Daftarkan Unit Servis</span>
@@ -372,7 +1132,43 @@
                                 <div id="receiveFeedback" class="hidden receive-feedback"></div>
                             </div>
 
+                            </div><!-- /rc-main -->
+                            <aside class="rc-side">
+                                <!-- HISTORI CERDAS -->
+                                <div id="smartHistory" class="panel receive-panel receive-panel-glow rc-hist">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico history-ico"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Cerdas</h3>
+                                            <span class="text-[10.5px] text-gray-400">Auto-sync customer history</span>
+                                        </div>
+                                        <span id="smartHistoryState" class="rc-hist-state">Kosong</span>
+                                    </div>
+                                    <div id="smartHistoryList" class="mt-2">
+                                        <div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> Ketik Nama / No. WhatsApp untuk cek histori pelanggan.</div>
+                                    </div>
+                                </div>
+                                <!-- SHORTCUT KERJA CEPAT -->
+                                <div class="panel receive-panel rc-shortcut">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-keyboard"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Shortcut Kerja Cepat</h3>
+                                            <span class="text-[10.5px] text-gray-400">Aktif saat form Servis Baru terbuka</span>
+                                        </div>
+                                    </div>
+                                    <ul class="rc-keys">
+                                        <li><span><kbd>Enter</kbd></span> Pindah kolom</li>
+                                        <li><span><kbd>F2</kbd></span> Focus Nama</li>
+                                        <li><span><kbd>F4</kbd></span> Focus Device</li>
+                                        <li class="is-primary"><span><kbd>F8</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd></span> Simpan Data</li>
+                                    </ul>
+                                </div>
+                            </aside>
+                            </div><!-- /rc-layout -->
+
                         </form>
+                        </div><!-- /float-body -->
                     </section>
 
                 </div>
@@ -395,7 +1191,11 @@
 
                 <!-- Mobile Bottom Nav -->
                 <nav class="mobile-nav sm:hidden flex items-center justify-around h-14 flex-shrink-0">
-                    <button class="mobile-nav-item active" data-page="transaksi">
+                    <button class="mobile-nav-item active" data-page="dashboard">
+                        <i class="fa-solid fa-gauge-high"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <button class="mobile-nav-item" data-page="transaksi">
                         <i class="fa-solid fa-money-bill-transfer"></i>
                         <span>Transaksi</span>
                     </button>
@@ -420,6 +1220,6 @@
         </div>
     </div>
 
-    <script src="script.js?v=9"></script>
+    <script src="/static/script.js?v=11"></script>
 </body>
 </html>

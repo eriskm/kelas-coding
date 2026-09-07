@@ -82,7 +82,7 @@ Detail:
 
 ## 5. DASHBOARD UI
 
-Struktur `pageDashboard`: grid `#starCards` (5 kartu), grid `#quickActions` + `#insightCards`, grid chart status (`#chartStatusTransaksi` + `#statusMiniGrid` + `#insightStatus`) dan tren kerusakan (`#damageRank` + `#damageHighlight` + `#insightDamage` + tombol Detail → `showTransaksi()`).
+Struktur `pageDashboard`: grid `#starCards` (5 kartu), grid `#quickActions` + `#insightCards`, grid chart status (`#statusRange` select periode + `#chartStatusTransaksi` + `#statusMiniGrid` 10 kartu + `#insightStatus` AI) dan tren kerusakan (`#damageRank` + `#damageHighlight` + `#insightDamage` + tombol Detail → `showTransaksi()`).
 
 Hubungan:
 
@@ -100,8 +100,8 @@ render UI (innerHTML kartu + ApexCharts line/bar + mini grid + banner)
 
 * **KPI/star cards:** `renderStarCards()` baca `data.star_cards[5]`, styling via `STAR_META` (emoji+tint, acuan `warna-reference.png`), format `kpiRupiah` (`Rp en-US`), kartu ke-5 (Target Gaji) hitung `kurang = target - bersih` lokal.
 * **Insight:** `renderInsights()` baca `data.insight[4]` (Unit Masuk/Selesai/Cash/Pending).
-* **Chart:** `initCharts()` (ApexCharts smooth line area Masuk/Selesai/Pending), `renderDamageSection()` (horizontal bar gradasi + data label dari `/statistics/damage`), `renderStatusMini()`, `updateChartTheme()` + `getChartHeight/getCommonOpts/chartGridColor/isDark` untuk dark mode.
-* **Status mini:** обикновено ringkasan dari `/overview.stats`.
+* **Chart:** `initCharts()` (Statistik Status Transaksi: ApexCharts smooth area 10 status dummy `STATUS_TX_DUMMY` + marker diskrit per status + data label angka, tanpa fetch — ref `statistic-reference.png`), `renderDamageSection()` (horizontal bar gradasi + data label dari `/statistics/damage`), `renderStatusMini()` (10 kartu `STATUS_TX_DUMMY`, total 21, persen dari total + banner Insight AI), `updateChartTheme()` + `getChartHeight/getCommonOpts/chartGridColor/isDark` untuk dark mode.
+* **Status mini:** 10 kartu status (Analisa 3, Konfirmasi 1, Wait Part 3, Repair 6, Done 6, Failed 1, Garansi 1, Refund/Cancel/Cash 0) + Insight AI (status dominan). Grid 4 kolom desktop / 2 kolom mobile.
 * **Data API vs dummy:** hitung order (`total/done/active/pending/ready`, `omset`, insight) REAL dari `service_orders`; `laba_kotor/total_beban/bersih/target_gaji`, seluruh series status dan damage MOCK hardcode backend.
 * **Fungsi terkait:** `loadDashboard, renderStarCards, renderQuickActions, renderInsights, initCharts, renderStatusMini, renderDamageSection, damageIcon, updateChartTheme, formatRupiah/kpiRupiah, isDark/chartGridColor`.
 
@@ -110,23 +110,20 @@ render UI (innerHTML kartu + ApexCharts line/bar + mini grid + banner)
 * **Tabel transaksi:** `pageTransaksi` → `txBody` dengan kolom aktual No, Tanggal, Device, User/WA, Status, Kerusakan, Perbaikan, Teknisi, Laba (kanan), Aksi (tengah). Badge via `txStatusBadge(status)`, tanggal via `txDate(d)`, laba via `txLaba(o)` + `plRupiah`-sejenis.
 * **Kolom yang ditampilkan:** sesuai header `index.html:293-303`. `Perbaikan` berasal dari `repair_plan`, `Laba` turunan estimate/payment (bukan tabel payments).
 * **Pagination:** backend-side. `TX_PER_PAGE = 10`, state `_txPage/_txTotal/_txTotalPages/_txReq` (guard race). `renderTransaksi()` → `loadTxPage(1)`; `loadTxPage(page)` → `apiGet('/orders?page&limit')` → render baris + `txInfo` (`Halaman p start - end (dari N transaksi)`) + tombol `txPageBtns` (← Sebelumnya, nomor, Berikutnya →). `txPagination` disembunyikan jika total ≤ 10. `txLoading/txEmpty` untuk loading/kosong/gagal (`Gagal memuat data.`).
-* **Search/filter:** BELUM ADA di halaman Transaksi (tidak ada input search di section ini).
-* **Action button:** kolom Aksi per baris (tombol view) memanggil `txDetail(id)`; header ada tombol `Servis Baru` → `showServisBaru()`.
+* **Search/filter:** ADA frontend-only. `#txSearch` (teks, debounce 300ms, cocokkan device/nama/WA/status/kerusakan/teknisi/no. servis) + `#txDateFilter` (type date, cocokkan `service_date`). Saat filter aktif → `loadTxFiltered()` ambil `/orders/latest?limit=500` lalu saring lokal, pagination disembunyikan, info tampil `N hasil filter`. Tanpa filter → `loadTxPage()` paged backend normal. Tanpa perubahan backend.
+* **Action button:** kolom Aksi per baris (tombol view) memanggil `txDetail(id)`; header kanan sebaris `.tx-toolbar`: search + date + tombol Servis Baru → `showServisBaru()`.
 * **Detail/edit/delete:** BELUM ADA sebagai fitur. `txDetail(id)` hanya `alert('Detail transaksi #' + id + ' (belum diimplementasikan)')`.
 * **API yang dipanggil:** hanya `GET /orders?page&limit`.
 * **Fungsi terkait:** `showTransaksi, renderTransaksi, loadTxPage, txStatusBadge, txDate, txLaba, txDetail`.
 
 Yang berjalan vs placeholder: list + pagination REAL; search, detail, edit, hapus masih placeholder/mock.
 
-## 7. PELANGGAN UI
+## 7. PELANGGAN UI (tahap UI: dummy data)
 
-* **Tabel pelanggan:** `pagePelanggan` → `plBody` kolom No, Nama User, No WA, Device Terakhir, Tindakan Terakhir, Harga Terakhir (kanan), Total Servis (tengah, `N×`). Format rupiah via `plRupiah` (`id-ID/IDR`).
-* **Pagination:** backend-side. `PL_PER_PAGE = 10`, state `_plPage/_plTotal/_plTotalPages/_plReq`. `renderPelanggan()` → `loadPlPage(1)` → `apiGet('/customers/summary?...')` → render + `plInfo/plPageBtns`, sembunyikan pagination jika ≤ 10.
-* **Summary/history:** halaman ini adalah summary (satu baris per customer + servis terakhir), bukan full history. `last_device = o.device`, `last_action = o.repair_plan`, `last_price = o.estimate`, `total_servis = count`. Full history per WA ada di History Cerdas (Servis Baru), bukan di halaman ini.
-* **Search:** BELUM ADA. **Action:** BELUM ADA (tidak ada tombol edit/hapus per baris).
-* **API:** hanya `GET /customers/summary?page&limit`.
-* **Fungsi:** `showPelanggan, renderPelanggan, loadPlPage, plRupiah`.
-* **Master vs history:** Customer master (`customers`) vs Service history (`service_orders`). Halaman ini menggabungkan keduanya via agregat backend; satu customer = satu baris meskipun punya banyak order.
+* **Tabel pelanggan:** `pagePelanggan` → `plBody` kolom No (urut, bukan ID), Nama Konsumen, No. WhatsApp, Device Terakhir, Tindakan Terakhir, Harga Terakhir (kanan), Total Servis (tengah, `N×`), Terakhir Servis (tanggal), Aksi (tengah, tombol Lihat Histori). Sumber `PL_DUMMY` 12 pelanggan di `script.js` — 1 record per pelanggan, backend (`GET /customers/summary`) diintegrasikan tahap berikutnya.
+* **Pagination:** lokal, `PL_PER_PAGE = 10` (12 data → 2 halaman), info `Halaman p start - end (dari N pelanggan)`, tombol Sebelumnya/nomor/Berikutnya. Styling/pagination sama seperti sebelumnya.
+* **Lihat Histori:** tombol per baris → `plHist(idx)` buka modal `pageHistory` (draggable, bisa tutup): ringkasan kartu `renderCustSummary` + tabel riwayat `plHistBody` (No, No. Servis, Tanggal, Device, Tindakan, Harga, Status). `closePlHist()` menutup. Index mengikuti hasil filter (`_plView`).
+* **Search:** ADA lokal (`#plSearch`, debounce 300ms): cocokkan Nama / WA (+ device/tindakan), pagination + histori mengikuti hasil filter. **Summary vs history:** tabel = ringkasan per customer; modal = seluruh riwayat transaksi customer tersebut (dari `c.hist` dummy).
 
 ## 8. SERVIS BARU UI
 
@@ -150,8 +147,12 @@ POST /api/orders/receive (apiPost)
 Transaksi diperbarui (feedback sukses + reset form; user buka Transaksi manual untuk melihat)
 ```
 
-* **Field form (sesuai `index.html:817-916`, tanpa karangan):** `rcName*` (text), `rcPhone` (text/numeric), `rcDevice*` (text), `rcPassword` (text + ikon lock), `rcDamage` (textarea), `rcPlan` (textarea), `rcEstimate` (number Rp), `rcDp` (number Rp), `rcTechnician` (select, opsi diisi JS + default `— Pilih Teknisi —`), `rcStatus` (select 8 opsi aktual: `ANALISA` default selected, `KONFIRMASI`, `WAIT PART`, `REPAIR`, `DONE`, `CASH`, `FILED`, `CANCEL` — catat berbeda dengan status backend; didokumentasikan apa adanya).
-* **Validasi frontend:** `required` HTML pada nama + device, `type=number min=0` pada nominal, trim + `parseFloat(...)||0` di JS. Tidak ada validasi pola WA, maks panjang, atau DP ≤ estimasi.
+* **Field form (sesuai `index.html`, tanpa karangan):** `rcName*` (text), `rcPhone*` (text, `inputmode tel` — terima format WA bebas, normalisasi di tahap backend), `rcDevice*` (text), `rcPassword` (type password + eye toggle `rcPwToggle`, default tersembunyi), `rcImei` (opsional, UI-only, belum dikirim ke API), `rcDamage*` (textarea rows 2, full-width), `rcPlan` (textarea rows 2, full-width, label Rencana Tindakan Perbaikan), `rcEstimate` (number Rp), `rcDp` (number Rp), `rcTechnician` (select, opsi diisi JS + default `— Pilih Teknisi —`), `rcStatus` (select 8 opsi aktual — catat berbeda dengan status backend; didokumentasikan apa adanya), checklist UI-only `rcCheckLcd/Frame/Camera/Button/Charging/Kit` (belum tersimpan ke DB).
+* **Progress stepper:** `#rcSteps` 4 step (Data Konsumen → Diagnostik → Estimasi & Penugasan → Siap Eksekusi), status aktif (merah brand) / done (hijau ✓) / pending via `updateReceiveSteps()` dari kelengkapan field.
+* **Tombol utama:** `.rc-submit` sticky di bawah modal (tetap terlihat saat scroll) + teks responsif via `receiveSubmitText`/`receiveFeedback`.
+* **Shortcut:** `initReceiveShortcuts()` aktif saat modal terbuka — Enter pindah kolom, F2 focus Nama, F4 focus Device, F8/Ctrl+S submit (baris F8 di-highlight `is-primary`).
+* **Layout:** `#pageReceive` lebar max 1100px, grid `.rc-layout` (main + side 300px Histori/Shortcut), stack <900px.
+* **Validasi frontend (syarat simpan):** `required` HTML pada Nama + WA + Device + Analisa Kerusakan, `type=number min=0` pada nominal, trim + `parseFloat(...)||0` di JS. Stepper ikut syarat yang sama. Backend masih opsional untuk WA/damagetype — pengetatan backend tahap berikutnya. Tidak ada validasi pola WA, maks panjang, atau DP ≤ estimasi.
 * **API:** `POST /orders/receive` via `apiPost` dengan payload `{customer_name, customer_phone, device, device_password, damagetype, repair_plan, estimate, dp, technician, status}` (`script.js:1512-1523`).
 * **Response:** `ServiceOrderOut` (`res.no_servis` ditampilkan).
 * **UI setelah berhasil:** `#receiveFeedback.success` (`Unit berhasil didaftarkan! No. Servis: <b>...`), `form.reset()`, sembunyikan `smartHistory`. Modal tetap terbuka (tidak auto-close/redirect).
@@ -161,10 +162,10 @@ Transaksi diperbarui (feedback sukses + reset form; user buka Transaksi manual u
 ## 9. HISTORY CERDAS
 
 * **Tujuan:** tampilkan riwayat servis konsumen sebelumnya saat mengetik WA di Servis Baru (panel `#smartHistory` + `#smartHistoryList`, subjudul `Nomor WhatsApp dipakai untuk History Cerdas`).
-* **Input pencarian:** `#rcPhone`. Pemicu: `change` + `keyup` jika panjang trim ≥ 4 (`initReceivePage`).
-* **API yang dipanggil:** `GET /api/orders/history/{phone}` via `apiGet` dengan `encodeURIComponent(phone)` (`loadSmartHistory`).
+* **Input pencarian:** `#rcPhone` (pemicu: `change` + `keyup` ≥4 char) dan `#rcName` (hanya tampilkan hint bila WA kosong, tanpa query). Panel `#smartHistory` selalu tampil di kolom samping dengan badge `#smartHistoryState` (Kosong/Mencari/Ditemukan N/Baru/Gagal).
+* **API yang dipanggil:** `GET /api/orders/history/{phone}` via `apiGet` dengan `encodeURIComponent(phone)` (`loadSmartHistory`, ada guard hasil basi). Integrasi real yang sudah ada dipertahankan — tahap ini tidak menambah/mengubah backend.
 * **Response:** list order (bisa `[]`). `no_servis, status, device, model, created_at, estimate` dipakai render.
-* **Data yang ditampilkan:** per item `history-no`, `history-status` (class `st-<status lower tanpa spasi>`), `history-dev` (device + model), `history-meta` (tanggal `id-ID` + `formatRupiah(estimate)`). Kosong → `Konsumen baru - belum ada riwayat servis`. Gagal → `Gagal memuat riwayat`.
+* **Data yang ditampilkan (Customer Found):** kartu ringkasan `renderCustSummary` (Nama, WA, Total Servis, Device Terakhir, Perbaikan Terakhir, Harga Terakhir) + maksimal 3 baris `history-item` via `historyItemsHtml`. Sumber: API real bila ada baris (ringkasan dihitung dari `rows[0]`), else `HISTORY_DUMMY` 2 entri (cocok by normalisasi WA), else New Customer. Kosong → hint; gagal → pesan error. Badge `#smartHistoryState`.
 * **Fungsi JS:** `loadSmartHistory` (dipanggil dari `initReceivePage`).
 
 ## 10. SPAREPART UI
@@ -183,13 +184,15 @@ DATA MOCK/LOCAL
 * **Pagination lokal:** `SP_PER_PAGE = 10`, `_spPage`, info `Halaman p start - end (dari N sparepart)`, tombol Sebelumnya/nomor/Berikutnya. `spEmpty/spLoading/spPagination/spInfo/spPageBtns` dikelola manual.
 * **Fungsi:** `spRupiah, spQtyCell, spEdit, spDel, spFiltered, renderSparepart, initSparepart, showSparepart`.
 
-## 11. GARANSI UI
+## 11. GARANSI UI (tahap UI: dummy data)
 
-* **UI:** `pageGaransi` → `grBody` kolom aktual No, Nama User, Device, Tgl Mulai, Tgl Akhir, Status (badge). `grEmpty/grLoading/grPagination/grInfo/grPageBtns` seperti modul lain.
-* **Data source:** `GR_MOCK` 14 item (`nama, device, mulai, akhir, status`) di `script.js`. Status aktual: `Aktif`, `Segera Berakhir`, `Berakhir`. Tanpa fetch/API/DB.
-* **Status REAL/MOCK:** MOCK / STATIC (`UI EXIST, API BELUM ADA, DATABASE BELUM ADA`).
-* **Fungsi yang tersedia:** list + pagination lokal (`GR_PER_PAGE = 10`, `_grPage`) + `grStatusBadge(status)` (class `gr-aktif/gr-berakhir/gr-segera`). Tanpa search, tanpa tambah/edit/hapus.
-* **API yang digunakan:** tidak ada.
+* **Tabel:** `pageGaransi` → `grBody` kolom No (urut), Nama User, Device, Tgl Mulai, Tgl Akhir, Status (badge + sisa hari), Aksi (Detail + Klaim). Sumber `GR_MOCK` 14 entri kaya (nama, WA, device, tanggal, kerusakan, tindakan, harga, klaim) — backend diintegrasikan tahap berikutnya.
+* **Search/filter lokal:** `#grSearch` (Nama/WA/Device, debounce 300ms, compact) + `#grDateFilter` (tampilkan garansi yang berlaku pada tanggal itu) + `#grStatusFilter` (Aktif/Akan Berakhir/Expired/Klaim). Pagination mengikuti hasil filter.
+* **KPI:** `#grKpi` 4 kartu (Total slate, Aktif hijau, Akan Berakhir amber, Expired merah), dihitung dari seluruh data (bukan hasil filter).
+* **Status derivasi:** `grState()` — Klaim bila ada klaim berjalan; else dari tanggal: Expired (<0 hari), Akan Berakhir (≤30 hari), Aktif. Badge `gr-aktif/gr-segera/gr-berakhir/gr-klaim` + teks sisa (`Aktif · N hari lagi`).
+* **Detail:** `grDetail()` modal `pageWarranty` (ringkasan + servis sebelumnya: no. servis, tanggal, kerusakan, tindakan, nilai + panel klaim berjalan bila ada).
+* **Klaim:** `grClaim()` modal `pageClaim` (identitas readonly + keluhan required + tgl/tindakan/status) → submit simpan in-memory ke entri (`g.klaim`), status jadi Klaim, tabel + KPI refresh. Hilang saat refresh.
+* **Fungsi:** `grState, grDaysLeft, grFiltered, initGrToolbar, renderGrKpi, grDetail/closeGrDetail, grClaim/closeGrClaim, initClaimForm, renderGaransi`.
 
 ## 12. KEUANGAN UI
 
