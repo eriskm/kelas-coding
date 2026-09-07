@@ -110,7 +110,7 @@ render UI (innerHTML kartu + ApexCharts line/bar + mini grid + banner)
 * **Tabel transaksi:** `pageTransaksi` → `txBody` dengan kolom aktual No, Tanggal, Device, User/WA, Status, Kerusakan, Perbaikan, Teknisi, Laba (kanan), Aksi (tengah). Badge via `txStatusBadge(status)`, tanggal via `txDate(d)`, laba via `txLaba(o)` + `plRupiah`-sejenis.
 * **Kolom yang ditampilkan:** sesuai header `index.html:293-303`. `Perbaikan` berasal dari `repair_plan`, `Laba` turunan estimate/payment (bukan tabel payments).
 * **Pagination:** backend-side. `TX_PER_PAGE = 10`, state `_txPage/_txTotal/_txTotalPages/_txReq` (guard race). `renderTransaksi()` → `loadTxPage(1)`; `loadTxPage(page)` → `apiGet('/orders?page&limit')` → render baris + `txInfo` (`Halaman p start - end (dari N transaksi)`) + tombol `txPageBtns` (← Sebelumnya, nomor, Berikutnya →). `txPagination` disembunyikan jika total ≤ 10. `txLoading/txEmpty` untuk loading/kosong/gagal (`Gagal memuat data.`).
-* **Search/filter:** ADA frontend-only. `#txSearch` (teks, debounce 300ms, cocokkan device/nama/WA/status/kerusakan/teknisi/no. servis) + `#txDateFilter` (type date, cocokkan `service_date`). Saat filter aktif → `loadTxFiltered()` ambil `/orders/latest?limit=500` lalu saring lokal, pagination disembunyikan, info tampil `N hasil filter`. Tanpa filter → `loadTxPage()` paged backend normal. Tanpa perubahan backend.
+* **Search/filter:** ADA frontend-only. `#txSearch` (teks, debounce 300ms) + `#txDateFilter` (label Tanggal terlihat). Saat filter aktif → `loadTxFiltered()` ambil `/orders/latest?limit=500` lalu saring lokal; bar info pagination ditampilkan (`N hasil filter`, tanpa tombol halaman). Tanpa filter → `loadTxPage()` paged backend normal. Tanpa perubahan backend.
 * **Action button:** kolom Aksi per baris (tombol view) memanggil `txDetail(id)`; header kanan sebaris `.tx-toolbar`: search + date + tombol Servis Baru → `showServisBaru()`.
 * **Detail/edit/delete:** BELUM ADA sebagai fitur. `txDetail(id)` hanya `alert('Detail transaksi #' + id + ' (belum diimplementasikan)')`.
 * **API yang dipanggil:** hanya `GET /orders?page&limit`.
@@ -123,7 +123,7 @@ Yang berjalan vs placeholder: list + pagination REAL; search, detail, edit, hapu
 * **Tabel pelanggan:** `pagePelanggan` → `plBody` kolom No (urut, bukan ID), Nama Konsumen, No. WhatsApp, Device Terakhir, Tindakan Terakhir, Harga Terakhir (kanan), Total Servis (tengah, `N×`), Terakhir Servis (tanggal), Aksi (tengah, tombol Lihat Histori). Sumber `PL_DUMMY` 12 pelanggan di `script.js` — 1 record per pelanggan, backend (`GET /customers/summary`) diintegrasikan tahap berikutnya.
 * **Pagination:** lokal, `PL_PER_PAGE = 10` (12 data → 2 halaman), info `Halaman p start - end (dari N pelanggan)`, tombol Sebelumnya/nomor/Berikutnya. Styling/pagination sama seperti sebelumnya.
 * **Lihat Histori:** tombol per baris → `plHist(idx)` buka modal `pageHistory` (draggable, bisa tutup): ringkasan kartu `renderCustSummary` + tabel riwayat `plHistBody` (No, No. Servis, Tanggal, Device, Tindakan, Harga, Status). `closePlHist()` menutup. Index mengikuti hasil filter (`_plView`).
-* **Search:** ADA lokal (`#plSearch`, debounce 300ms): cocokkan Nama / WA (+ device/tindakan), pagination + histori mengikuti hasil filter. **Summary vs history:** tabel = ringkasan per customer; modal = seluruh riwayat transaksi customer tersebut (dari `c.hist` dummy).
+* **Search:** ADA lokal (`#plSearch`, debounce 300ms): cocokkan Nama / WA (+ device/tindakan). Filter tanggal `#plDateFilter` cocokkan Terakhir Servis (`c.last`). Pagination + histori mengikuti hasil filter. **Summary vs history:** tabel = ringkasan per customer; modal = seluruh riwayat transaksi customer tersebut (dari `c.hist` dummy).
 
 ## 8. SERVIS BARU UI
 
@@ -148,7 +148,7 @@ Transaksi diperbarui (feedback sukses + reset form; user buka Transaksi manual u
 ```
 
 * **Field form (sesuai `index.html`, tanpa karangan):** `rcName*` (text), `rcPhone*` (text, `inputmode tel` — terima format WA bebas, normalisasi di tahap backend), `rcDevice*` (text), `rcPassword` (type password + eye toggle `rcPwToggle`, default tersembunyi), `rcImei` (opsional, UI-only, belum dikirim ke API), `rcDamage*` (textarea rows 2, full-width), `rcPlan` (textarea rows 2, full-width, label Rencana Tindakan Perbaikan), `rcEstimate` (number Rp), `rcDp` (number Rp), `rcTechnician` (select, opsi diisi JS + default `— Pilih Teknisi —`), `rcStatus` (select 8 opsi aktual — catat berbeda dengan status backend; didokumentasikan apa adanya), checklist UI-only `rcCheckLcd/Frame/Camera/Button/Charging/Kit` (belum tersimpan ke DB).
-* **Progress stepper:** `#rcSteps` 4 step (Data Konsumen → Diagnostik → Estimasi & Penugasan → Siap Eksekusi), status aktif (merah brand) / done (hijau ✓) / pending via `updateReceiveSteps()` dari kelengkapan field.
+* **Progress stepper:** `#rcSteps` 4 step (Data Konsumen → Diagnostik → Estimasi & Penugasan → Siap Eksekusi), status aktif (merah brand + pulse) / done (hijau ✓) / pending via `updateReceiveSteps()` dari kelengkapan field. Step 4 ikut done (hijau) sesaat setelah simpan sukses. Label tampil juga di layar kecil (scroll horizontal).
 * **Tombol utama:** `.rc-submit` sticky di bawah modal (tetap terlihat saat scroll) + teks responsif via `receiveSubmitText`/`receiveFeedback`.
 * **Shortcut:** `initReceiveShortcuts()` aktif saat modal terbuka — Enter pindah kolom, F2 focus Nama, F4 focus Device, F8/Ctrl+S submit (baris F8 di-highlight `is-primary`).
 * **Layout:** `#pageReceive` lebar max 1100px, grid `.rc-layout` (main + side 300px Histori/Shortcut), stack <900px.
@@ -177,10 +177,13 @@ DATABASE BELUM ADA
 DATA MOCK/LOCAL
 ```
 
-* **List:** `pageSparepart` → `spBody` kolom aktual No, Tgl Masuk, Kategori, Merek, Jenis Barang, Device, Qty (tengah), Beli (kanan), Jual (kanan), Aksi (tengah). Data `SP_MOCK` 14 item (`tgl, kategori, merek, jenis, device, qty, beli, jual`) di `script.js`.
-* **Search:** ADA lokal. `#spSearch` (`Cari jenis, merek, device, kategori...`) → state `_spQuery` → `spFiltered()` (match case-insensitive pada 4 field) → `renderSparepart()`. Tanpa debounce; pagination direset ke 1.
+* **List:** `pageSparepart` → `spBody` kolom aktual No, Tgl Masuk, Kategori, Merek, Jenis Barang, Device, Qty (tengah), Beli (kanan), Jual (kanan), Aksi (tengah). Data `SP_MOCK` 14 item — in-memory (tambah/edit/hapus lokal, hilang setelah refresh), backend tahap berikutnya.
+* **KPI:** `#spKpi` 4 kartu (Total Item, Stok Habis, Stok Menipis, Nilai Stok) via `renderSpKpi()`.
+* **Search:** `#spSearch` + debounce 300ms (pola sama dengan Transaksi/Pelanggan/Garansi).
+* **Tambah/edit/hapus:** tombol Tambah + modal `pageSpare` (`spAdd/closeSpare`, validasi Jenis wajib); `spEdit(i)` prefill modal; `spDel(i)` konfirmasi `confirm()` lalu hapus.
+* **Search:** ADA lokal. `#spSearch` (`Cari jenis, merek, device, kategori...`) → state `_spQuery` → `spFiltered()` (match case-insensitive pada 4 field) → `renderSparepart()`. Debounce 300ms; pagination direset ke 1.
 * **Stok:** `spQtyCell(qty)`: `0 → Habis` (merah), `≤5 → Menipis` (kuning + angka), `>5 → ok`. Rupiah via `spRupiah` (`id-ID/IDR`).
-* **Tambah/edit/hapus:** Tambah BELUM ADA (tidak ada tombol/form). Edit/hapus hanya `spEdit(i)/spDel(i)` → `alert('... belum diimplementasikan')`.
+* **Tambah/edit/hapus:** in-memory via modal (lihat di atas). `txDetail` Transaksi dan `kuEdit` Keuangan masih `alert`.
 * **Pagination lokal:** `SP_PER_PAGE = 10`, `_spPage`, info `Halaman p start - end (dari N sparepart)`, tombol Sebelumnya/nomor/Berikutnya. `spEmpty/spLoading/spPagination/spInfo/spPageBtns` dikelola manual.
 * **Fungsi:** `spRupiah, spQtyCell, spEdit, spDel, spFiltered, renderSparepart, initSparepart, showSparepart`.
 
@@ -188,7 +191,8 @@ DATA MOCK/LOCAL
 
 * **Tabel:** `pageGaransi` → `grBody` kolom No (urut), Nama User, Device, Tgl Mulai, Tgl Akhir, Status (badge + sisa hari), Aksi (Detail + Klaim). Sumber `GR_MOCK` 14 entri kaya (nama, WA, device, tanggal, kerusakan, tindakan, harga, klaim) — backend diintegrasikan tahap berikutnya.
 * **Search/filter lokal:** `#grSearch` (Nama/WA/Device, debounce 300ms, compact) + `#grDateFilter` (tampilkan garansi yang berlaku pada tanggal itu) + `#grStatusFilter` (Aktif/Akan Berakhir/Expired/Klaim). Pagination mengikuti hasil filter.
-* **KPI:** `#grKpi` 4 kartu (Total slate, Aktif hijau, Akan Berakhir amber, Expired merah), dihitung dari seluruh data (bukan hasil filter).
+* **KPI:** `#grKpi` 5 kartu (Total slate, Aktif hijau, Akan Berakhir amber, Expired merah, Klaim biru), dihitung dari seluruh data (bukan hasil filter). Grid 5 kolom desktop.
+* **Filter:** search + `#grDateFilter` (hint tertulis: menampilkan garansi yang aktif pada tanggal tersebut) + `#grStatusFilter`.
 * **Status derivasi:** `grState()` — Klaim bila ada klaim berjalan; else dari tanggal: Expired (<0 hari), Akan Berakhir (≤30 hari), Aktif. Badge `gr-aktif/gr-segera/gr-berakhir/gr-klaim` + teks sisa (`Aktif · N hari lagi`).
 * **Detail:** `grDetail()` modal `pageWarranty` (ringkasan + servis sebelumnya: no. servis, tanggal, kerusakan, tindakan, nilai + panel klaim berjalan bila ada).
 * **Klaim:** `grClaim()` modal `pageClaim` (identitas readonly + keluhan required + tgl/tindakan/status) → submit simpan in-memory ke entri (`g.klaim`), status jadi Klaim, tabel + KPI refresh. Hilang saat refresh.

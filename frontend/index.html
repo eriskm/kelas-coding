@@ -287,6 +287,7 @@
                                     <i class="fa-solid fa-magnifying-glass"></i>
                                     <input type="text" id="txSearch" class="receive-input" placeholder="Cari device, nama, WA, teknisi..." autocomplete="off">
                                 </div>
+                                <label class="tx-filter-label" for="txDateFilter">Tanggal</label>
                                 <input type="date" id="txDateFilter" class="receive-input" aria-label="Filter tanggal" title="Filter tanggal">
                                 <button type="button" onclick="showServisBaru()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
                                     <i class="fa-solid fa-plus"></i> Servis Baru
@@ -344,6 +345,8 @@
                                     <i class="fa-solid fa-magnifying-glass"></i>
                                     <input type="text" id="plSearch" class="receive-input" placeholder="Cari nama atau No. WA..." autocomplete="off">
                                 </div>
+                                <label class="tx-filter-label" for="plDateFilter">Terakhir Servis</label>
+                                <input type="date" id="plDateFilter" class="receive-input" aria-label="Filter tanggal terakhir servis" title="Filter tanggal terakhir servis">
                             </div>
                         </div>
 
@@ -447,6 +450,8 @@
                                 </select>
                             </div>
                         </div>
+
+                        <p class="gr-filter-hint">Filter tanggal menampilkan garansi yang aktif pada tanggal tersebut.</p>
 
                         <div class="panel overflow-hidden">
                             <div class="overflow-x-auto">
@@ -607,7 +612,12 @@
                                 </h2>
                                 <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Stok & harga sparepart toko</p>
                             </div>
+                            <button type="button" onclick="spAdd()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
+                                <i class="fa-solid fa-plus"></i> Tambah Sparepart
+                            </button>
                         </div>
+
+                        <div class="gr-kpi-grid" id="spKpi"></div>
 
                         <div class="panel overflow-hidden">
                             <div class="px-4 pt-4">
@@ -646,6 +656,65 @@
                                 <div id="spInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
                                 <div id="spPageBtns" class="flex items-center gap-1.5"></div>
                             </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: FORM SPAREPART ===== -->
+                    <section id="pageSpare" class="float-window" role="dialog" aria-label="Form Sparepart">
+                        <div class="float-titlebar" id="spareTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-microchip"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title" id="spfTitle">Tambah Sparepart</h2>
+                                    <p class="float-sub">Tersimpan lokal, hilang setelah refresh</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeSpare()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <form id="spareForm" autocomplete="off">
+                                <div class="panel receive-panel">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="spfKategori">Kategori</label>
+                                            <input class="receive-input" type="text" id="spfKategori" placeholder="cth. LCD">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="spfMerek">Merek</label>
+                                            <input class="receive-input" type="text" id="spfMerek" placeholder="cth. Samsung">
+                                        </div>
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="spfJenis">Jenis Barang <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="spfJenis" placeholder="cth. LCD Samsung A55 ORI" required>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="spfDevice">Device</label>
+                                            <input class="receive-input" type="text" id="spfDevice" placeholder="cth. Galaxy A55">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="spfQty">Qty</label>
+                                            <input class="receive-input" type="number" id="spfQty" min="0" placeholder="0">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="spfBeli">Harga Beli (Rp)</label>
+                                            <input class="receive-input" type="number" id="spfBeli" min="0" placeholder="0">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="spfJual">Harga Jual (Rp)</label>
+                                            <input class="receive-input" type="number" id="spfJual" min="0" placeholder="0">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
+                                    <button type="submit" class="receive-submit-btn">
+                                        <i class="fa-solid fa-check-double"></i>
+                                        <span>Simpan Sparepart</span>
+                                    </button>
+                                    <div id="spfFeedback" class="hidden receive-feedback"></div>
+                                </div>
+                            </form>
                         </div>
                     </section>
 

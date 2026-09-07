@@ -245,6 +245,7 @@ function initFloatDrag() {
     makeFloatDraggable('pageHistory', 'histTitlebar', closePlHist);
     makeFloatDraggable('pageWarranty', 'warrantyTitlebar', closeGrDetail);
     makeFloatDraggable('pageClaim', 'claimTitlebar', closeGrClaim);
+    makeFloatDraggable('pageSpare', 'spareTitlebar', closeSpare);
 }
 
 // ─────────────────────────────────────────────
@@ -743,10 +744,15 @@ const TX_STATUS_LABEL = {
     QC: 'QC',
     KONFIRMASI: 'Konfirmasi',
     REVIEW: 'Review',
+    DONE: 'Selesai',
+    CASH: 'Cash/Lunas',
+    FILED: 'Arsip',
+    CANCEL: 'Batal',
+    WAIT_PART: 'Tunggu Part',
 };
 
 function txStatusBadge(status) {
-    const s = (status || '').toUpperCase();
+    const s = (status || '').toUpperCase().replace(/\s+/g, '_');
     const label = TX_STATUS_LABEL[s] || s || 'Diterima';
     return '<span class="tx-status st-' + s + '"><i class="fa-solid fa-circle"></i>' + escapeHtml(label) + '</span>';
 }
@@ -847,6 +853,8 @@ async function loadTxFiltered() {
             return;
         }
         body.innerHTML = hit.map((o, i) => txRowHtml(o, i + 1)).join('');
+        pagination.classList.remove('hidden');
+        if (document.getElementById('txPageBtns')) document.getElementById('txPageBtns').innerHTML = '';
         const info = document.getElementById('txInfo');
         if (info) info.textContent = hit.length + ' hasil filter';
     } catch (err) {
@@ -1015,18 +1023,20 @@ function initGrToolbar() {
 function renderGrKpi() {
     const el = document.getElementById('grKpi');
     if (!el) return;
-    const n = { total: GR_MOCK.length, aktif: 0, segera: 0, expired: 0 };
+    const n = { total: GR_MOCK.length, aktif: 0, segera: 0, expired: 0, klaim: 0 };
     GR_MOCK.forEach(g => {
         const k = grState(g).key;
         if (k === 'aktif') n.aktif++;
         else if (k === 'segera') n.segera++;
         else if (k === 'expired') n.expired++;
+        else if (k === 'klaim') n.klaim++;
     });
     const cards = [
         { label: 'Total Garansi', value: n.total, icon: 'fa-shield-halved', cls: 'sm-slate' },
         { label: 'Aktif', value: n.aktif, icon: 'fa-circle-check', cls: 'sm-green' },
         { label: 'Akan Berakhir', value: n.segera, icon: 'fa-hourglass-half', cls: 'sm-amber' },
         { label: 'Expired', value: n.expired, icon: 'fa-circle-xmark', cls: 'sm-red' },
+        { label: 'Klaim', value: n.klaim, icon: 'fa-file-circle-plus', cls: 'sm-blue' },
     ];
     el.innerHTML = cards.map(c => `
         <div class="sm-card ${c.cls}">
@@ -1210,24 +1220,34 @@ function renderGaransi() {
 const PL_PER_PAGE = 10;
 let _plPage = 1;
 let _plQuery = '';
+let _plDate = '';
 let _plView = [];
 
 function initPlToolbar() {
     const s = document.getElementById('plSearch');
-    if (!s || s.dataset.bound) return;
-    s.dataset.bound = '1';
-    let t = null;
-    s.addEventListener('input', () => {
-        clearTimeout(t);
-        t = setTimeout(() => { _plQuery = s.value; loadPlPage(1); }, 300);
-    });
+    const d = document.getElementById('plDateFilter');
+    if (s && !s.dataset.bound) {
+        s.dataset.bound = '1';
+        let t = null;
+        s.addEventListener('input', () => {
+            clearTimeout(t);
+            t = setTimeout(() => { _plQuery = s.value; loadPlPage(1); }, 300);
+        });
+    }
+    if (d && !d.dataset.bound) {
+        d.dataset.bound = '1';
+        d.addEventListener('change', () => { _plDate = d.value; loadPlPage(1); });
+    }
 }
 
 function plFiltered() {
     const q = _plQuery.trim().toLowerCase();
-    if (!q) return PL_DUMMY.slice();
-    return PL_DUMMY.filter(c => [c.name, c.phone, c.device, c.plan]
-        .some(f => (f || '').toLowerCase().includes(q)));
+    return PL_DUMMY.filter(c => {
+        if (_plDate && (c.last || '') !== _plDate) return false;
+        if (!q) return true;
+        return [c.name, c.phone, c.device, c.plan]
+            .some(f => (f || '').toLowerCase().includes(q));
+    });
 }
 
 const PL_DUMMY = [
@@ -1416,11 +1436,67 @@ function spQtyCell(qty) {
 }
 
 function spEdit(i) {
-    alert('Edit sparepart #' + (i + 1) + ' (belum diimplementasikan)');
+    const s = SP_MOCK[i];
+    if (!s) return;
+    _spEditIdx = i;
+    document.getElementById('spfTitle').textContent = 'Edit Sparepart';
+    document.getElementById('spfKategori').value = s.kategori || '';
+    document.getElementById('spfMerek').value = s.merek || '';
+    document.getElementById('spfJenis').value = s.jenis || '';
+    document.getElementById('spfDevice').value = s.device || '';
+    document.getElementById('spfQty').value = s.qty ?? 0;
+    document.getElementById('spfBeli').value = s.beli || 0;
+    document.getElementById('spfJual').value = s.jual || 0;
+    const fb = document.getElementById('spfFeedback');
+    fb.classList.add('hidden');
+    fb.classList.remove('success');
+    document.getElementById('pageSpare').classList.add('open');
 }
 
 function spDel(i) {
-    alert('Hapus sparepart #' + (i + 1) + ' (belum diimplementasikan)');
+    const s = SP_MOCK[i];
+    if (!s) return;
+    if (!confirm('Hapus sparepart "' + s.jenis + '"? (lokal, hilang permanen setelah refresh tidak berpengaruh)')) return;
+    SP_MOCK.splice(i, 1);
+    renderSparepart();
+}
+
+let _spEditIdx = -1;
+
+function spAdd() {
+    _spEditIdx = -1;
+    document.getElementById('spfTitle').textContent = 'Tambah Sparepart';
+    document.getElementById('spareForm').reset();
+    const fb = document.getElementById('spfFeedback');
+    fb.classList.add('hidden');
+    fb.classList.remove('success');
+    document.getElementById('pageSpare').classList.add('open');
+}
+
+function closeSpare() {
+    document.getElementById('pageSpare').classList.remove('open');
+    _spEditIdx = -1;
+}
+
+function renderSpKpi() {
+    const el = document.getElementById('spKpi');
+    if (!el) return;
+    const total = SP_MOCK.length;
+    const habis = SP_MOCK.filter(s => (s.qty || 0) <= 0).length;
+    const tipis = SP_MOCK.filter(s => (s.qty || 0) > 0 && (s.qty || 0) <= 5).length;
+    const nilai = SP_MOCK.reduce((a, s) => a + (Number(s.qty) || 0) * (Number(s.jual) || 0), 0);
+    const cards = [
+        { label: 'Total Item', value: total, unit: 'item', icon: 'fa-boxes-stacked', cls: 'sm-slate' },
+        { label: 'Stok Habis', value: habis, unit: 'item', icon: 'fa-box-open', cls: 'sm-red' },
+        { label: 'Stok Menipis', value: tipis, unit: 'item', icon: 'fa-triangle-exclamation', cls: 'sm-amber' },
+        { label: 'Nilai Stok', value: spRupiah(nilai), unit: 'jual', icon: 'fa-sack-dollar', cls: 'sm-green' },
+    ];
+    el.innerHTML = cards.map(c => `
+        <div class="sm-card ${c.cls}">
+            <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
+            <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">${c.unit}</span></div>
+        </div>
+    `).join('');
 }
 
 function spFiltered() {
@@ -1431,6 +1507,7 @@ function spFiltered() {
 }
 
 function renderSparepart() {
+    renderSpKpi();
     const body = document.getElementById('spBody');
     const empty = document.getElementById('spEmpty');
     const loading = document.getElementById('spLoading');
@@ -1506,8 +1583,44 @@ function renderSparepart() {
 
 function initSparepart() {
     const input = document.getElementById('spSearch');
-    if (input) {
-        input.addEventListener('input', () => { _spQuery = input.value; _spPage = 1; renderSparepart(); });
+    if (input && !input.dataset.bound) {
+        input.dataset.bound = '1';
+        let t = null;
+        input.addEventListener('input', () => {
+            clearTimeout(t);
+            t = setTimeout(() => { _spQuery = input.value; _spPage = 1; renderSparepart(); }, 300);
+        });
+    }
+    const form = document.getElementById('spareForm');
+    if (form && !form.dataset.bound) {
+        form.dataset.bound = '1';
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            const jenis = document.getElementById('spfJenis').value.trim();
+            if (!jenis) return;
+            const item = {
+                tgl: new Date().toISOString().slice(0, 10),
+                kategori: document.getElementById('spfKategori').value.trim() || '-',
+                merek: document.getElementById('spfMerek').value.trim() || '-',
+                jenis: jenis,
+                device: document.getElementById('spfDevice').value.trim() || '-',
+                qty: Math.max(0, parseInt(document.getElementById('spfQty').value, 10) || 0),
+                beli: Math.max(0, Number(document.getElementById('spfBeli').value) || 0),
+                jual: Math.max(0, Number(document.getElementById('spfJual').value) || 0),
+            };
+            if (_spEditIdx >= 0 && SP_MOCK[_spEditIdx]) {
+                item.tgl = SP_MOCK[_spEditIdx].tgl;
+                SP_MOCK[_spEditIdx] = item;
+            } else {
+                SP_MOCK.unshift(item);
+                _spPage = 1;
+            }
+            renderSparepart();
+            const fb = document.getElementById('spfFeedback');
+            fb.classList.remove('hidden');
+            fb.classList.add('success');
+            fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Tersimpan (lokal, hilang setelah refresh).`;
+        });
     }
 }
 
@@ -2028,7 +2141,7 @@ async function initReceivePage() {
             fb.classList.add('success');
             fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Unit berhasil didaftarkan! No. Servis: <b>${res.no_servis}</b>`;
             this.reset();
-            updateReceiveSteps();
+            document.querySelectorAll('#rcSteps .rc-step').forEach(li => { li.classList.remove('is-active'); li.classList.add('is-done'); });
             loadSmartHistory();
         } catch (err) {
             fb.classList.remove('hidden');
