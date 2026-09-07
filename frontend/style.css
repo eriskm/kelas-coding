@@ -795,6 +795,39 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     margin-bottom: 14px;
 }
 .login-error.hidden { display: none; }
+.caps-warn {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #fbbf24;
+    margin: -6px 0 12px 2px;
+}
+.caps-warn.hidden { display: none; }
+.server-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    margin-top: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+}
+.server-status .dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background: #64748b;
+    flex-shrink: 0;
+}
+.server-status[data-mode="checking"] .dot { background: #f59e0b; animation: srvBlink 1.2s ease-in-out infinite; }
+@keyframes srvBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.server-status[data-mode="online"] { color: #4ade80; }
+.server-status[data-mode="online"] .dot { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+.server-status[data-mode="offline"] { color: #f87171; }
+.server-status[data-mode="offline"] .dot { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
 .login-error.shake { animation: loginShake 0.4s ease; }
 @keyframes loginShake {
     0%, 100% { transform: translateX(0); }
@@ -1448,7 +1481,8 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .tx-status.ku-keluar { background: #fee2e2; color: #b91c1c; }
 #kuDonut { min-height: 200px; }
 .al-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.al-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; }
+.al-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; padding: 7px 10px; border: 1px solid transparent; border-radius: 10px; transition: border-color .15s, box-shadow .15s, background .15s; }
+.al-row:hover { background: rgba(148,163,184,0.12); }
 .al-dot { width: 11px; height: 11px; border-radius: 4px; flex-shrink: 0; }
 .al-name { font-weight: 600; color: #334155; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dark .al-name { color: #cbd5e1; }
@@ -1848,6 +1882,34 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #histSummary { margin-bottom: 12px; }
 #histSummary .rc-cust { margin-bottom: 0; }
 
+/* Keuangan: ringkasan kas + head riwayat + highlight alokasi */
+.ku-summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+    margin: 10px 0 2px;
+}
+.ku-summary .sm-card { padding: 8px 10px; }
+.ku-summary .sm-top { font-size: 10px; gap: 5px; }
+.ku-summary .sm-num.ku-num { font-size: 14px; }
+@media (max-width: 560px) { .ku-summary { grid-template-columns: 1fr; } }
+.ku-riwayat-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    flex-wrap: wrap;
+    padding: 14px 16px 0;
+}
+.ku-riwayat-head .panel-title { margin: 0; }
+.ku-riwayat-head .tx-toolbar { flex: 1 1 auto; justify-content: flex-end; }
+.ku-riwayat-head .tx-search-wrap { flex: 1 1 180px; max-width: 250px; min-width: 150px; }
+.ku-riwayat-head select.receive-input,
+.ku-riwayat-head input[type="date"].receive-input { flex: 0 0 auto; width: auto; }
+.al-row.is-sel { border-color: currentColor; box-shadow: 0 0 0 1px currentColor; }
+.al-row { cursor: pointer; }
+#histSummary .rc-cust { margin-bottom: 0; }
+
 /* Sticky action area */
 .rc-submit {
     position: sticky;
@@ -2118,7 +2180,8 @@ select.range-pill.range-select option { color: #0f172a; }
 
 /* Damage rank rows */
 .damage-rank { display: flex; flex-direction: column; gap: 11px; margin-top: 2px; }
-.dr-row { display: flex; align-items: center; gap: 10px; }
+.dr-row { display: flex; align-items: center; gap: 10px; cursor: pointer; border-radius: 10px; padding: 3px 6px; margin: -3px -6px; transition: background .15s; }
+.dr-row:hover { background: rgba(148,163,184,0.12); }
 .dr-rank {
     width: 30px;
     height: 30px;
@@ -2150,7 +2213,10 @@ select.range-pill.range-select option { color: #0f172a; }
     padding: 9px 10px;
     background: #f8fafc;
     border: 1px solid #eef0f4;
+    cursor: pointer;
+    transition: border-color .15s, box-shadow .15s;
 }
+.hl-card:hover { border-color: #fecaca; box-shadow: 0 4px 12px rgba(220,38,38,0.12); }
 .dark .hl-card { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.08); }
 .hl-card.hl-first {
     background: #fffbeb;

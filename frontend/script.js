@@ -120,7 +120,151 @@ function showPelanggan() { showPage('pelanggan'); renderPelanggan(); }
 function showGaransi() { showPage('garansi'); renderGaransi(); }
 function showSparepart() { showPage('sparepart'); renderSparepart(); }
 function showKeuangan() { showPage('keuangan'); renderKeuangan(); }
-function showAkun() { showPage('akun'); }
+function showAkun() { showPage('akun'); renderAkun(); }
+
+// ─────────────────────────────────────────────
+// KELOLA AKUN (tahap UI: dummy in-memory, backend tahap berikutnya)
+// ─────────────────────────────────────────────
+const AKUN_DUMMY = [
+    { nama: 'Andi Pratama', username: 'andi_admin', role: 'Admin', status: 'Aktif', login: 'Hari ini, 08:30' },
+    { nama: 'Budi Santoso', username: 'budi_super', role: 'Admin', status: 'Aktif', login: 'Kemarin, 14:15' },
+    { nama: 'Citra Kirana', username: 'citra_tek', role: 'Teknisi', status: 'Aktif', login: 'Hari ini, 09:05' },
+    { nama: 'Doni Setiawan', username: 'doni_tek', role: 'Teknisi', status: 'Aktif', login: 'Hari ini, 10:20' },
+    { nama: 'Eko Wahyudi', username: 'eko_tek', role: 'Teknisi', status: 'Nonaktif', login: '12 Ags 2026, 16:45' },
+];
+
+let _akQuery = '';
+let _akRole = '';
+let _akStatus = '';
+let _akEditIdx = -1;
+
+function akRoleBadge(role) {
+    const admin = role === 'Admin';
+    return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${admin ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}">${escapeHtml(role)}</span>`;
+}
+
+function akStatusBadge(status) {
+    const on = status === 'Aktif';
+    return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${on ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400'}">${escapeHtml(status)}</span>`;
+}
+
+function akFiltered() {
+    const q = _akQuery.trim().toLowerCase();
+    return AKUN_DUMMY.filter(a => {
+        if (_akRole && a.role !== _akRole) return false;
+        if (_akStatus && a.status !== _akStatus) return false;
+        if (!q) return true;
+        return [a.nama, a.username].some(f => (f || '').toLowerCase().includes(q));
+    });
+}
+
+function initAkToolbar() {
+    const s = document.getElementById('akSearch');
+    const r = document.getElementById('akRoleFilter');
+    const t = document.getElementById('akStatusFilter');
+    if (s && !s.dataset.bound) {
+        s.dataset.bound = '1';
+        let timer = null;
+        s.addEventListener('input', () => {
+            clearTimeout(timer);
+            timer = setTimeout(() => { _akQuery = s.value; renderAkun(); }, 300);
+        });
+    }
+    if (r && !r.dataset.bound) {
+        r.dataset.bound = '1';
+        r.addEventListener('change', () => { _akRole = r.value; renderAkun(); });
+    }
+    if (t && !t.dataset.bound) {
+        t.dataset.bound = '1';
+        t.addEventListener('change', () => { _akStatus = t.value; renderAkun(); });
+    }
+}
+
+function renderAkun() {
+    initAkToolbar();
+    initAkunForm();
+    const body = document.getElementById('akBody');
+    if (!body) return;
+    const total = AKUN_DUMMY.length;
+    const aktif = AKUN_DUMMY.filter(a => a.status === 'Aktif').length;
+    const admin = AKUN_DUMMY.filter(a => a.role === 'Admin').length;
+    const setNum = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
+    setNum('akTotal', total);
+    setNum('akAktif', aktif);
+    setNum('akAdmin', admin);
+    const data = akFiltered();
+    body.innerHTML = data.map((a, i) => {
+        const idx = AKUN_DUMMY.indexOf(a);
+        return `
+        <tr class="tx-row${i % 2 ? ' bg-gray-50/50 dark:bg-white/[0.02]' : ''}">
+            <td class="text-center text-gray-500">${i + 1}</td>
+            <td class="font-semibold text-gray-800 dark:text-gray-200">${escapeHtml(a.nama)}</td>
+            <td class="text-gray-500">${escapeHtml(a.username)}</td>
+            <td class="text-center">${akRoleBadge(a.role)}</td>
+            <td class="text-center">${akStatusBadge(a.status)}</td>
+            <td class="text-gray-500 text-[11px]">${escapeHtml(a.login)}</td>
+            <td class="text-center">
+                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun" onclick="akEdit(${idx})"><i class="fa-solid fa-pen-to-square"></i></button>
+                <button class="tx-view-btn tx-del-btn" title="Hapus Akun" onclick="akDel(${idx})"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+    const info = document.getElementById('akInfo');
+    if (info) info.textContent = data.length === total
+        ? 'Menampilkan 1-' + total + ' dari ' + total + ' akun'
+        : 'Menampilkan ' + data.length + ' dari ' + total + ' akun (filter)';
+}
+
+function akEdit(i) {
+    const a = AKUN_DUMMY[i];
+    if (!a) return;
+    _akEditIdx = i;
+    document.getElementById('akFormTitle').textContent = 'Edit Akun';
+    document.getElementById('akNama').value = a.nama || '';
+    document.getElementById('akUsername').value = a.username || '';
+    document.getElementById('akPassword').value = '';
+    document.getElementById('akRole').value = a.role || 'Teknisi';
+    document.getElementById('akStatus').value = a.status || 'Aktif';
+    openFormAkun();
+}
+
+function akDel(i) {
+    const a = AKUN_DUMMY[i];
+    if (!a) return;
+    if (!confirm('Hapus akun "' + a.username + '"? (lokal, tidak memengaruhi database)')) return;
+    AKUN_DUMMY.splice(i, 1);
+    renderAkun();
+}
+
+function initAkunForm() {
+    const form = document.getElementById('akunForm');
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = '1';
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const nama = document.getElementById('akNama').value.trim();
+        const username = document.getElementById('akUsername').value.trim();
+        if (!nama || !username) return;
+        if (AKUN_DUMMY.some((a, j) => j !== _akEditIdx && a.username.toLowerCase() === username.toLowerCase())) {
+            alert('Username sudah dipakai akun lain.');
+            return;
+        }
+        const item = {
+            nama: nama,
+            username: username,
+            role: document.getElementById('akRole').value,
+            status: document.getElementById('akStatus').value,
+            login: (_akEditIdx >= 0 && AKUN_DUMMY[_akEditIdx]) ? AKUN_DUMMY[_akEditIdx].login : 'Belum pernah login',
+        };
+        if (_akEditIdx >= 0 && AKUN_DUMMY[_akEditIdx]) {
+            AKUN_DUMMY[_akEditIdx] = item;
+        } else {
+            AKUN_DUMMY.push(item);
+        }
+        renderAkun();
+        closeFormAkun();
+    });
+}
 
 function openServisBaru() {
     document.getElementById('pageReceive').classList.add('open');
@@ -156,7 +300,12 @@ function openFormAkun() {
     if (first) setTimeout(() => first.focus({ preventScroll: true }), 80);
     if (window.innerWidth < 640) toggleSidebar(false);
 }
-function showFormAkun() { openFormAkun(); }
+function showFormAkun() {
+    _akEditIdx = -1;
+    document.getElementById('akFormTitle').textContent = 'Tambah Akun';
+    document.getElementById('akunForm').reset();
+    openFormAkun();
+}
 function closeFormAkun() {
     const pageFormAkun = document.getElementById('pageFormAkun');
     if (pageFormAkun) pageFormAkun.classList.remove('open');
@@ -246,6 +395,7 @@ function initFloatDrag() {
     makeFloatDraggable('pageWarranty', 'warrantyTitlebar', closeGrDetail);
     makeFloatDraggable('pageClaim', 'claimTitlebar', closeGrClaim);
     makeFloatDraggable('pageSpare', 'spareTitlebar', closeSpare);
+    makeFloatDraggable('pageKeu', 'keuTitlebar', closeKeu);
 }
 
 // ─────────────────────────────────────────────
@@ -548,6 +698,14 @@ async function renderStatusMini() {
     }
 }
 
+function goDamageFilter(name) {
+    _txQuery = name || '';
+    _txPage = 1;
+    const s = document.getElementById('txSearch');
+    if (s) s.value = _txQuery;
+    showTransaksi();
+}
+
 function damageIcon(name) {
     const n = (name || '').toLowerCase();
     if (n.includes('layar') || n.includes('lcd')) return 'fa-mobile-screen-button';
@@ -587,7 +745,7 @@ async function renderDamageSection() {
             const color = DAMAGE_COLORS[i % DAMAGE_COLORS.length];
             const w = max > 0 ? Math.max(4, Math.round(it.value / max * 100)) : 0;
             return `
-            <div class="dr-row">
+            <div class="dr-row" onclick="goDamageFilter('${escapeHtml(it.name).replace(/'/g, "\\'")}')" title="Lihat di Transaksi">
                 <span class="dr-rank"><i class="fa-solid ${damageIcon(it.name)}"></i></span>
                 <span class="dr-label">${String(i + 1).padStart(2, '0')}. ${escapeHtml(it.name)}</span>
                 <div class="dr-track"><div class="dr-fill" style="width:${w}%;background:${color}"></div></div>
@@ -601,7 +759,7 @@ async function renderDamageSection() {
                 const r = items.indexOf(it) + 1;
                 const first = r === 1 ? ' hl-first' : '';
                 return `
-                <div class="hl-card${first}">
+                <div class="hl-card${first}" onclick="goDamageFilter('${escapeHtml(it.name).replace(/'/g, "\\'")}')" title="Lihat di Transaksi">
                     <div class="hl-tag">#${r} ${escapeHtml(it.name)}</div>
                     <div><span class="hl-num">${it.value}</span> <span class="hl-unit">Unit</span></div>
                     <div class="hl-bot"><span class="hl-share">${pct(it.value)} dari total</span></div>
@@ -1675,16 +1833,36 @@ function renderKeuangan() {
 
 function renderBukuKas() {
     const body = document.getElementById('kuKasBody');
-    if (!body) return;
-    body.innerHTML = KU_KAS.map(k => `
-        <tr>
-            <td><span class="tx-device">${escapeHtml(k.uraian)}</span></td>
-            <td class="tx-debit numeric-c">${k.debit ? kuRupiah(k.debit) : '<span class="text-green-500">-</span>'}</td>
-            <td class="tx-kredit numeric-c">${k.kredit ? kuRupiah(k.kredit) : '<span class="text-red-500">-</span>'}</td>
-            <td class="tx-saldo numeric-r">${kuRupiah(k.saldo)}</td>
-        </tr>
-    `).join('');
+    if (body) {
+        body.innerHTML = KU_KAS.map(k => `
+            <tr>
+                <td><span class="tx-device">${escapeHtml(k.uraian)}</span></td>
+                <td class="tx-debit numeric-c">${k.debit ? kuRupiah(k.debit) : '<span class="text-green-500">-</span>'}</td>
+                <td class="tx-kredit numeric-c">${k.kredit ? kuRupiah(k.kredit) : '<span class="text-red-500">-</span>'}</td>
+                <td class="tx-saldo numeric-r">${kuRupiah(k.saldo)}</td>
+            </tr>
+        `).join('');
+    }
+    const sum = document.getElementById('kuKasSummary');
+    if (sum) {
+        const masuk = KU_KAS.reduce((a, k) => a + (Number(k.debit) || 0), 0);
+        const keluar = KU_KAS.reduce((a, k) => a + (Number(k.kredit) || 0), 0);
+        const saldo = KU_KAS.length ? KU_KAS[KU_KAS.length - 1].saldo : 0;
+        const cards = [
+            { label: 'Total Masuk', value: kuRupiah(masuk), icon: 'fa-arrow-trend-up', cls: 'sm-green' },
+            { label: 'Total Keluar', value: kuRupiah(keluar), icon: 'fa-arrow-trend-down', cls: 'sm-red' },
+            { label: 'Saldo Kas', value: kuRupiah(saldo), icon: 'fa-wallet', cls: 'sm-blue' },
+        ];
+        sum.innerHTML = cards.map(c => `
+            <div class="sm-card ${c.cls}">
+                <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
+                <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+            </div>
+        `).join('');
+    }
 }
+
+let _kuSelAlloc = -1;
 
 function renderAlloc() {
     const list = document.getElementById('kuAllocList');
@@ -1692,10 +1870,10 @@ function renderAlloc() {
     const total = 6250000;
     if (totalEl) totalEl.textContent = kuRupiah(total);
     if (!list) return;
-    list.innerHTML = KU_ALLOC.map(a => {
+    list.innerHTML = KU_ALLOC.map((a, i) => {
         const nom = Math.round(total * a.pct / 100);
         return `
-        <div class="al-row">
+        <div class="al-row${i === _kuSelAlloc ? ' is-sel' : ''}" data-alloc="${i}">
             <span class="al-dot" style="background:${a.color}"></span>
             <span class="al-name">${escapeHtml(a.nama)}</span>
             <span class="al-pct">${a.pct}%</span>
@@ -1709,7 +1887,16 @@ function initProfitChart() {
     if (!el || typeof ApexCharts === 'undefined') return;
     if (_profitChart) { _profitChart.updateOptions({ theme: { mode: isDark() ? 'dark' : 'light' } }); return; }
     _profitChart = new ApexCharts(el, {
-        chart: { fontFamily: 'Inter, system-ui, sans-serif', type: 'donut', height: 200, toolbar: { show: false } },
+        chart: {
+            fontFamily: 'Inter, system-ui, sans-serif', type: 'donut', height: 200, toolbar: { show: false },
+            events: {
+                dataPointSelection: (e, ctx, cfg) => {
+                    const i = cfg && cfg.dataPointIndex;
+                    _kuSelAlloc = (_kuSelAlloc === i) ? -1 : i;
+                    renderAlloc();
+                },
+            },
+        },
         series: KU_ALLOC.map(a => a.pct),
         labels: KU_ALLOC.map(a => a.nama),
         colors: KU_ALLOC.map(a => a.color),
@@ -1746,15 +1933,104 @@ function initKuKasForm() {
     });
 }
 
+let _kuQuery = '';
+let _kuJenis = '';
+let _kuDate = '';
+let _kuView = [];
+let _kuEditIdx = -1;
+
+function initKuToolbar() {
+    const s = document.getElementById('kuSearch');
+    const j = document.getElementById('kuJenisFilter');
+    const d = document.getElementById('kuDateFilter');
+    if (s && !s.dataset.bound) {
+        s.dataset.bound = '1';
+        let t = null;
+        s.addEventListener('input', () => {
+            clearTimeout(t);
+            t = setTimeout(() => { _kuQuery = s.value; _kuPage = 1; renderRiwayat(); }, 300);
+        });
+    }
+    if (j && !j.dataset.bound) {
+        j.dataset.bound = '1';
+        j.addEventListener('change', () => { _kuJenis = j.value; _kuPage = 1; renderRiwayat(); });
+    }
+    if (d && !d.dataset.bound) {
+        d.dataset.bound = '1';
+        d.addEventListener('change', () => { _kuDate = d.value; _kuPage = 1; renderRiwayat(); });
+    }
+}
+
+function kuFiltered() {
+    const q = _kuQuery.trim().toLowerCase();
+    return KU_RIWAYAT.filter(r => {
+        if (_kuJenis && r.jenis !== _kuJenis) return false;
+        if (_kuDate && (r.tgl || '') !== _kuDate) return false;
+        if (!q) return true;
+        return [r.ket, r.kategori, r.jenis].some(f => (f || '').toLowerCase().includes(q));
+    });
+}
+
 function kuEdit(i) {
-    alert('Edit transaksi #' + (i + 1) + ' (belum diimplementasikan)');
+    const r = _kuView[i];
+    if (!r) return;
+    _kuEditIdx = KU_RIWAYAT.indexOf(r);
+    document.getElementById('keJenis').value = r.jenis || 'Masuk';
+    document.getElementById('keKategori').value = r.kategori || 'Lainnya';
+    document.getElementById('keKet').value = r.ket || '';
+    document.getElementById('keTgl').value = r.tgl || '';
+    document.getElementById('keNominal').value = r.nominal || '';
+    const fb = document.getElementById('keuFeedback');
+    fb.classList.add('hidden');
+    fb.classList.remove('success');
+    document.getElementById('pageKeu').classList.add('open');
+}
+
+function closeKeu() {
+    document.getElementById('pageKeu').classList.remove('open');
+    _kuEditIdx = -1;
 }
 
 function kuDel(i) {
-    alert('Hapus transaksi #' + (i + 1) + ' (belum diimplementasikan)');
+    const r = _kuView[i];
+    if (!r) return;
+    if (!confirm('Hapus "' + (r.ket || 'transaksi') + '"? (lokal, tidak memengaruhi database)')) return;
+    KU_RIWAYAT.splice(KU_RIWAYAT.indexOf(r), 1);
+    renderRiwayat();
+}
+
+function initKeuForm() {
+    const form = document.getElementById('keuForm');
+    if (!form || form.dataset.bound) return;
+    form.dataset.bound = '1';
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const ket = document.getElementById('keKet').value.trim();
+        if (!ket) return;
+        const item = {
+            tgl: document.getElementById('keTgl').value || new Date().toISOString().slice(0, 10),
+            jenis: document.getElementById('keJenis').value,
+            kategori: document.getElementById('keKategori').value,
+            ket: ket,
+            nominal: Math.max(1, Number(document.getElementById('keNominal').value) || 0),
+        };
+        if (_kuEditIdx >= 0 && KU_RIWAYAT[_kuEditIdx]) {
+            KU_RIWAYAT[_kuEditIdx] = item;
+        } else {
+            KU_RIWAYAT.unshift(item);
+            _kuPage = 1;
+        }
+        renderRiwayat();
+        const fb = document.getElementById('keuFeedback');
+        fb.classList.remove('hidden');
+        fb.classList.add('success');
+        fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Tersimpan (lokal, hilang setelah refresh).`;
+    });
 }
 
 function renderRiwayat() {
+    initKuToolbar();
+    initKeuForm();
     const body = document.getElementById('kuBody');
     const empty = document.getElementById('kuEmpty');
     const pagination = document.getElementById('kuPagination');
@@ -1765,21 +2041,26 @@ function renderRiwayat() {
     body.innerHTML = '';
     empty.classList.add('hidden');
 
-    const total = KU_RIWAYAT.length;
+    const data = kuFiltered();
+    _kuView = data;
+    const total = data.length;
     const totalPages = Math.max(1, Math.ceil(total / KU_PER_PAGE));
     if (_kuPage > totalPages) _kuPage = totalPages;
     if (_kuPage < 1) _kuPage = 1;
 
     if (total === 0) {
+        empty.innerHTML = (_kuQuery.trim() || _kuJenis || _kuDate)
+            ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Tidak ada transaksi yang cocok dengan filter.'
+            : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada riwayat transaksi.';
         empty.classList.remove('hidden');
         pagination.classList.add('hidden');
         return;
     }
 
     const start = (_kuPage - 1) * KU_PER_PAGE;
-    const rows = KU_RIWAYAT.slice(start, start + KU_PER_PAGE);
+    const rows = data.slice(start, start + KU_PER_PAGE);
     rows.forEach((r, i) => {
-        const idx = KU_RIWAYAT.indexOf(r);
+        const idx = start + i;
         const masuk = r.jenis === 'Masuk';
         const tr = document.createElement('tr');
         tr.innerHTML = `
@@ -1925,6 +2206,42 @@ function initLogin() {
         pwToggle.innerHTML = `<i class="fa-solid ${show ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
         pwToggle.setAttribute('aria-label', show ? 'Sembunyikan passcode' : 'Tampilkan passcode');
     });
+
+    const capsWarn = document.getElementById('capsWarn');
+    if (pwInput && capsWarn) {
+        const checkCaps = e => {
+            const on = e && e.getModifierState && e.getModifierState('CapsLock');
+            capsWarn.classList.toggle('hidden', !on);
+        };
+        pwInput.addEventListener('keyup', checkCaps);
+        pwInput.addEventListener('click', checkCaps);
+        pwInput.addEventListener('blur', () => capsWarn.classList.add('hidden'));
+    }
+
+    checkServer();
+}
+
+async function checkServer() {
+    const box = document.getElementById('serverStatus');
+    const txt = document.getElementById('serverStatusText');
+    if (!box || !txt) return false;
+    const set = (mode, label) => {
+        box.dataset.mode = mode;
+        txt.textContent = label;
+    };
+    set('checking', 'Memeriksa server...');
+    try {
+        const ctl = new AbortController();
+        const timer = setTimeout(() => ctl.abort(), 5000);
+        const res = await fetch('/', { method: 'HEAD', signal: ctl.signal, cache: 'no-store' });
+        clearTimeout(timer);
+        if (!res.ok) throw new Error('bad status');
+        set('online', 'Server terhubung');
+        return true;
+    } catch (_) {
+        set('offline', 'Server tidak terjangkau');
+        return false;
+    }
 }
 
 // ─────────────────────────────────────────────

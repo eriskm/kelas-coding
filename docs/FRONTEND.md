@@ -78,6 +78,8 @@ Detail:
 * **Redirect saat session invalid:** `apiGet/apiPost` lempar `AuthError` saat 401; pemanggil dashboard/transaksi/pelanggan tidak menangani khusus selain log — sesi invalid efektif memaksa login ulang via `checkSession` berikutnya / reload. `showLogin/hideLogin` toggle overlay vs app.
 * **User information:** `setAdminUI(user)` mengisi `#adminName` + sapaan topbar (default teks `Admin`). Tidak ada avatar/role dinamis selain itu.
 * **Lupa Password:** `#forgotLink` hanya tampilkan error `Hubungi administrator untuk mereset passcode.` (mock, tanpa API).
+* **Caps-lock warning:** `#capsWarn` muncul saat Caps Lock aktif di field passcode (`getModifierState`, sembunyi saat blur).
+* **Status server + versi:** pill `#serverStatus` di bawah tombol Login (`HEAD /` timeout 5 dtk via `checkServer()` saat init — hijau terhubung / merah tidak terjangkau); footer `v1.0.0`.
 * Credential aktual tidak ditulis di sini.
 
 ## 5. DASHBOARD UI
@@ -100,7 +102,7 @@ render UI (innerHTML kartu + ApexCharts line/bar + mini grid + banner)
 
 * **KPI/star cards:** `renderStarCards()` baca `data.star_cards[5]`, styling via `STAR_META` (emoji+tint, acuan `warna-reference.png`), format `kpiRupiah` (`Rp en-US`), kartu ke-5 (Target Gaji) hitung `kurang = target - bersih` lokal.
 * **Insight:** `renderInsights()` baca `data.insight[4]` (Unit Masuk/Selesai/Cash/Pending).
-* **Chart:** `initCharts()` (Statistik Status Transaksi: ApexCharts smooth area 10 status dummy `STATUS_TX_DUMMY` + marker diskrit per status + data label angka, tanpa fetch — ref `statistic-reference.png`), `renderDamageSection()` (horizontal bar gradasi + data label dari `/statistics/damage`), `renderStatusMini()` (10 kartu `STATUS_TX_DUMMY`, total 21, persen dari total + banner Insight AI), `updateChartTheme()` + `getChartHeight/getCommonOpts/chartGridColor/isDark` untuk dark mode.
+* **Chart:** `initCharts()` (Statistik Status Transaksi: ApexCharts smooth area 10 status dummy `STATUS_TX_DUMMY` + marker diskrit per status + data label angka, tanpa fetch — ref `statistic-reference.png`), `renderDamageSection()` (horizontal bar gradasi dari `/statistics/damage`; bar + kartu highlight bisa diklik → Transaksi terfilter damage via `goDamageFilter()`), `renderStatusMini()` (10 kartu `STATUS_TX_DUMMY`, total 21, persen dari total + banner Insight AI), `updateChartTheme()` + `getChartHeight/getCommonOpts/chartGridColor/isDark` untuk dark mode.
 * **Status mini:** 10 kartu status (Analisa 3, Konfirmasi 1, Wait Part 3, Repair 6, Done 6, Failed 1, Garansi 1, Refund/Cancel/Cash 0) + Insight AI (status dominan). Grid 4 kolom desktop / 2 kolom mobile.
 * **Data API vs dummy:** hitung order (`total/done/active/pending/ready`, `omset`, insight) REAL dari `service_orders`; `laba_kotor/total_beban/bersih/target_gaji`, seluruh series status dan damage MOCK hardcode backend.
 * **Fungsi terkait:** `loadDashboard, renderStarCards, renderQuickActions, renderInsights, initCharts, renderStatusMini, renderDamageSection, damageIcon, updateChartTheme, formatRupiah/kpiRupiah, isDark/chartGridColor`.
@@ -183,7 +185,7 @@ DATA MOCK/LOCAL
 * **Tambah/edit/hapus:** tombol Tambah + modal `pageSpare` (`spAdd/closeSpare`, validasi Jenis wajib); `spEdit(i)` prefill modal; `spDel(i)` konfirmasi `confirm()` lalu hapus.
 * **Search:** ADA lokal. `#spSearch` (`Cari jenis, merek, device, kategori...`) → state `_spQuery` → `spFiltered()` (match case-insensitive pada 4 field) → `renderSparepart()`. Debounce 300ms; pagination direset ke 1.
 * **Stok:** `spQtyCell(qty)`: `0 → Habis` (merah), `≤5 → Menipis` (kuning + angka), `>5 → ok`. Rupiah via `spRupiah` (`id-ID/IDR`).
-* **Tambah/edit/hapus:** in-memory via modal (lihat di atas). `txDetail` Transaksi dan `kuEdit` Keuangan masih `alert`.
+* **Tambah/edit/hapus:** in-memory via modal (lihat di atas). `txDetail` Transaksi masih `alert`.
 * **Pagination lokal:** `SP_PER_PAGE = 10`, `_spPage`, info `Halaman p start - end (dari N sparepart)`, tombol Sebelumnya/nomor/Berikutnya. `spEmpty/spLoading/spPagination/spInfo/spPageBtns` dikelola manual.
 * **Fungsi:** `spRupiah, spQtyCell, spEdit, spDel, spFiltered, renderSparepart, initSparepart, showSparepart`.
 
@@ -205,28 +207,22 @@ UI vs API vs DATABASE: UI lengkap, API BELUM ADA, DATABASE BELUM ADA.
 Data hanya di JavaScript/in-memory dan hilang setelah refresh — ditulis eksplisit.
 ```
 
-* **Kas (Buku Kas):** `kuKasBody` kolom Uraian, Debit (tengah), Kredit (tengah), Saldo (kanan). Sumber `KU_KAS` 4 baris awal (`Kas Aset Awal, Total Penjualan Service, Total Modal, Total Beban`). Render `renderBukuKas()` + format `kuRupiah`.
+* **Kas (Buku Kas):** `kuKasBody` kolom Uraian, Debit (tengah), Kredit (tengah), Saldo (kanan). Sumber `KU_KAS` 4 baris awal + tambah via form (in-memory). Ringkasan `#kuKasSummary` 3 kartu (Total Masuk hijau, Total Keluar merah, Saldo Kas biru) dihitung di `renderBukuKas()`.
+* **Form tambah kas:** `#kuKasForm` (`kuKasJenis`, `kuKasKategori` 6 opsi, `kuKasNominal`) push ke `KU_KAS` + refresh tabel + ringkasan. Tanpa validasi saldo minus, tanpa persistensi.
+* **Riwayat:** `kuBody` + toolbar (`#kuSearch` debounce 300ms, `#kuJenisFilter`, `#kuDateFilter`) → `kuFiltered()` + pagination mengikuti hasil. Edit via modal `pageKeu` (`kuEdit` prefill, `initKeuForm` simpan), hapus via `confirm` (`kuDel`) — in-memory.
+* **Alokasi:** `#kuAllocList` + donut `#kuDonut` — klik potongan donut highlight baris alokasi (`dataPointSelection` → `_kuSelAlloc` → `is-sel`).
 * **Form transaksi:** `#kuKasForm` dengan `#kuKasJenis` (`Masuk` default / `Keluar`), `#kuKasKategori` (6 opsi aktual: `Penjualan Service` default, `Modal Part`, `Modal Jasa`, `Beban Gaji`, `Beban Operasional`, `Lainnya`), `#kuKasNominal` (number ≥1 required). Submit `initKuKasForm()` push ke `KU_KAS` (`uraian=kategori, debit/kredit, saldo=last±nominal`) + `renderBukuKas()` + kosongkan nominal. Tanpa validasi saldo minus, tanpa persistensi.
 * **Alokasi:** `#kuAllocList` + `#kuTotalProfit` (tetap `6250000`) dari `KU_ALLOC` 4 item aktual (`Bonus Karyawan 10% #f59e0b, Pengelola 30% #dc2626, Investor 30% #2563eb, Kas Aset 30% #16a34a`). Render `renderAlloc()` hitung nominal = total×pct.
-* **Riwayat:** `kuBody` kolom No, Tanggal, Jenis, Kategori, Keterangan, Nominal (kanan), Aksi (tengah). Sumber `KU_RIWAYAT` 12 baris. Render `renderRiwayat()`. Edit via `kuEdit(i)` → `alert` (belum implementasi). Pagination `kuPagination/kuInfo/kuPageBtns` + konstanta `KU_PER_PAGE = 10` / `_kuPage` ada tetapi data tetap lokal.
+* **Riwayat:** `kuBody` kolom No, Tanggal, Jenis, Kategori, Keterangan, Nominal (kanan), Aksi (tengah). Sumber `KU_RIWAYAT` 12 baris + tambah via form kas? Tidak — riwayat dan kas array terpisah (keduanya in-memory). Render `renderRiwayat()` + filter `kuFiltered()`. Edit/hapus fungsional lokal (lihat di atas). Pagination `kuPagination/kuInfo/kuPageBtns`, `KU_PER_PAGE = 10`.
 * **Chart:** `#kuDonut` ApexCharts donut (`initProfitChart`, tinggi 200, tanpa legend, label %, dark/light aware, instance `_profitChart` di-update temanya saja).
 * **Fungsi:** `showKeuangan, renderKeuangan, renderBukuKas, renderAlloc, initProfitChart, initKuKasForm, renderRiwayat, kuRupiah, kuEdit`.
 
-## 13. KELOLA AKUN UI
+## 13. KELOLA AKUN UI (tahap UI: dummy in-memory, backend tahap berikutnya)
 
-```text
-UI MOCK
-API BELUM ADA
-DATABASE BELUM TERHUBUNG
-```
-
-* **Daftar akun:** `pageAkun` tabel hardcode 5 baris di `index.html` (Andi Pratama/andi_admin/Admin/Aktif, Budi Santoso/budi_super/Admin/Aktif, Citra Kirana/citra_tek/Teknisi/Aktif, Doni Setiawan/doni_tek/Teknisi/Aktif, Eko Wahyudi/eko_tek/Teknisi/Nonaktif) + kolom No, Nama, Username, Role (badge), Status (badge), Terakhir Login (teks bebas `Hari ini...`), Aksi (tombol edit tanpa handler).
-* **Summary:** 3 kartu hardcode (`TOTAL AKUN 5, AKUN AKTIF 4, ADMIN 2`).
-* **Role/Status:** hanya badge teks (`Admin` merah, `Teknisi` biru, `Aktif` hijau, `Nonaktif` abu). Tidak ada enforcement.
-* **Form:** modal `pageFormAkun` (`Tambah Akun`: `akNama*`, `akUsername*`, `akPassword` + panel info; tombol tutup `closeFormAkun()`). Submit tanpa backend (tidak ada fetch).
-* **Action:** search input + 2 select filter (Semua Role/Status) tanpa ID/handler — tidak berfungsi. Pagination bawah hardcode (`Menampilkan 1-5 dari 5`, tombol disabled).
-* **Data source:** murni HTML statis. Tidak memanggil API, tidak membaca `users`.
-* **Fungsi:** `showAkun, showFormAkun/openFormAkun/closeFormAkun` (toggle modal + draggable). Tanpa API terkait.
+* **Daftar akun:** `pageAkun` → `tbody#akBody` dirender dari `AKUN_DUMMY` 5 akun (nama, username, role, status, login terakhir) via `renderAkun()`. Kolom No (urut), Nama, Username, Role (badge), Status (badge), Terakhir Login, Aksi (edit + hapus).
+* **Summary:** `#akTotal/akAktif/akAdmin` dihitung otomatis dari data (bukan hardcode).
+* **Search/filter fungsional:** `#akSearch` (debounce, Nama/Username) + `#akRoleFilter` + `#akStatusFilter` → `akFiltered()`; info `#akInfo` (`N dari M akun (filter)`).
+* **Form:** modal `pageFormAkun` (`akNama*/akUsername*/akPassword/akRole/akStatus`) — tambah (`showFormAkun` reset mode) + edit prefill (`akEdit`, judul jadi Edit Akun) + hapus `confirm` (`akDel`); validasi username unik lokal. Submit tutup modal + refresh tabel. In-memory, hilang setelah refresh. Tidak ada `GET/POST /api/users`.
 
 ## 14. FRONTEND STATE
 

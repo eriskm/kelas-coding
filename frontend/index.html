@@ -56,6 +56,10 @@
                     <input type="password" id="loginPasscode" placeholder="Passcode" required>
                     <button type="button" class="pw-toggle" id="pwToggle" aria-label="Tampilkan passcode"><i class="fa-solid fa-eye"></i></button>
                 </div>
+                <div id="capsWarn" class="caps-warn hidden">
+                    <i class="fa-solid fa-triangle-exclamation"></i>
+                    <span>Caps Lock aktif</span>
+                </div>
                 <div id="loginError" class="login-error hidden">
                     <i class="fa-solid fa-circle-exclamation"></i>
                     <span id="loginErrorText"></span>
@@ -72,6 +76,10 @@
                     <span id="loginBtnText">Login</span>
                     <i class="fa-solid fa-arrow-right-to-bracket login-btn-icon" id="loginBtnIcon"></i>
                 </button>
+                <div id="serverStatus" class="server-status" role="status">
+                    <span class="dot"></span>
+                    <span id="serverStatusText">Memeriksa server...</span>
+                </div>
             </form>
 
             <div class="login-divider"><span>atau masuk dengan</span></div>
@@ -81,7 +89,7 @@
                 <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-solid fa-fingerprint"></i></button>
             </div>
         </div>
-        <p class="login-footer">&copy; 2026 <b>BOSS SF</b> - Service System</p>
+        <p class="login-footer">&copy; 2026 <b>BOSS SF</b> - Service System • v1.0.0</p>
         </div>
     </div>
 
@@ -736,6 +744,7 @@
                             <div class="panel lg:col-span-3 ku-kas-panel">
                                 <h3 class="panel-title">Buku Kas</h3>
                                 <p class="ku-sub">Ringkasan arus kas berdasarkan transaksi keuangan.</p>
+                                <div class="ku-summary" id="kuKasSummary"></div>
                                 <div class="overflow-x-auto">
                                     <table class="tx-table cash-table w-full text-sm">
                                         <thead>
@@ -783,7 +792,21 @@
 
                         <!-- Riwayat -->
                         <div class="panel overflow-hidden">
-                            <h3 class="panel-title px-0">Riwayat Transaksi</h3>
+                            <div class="ku-riwayat-head">
+                                <h3 class="panel-title">Riwayat Transaksi</h3>
+                                <div class="tx-toolbar ku-tools">
+                                    <div class="tx-search-wrap">
+                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                        <input type="text" id="kuSearch" class="receive-input" placeholder="Cari keterangan, kategori..." autocomplete="off">
+                                    </div>
+                                    <select id="kuJenisFilter" class="receive-input" aria-label="Filter jenis">
+                                        <option value="">Semua</option>
+                                        <option value="Masuk">Masuk</option>
+                                        <option value="Keluar">Keluar</option>
+                                    </select>
+                                    <input type="date" id="kuDateFilter" class="receive-input" aria-label="Filter tanggal" title="Filter tanggal">
+                                </div>
+                            </div>
                             <div class="overflow-x-auto">
                                 <table class="tx-table w-full text-sm">
                                     <thead>
@@ -811,6 +834,67 @@
                         </div>
                     </section>
 
+                    <!-- ===== FLOATING WINDOW: FORM KEUANGAN ===== -->
+                    <section id="pageKeu" class="float-window" role="dialog" aria-label="Form Transaksi Keuangan">
+                        <div class="float-titlebar" id="keuTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-receipt"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title">Edit Transaksi</h2>
+                                    <p class="float-sub">Tersimpan lokal, hilang setelah refresh</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeKeu()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <form id="keuForm" autocomplete="off">
+                                <div class="panel receive-panel">
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="keJenis">Jenis</label>
+                                            <select class="receive-input" id="keJenis">
+                                                <option value="Masuk">Masuk</option>
+                                                <option value="Keluar">Keluar</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="keTgl">Tanggal</label>
+                                            <input class="receive-input" type="date" id="keTgl">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="keKategori">Kategori</label>
+                                            <select class="receive-input" id="keKategori">
+                                                <option value="Penjualan Service">Penjualan Service</option>
+                                                <option value="Modal Part">Modal Part</option>
+                                                <option value="Modal Jasa">Modal Jasa</option>
+                                                <option value="Beban Gaji">Beban Gaji</option>
+                                                <option value="Beban Operasional">Beban Operasional</option>
+                                                <option value="Lainnya">Lainnya</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="keNominal">Nominal (Rp)</label>
+                                            <input class="receive-input" type="number" id="keNominal" min="1" required>
+                                        </div>
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="keKet">Keterangan <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="keKet" placeholder="cth. Servis ganti LCD A55" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
+                                    <button type="submit" class="receive-submit-btn">
+                                        <i class="fa-solid fa-check-double"></i>
+                                        <span>Simpan Perubahan</span>
+                                    </button>
+                                    <div id="keuFeedback" class="hidden receive-feedback"></div>
+                                </div>
+                            </form>
+                        </div>
+                    </section>
+
                     <!-- ===== PAGE: AKUN ===== -->
                     <section id="pageAkun" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
                         <div class="flex items-center justify-between flex-wrap gap-3">
@@ -834,7 +918,7 @@
                                 </div>
                                 <div>
                                     <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">TOTAL AKUN</div>
-                                    <div class="text-xl font-bold text-gray-800 dark:text-white">5</div>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-white" id="akTotal">5</div>
                                 </div>
                             </div>
                             <div class="panel flex items-center gap-4 p-4 rounded-xl">
@@ -843,7 +927,7 @@
                                 </div>
                                 <div>
                                     <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">AKUN AKTIF</div>
-                                    <div class="text-xl font-bold text-gray-800 dark:text-white">4</div>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-white" id="akAktif">4</div>
                                 </div>
                             </div>
                             <div class="panel flex items-center gap-4 p-4 rounded-xl">
@@ -852,7 +936,7 @@
                                 </div>
                                 <div>
                                     <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">ADMIN</div>
-                                    <div class="text-xl font-bold text-gray-800 dark:text-white">2</div>
+                                    <div class="text-xl font-bold text-gray-800 dark:text-white" id="akAdmin">2</div>
                                 </div>
                             </div>
                         </div>
@@ -862,14 +946,14 @@
                             <div class="flex flex-col sm:flex-row gap-3">
                                 <div class="relative flex-1">
                                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
-                                    <input type="text" class="receive-input pl-9 w-full" placeholder="Cari Nama / Username..." autocomplete="off">
+                                    <input type="text" id="akSearch" class="receive-input pl-9 w-full" placeholder="Cari Nama / Username..." autocomplete="off">
                                 </div>
-                                <select class="receive-input sm:w-48">
+                                <select id="akRoleFilter" class="receive-input sm:w-48">
                                     <option value="">Semua Role</option>
                                     <option value="Admin">Admin</option>
                                     <option value="Teknisi">Teknisi</option>
                                 </select>
-                                <select class="receive-input sm:w-48">
+                                <select id="akStatusFilter" class="receive-input sm:w-48">
                                     <option value="">Semua Status</option>
                                     <option value="Aktif">Aktif</option>
                                     <option value="Nonaktif">Nonaktif</option>
@@ -892,67 +976,11 @@
                                             <th class="text-center w-24">Aksi</th>
                                         </tr>
                                     </thead>
-                                    <tbody>
-                                        <tr class="tx-row">
-                                            <td class="text-center text-gray-500">1</td>
-                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Andi Pratama</td>
-                                            <td class="text-gray-500">andi_admin</td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">Admin</span></td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
-                                            <td class="text-gray-500 text-[11px]">Hari ini, 08:30</td>
-                                            <td class="text-center">
-                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
-                                            </td>
-                                        </tr>
-                                        <tr class="tx-row bg-gray-50/50 dark:bg-white/[0.02]">
-                                            <td class="text-center text-gray-500">2</td>
-                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Budi Santoso</td>
-                                            <td class="text-gray-500">budi_super</td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">Admin</span></td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
-                                            <td class="text-gray-500 text-[11px]">Kemarin, 14:15</td>
-                                            <td class="text-center">
-                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
-                                            </td>
-                                        </tr>
-                                        <tr class="tx-row">
-                                            <td class="text-center text-gray-500">3</td>
-                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Citra Kirana</td>
-                                            <td class="text-gray-500">citra_tek</td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Teknisi</span></td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
-                                            <td class="text-gray-500 text-[11px]">Hari ini, 09:05</td>
-                                            <td class="text-center">
-                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
-                                            </td>
-                                        </tr>
-                                        <tr class="tx-row bg-gray-50/50 dark:bg-white/[0.02]">
-                                            <td class="text-center text-gray-500">4</td>
-                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Doni Setiawan</td>
-                                            <td class="text-gray-500">doni_tek</td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Teknisi</span></td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400">Aktif</span></td>
-                                            <td class="text-gray-500 text-[11px]">Hari ini, 10:20</td>
-                                            <td class="text-center">
-                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
-                                            </td>
-                                        </tr>
-                                        <tr class="tx-row">
-                                            <td class="text-center text-gray-500">5</td>
-                                            <td class="font-semibold text-gray-800 dark:text-gray-200">Eko Wahyudi</td>
-                                            <td class="text-gray-500">eko_tek</td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">Teknisi</span></td>
-                                            <td class="text-center"><span class="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400">Nonaktif</span></td>
-                                            <td class="text-gray-500 text-[11px]">12 Ags 2026, 16:45</td>
-                                            <td class="text-center">
-                                                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun"><i class="fa-solid fa-pen-to-square"></i></button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
+                                    <tbody id="akBody"></tbody>
                                 </table>
                             </div>
                             <div class="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
-                                <div class="text-xs text-gray-500 dark:text-gray-400">Menampilkan 1-5 dari 5 akun</div>
+                                <div class="text-xs text-gray-500 dark:text-gray-400" id="akInfo">Menampilkan 1-5 dari 5 akun</div>
                                 <div class="flex items-center gap-1.5">
                                     <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
                                     <button class="w-7 h-7 rounded flex items-center justify-center bg-brand-500 text-white font-bold text-xs">1</button>
@@ -968,7 +996,7 @@
                             <div class="flex items-center gap-2.5 min-w-0">
                                 <span class="receive-title-icon"><i class="fa-solid fa-user-plus"></i></span>
                                 <div class="min-w-0">
-                                    <h2 class="float-title">Tambah Akun</h2>
+                                    <h2 class="float-title" id="akFormTitle">Tambah Akun</h2>
                                     <p class="float-sub">Tambahkan akun pengguna baru ke sistem</p>
                                 </div>
                             </div>
