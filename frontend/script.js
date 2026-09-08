@@ -1824,11 +1824,42 @@ function kuRupiah(v) {
 }
 
 function renderKeuangan() {
+    kuShowMain(true);
     renderBukuKas();
     renderAlloc();
     renderRiwayat();
     initProfitChart();
     initKuKasForm();
+}
+
+// ── Keuangan: pusat kontrol (main) vs arsip (riwayat) ──
+// Riwayat tetap dirender (data/fitur utuh), hanya disembunyikan dari tampilan utama.
+function kuShowMain(silent) {
+    const main = document.getElementById('kuMainView');
+    const riw = document.getElementById('kuRiwayatView');
+    if (main) main.classList.remove('hidden');
+    if (riw) riw.classList.add('hidden');
+    if (!silent && riw) {
+        const page = document.getElementById('pageKeuangan');
+        if (page) page.scrollIntoView({ block: 'start' });
+    }
+}
+
+function kuShowRiwayat() {
+    const main = document.getElementById('kuMainView');
+    const riw = document.getElementById('kuRiwayatView');
+    if (main) main.classList.add('hidden');
+    if (riw) {
+        riw.classList.remove('hidden');
+        riw.scrollIntoView({ block: 'start' });
+    }
+    renderRiwayat();
+}
+
+// Aksi utama Buku Kas — konfirmasi UI saja, tanpa mengubah data/logika bisnis.
+function kuTutupKas() {
+    if (!confirm('Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.')) return;
+    alert('Tutup kas diproses & arsip dipindahkan. (konfirmasi lokal — data & perhitungan tidak diubah)');
 }
 
 function renderBukuKas() {

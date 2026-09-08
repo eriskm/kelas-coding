@@ -74,37 +74,63 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
     return order
 
 
-@router.get("", response_model=list[schemas.ServiceOrderList])
-def list_orders(db: Session = Depends(get_db_session), limit: int = 100):
+DEFAULT_PAGE = 1
+DEFAULT_LIMIT = 10
+MAX_LIMIT = 10
+
+
+def _to_list_schema(o):
+    return schemas.ServiceOrderList(
+        id=o.id,
+        no_servis=o.no_servis,
+        customer_id=o.customer_id,
+        device=o.device,
+        brand=o.brand,
+        model=o.model,
+        damagetype=o.damagetype,
+        technician=o.technician,
+        status=o.status,
+        estimate=o.estimate,
+        payment=o.payment,
+        service_date=o.service_date,
+        created_at=o.created_at,
+        customer_name=o.customer.name if o.customer else None,
+        customer_phone=o.customer.phone if o.customer else None,
+    )
+
+
+def _page_clamp(page: int, limit: int):
+    page = max(DEFAULT_PAGE, page)
+    limit = min(MAX_LIMIT, max(1, limit))
+    return page, limit
+
+
+@router.get("", response_model=schemas.ServiceOrderPage)
+def list_orders(
+    db: Session = Depends(get_db_session),
+    page: int = DEFAULT_PAGE,
+    limit: int = DEFAULT_LIMIT,
+):
+    """Daftar servis order dengan pagination (backend-side)."""
+    page, limit = _page_clamp(page, limit)
+    total = db.query(ServiceOrder).count()
     rows = (
         db.query(ServiceOrder)
         .options(joinedload(ServiceOrder.customer))
         .order_by(ServiceOrder.created_at.desc())
+        .offset((page - 1) * limit)
         .limit(limit)
         .all()
     )
-    result = []
-    for o in rows:
-        result.append(
-            schemas.ServiceOrderList(
-                id=o.id,
-                no_servis=o.no_servis,
-                customer_id=o.customer_id,
-                device=o.device,
-                brand=o.brand,
-                model=o.model,
-                damagetype=o.damagetype,
-                technician=o.technician,
-                status=o.status,
-                estimate=o.estimate,
-                payment=o.payment,
-                service_date=o.service_date,
-                created_at=o.created_at,
-                customer_name=o.customer.name if o.customer else None,
-                customer_phone=o.customer.phone if o.customer else None,
-            )
-        )
-    return result
+    items = [_to_list_schema(o) for o in rows]
+    total_pages = (total + limit - 1) // limit if total else 1
+    return schemas.ServiceOrderPage(
+        total=total,
+        page=page,
+        limit=limit,
+        total_pages=total_pages,
+        items=items,
+    )
 
 
 @router.get("/latest", response_model=list[schemas.ServiceOrderList])

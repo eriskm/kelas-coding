@@ -1413,6 +1413,11 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .gr-kpi-grid .sm-top i { flex-shrink: 0; }
 .gr-kpi-grid .sm-num { font-size: 22px; }
 .gr-kpi-grid .sm-pct { font-size: 11px; padding: 1px 8px; }
+/* KPI Sparepart: -20% dari ukuran KPI Garansi (scope khusus) */
+#spKpi .sm-card { padding: 8px 10px; }
+#spKpi .sm-top { font-size: 10px; }
+#spKpi .sm-num { font-size: 18px; }
+#spKpi .sm-pct { font-size: 9px; }
 .tx-view-btn.tx-claim-btn:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
 .dark .tx-view-btn.tx-claim-btn:hover { background: rgba(37,99,235,0.2); color: #93c5fd; }
 .dark .tx-status { background: rgba(255,255,255,0.08); color: #e2e8f0; }
@@ -1448,12 +1453,26 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .gr-table thead th { padding: 13.2px 16.8px; font-size: 12.5px; }
 .gr-table tbody td { padding: 14.4px 16.8px; font-size: 15.1px; }
 .gr-table .tx-device { font-size: 15px; }
+/* Table Card Transaksi: +1% keseluruhan isi card tabel */
+#pageTransaksi .panel.overflow-hidden { zoom: 1.01; }
+/* Table Card Garansi: +5% keseluruhan isi card tabel */
+#pageGaransi .panel.overflow-hidden { zoom: 1.03; }
 /* Proporsi khusus tabel Pelanggan */
-.pl-table thead th { padding: 7px 8px; font-size: 9px; letter-spacing: .03em; }
-.pl-table tbody td { padding: 8px 10px; font-size: 12px; }
-.pl-table .tx-device, .pl-table .tx-user { font-size: 12px; }
-.pl-table .tx-cell-muted { font-size: 11px; }
-.pl-table .tx-laba { font-size: 10px; }
+.pl-table thead th { padding: 6px 7px; font-size: 9px; letter-spacing: .03em; }
+/* Table Card Pelanggan: skala isi card tabel */
+#pagePelanggan .panel.overflow-hidden { zoom: 0.93; }
+/* Table Card Sparepart: -3% isi card tabel */
+#pageSparepart .panel.overflow-hidden { zoom: 0.97; }
+/* Date filter Pelanggan: hanya tinggi dipadatkan, lebar tetap */
+#plDateFilter { padding-top: 6px; padding-bottom: 6px; }
+#plSearch { padding-top: 6px; padding-bottom: 6px; }
+.pl-table tbody td { padding: 3px 8px; font-size: 13px; border-bottom-color: #f8fafc; }
+.dark .pl-table tbody td { border-bottom-color: rgba(255,255,255,0.03); }
+.pl-table thead th { border-bottom-width: 1px; }
+#pagePelanggan #plPagination { padding-top: 10px; padding-bottom: 10px; }
+.pl-table .tx-device, .pl-table .tx-user { font-size: 13px; }
+.pl-table .tx-cell-muted { font-size: 12px; }
+.pl-table .tx-laba { font-size: 11px; }
 
 /* Rapat vertikal khusus tabel Garansi (hemat ruang, tanpa scroll) */
 .gr-table thead th { padding: 8px 13px; font-size: 11.5px; }
@@ -1525,6 +1544,34 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     font-variant-numeric: tabular-nums;
 }
 .cash-table .cash-num { min-width: 118px; }
+
+/* Keuangan (pusat kontrol): fokus Buku Kas + Alokasi, riwayat sebagai arsip */
+#kuMainView { display: flex; flex-direction: column; gap: 1rem; }
+.ku-kas-actions { margin-top: 12px; padding-top: 12px; border-top: 1px solid #f1f5f9; }
+.dark .ku-kas-actions { border-top-color: rgba(255,255,255,0.07); }
+.ku-tutup-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 10px 14px; border-radius: 11px;
+    font-size: 13px; font-weight: 700; letter-spacing: .01em;
+    color: #fff; background: linear-gradient(135deg, #dc2626, #991b1b);
+    border: 1px solid transparent; box-shadow: 0 8px 20px rgba(220,38,38,0.28);
+    transition: transform .15s, box-shadow .15s, filter .15s;
+}
+.ku-tutup-btn:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 26px rgba(220,38,38,0.35); }
+.ku-tutup-btn:active { transform: translateY(0); }
+.ku-riwayat-toggle-wrap { display: flex; justify-content: center; padding: 2px 0 4px; }
+.ku-riwayat-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 18px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 600; color: #475569;
+    background: #fff; border: 1px solid #e5e7eb; box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    transition: all .15s;
+}
+.dark .ku-riwayat-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
+.ku-riwayat-btn:hover { color: #dc2626; border-color: #fecaca; transform: translateY(-1px); }
+.ku-back-btn { margin-bottom: 12px; }
+#kuRiwayatView { display: flex; flex-direction: column; }
+#kuRiwayatView.hidden { display: none; }
 
 .tx-view-btn {
     display: inline-flex;

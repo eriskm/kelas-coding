@@ -29,6 +29,24 @@ class CustomerOut(CustomerBase):
     created_at: datetime
 
 
+class CustomerSummary(BaseModel):
+    id: int
+    name: str
+    phone: Optional[str] = None
+    last_device: Optional[str] = None
+    last_action: Optional[str] = None
+    last_price: Optional[float] = None
+    total_servis: int
+
+
+class CustomerSummaryPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: List[CustomerSummary]
+
+
 # ---------- ServiceOrder ----------
 class ServiceOrderBase(BaseModel):
     no_servis: str
@@ -104,6 +122,14 @@ class ServiceOrderList(BaseModel):
     created_at: datetime
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
+
+
+class ServiceOrderPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: List[ServiceOrderList]
 
 
 # ---------- Payment ----------

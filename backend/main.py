@@ -8,7 +8,7 @@ Layer:
 """
 import os
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
@@ -80,14 +80,21 @@ app.include_router(customers.router, dependencies=[Depends(get_authenticated_use
 
 
 # ---------- Mount frontend (static) ----------
-@app.get("/")
+@app.get("/", include_in_schema=False)
 def root():
-    return {
-        "app": "BOSS SF - Service System",
-        "docs": "/docs",
-        "frontend": "/static/index.html",
-    }
+    index_path = os.path.join(FRONTEND_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return FileResponse(index_path)
+    return {"detail": "Frontend index.html tidak ditemukan"}
 
 
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/static", NoCacheStaticFiles(directory=FRONTEND_DIR), name="static")
+
+
+@app.get("/favicon.ico")
+def favicon():
+    favicon_path = os.path.join(FRONTEND_DIR, "assets", "logo.png")
+    if os.path.isfile(favicon_path):
+        return FileResponse(favicon_path, media_type="image/png")
+    raise HTTPException(status_code=404)

@@ -22,3 +22,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Cloudflare tunnel (binary besar & konfigurasi sensitive)
+tools/cloudflared.exe

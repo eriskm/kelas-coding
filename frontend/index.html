@@ -739,7 +739,8 @@
                             </div>
                         </div>
 
-                        <!-- Buku Kas + Alokasi -->
+                        <!-- Buku Kas + Alokasi (fokus utama) -->
+                        <div id="kuMainView" class="space-y-4">
                         <div class="grid grid-cols-1 lg:grid-cols-5 gap-2.5 sm:gap-3">
                             <div class="panel lg:col-span-3 ku-kas-panel">
                                 <h3 class="panel-title">Buku Kas</h3>
@@ -781,6 +782,11 @@
                                         </button>
                                     </div>
                                 </form>
+                                <div class="ku-kas-actions">
+                                    <button type="button" id="kuTutupKasBtn" onclick="kuTutupKas()" class="ku-tutup-btn">
+                                        <i class="fa-solid fa-lock"></i> Proses Tutup Kas & Pindah Arsip (jam 16.00)
+                                    </button>
+                                </div>
                             </div>
                             <div class="panel lg:col-span-2">
                                 <h3 class="panel-title">Alokasi Profit</h3>
@@ -790,7 +796,19 @@
                             </div>
                         </div>
 
-                        <!-- Riwayat -->
+                        <!-- Arsip riwayat: hanya tombol, tabel disembunyikan dari tampilan utama -->
+                        <div class="ku-riwayat-toggle-wrap">
+                            <button type="button" id="kuRiwayatBtn" onclick="kuShowRiwayat()" class="ku-riwayat-btn">
+                                <i class="fa-solid fa-clipboard-list"></i> Lihat Riwayat Transaksi
+                            </button>
+                        </div>
+                        </div>
+
+                        <!-- Riwayat (arsip): dibuka hanya saat diperlukan -->
+                        <div id="kuRiwayatView" class="hidden">
+                        <button type="button" onclick="kuShowMain()" class="receive-back-btn ku-back-btn">
+                            <i class="fa-solid fa-arrow-left"></i> Kembali ke Keuangan
+                        </button>
                         <div class="panel overflow-hidden">
                             <div class="ku-riwayat-head">
                                 <h3 class="panel-title">Riwayat Transaksi</h3>
@@ -831,6 +849,7 @@
                                 <div id="kuInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
                                 <div id="kuPageBtns" class="flex items-center gap-1.5"></div>
                             </div>
+                        </div>
                         </div>
                     </section>
 
