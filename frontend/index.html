@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>BOSS SF - Service System</title>
+    <title>SUKABUMI FLASHER - Business Operating System</title>
     <link rel="icon" type="image/png" href="/static/assets/logo.png">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css?v=10">
@@ -37,12 +38,12 @@
         <div class="login-card">
             <div class="login-brand">
                 <img src="/static/assets/logo.png" alt="Logo Toko" class="login-logo">
-                <h1 class="login-title">BOSS <span>SF</span></h1>
-                <p class="login-subtitle">Service System</p>
+                <h1 class="login-title">SUKABUMI <span>FLASHER</span></h1>
+                <p class="login-subtitle">Business Operating System</p>
             </div>
 
             <h2 class="welcome-title">Selamat Datang Kembali!</h2>
-            <p class="welcome-sub">Masuk untuk mengakses sistem BOSS SF</p>
+            <p class="welcome-sub">Masuk untuk mengakses sistem SUKABUMI FLASHER</p>
 
             <form id="loginForm" autocomplete="off" novalidate>
                 <div class="login-field">
@@ -89,7 +90,7 @@
                 <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-solid fa-fingerprint"></i></button>
             </div>
         </div>
-        <p class="login-footer">&copy; 2026 <b>BOSS SF</b> - Service System • v1.0.0</p>
+        <p class="login-footer">&copy; 2026 <b>SUKABUMI FLASHER</b> - Business Operating System • v1.0.0</p>
         </div>
     </div>
 
@@ -105,7 +106,7 @@
             </div>
             <div class="flex items-center gap-2">
                 <img src="/static/assets/logo.png" alt="Logo Toko" class="w-5 h-5 object-contain">
-                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">BOSS SF</span>
+                <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">SUKABUMI FLASHER</span>
             </div>
             <div class="w-16"></div>
         </div>
@@ -735,7 +736,7 @@
                                     <i class="fa-solid fa-coins text-brand-500"></i>
                                     Keuangan
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola arus kas, pengeluaran, dan alokasi profit BOSS SF.</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola arus kas, pengeluaran, dan alokasi profit SUKABUMI FLASHER.</p>
                             </div>
                         </div>
 
@@ -922,7 +923,7 @@
                                     <i class="fa-solid fa-user-gear text-brand-500"></i>
                                     Kelola Akun
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola akun pengguna dan hak akses sistem BOSS SF</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola akun pengguna dan hak akses sistem SUKABUMI FLASHER</p>
                             </div>
                             <button type="button" onclick="showFormAkun()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
                                 <i class="fa-solid fa-plus"></i> Tambah Akun
@@ -1169,7 +1170,12 @@
                                         <label class="field-label" for="rcImei">IMEI / Serial Number</label>
                                         <input class="receive-input" type="text" id="rcImei" placeholder="cth. 356938035643809" inputmode="numeric" autocomplete="off">
                                     </div>
-                                    <div class="sm:col-span-3 grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                </div>
+                                <div class="rc-check-wrap">
+                                    <p class="field-label rc-check-title">Checklist Unit <span class="rc-check-sub">(kondisi &amp; kelengkapan saat unit diterima — dokumentasi awal, bukan analisa kerusakan)</span></p>
+                                    <div class="rc-check-groups" id="rcCheckGroups"></div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3">
                                     <div class="field">
                                         <label class="field-label" for="rcDamage">Analisa Kerusakan <b class="text-red-500">*</b></label>
                                         <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi" required></textarea>
@@ -1177,18 +1183,6 @@
                                     <div class="field">
                                         <label class="field-label" for="rcPlan">Rencana Tindakan Perbaikan</label>
                                         <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
-                                    </div>
-                                </div>
-                                </div>
-                                <div class="rc-check-wrap">
-                                    <p class="field-label rc-check-title">Checklist Unit <span class="rc-check-sub">(kondisi saat diterima — tahap UI, belum tersimpan ke database)</span></p>
-                                    <div class="rc-check-grid">
-                                        <label class="rc-check"><input type="checkbox" id="rcCheckLcd"><span>Kondisi LCD</span></label>
-                                        <label class="rc-check"><input type="checkbox" id="rcCheckFrame"><span>Frame / Casing</span></label>
-                                        <label class="rc-check"><input type="checkbox" id="rcCheckCamera"><span>Kamera</span></label>
-                                        <label class="rc-check"><input type="checkbox" id="rcCheckButton"><span>Tombol</span></label>
-                                        <label class="rc-check"><input type="checkbox" id="rcCheckCharging"><span>Charging</span></label>
-                                        <label class="rc-check"><input type="checkbox" id="rcCheckKit"><span>Kelengkapan</span></label>
                                     </div>
                                 </div>
                             </div>
@@ -1246,6 +1240,9 @@
                                     <span id="receiveSubmitText">Terima dan Daftarkan Unit Servis</span>
                                 </button>
                                 <div id="receiveFeedback" class="hidden receive-feedback"></div>
+                                <button type="button" id="receiveNotaBtn" onclick="openNota()" class="hidden receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
+                                    <i class="fa-solid fa-receipt"></i> Cetak Nota
+                                </button>
                             </div>
 
                             </div><!-- /rc-main -->
@@ -1285,6 +1282,305 @@
 
                         </form>
                         </div><!-- /float-body -->
+                        <!-- POPUP: sukses daftar servis -->
+                        <div id="receiveSuccessPopup" class="rsp-overlay hidden" onclick="if(event.target===this)closeReceiveSuccessPopup(true)" role="alertdialog" aria-label="Servis berhasil didaftarkan">
+                            <div class="rsp-card">
+                                <span class="rsp-check"><i class="fa-solid fa-check"></i></span>
+                                <h3 class="rsp-title">Unit Berhasil Didaftarkan!</h3>
+                                <p class="rsp-sub">No. Servis</p>
+                                <p class="rsp-no" id="rspNoServis">-</p>
+                                <div class="rsp-btns">
+                                    <button type="button" onclick="receiveSuccessPrint()" class="receive-submit-btn rsp-btn">
+                                        <i class="fa-solid fa-receipt"></i> Cetak Nota
+                                    </button>
+                                    <button type="button" onclick="closeReceiveSuccessPopup(true)" class="receive-back-btn rsp-btn">
+                                        <i class="fa-solid fa-plus"></i> Input Servis Lagi
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: UPDATE DATA SERVIS ===== -->
+                    <section id="pageUpdateServis" class="float-window" role="dialog" aria-label="Update Data Servis">
+                        <div class="float-titlebar us-titlebar" id="updateTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                <span class="receive-title-icon"><i class="fa-solid fa-pen-to-square"></i></span>
+                                <div class="min-w-0 flex-1">
+                                    <h2 class="float-title">Update Data Servis</h2>
+                                    <p class="float-sub">Perbarui data, rincian kas &amp; status unit</p>
+                                    <p class="us-head-meta"><span id="usTitle">UPDATE DATA SERVIS #-</span><span class="us-dot" aria-hidden="true">&bull;</span><span id="usHeadDevice">-</span><span class="us-dot" aria-hidden="true">&bull;</span><span id="usHeadCustomer">-</span></p>
+                                </div>
+                            </div>
+                            <div class="us-titlebar-right">
+                                <span id="usHeadStatus" class="tx-status">-</span>
+                                <button type="button" class="float-close" onclick="closeUpdateServis()" aria-label="Tutup">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="float-body">
+                        <form id="updateForm" autocomplete="off">
+                            <div class="us-layout">
+                            <div class="us-main">
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-user-check"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Data Identitas Konsumen</h3></div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="usNama">Nama Konsumen <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="usNama" required>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="usPhone" inputmode="tel" required>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Identitas, Diagnosa &amp; Checklist Unit</h3></div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="usDevice">Device / Model HP <b class="text-red-500">*</b></label>
+                                            <input class="receive-input" type="text" id="usDevice" required>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usPassword">Password / Pola</label>
+                                            <input class="receive-input" type="text" id="usPassword" autocomplete="off">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usImei">IMEI / Serial Number</label>
+                                            <input class="receive-input" type="text" id="usImei" inputmode="numeric" autocomplete="off">
+                                        </div>
+                                    </div>
+                                    <div class="rc-check-wrap">
+                                        <p class="field-label rc-check-title">Catatan Kondisi Unit Saat Diterima</p>
+                                        <div class="rc-check-groups" id="usCheckGroups"></div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3">
+                                        <div class="field">
+                                            <label class="field-label" for="usDamage">Analisa Kerusakan <b class="text-red-500">*</b></label>
+                                            <textarea class="receive-input" id="usDamage" rows="2" required></textarea>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usPlan">Rencana Tindakan Perbaikan</label>
+                                            <textarea class="receive-input" id="usPlan" rows="2"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-calculator"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Estimasi Biaya &amp; Penugasan Teknisi</h3></div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="usEstimate">Estimasi Biaya</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input class="receive-input pl-9" type="number" id="usEstimate" min="0">
+                                            </div>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usDp">DP (Deposit Awal)</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input class="receive-input pl-9" type="number" id="usDp" min="0">
+                                            </div>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usTechnician">Teknisi Penanggung Jawab</label>
+                                            <select class="receive-input" id="usTechnician"><option value="">— Pilih Teknisi —</option></select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usStatus">Status Awal Pengerjaan</label>
+                                            <select class="receive-input" id="usStatus">
+                                                <option value="ANALISA">Analisa</option>
+                                                <option value="KONFIRMASI">Konfirmasi</option>
+                                                <option value="WAIT PART">Wait Part</option>
+                                                <option value="REPAIR">Repair</option>
+                                                <option value="DONE">Done</option>
+                                                <option value="CASH">Cash</option>
+                                                <option value="FILED">Filed</option>
+                                                <option value="CANCEL">Cancel</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="us-side">
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-cash-register"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Rincian Biaya &amp; Pembagian Kas</h3><span class="text-[10.5px] text-gray-400">Hitungan lokal — belum masuk KAS</span></div>
+                                    </div>
+                                    <div class="us-fin">
+                                        <div class="us-duo">
+                                            <div class="us-stat"><span>Estimasi Biaya Awal</span><b id="usSumEstimate">Rp 0</b></div>
+                                            <div class="us-stat"><span>DP / Deposit Awal</span><b id="usSumDp">Rp 0</b></div>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usFinFinal">Harga Final (total pembayaran konsumen)</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input class="receive-input pl-9 us-money" type="number" id="usFinFinal" min="0">
+                                            </div>
+                                        </div>
+                                        <div class="us-duo">
+                                        <div class="field">
+                                            <label class="field-label" for="usFinPart">Modal Part (Rp)</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input class="receive-input pl-9 us-money" type="number" id="usFinPart" min="0">
+                                            </div>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usFinPartKe">Setor Part Ke</label>
+                                            <select class="receive-input" id="usFinPartKe">
+                                                <option value="Toko">Toko</option>
+                                                <option value="Owner">Owner</option>
+                                            </select>
+                                        </div>
+                                        </div>
+                                        <div class="us-duo">
+                                        <div class="field">
+                                            <label class="field-label" for="usFinJasaMode">Modal Jasa — Metode</label>
+                                            <select class="receive-input" id="usFinJasaMode">
+                                                <option value="Manual">Manual</option>
+                                                <option value="40">40%</option>
+                                                <option value="50">50%</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usFinJasa">Modal Jasa (Rp)</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input class="receive-input pl-9 us-money" type="number" id="usFinJasa" min="0">
+                                            </div>
+                                        </div>
+                                        </div>
+                                        <div class="us-duo">
+                                        <div class="field">
+                                            <label class="field-label" for="usFinJasaKe">Setor Jasa Ke</label>
+                                            <select class="receive-input" id="usFinJasaKe"><option value="">— Nama Teknisi —</option></select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usFinLain">Lain-Lain (Rp, opsional)</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input class="receive-input pl-9 us-money" type="number" id="usFinLain" min="0">
+                                            </div>
+                                        </div>
+                                        </div>
+                                        <div class="field hidden" id="usFinLainKeWrap">
+                                            <label class="field-label" for="usFinLainKe">Setor Lainnya Ke</label>
+                                            <select class="receive-input" id="usFinLainKe"><option value="Kasir">Kasir</option></select>
+                                        </div>
+                                        <div class="us-sum">
+                                            <div class="us-row"><span>Harga Final</span><b id="usSumFinal">Rp 0</b></div>
+                                            <div class="us-row"><span>Modal Part</span><b id="usSumPart">Rp 0</b></div>
+                                            <div class="us-row"><span>Modal Jasa</span><b id="usSumJasa">Rp 0</b></div>
+                                            <div class="us-row"><span>Lain-Lain</span><b id="usSumLain">Rp 0</b></div>
+                                            <div class="us-row is-total"><span>Sisa (Final − DP)</span><b id="usSumSisa">Rp 0</b></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-bolt"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Status Unit &amp; Aksi Cepat</h3></div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="usQuickStatus">Update Status Unit Terkini</label>
+                                        <select class="receive-input" id="usQuickStatus">
+                                            <option value="ANALISA">Analisa</option>
+                                            <option value="KONFIRMASI">Konfirmasi</option>
+                                            <option value="WAIT PART">Wait Part</option>
+                                            <option value="REPAIR">Repair</option>
+                                            <option value="DONE">Done</option>
+                                            <option value="CASH">Cash</option>
+                                            <option value="FILED">Filed</option>
+                                            <option value="CANCEL">Cancel</option>
+                                        </select>
+                                    </div>
+                                    <button type="button" id="usReprintBtn" onclick="usReprint()" class="hidden receive-back-btn w-full justify-center mt-3">
+                                        <i class="fa-solid fa-receipt"></i> Cetak Ulang Nota / Garansi
+                                    </button>
+                                    <button type="submit" id="usSaveBtn" class="receive-submit-btn w-full justify-center mt-3">
+                                        <i class="fa-solid fa-check-double"></i>
+                                        <span id="usSaveText">Simpan Perubahan Servis</span>
+                                    </button>
+                                    <p class="us-keys"><span><kbd>F8</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd></span> Simpan Perubahan Servis</p>
+                                    <div id="usFeedback" class="hidden receive-feedback mt-3"></div>
+                                </div>
+                            </div>
+                            </div>
+                        </form>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: NOTA PENERIMAAN SERVICE ===== -->
+                    <section id="pageNota" class="float-window" role="dialog" aria-label="Nota Penerimaan Service">
+                        <div class="float-titlebar" id="notaTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-receipt"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title">Nota Penerimaan Service</h2>
+                                    <p class="float-sub">Preview nota thermal siap cetak</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeNota()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <div class="nota-tabs" role="tablist" aria-label="Jenis nota">
+                                <button type="button" id="notaTabThermal" onclick="notaSwitch('thermal')" class="nota-tab is-active">
+                                    <i class="fa-solid fa-print"></i> Nota Thermal
+                                </button>
+                                <button type="button" id="notaTabDigital" onclick="notaSwitch('digital')" class="nota-tab">
+                                    <i class="fa-solid fa-mobile-screen"></i> Nota Digital
+                                </button>
+                            </div>
+                            <div id="notaThermalWrap">
+                            <div class="nota-preview-wrap">
+                                <div class="nota-thermal" id="notaPreview"></div>
+                            </div>
+                            <div class="nota-actions">
+                                <button type="button" onclick="notaPrint()" class="nota-act is-primary">
+                                    <i class="fa-solid fa-print"></i> Cetak Nota Thermal
+                                </button>
+                                <button type="button" onclick="notaShareWA()" class="nota-act is-wa">
+                                    <i class="fa-brands fa-whatsapp"></i> Salin &amp; Kirim ke WA
+                                </button>
+                                <button type="button" onclick="notaSaveImage()" class="nota-act">
+                                    <i class="fa-solid fa-image"></i> Simpan Gambar
+                                </button>
+                            </div>
+                            </div>
+                            <div id="notaDigitalWrap" class="hidden">
+                            <div class="nota-preview-wrap nd-wrap">
+                                <div class="nd-card" id="notaDigital"></div>
+                            </div>
+                            <div class="nota-actions nd-actions">
+                                <button type="button" onclick="notaPrint()" class="nota-act">
+                                    <i class="fa-solid fa-print"></i> Cetak Nota Thermal
+                                </button>
+                                <button type="button" onclick="notaDigitalShareWA()" class="nota-act is-wa">
+                                    <i class="fa-brands fa-whatsapp"></i> Salin &amp; Kirim ke WA
+                                </button>
+                                <button type="button" onclick="notaSaveDigitalImage()" class="nota-act is-primary">
+                                    <i class="fa-solid fa-image"></i> Simpan Gambar ke Device
+                                </button>
+                            </div>
+                            </div>
+                            <div id="notaFeedback" class="hidden receive-feedback"></div>
+                        </div>
                     </section>
 
                 </div>
@@ -1301,7 +1597,7 @@
                     </div>
                     <div class="flex items-center gap-4">
                         <span>v1.0.0</span>
-                        <span>&copy; 2026 BOSS SF - Service System</span>
+                        <span>&copy; 2026 SUKABUMI FLASHER - Business Operating System</span>
                     </div>
                 </div>
 

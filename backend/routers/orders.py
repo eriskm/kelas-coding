@@ -54,6 +54,12 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
         db.add(customer)
         db.commit()
         db.refresh(customer)
+    elif data.customer_name and data.customer_name.strip() and customer.name != data.customer_name.strip():
+        # Opsi (a): nomor WA sama = identitas sama → koreksi nama terbaru.
+        # Tidak membuat customer baru; No. Servis dan histori order lain tidak berubah.
+        customer.name = data.customer_name.strip()
+        db.commit()
+        db.refresh(customer)
 
     order = ServiceOrder(
         no_servis=_generate_no_servis(),
@@ -61,6 +67,9 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
         device=data.device,
         damagetype=data.damagetype,
         device_password=data.device_password,
+        imei=(data.imei or "").strip() or None,
+        check_fisik=list(data.check_fisik or []),
+        check_len=list(data.check_len) if data.check_len is not None else ["unit_saja"],
         repair_plan=data.repair_plan,
         technician=data.technician,
         status=data.status,
@@ -88,6 +97,9 @@ def _to_list_schema(o):
         brand=o.brand,
         model=o.model,
         damagetype=o.damagetype,
+        imei=o.imei,
+        check_fisik=list(o.check_fisik or []),
+        check_len=list(o.check_len) if o.check_len is not None else ["unit_saja"],
         technician=o.technician,
         status=o.status,
         estimate=o.estimate,
@@ -153,6 +165,9 @@ def latest_orders(db: Session = Depends(get_db_session), limit: int = 10):
                 brand=o.brand,
                 model=o.model,
                 damagetype=o.damagetype,
+                imei=o.imei,
+                check_fisik=list(o.check_fisik or []),
+                check_len=list(o.check_len) if o.check_len is not None else ["unit_saja"],
                 technician=o.technician,
                 status=o.status,
                 estimate=o.estimate,

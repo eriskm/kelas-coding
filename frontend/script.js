@@ -1,5 +1,5 @@
 /* ============================================
-   BOSS SF — Dashboard Logic (fetch dari FastAPI)
+   SUKABUMI FLASHER — Dashboard Logic (fetch dari FastAPI)
    ============================================ */
 
 const API_BASE = '/api';
@@ -52,9 +52,87 @@ function setActiveNav(active, items) {
 
 const VALID_PAGES = ['dashboard', 'transaksi', 'pelanggan', 'garansi', 'sparepart', 'keuangan'];
 
+// Servis Baru adalah floating overlay di atas halaman utama, jadi status bukanya
+// disimpan terpisah agar tahan refresh (bsf_page tetap menyimpan halaman dasar).
+const RECEIVE_OPEN_KEY = 'bsf_receive_open';
+const RECEIVE_DRAFT_KEY = 'bsf_receive_draft';
+
 function pageFromHash() {
     const m = (location.hash || '').match(/^#\/([a-z]+)/);
     return (m && VALID_PAGES.includes(m[1])) ? m[1] : null;
+}
+
+function isReceiveHash() {
+    return /^#\/(servisbaru|receive)\/?$/.test(location.hash || '');
+}
+
+function isReceiveOpen() {
+    try { return localStorage.getItem(RECEIVE_OPEN_KEY) === '1'; } catch (_) { return false; }
+}
+
+function setReceiveHash() {
+    const h = '#/servisbaru';
+    if (location.hash !== h) location.hash = h;
+}
+
+// ─────────────────────────────────────────────
+// SERVIS BARU — draft autosave (tahan refresh)
+// ─────────────────────────────────────────────
+const RECEIVE_DRAFT_FIELDS = ['rcName', 'rcPhone', 'rcDevice', 'rcPassword', 'rcImei', 'rcDamage', 'rcPlan', 'rcEstimate', 'rcDp', 'rcTechnician', 'rcStatus'];
+let _rcDraftTimer = null;
+
+function collectReceiveDraft() {
+    const d = {};
+    RECEIVE_DRAFT_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) d[id] = el.value;
+    });
+    try {
+        if (typeof collectChecklist === 'function') d._checklist = collectChecklist('rc');
+    } catch (_) {}
+    return d;
+}
+
+function saveReceiveDraft() {
+    try {
+        const d = collectReceiveDraft();
+        const hasValue = Object.keys(d).some(k => {
+            if (k === '_checklist') {
+                const c = d._checklist || {};
+                return (c.fisik || []).length > 0 || ((c.len || []).filter(x => x !== 'unit_saja').length > 0);
+            }
+            return String(d[k] || '').trim() !== '' && d[k] !== 'ANALISA';
+        });
+        if (hasValue) localStorage.setItem(RECEIVE_DRAFT_KEY, JSON.stringify(d));
+        else localStorage.removeItem(RECEIVE_DRAFT_KEY);
+    } catch (_) {}
+}
+
+function scheduleReceiveDraft() {
+    clearTimeout(_rcDraftTimer);
+    _rcDraftTimer = setTimeout(saveReceiveDraft, 300);
+}
+
+function restoreReceiveDraft() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null'); } catch (_) { d = null; }
+    if (!d) return false;
+    RECEIVE_DRAFT_FIELDS.forEach(id => {
+        const el = document.getElementById(id);
+        if (!el || d[id] === undefined) return;
+        // Jangan timpa pilihan teknisi bila option-nya belum ada (daftar async).
+        if (id === 'rcTechnician' && d[id] && !Array.from(el.options).some(o => o.value === d[id])) return;
+        el.value = d[id];
+    });
+    try {
+        if (d._checklist && typeof applyChecklist === 'function') applyChecklist('rc', d._checklist);
+    } catch (_) {}
+    try { updateReceiveSteps(); } catch (_) {}
+    return true;
+}
+
+function clearReceiveDraft() {
+    try { localStorage.removeItem(RECEIVE_DRAFT_KEY); } catch (_) {}
 }
 
 function savePage(key) {
@@ -76,6 +154,7 @@ function navigateTo(key) {
     else if (key === 'sparepart') showSparepart();
     else if (key === 'keuangan') showKeuangan();
     else if (key === 'akun') showAkun();
+    else if (key === 'servisbaru' || key === 'receive') openServisBaru();
     else showPage('dashboard');
 }
 
@@ -87,11 +166,16 @@ function showPage(name) {
     const isSparepart = name === 'sparepart';
     const isKeuangan = name === 'keuangan';
     const isAkun = name === 'akun';
-    if (name === 'receive') { openServisBaru(); return; }
+    if (name === 'receive' || name === 'servisbaru') { openServisBaru(); return; }
     if (name === 'formAkun') { openFormAkun(); return; }
     savePage(name);
-    
+    try { localStorage.removeItem(RECEIVE_OPEN_KEY); } catch (_) {}
+
     document.getElementById('pageReceive').classList.remove('open');
+    const _pgNota = document.getElementById('pageNota');
+    if (_pgNota) _pgNota.classList.remove('open');
+    const _pgUpd = document.getElementById('pageUpdateServis');
+    if (_pgUpd) _pgUpd.classList.remove('open');
     if (document.getElementById('pageFormAkun')) {
         document.getElementById('pageFormAkun').classList.remove('open');
     }
@@ -268,6 +352,14 @@ function initAkunForm() {
 
 function openServisBaru() {
     document.getElementById('pageReceive').classList.add('open');
+    try { localStorage.setItem(RECEIVE_OPEN_KEY, '1'); } catch (_) {}
+    closeReceiveSuccessPopup(false);
+    restoreReceiveDraft();
+    setReceiveHash();
+    const _nb = document.getElementById('receiveNotaBtn');
+    if (_nb) _nb.classList.add('hidden');
+    const _st = document.getElementById('receiveSubmitText');
+    if (_st) _st.textContent = 'Terima dan Daftarkan Unit Servis';
     updateReceiveSteps();
     loadSmartHistory();
     setActiveNav('servisbaru', document.querySelectorAll('.nav-link'));
@@ -277,7 +369,28 @@ function openServisBaru() {
     if (window.innerWidth < 640) toggleSidebar(false);
 }
 function showServisBaru() { openServisBaru(); }
+// Popup sukses Servis Baru: notif No. Servis + tombol Cetak Nota.
+function showReceiveSuccessPopup(noServis) {
+    const noEl = document.getElementById('rspNoServis');
+    if (noEl) noEl.textContent = noServis || '-';
+    const ov = document.getElementById('receiveSuccessPopup');
+    if (ov) ov.classList.remove('hidden');
+}
+function closeReceiveSuccessPopup(focusAgain) {
+    const ov = document.getElementById('receiveSuccessPopup');
+    if (ov) ov.classList.add('hidden');
+    if (focusAgain) {
+        const f = document.getElementById('rcName');
+        if (f) setTimeout(() => f.focus({ preventScroll: true }), 60);
+    }
+}
+function receiveSuccessPrint() {
+    closeReceiveSuccessPopup(false);
+    openNota();
+}
 function closeServisBaru() {
+    try { localStorage.removeItem(RECEIVE_OPEN_KEY); } catch (_) {}
+    closeReceiveSuccessPopup(false);
     document.getElementById('pageReceive').classList.remove('open');
     const isTx = !document.getElementById('pageTransaksi').classList.contains('hidden');
     const isPl = !document.getElementById('pagePelanggan').classList.contains('hidden');
@@ -396,6 +509,8 @@ function initFloatDrag() {
     makeFloatDraggable('pageClaim', 'claimTitlebar', closeGrClaim);
     makeFloatDraggable('pageSpare', 'spareTitlebar', closeSpare);
     makeFloatDraggable('pageKeu', 'keuTitlebar', closeKeu);
+    makeFloatDraggable('pageNota', 'notaTitlebar', closeNota);
+    makeFloatDraggable('pageUpdateServis', 'updateTitlebar', closeUpdateServis);
 }
 
 // ─────────────────────────────────────────────
@@ -473,6 +588,38 @@ async function apiPost(path, body) {
         throw new Error(detail);
     }
     return res.json();
+}
+
+async function apiPut(path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    const token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE + path, {
+        method: 'PUT',
+        headers,
+        body: JSON.stringify(body || {}),
+    });
+    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
+    if (!res.ok) {
+        let detail = 'Gagal menyimpan perubahan (HTTP ' + res.status + ')';
+        try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
+        throw new Error(detail);
+    }
+    return res.json();
+}
+
+async function apiDel(path) {
+    const headers = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE + path, { method: 'DELETE', headers });
+    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
+    if (!res.ok) {
+        let detail = 'Gagal menghapus data (HTTP ' + res.status + ')';
+        try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
+        throw new Error(detail);
+    }
+    try { return await res.json(); } catch (_) { return { ok: true }; }
 }
 
 // Warna semantik KPI (ref: warna-reference.png):
@@ -968,7 +1115,11 @@ function txRowHtml(o, num) {
         <td class="tx-cell-muted">${escapeHtml(o.repair_plan || '-')}</td>
         <td class="tx-cell-muted">${escapeHtml(o.technician || '-')}</td>
         <td class="tx-laba">${txLaba(o)}</td>
-        <td class="tx-aksi"><button type="button" class="tx-view-btn" title="Detail" onclick="txDetail(${o.id})"><i class="fa-solid fa-eye"></i></button></td>
+        <td class="tx-aksi">
+            <button type="button" class="tx-view-btn" title="Detail" onclick="txDetail(${o.id})"><i class="fa-solid fa-eye"></i></button>
+            <button type="button" class="tx-view-btn tx-edit-btn" title="Edit" onclick="txEdit(${o.id})"><i class="fa-solid fa-pen"></i></button>
+            <button type="button" class="tx-view-btn tx-del-btn" title="Hapus" onclick="txDel(${o.id})"><i class="fa-solid fa-trash"></i></button>
+        </td>
     </tr>`;
 }
 
@@ -1091,6 +1242,274 @@ async function loadTxPage(page) {
 
 function txDetail(id) {
     alert('Detail transaksi #' + id + ' (belum diimplementasikan)');
+}
+
+let _txEditId = null;
+let _txEditCustomerId = null;
+
+async function txEdit(id) {
+    let o;
+    try {
+        o = await apiGet('/orders/' + id);
+    } catch (err) {
+        alert(err.message);
+        return;
+    }
+    openUpdateServis(o);
+}
+
+async function txDel(id) {
+    if (!confirm('Hapus transaksi #' + id + '? Data yang dihapus tidak bisa dikembalikan.')) return;
+    try {
+        await apiDel('/orders/' + id);
+        await renderTransaksi();
+    } catch (err) {
+        alert(err.message);
+    }
+}
+
+// ─────────────────────────────────────────────
+// UPDATE DATA SERVIS (edit transaksi: kiri data, kanan finance + aksi)
+// Finance = dummy tahap UI (tanpa endpoint); data servis memakai PUT yang sudah ada.
+// ─────────────────────────────────────────────
+
+function usVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
+function usNum(id) { return parseFloat(usVal(id)) || 0; }
+
+let _usNo = '';
+// Baseline checklist dari server per No. Servis — untuk dirty-guard:
+// checklist hanya dikirim saat user benar-benar mengubahnya.
+let _usCheckBaseline = '';
+
+function _usServerChecklist(o) {
+    const fisik = Array.isArray(o.check_fisik) ? o.check_fisik : [];
+    const len = Array.isArray(o.check_len) ? o.check_len : ['unit_saja'];
+    return { fisik: fisik, len: len.length ? len : ['unit_saja'] };
+}
+
+function openUpdateServis(o) {
+    _txEditId = o.id;
+    _usNo = o.no_servis || '';
+    _txEditCustomerId = o.customer_id || (o.customer || {}).id || null;
+    document.getElementById('usTitle').textContent = 'UPDATE DATA SERVIS #' + (o.no_servis || o.id);
+    document.getElementById('usHeadDevice').textContent = o.device || '-';
+    document.getElementById('usHeadCustomer').textContent = (o.customer || {}).name || o.customer_name || '-';
+    document.getElementById('usNama').value = (o.customer || {}).name || o.customer_name || '';
+    document.getElementById('usPhone').value = (o.customer || {}).phone || o.customer_phone || '';
+    document.getElementById('usDevice').value = o.device || '';
+    document.getElementById('usPassword').value = o.device_password || '';
+    document.getElementById('usImei').value = o.imei || '';
+    document.getElementById('usDamage').value = o.damagetype || '';
+    document.getElementById('usPlan').value = o.repair_plan || '';
+    document.getElementById('usEstimate').value = (o.estimate !== null && o.estimate !== undefined) ? o.estimate : '';
+    document.getElementById('usDp').value = (o.payment !== null && o.payment !== undefined) ? o.payment : '';
+    document.getElementById('usTechnician').value = o.technician || '';
+    // Finance dummy: nilai awal dari data tersimpan
+    document.getElementById('usFinFinal').value = (o.estimate !== null && o.estimate !== undefined) ? o.estimate : '';
+    document.getElementById('usFinPart').value = '';
+    document.getElementById('usFinPartKe').value = 'Toko';
+    document.getElementById('usFinJasaMode').value = 'Manual';
+    document.getElementById('usFinJasa').value = '';
+    document.getElementById('usFinJasaKe').value = o.technician || '';
+    document.getElementById('usFinLain').value = '';
+    // Checklist awal: SELALU dari data server per No. Servis (bukan dummy,
+    // bukan store lokal). Setelah refresh pun tampil sama persis.
+    const _usCheck = _usServerChecklist(o);
+    applyChecklist('us', _usCheck);
+    _usCheckBaseline = JSON.stringify(_usCheck);
+    _checkStore[_usNo] = _usCheck;
+    usSetStatus(o.status || 'ANALISA');
+    usFinUpdate();
+    const fb = document.getElementById('usFeedback');
+    if (fb) fb.classList.add('hidden');
+    const txt = document.getElementById('usSaveText');
+    if (txt) txt.textContent = 'Simpan Perubahan Servis';
+    document.getElementById('pageUpdateServis').classList.add('open');
+}
+
+function closeUpdateServis() {
+    document.getElementById('pageUpdateServis').classList.remove('open');
+    _txEditId = null;
+    _txEditCustomerId = null;
+    _usNo = '';
+}
+
+// Status unit: SATU sumber tulis (usSetStatus) + SATU sumber baca (usGetStatus).
+// Kedua kontrol (usStatus & usQuickStatus) hanya mirror dari state yang sama.
+function usSetStatus(s) {
+    const a = document.getElementById('usStatus');
+    const b = document.getElementById('usQuickStatus');
+    if (a) a.value = s;
+    if (b) b.value = s;
+    const badge = document.getElementById('usHeadStatus');
+    if (badge) {
+        badge.textContent = s;
+        badge.className = 'tx-status st-' + String(s || '').toUpperCase().replace(/\s+/g, '_');
+    }
+    const rp = document.getElementById('usReprintBtn');
+    if (rp) rp.classList.toggle('hidden', s !== 'CASH');
+}
+
+function usGetStatus() {
+    const b = document.getElementById('usQuickStatus');
+    const a = document.getElementById('usStatus');
+    return (b && b.value) || (a && a.value) || 'ANALISA';
+}
+
+function usRupiah(v) {
+    return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+}
+
+function usFinUpdate() {
+    const est = usNum('usEstimate');
+    const dp = usNum('usDp');
+    let final = usNum('usFinFinal');
+    const mode = usVal('usFinJasaMode');
+    const jasaEl = document.getElementById('usFinJasa');
+    if (mode === '40' || mode === '50') {
+        const auto = Math.round(final * Number(mode) / 100);
+        if (jasaEl) jasaEl.value = auto;
+    }
+    const part = usNum('usFinPart');
+    const jasa = usNum('usFinJasa');
+    const lain = usNum('usFinLain');
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = usRupiah(v); };
+    set('usSumEstimate', est);
+    set('usSumDp', dp);
+    set('usSumFinal', final);
+    set('usSumPart', part);
+    set('usSumJasa', jasa);
+    set('usSumLain', lain);
+    set('usSumSisa', final - dp);
+    const wrap = document.getElementById('usFinLainKeWrap');
+    if (wrap) wrap.classList.toggle('hidden', !(lain > 0));
+}
+
+function usReprint() {
+    _lastNota = {
+        no: document.getElementById('usTitle').textContent.replace('UPDATE DATA SERVIS #', '') || '-',
+        tgl: new Date().toISOString().slice(0, 10),
+        nama: usVal('usNama'),
+        phone: usVal('usPhone'),
+        device: usVal('usDevice'),
+        damage: usVal('usDamage'),
+        plan: usVal('usPlan'),
+        estimate: usNum('usFinFinal') || usNum('usEstimate'),
+        dp: usNum('usDp'),
+        technician: usVal('usTechnician'),
+        status: usVal('usQuickStatus'),
+        imei: '',
+        password: usVal('usPassword'),
+    };
+    openNota();
+}
+
+function initUpdateServis() {
+    renderChecklist('us', 'usCheckGroups', 'Catatan kondisi awal — tidak diubah otomatis saat data servis diperbarui.');
+    const techFill = (selId) => {
+        const sel = document.getElementById(selId);
+        if (!sel || sel.options.length > 1) return;
+        const src = document.getElementById('rcTechnician');
+        if (src) sel.innerHTML = src.innerHTML;
+    };
+    const syncTech = async () => {
+        try {
+            const techs = await apiGet('/orders/technicians');
+            ['usTechnician', 'usFinJasaKe'].forEach(id => {
+                const sel = document.getElementById(id);
+                if (!sel || sel.options.length > 1) return;
+                const keep = id === 'usTechnician' ? '— Pilih Teknisi —' : '— Nama Teknisi —';
+                sel.innerHTML = `<option value="">${keep}</option>` + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+            });
+        } catch (_) { techFill('usTechnician'); techFill('usFinJasaKe'); }
+    };
+    syncTech();
+    ['usEstimate', 'usDp', 'usFinFinal', 'usFinPart', 'usFinJasa', 'usFinLain'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.usBound) {
+            el.dataset.usBound = '1';
+            el.addEventListener('input', usFinUpdate);
+        }
+    });
+    const jm = document.getElementById('usFinJasaMode');
+    if (jm && !jm.dataset.usBound) { jm.dataset.usBound = '1'; jm.addEventListener('change', usFinUpdate); }
+    const sa = document.getElementById('usStatus');
+    if (sa && !sa.dataset.usBound) { sa.dataset.usBound = '1'; sa.addEventListener('change', () => usSetStatus(sa.value)); }
+    const sb = document.getElementById('usQuickStatus');
+    if (sb && !sb.dataset.usBound) { sb.dataset.usBound = '1'; sb.addEventListener('change', () => usSetStatus(sb.value)); }
+    const form = document.getElementById('updateForm');
+    if (form && !form.dataset.usBound) {
+        form.dataset.usBound = '1';
+        form.addEventListener('submit', async function (e) {
+            e.preventDefault();
+            if (!_txEditId) return;
+            const btn = document.getElementById('usSaveBtn');
+            const txt = document.getElementById('usSaveText');
+            const fb = document.getElementById('usFeedback');
+            if (fb) fb.classList.add('hidden');
+            if (btn) btn.disabled = true;
+            if (txt) txt.textContent = 'Menyimpan...';
+            try {
+                const _usCheckNow = collectChecklist('us');
+                const _usCheckChanged = JSON.stringify(_usCheckNow) !== _usCheckBaseline;
+                const _usPayload = {
+                    device: usVal('usDevice').trim(),
+                    device_password: usVal('usPassword'),
+                    imei: usVal('usImei').trim(),
+                    damagetype: usVal('usDamage').trim(),
+                    repair_plan: usVal('usPlan').trim(),
+                    estimate: usNum('usEstimate'),
+                    payment: usNum('usDp'),
+                    technician: usVal('usTechnician'),
+                    status: usGetStatus(),
+                };
+                // Checklist hanya dikirim bila user mengubahnya eksplisit.
+                // Jika tidak disentuh, field dihilangkan agar data server tidak tertimpa.
+                if (_usCheckChanged) {
+                    _usPayload.check_fisik = _usCheckNow.fisik;
+                    _usPayload.check_len = _usCheckNow.len;
+                }
+                await apiPut('/orders/' + _txEditId, _usPayload);
+                if (_txEditCustomerId) {
+                    await apiPut('/customers/' + _txEditCustomerId, {
+                        name: usVal('usNama').trim(),
+                        phone: usVal('usPhone').trim(),
+                    });
+                }
+                usSetStatus(usGetStatus());
+                if (_usCheckChanged) {
+                    _usCheckBaseline = JSON.stringify(_usCheckNow);
+                    if (_usNo) _checkStore[_usNo] = _usCheckNow;
+                }
+                if (fb) {
+                    fb.classList.remove('hidden');
+                    fb.classList.add('success');
+                    fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Data servis tersimpan di server. Rincian kas di panel kanan masih hitungan lokal (belum masuk KAS).`;
+                }
+                renderTransaksi();
+            } catch (err) {
+                if (fb) {
+                    fb.classList.remove('hidden');
+                    fb.classList.add('error');
+                    fb.textContent = err.message;
+                }
+            } finally {
+                if (btn) btn.disabled = false;
+                if (txt) txt.textContent = 'Simpan Perubahan Servis';
+            }
+        });
+    }
+    if (document.body.dataset.usKeys !== '1') {
+        document.body.dataset.usKeys = '1';
+        document.addEventListener('keydown', function (e) {
+            const win = document.getElementById('pageUpdateServis');
+            if (!win || !win.classList.contains('open')) return;
+            if (e.key === 'F8' || ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's')) {
+                e.preventDefault();
+                document.getElementById('updateForm').requestSubmit();
+            }
+        });
+    }
 }
 
 // ─────────────────────────────────────────────
@@ -2206,6 +2625,7 @@ async function handleLogout(e) {
     }
     clearToken();
     localStorage.removeItem('bsf_page');
+    try { localStorage.removeItem(RECEIVE_OPEN_KEY); localStorage.removeItem(RECEIVE_DRAFT_KEY); } catch (_) {}
     history.replaceState(null, '', location.pathname + location.search);
     location.reload();
 }
@@ -2437,11 +2857,81 @@ async function loadSmartHistory() {
     }
 }
 
+// ─────────────────────────────────────────────
+// CHECKLIST UNIT — sumber tunggal (Servis Baru & Update konsisten)
+// Kondisi awal per No. Servis, tahap UI (lokal, tanpa DB/API).
+// ─────────────────────────────────────────────
+
+const CHECK_FISIK = [
+    { key: 'lcd_pecah', label: 'LCD Pecah' },
+    { key: 'lcd_terbuka', label: 'LCD Terbuka' },
+    { key: 'frame_bengkok', label: 'Frame/Case Bengkok' },
+    { key: 'frame_gompal', label: 'Frame/Case Gompal' },
+    { key: 'tombol_tidak_ada', label: 'Tombol Tidak Ada' },
+    { key: 'bekas_air', label: 'Bekas Air' }
+];
+
+const CHECK_LEN = [
+    { key: 'unit_saja', label: 'Unit Saja' },
+    { key: 'case', label: 'Case' },
+    { key: 'sim_card', label: 'SIM Card' },
+    { key: 'memory_card', label: 'Memory Card' },
+    { key: 'box', label: 'Box' },
+    { key: 'charger', label: 'Charger' }
+];
+
+const _checkStore = {};
+
+function renderChecklist(prefix, containerId, note) {
+    const box = document.getElementById(containerId);
+    if (!box) return;
+    const group = (title, icon, list) => `
+        <div class="rc-check-group">
+            <p class="rc-check-group-head"><span class="rc-check-group-ico"><i class="fa-solid ${icon}"></i></span>${title}</p>
+            <div class="rc-check-grid">
+                ${list.map(it => `<label class="rc-check"><input type="checkbox" id="${prefix}-ck-${it.key}"><span>${it.label}</span></label>`).join('')}
+            </div>
+        </div>`;
+    box.innerHTML =
+        group('KONDISI FISIK SAAT DITERIMA', 'fa-mobile-screen-button', CHECK_FISIK)
+        + group('KELENGKAPAN SAAT DITERIMA', 'fa-box-open', CHECK_LEN)
+        + (note ? `<p class="field-hint">${note}</p>` : '');
+}
+
+function collectChecklist(prefix) {
+    const get = (list) => list
+        .filter(it => { const el = document.getElementById(prefix + '-ck-' + it.key); return el && el.checked; })
+        .map(it => it.key);
+    return { fisik: get(CHECK_FISIK), len: get(CHECK_LEN) };
+}
+
+function applyChecklist(prefix, data) {
+    data = data || { fisik: [], len: [] };
+    const set = (list, keys) => list.forEach(it => {
+        const el = document.getElementById(prefix + '-ck-' + it.key);
+        if (el) el.checked = (keys || []).includes(it.key);
+    });
+    set(CHECK_FISIK, data.fisik);
+    set(CHECK_LEN, data.len);
+}
+
 async function initReceivePage() {
+    renderChecklist('rc', 'rcCheckGroups');
+    applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
+    restoreReceiveDraft();
     try {
         const techs = await apiGet('/orders/technicians');
         const sel = document.getElementById('rcTechnician');
-        sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+        if (sel && techs && techs.length) {
+            const cur = (document.getElementById('rcTechnician') || {}).value || '';
+            sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+            // Kembalikan pilihan teknisi dari draft setelah option async tersedia.
+            try {
+                const d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null');
+                const want = (d && d.rcTechnician) || cur;
+                if (want && Array.from(sel.options).some(o => o.value === want)) sel.value = want;
+            } catch (_) { if (cur) sel.value = cur; }
+        }
     } catch (_) {}
 
     const phoneEl = document.getElementById('rcPhone');
@@ -2459,9 +2949,10 @@ async function initReceivePage() {
     });
 
     const form = document.getElementById('receiveForm');
-    form.addEventListener('input', updateReceiveSteps);
-    form.addEventListener('change', updateReceiveSteps);
+    form.addEventListener('input', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
+    form.addEventListener('change', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
     initReceiveShortcuts();
+    restoreReceiveDraft();
     updateReceiveSteps();
 
     document.getElementById('receiveForm').addEventListener('submit', async function (e) {
@@ -2473,11 +2964,15 @@ async function initReceivePage() {
         btn.disabled = true;
         txt.textContent = 'Menyimpan...';
         try {
+            const _rcCheck = collectChecklist('rc');
             const res = await apiPost('/orders/receive', {
                 customer_name: document.getElementById('rcName').value.trim(),
                 customer_phone: phoneEl.value.trim(),
                 device: document.getElementById('rcDevice').value.trim(),
                 device_password: document.getElementById('rcPassword').value.trim(),
+                imei: (document.getElementById('rcImei') || {}).value.trim(),
+                check_fisik: _rcCheck.fisik,
+                check_len: _rcCheck.len,
                 damagetype: document.getElementById('rcDamage').value.trim(),
                 repair_plan: document.getElementById('rcPlan').value.trim(),
                 estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
@@ -2488,9 +2983,31 @@ async function initReceivePage() {
             fb.classList.remove('hidden');
             fb.classList.add('success');
             fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Unit berhasil didaftarkan! No. Servis: <b>${res.no_servis}</b>`;
+            _lastNota = {
+                no: res.no_servis,
+                tgl: new Date().toISOString().slice(0, 10),
+                nama: document.getElementById('rcName').value.trim(),
+                phone: phoneEl.value.trim(),
+                device: document.getElementById('rcDevice').value.trim(),
+                damage: document.getElementById('rcDamage').value.trim(),
+                plan: document.getElementById('rcPlan').value.trim(),
+                estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
+                dp: parseFloat(document.getElementById('rcDp').value) || 0,
+                technician: (document.getElementById('rcTechnician').selectedOptions[0] || {}).textContent || '',
+                status: document.getElementById('rcStatus').value,
+                imei: (document.getElementById('rcImei') || {}).value || '',
+                password: (document.getElementById('rcPassword') || {}).value || '',
+            };
+            _lastNota.checklist = _rcCheck;
+            _checkStore[res.no_servis] = _rcCheck;
+            const _nb2 = document.getElementById('receiveNotaBtn');
+            if (_nb2) _nb2.classList.remove('hidden');
             this.reset();
+            clearReceiveDraft();
+            applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
             document.querySelectorAll('#rcSteps .rc-step').forEach(li => { li.classList.remove('is-active'); li.classList.add('is-done'); });
             loadSmartHistory();
+            showReceiveSuccessPopup(res.no_servis);
         } catch (err) {
             fb.classList.remove('hidden');
             fb.classList.add('error');
@@ -2502,6 +3019,554 @@ async function initReceivePage() {
     });
 }
 
+// ─────────────────────────────────────────────
+// NOTA PENERIMAAN SERVICE (tahap UI: dummy, tanpa DB/API)
+// ─────────────────────────────────────────────
+
+let _lastNota = null;
+
+const NOTA_DUMMY = {
+    no: 'SV-20260908-2525',
+    tgl: '2026-09-08',
+    nama: 'Andi Pratama',
+    phone: '081234567890',
+    device: 'Samsung Galaxy A55',
+    damage: 'Layar retak, touch sebagian tidak berfungsi',
+    plan: 'Ganti LCD + frame, tes fungsi',
+    estimate: 550000,
+    dp: 100000,
+    technician: 'Teknisi 1',
+    status: 'ANALISA',
+    estimasi_selesai: '2026-09-11',
+    garansi: 'Garansi pengerjaan 30 hari untuk penggantian part yang sama.',
+    imei: '-',
+    password: '-',
+};
+
+function notaData() { return _lastNota || NOTA_DUMMY; }
+
+function notaRupiah(v) {
+    return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+}
+
+function notaTgl(t) {
+    const p = String(t || '').split('-');
+    return (p.length === 3) ? p[2] + '-' + p[1] + '-' + p[0] : String(t || '-');
+}
+
+function openNota() {
+    renderNotaPreview(notaData());
+    renderNotaDigital(notaData());
+    const fb = document.getElementById('notaFeedback');
+    if (fb) fb.classList.add('hidden');
+    document.getElementById('pageNota').classList.add('open');
+}
+
+function closeNota() {
+    document.getElementById('pageNota').classList.remove('open');
+}
+
+function renderNotaPreview(d) {
+    const el = document.getElementById('notaPreview');
+    if (!el) return;
+    const row = (k, v) => `<div class="nt-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v || '-')}</b></div>`;
+    el.innerHTML = `
+        <div class="nt-head">
+            <div class="nt-brand">SUKABUMI FLASHER</div>
+            <div class="nt-sub">BUSINESS OPERATING SYSTEM</div>
+            <div class="nt-title">NOTA PENERIMAAN SERVICE</div>
+        </div>
+        <div class="nt-sep"></div>
+        ${row('No. Servis', d.no)}
+        ${row('Tanggal', notaTgl(d.tgl))}
+        <div class="nt-sep"></div>
+        ${row('Konsumen', d.nama)}
+        ${row('No. WA', d.phone)}
+        ${row('Device', d.device)}
+        <div class="nt-sep"></div>
+        <div class="nt-label">Kerusakan:</div>
+        <div class="nt-val">${escapeHtml(d.damage)}</div>
+        <div class="nt-label">Tindakan:</div>
+        <div class="nt-val">${escapeHtml(d.plan)}</div>
+        <div class="nt-sep"></div>
+        ${row('Estimasi', notaRupiah(d.estimate))}
+        ${row('DP', notaRupiah(d.dp))}
+        ${row('Teknisi', (d.technician || '').trim() || '-')}
+        ${row('Status', d.status)}
+        <div class="nt-sep"></div>
+        <div class="nt-foot">Simpan nota ini sebagai<br>bukti pengambilan unit.<br>Terima kasih!</div>`;
+}
+
+function notaWrap(text, w) {
+    const words = String(text || '-').split(/\s+/);
+    const lines = [];
+    let cur = '';
+    words.forEach(wd => {
+        if ((cur + ' ' + wd).trim().length > w) { if (cur) lines.push(cur); cur = wd; }
+        else cur = (cur + ' ' + wd).trim();
+    });
+    if (cur) lines.push(cur);
+    return lines.length ? lines : ['-'];
+}
+
+function notaText(d) {
+    const L = [];
+    const sep = '--------------------------------';
+    const kv = (k, v) => {
+        const s = k + ' : ' + (v || '-');
+        notaWrap(s, 32).forEach(x => L.push(x));
+    };
+    L.push('        SUKABUMI FLASHER');
+    L.push('   BUSINESS OPERATING SYSTEM');
+    L.push('   NOTA PENERIMAAN SERVICE');
+    L.push(sep);
+    kv('No', d.no);
+    kv('Tgl', notaTgl(d.tgl));
+    L.push(sep);
+    kv('Konsumen', d.nama);
+    kv('WA', d.phone);
+    kv('Device', d.device);
+    L.push(sep);
+    L.push('Kerusakan:');
+    notaWrap(d.damage, 32).forEach(x => L.push(x));
+    L.push('Tindakan:');
+    notaWrap(d.plan, 32).forEach(x => L.push(x));
+    L.push(sep);
+    kv('Estimasi', notaRupiah(d.estimate));
+    kv('DP', notaRupiah(d.dp));
+    kv('Teknisi', (d.technician || '').trim() || '-');
+    kv('Status', d.status);
+    L.push(sep);
+    L.push('Simpan nota ini sebagai');
+    L.push('bukti pengambilan unit.');
+    L.push('Terima kasih!');
+    return L.join('\n');
+}
+
+function notaPrintCSS() {
+    return 'body{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:#000;margin:0;padding:8px;}' +
+        '.nota{width:72mm;margin:0 auto;white-space:pre-wrap;word-break:break-word;}' +
+        '@media print{@page{size:auto;margin:5mm;}body{padding:0;}}';
+}
+
+function notaPrint() {
+    const d = notaData();
+    const w = window.open('', '_blank', 'width=360,height=640');
+    if (!w) {
+        notaFlash('Popup diblokir browser — izinkan popup untuk mencetak.', true);
+        return;
+    }
+    w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Nota ' +
+        escapeHtml(d.no) + '</title><style>' + notaPrintCSS() + '</style></head><body>' +
+        '<div class="nota">' + escapeHtml(notaText(d)) + '</div>' +
+        '<script>window.onload=function(){window.print();};<' + '/script></body></html>');
+    w.document.close();
+}
+
+function notaWaNumber(phone) {
+    let p = String(phone || '').replace(/\D/g, '');
+    if (!p) return '';
+    if (p.charAt(0) === '0') p = '62' + p.slice(1);
+    return p;
+}
+
+function notaFlash(msg, isErr) {
+    const fb = document.getElementById('notaFeedback');
+    if (!fb) return;
+    fb.classList.remove('hidden', 'success', 'error');
+    fb.classList.add(isErr ? 'error' : 'success');
+    fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+}
+
+function notaShareWA() {
+    const d = notaData();
+    const msg = 'Halo ' + (d.nama || 'Kak') + ', unit Anda sudah terdaftar di SUKABUMI FLASHER.\n\n' + notaText(d);
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
+    } catch (_) {}
+    const num = notaWaNumber(d.phone);
+    if (!num) { notaFlash('No. WA kosong — teks nota sudah disalin.', true); return; }
+    notaFlash('Teks nota disalin — membuka WhatsApp customer...');
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+function notaSaveImage() {
+    const d = notaData();
+    const lines = notaText(d).split('\n');
+    const fs = 22, lh = 29, pad = 24, W = 560;
+    const H = lines.length * lh + pad * 2;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#111111';
+    ctx.font = fs + 'px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textBaseline = 'top';
+    lines.forEach((ln, i) => {
+        const tw = ctx.measureText(ln).width;
+        const centered = /SUKABUMI FLASHER|BUSINESS OPERATING SYSTEM|NOTA PENERIMAAN|Terima kasih|bukti pengambilan|Simpan nota|^---/.test(ln);
+        ctx.fillText(ln, centered ? Math.max(pad, (W - tw) / 2) : pad, pad + i * lh);
+    });
+    const a = document.createElement('a');
+    a.href = cv.toDataURL('image/png');
+    a.download = 'nota-' + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    notaFlash('Gambar nota tersimpan ke device.');
+}
+
+// ── Nota Digital: modern, visual, untuk smartphone/WA (tahap UI, tanpa DB/API) ──
+
+function notaSwitch(tab) {
+    const t = document.getElementById('notaThermalWrap');
+    const dg = document.getElementById('notaDigitalWrap');
+    const tt = document.getElementById('notaTabThermal');
+    const td = document.getElementById('notaTabDigital');
+    const isD = tab === 'digital';
+    if (t) t.classList.toggle('hidden', isD);
+    if (dg) dg.classList.toggle('hidden', !isD);
+    if (tt) tt.classList.toggle('is-active', !isD);
+    if (td) td.classList.toggle('is-active', isD);
+    const win = document.getElementById('pageNota');
+    if (win) win.classList.toggle('nota-wide', isD);
+    if (isD) renderNotaDigital(notaData());
+}
+
+function notaJam() {
+    const n = new Date();
+    const p = x => String(x).padStart(2, '0');
+    return p(n.getHours()) + ':' + p(n.getMinutes());
+}
+
+function notaTglSlash(t) {
+    const p = String(t || '').split('-');
+    return (p.length === 3) ? p[2] + '/' + p[1] + '/' + p[0] : String(t || '-');
+}
+
+function notaStatusClass(s) {
+    const v = String(s || '').toUpperCase();
+    if (v === 'DONE' || v === 'CASH' || v === 'SELESAI') return 'nd-green';
+    if (v === 'CANCEL' || v === 'BATAL') return 'nd-red';
+    if (v === 'ANALISA' || v === 'KONFIRMASI' || v === 'WAIT PART') return 'nd-amber';
+    return 'nd-blue';
+}
+
+function notaEstimasiSelesai(d) {
+    if (d.estimasi_selesai) return d.estimasi_selesai;
+    const m = String(d.tgl || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!m) return '-';
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + 3);
+    const p = n => String(n).padStart(2, '0');
+    return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate());
+}
+
+function renderNotaDigital(d) {
+    const el = document.getElementById('notaDigital');
+    if (!el) return;
+    const teknisi = (d.technician || '').trim() || '-';
+    const tgl = notaTglSlash(d.tgl);
+    const jam = notaJam();
+    const selesai = notaTglSlash(notaEstimasiSelesai(d));
+    const imei = (d.imei || '').trim() || '-';
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
+        + encodeURIComponent('SUKABUMI FLASHER ' + (d.no || ''));
+    const stCls = notaStatusClass(d.status).replace('nd-', '');
+    el.innerHTML = `
+    <div class="ndr-sheet">
+        <div class="ndr-head">
+            <div class="ndr-brand">
+                <span class="ndr-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
+                <div><b>SUKABUMI FLASHER</b><span>BUSINESS OPERATING SYSTEM</span></div>
+            </div>
+            <div class="ndr-contact">
+                <div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
+                <div><i class="fa-regular fa-clock"></i>Jam: ${escapeHtml(jam)}</div>
+            </div>
+        </div>
+        <div class="ndr-title-row">
+            <div class="ndr-title">
+                <h3>NOTA <em>PENERIMAAN</em> SERVICE</h3>
+                <div class="ndr-state ndr-${stCls}">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div><b>STATUS: ${escapeHtml(d.status || '-')}</b><span>Simpan nota ini sebagai bukti penerimaan &amp; pengambilan unit Anda.</span></div>
+                </div>
+            </div>
+            <div class="ndr-nonum">
+                <span>NOMOR SERVIS</span>
+                <b>${escapeHtml(d.no || '-')}</b>
+                <div class="ndr-strip"><i class="fa-solid fa-shield-halved"></i>Simpan nota ini sebagai bukti servis Anda</div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-user"></i>PELANGGAN</div>
+                <div class="ndr-name">${escapeHtml(d.nama)}</div>
+                <div class="ndr-line"><i class="fa-solid fa-phone"></i>${escapeHtml(d.phone)}</div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>DEVICE</div>
+                <div class="ndr-name">${escapeHtml(d.device)}</div>
+                <div class="ndr-kv">IMEI <span>${escapeHtml(imei)}</span></div>
+                <div class="ndr-kv">No. Servis <span>${escapeHtml(d.no || '-')}</span></div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-hashtag"></i>PENERIMAAN</div>
+                <div class="ndr-name">${escapeHtml(d.no || '-')}</div>
+                <div class="ndr-line"><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
+                <div class="ndr-line"><i class="fa-regular fa-clock"></i>${escapeHtml(jam)}</div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>DETAIL PERBAIKAN</div>
+                <div class="ndr-sec"><span>Keluhan</span><p>${escapeHtml(d.damage)}</p></div>
+                <div class="ndr-sec"><span>Pekerjaan / Tindakan</span><p class="ndr-check"><i class="fa-solid fa-check"></i>${escapeHtml(d.plan)}</p></div>
+                <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(teknisi)}</p></div>
+                <div class="ndr-sec"><span>Estimasi Biaya</span><p class="ndr-price">${escapeHtml(notaRupiah(d.estimate))}</p></div>
+                <div class="ndr-sec"><span>DP Masuk</span><p>${escapeHtml(notaRupiah(d.dp))}</p></div>
+            </div>
+            <div class="ndr-card is-green">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>JADWAL SERVIS</div>
+                <div class="ndr-sched">
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar"></i></span><div><span>Diterima</span><b>${escapeHtml(tgl)}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar-check"></i></span><div><span>Estimasi Selesai</span><b>${escapeHtml(selesai)}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-clock"></i></span><div><span>Status</span><b>${escapeHtml(d.status || '-')}</b></div></div>
+                </div>
+                <div class="ndr-note"><i class="fa-solid fa-circle-info"></i><span>${d.garansi ? escapeHtml(d.garansi) : 'Estimasi dapat berubah sesuai hasil diagnosa teknisi.'}</span></div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap is-green-t"><i class="fa-solid fa-shield-halved"></i>SYARAT PENGAMBILAN</div>
+                <ul class="ndr-yes">
+                    <li><i class="fa-solid fa-check"></i><span>Tunjukkan nota / No. Servis</span></li>
+                    <li><i class="fa-solid fa-check"></i><span>Pelunasan sisa biaya servis</span></li>
+                    <li><i class="fa-solid fa-check"></i><span>Cek kondisi unit saat pengambilan</span></li>
+                </ul>
+                <div class="ndr-nohead"><i class="fa-solid fa-triangle-exclamation"></i>TIDAK TERMASUK</div>
+                <ul class="ndr-no">
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kehilangan data / password</span></li>
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kerusakan akibat kelalaian pemilik</span></li>
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Aksesoris yang tidak dititipkan</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="ndr-grid3 ndr-row3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI SERVIS</div>
+                <p class="ndr-desc">Scan QR untuk verifikasi nota dan melihat status servis Anda.</p>
+                <div class="ndr-pill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+            </div>
+            <div class="ndr-qrwrap">
+                <img src="${qrUrl}" alt="QR servis" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
+                <div class="ndr-kode-fallback" style="display:none"><span>KODE SERVIS</span><b>${escapeHtml(d.no || '-')}</b></div>
+            </div>
+            <div class="ndr-pink">
+                <span class="ndr-shield"><i class="fa-solid fa-shield-halved"></i></span>
+                <p>Nota ini hanya berlaku di<br><b>SUKABUMI FLASHER<br>BUSINESS OPERATING SYSTEM</b></p>
+                <div class="ndr-thanks">Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</div>
+            </div>
+        </div>
+        <div class="ndr-terms">
+            <div class="ndr-terms-head">KETENTUAN SERVIS<span></span></div>
+            <div class="ndr-terms-grid">
+                <div><span><i class="fa-regular fa-file-lines"></i></span><p><b>1.</b> Nota ini wajib dibawa saat pengambilan unit.</p></div>
+                <div><span><i class="fa-solid fa-shield-halved"></i></span><p><b>2.</b> Estimasi dapat berubah sesuai hasil diagnosa teknisi.</p></div>
+                <div><span><i class="fa-solid fa-mobile-screen-button"></i></span><p><b>3.</b> Data penting harap di-backup sebelum servis.</p></div>
+                <div><span><i class="fa-solid fa-triangle-exclamation"></i></span><p><b>4.</b> Keputusan teknisi adalah yang utama dalam penentuan perbaikan.</p></div>
+            </div>
+        </div>
+        <div class="ndr-foot">
+            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</span></div>
+            <div class="ndr-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+        </div>
+    </div>`;
+}
+
+function notaDigitalText(d) {
+    return '*NOTA PENERIMAAN SERVICE*\n*SUKABUMI FLASHER - Business Operating System*\n'
+        + '--------------------------\n'
+        + 'No. Servis : ' + (d.no || '-') + '\n'
+        + 'Status : ' + (d.status || '-') + '\n'
+        + 'Nama : ' + (d.nama || '-') + '\n'
+        + 'WA : ' + (d.phone || '-') + '\n'
+        + 'Device : ' + (d.device || '-') + '\n'
+        + 'Keluhan : ' + (d.damage || '-') + '\n'
+        + 'Estimasi : ' + notaRupiah(d.estimate) + '\n'
+        + 'DP : ' + notaRupiah(d.dp) + '\n'
+        + 'Teknisi : ' + ((d.technician || '').trim() || '-') + '\n'
+        + 'Tgl Terima : ' + notaTgl(d.tgl) + '\n'
+        + 'Estimasi Selesai : ' + notaTgl(notaEstimasiSelesai(d)) + '\n'
+        + (d.garansi ? d.garansi + '\n' : '')
+        + '--------------------------\n'
+         + 'Simpan nota ini sebagai bukti pengambilan unit. Terima kasih! - *SUKABUMI FLASHER*';
+}
+
+function notaDigitalShareWA() {
+    const d = notaData();
+    const msg = 'Halo ' + (d.nama || 'Kak') + ', berikut nota digital servis Anda di SUKABUMI FLASHER.\n\n' + notaDigitalText(d);
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
+    } catch (_) {}
+    const num = notaWaNumber(d.phone);
+    if (!num) { notaFlash('No. WA kosong — teks nota sudah disalin.', true); return; }
+    notaFlash('Nota digital disalin — membuka WhatsApp customer...');
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+}
+
+function notaCanvasWrap(ctx, text, maxW) {
+    const words = String(text || '-').split(/\s+/);
+    const lines = [];
+    let cur = '';
+    words.forEach(wd => {
+        const t = (cur + ' ' + wd).trim();
+        if (ctx.measureText(t).width > maxW) { if (cur) lines.push(cur); cur = wd; }
+        else cur = t;
+    });
+    if (cur) lines.push(cur);
+    return lines.length ? lines : ['-'];
+}
+
+async function notaSaveDigitalImage() {
+    const d = notaData();
+    const node = document.getElementById('notaDigital');
+    if (node && typeof html2canvas !== 'undefined') {
+        try {
+            notaFlash('Menyiapkan gambar nota...');
+            // Export optimal untuk WhatsApp: target lebar ±1080px, tajam, ringan.
+            // Scale dinamis dari lebar aktual node; tinggi mengikuti proporsional.
+            const targetWidth = 1080;
+            const rect = node.getBoundingClientRect();
+            const actualWidth = (rect && rect.width) || node.offsetWidth || 0;
+            const scale = actualWidth > 0 ? Math.min(targetWidth / actualWidth, 2) : 2;
+            const canvas = await html2canvas(node, { backgroundColor: '#eef1f5', scale: scale, useCORS: true, logging: false });
+            const fname = 'nota-digital-' + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.png';
+            if (canvas.toBlob) {
+                const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                if (blob) {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = fname;
+                    document.body.appendChild(a); a.click(); a.remove();
+                    setTimeout(() => URL.revokeObjectURL(url), 4000);
+                    notaFlash('Gambar nota digital tersimpan ke device.');
+                    return;
+                }
+            }
+            const a = document.createElement('a');
+            a.href = canvas.toDataURL('image/png'); a.download = fname;
+            document.body.appendChild(a); a.click(); a.remove();
+            notaFlash('Gambar nota digital tersimpan ke device.');
+            return;
+        } catch (_) { /* fallback ke gambar manual di bawah */ }
+    }
+    notaSaveDigitalImageManual(d);
+}
+
+// Fallback offline / CDN terblokir: gambar manual sederhana (tidak identik preview).
+function notaSaveDigitalImageManual(d) {
+    const W = 760, pad = 44;
+    const maxW = W - pad * 2;
+    const meas = document.createElement('canvas').getContext('2d');
+    meas.font = '600 24px Inter, system-ui, sans-serif';
+    const wrap = t => notaCanvasWrap(meas, t, maxW);
+    const blocks = [
+        ['PELANGGAN', d.nama + '  •  ' + (d.phone || '-')],
+        ['DEVICE', d.device],
+        ['NO. SERVIS', d.no + '  •  Tgl: ' + notaTglSlash(d.tgl) + '  •  Jam: ' + notaJam()],
+        ['KELUHAN', d.damage],
+        ['TINDAKAN', d.plan],
+        ['TEKNISI', (d.technician || '').trim() || '-'],
+        ['ESTIMASI SELESAI', notaTglSlash(notaEstimasiSelesai(d))],
+    ];
+    const lines = blocks.map(b => wrap(b[1]));
+    const lh = 31;
+    let H = 170 + 120;
+    lines.forEach(L => { H += 30 + L.length * lh + 26; });
+    H += 110 + 4 * 30 + 40 + 90;
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const c = cv.getContext('2d');
+    c.fillStyle = '#ffffff';
+    c.fillRect(0, 0, W, H);
+    const g = c.createLinearGradient(0, 0, W, 0);
+    g.addColorStop(0, '#d31111'); g.addColorStop(1, '#a30d0d');
+    c.fillStyle = g;
+    c.fillRect(0, 0, W, 150);
+    c.fillStyle = '#ffffff';
+    c.font = 'italic 800 52px Inter, system-ui, sans-serif';
+    c.fillText('SUKABUMI FLASHER', pad, 72);
+    c.font = '600 17px Inter, system-ui, sans-serif';
+    c.fillText('S E R V I C E   S Y S T E M', pad, 104);
+    c.textAlign = 'right';
+    c.font = '600 21px Inter, system-ui, sans-serif';
+    c.fillText(notaTglSlash(d.tgl), W - pad, 62);
+    c.fillText('Jam: ' + notaJam(), W - pad, 96);
+    c.textAlign = 'left';
+    let y = 150 + 56;
+    c.fillStyle = '#111111';
+    c.font = '800 38px Inter, system-ui, sans-serif';
+    c.fillText('NOTA PENERIMAAN SERVICE', pad, y);
+    y += 18;
+    c.fillStyle = '#b91c1c';
+    c.font = '700 25px ui-monospace, monospace';
+    c.fillText(d.no || '-', pad, y + 30);
+    y += 62;
+    c.font = '700 19px Inter, system-ui, sans-serif';
+    c.fillStyle = '#94a3b8';
+    blocks.forEach((b, i) => {
+        c.fillText(b[0], pad, y);
+        y += 30;
+        c.fillStyle = '#0f172a';
+        c.font = '600 24px Inter, system-ui, sans-serif';
+        lines[i].forEach(L => { c.fillText(L, pad, y); y += lh; });
+        y += 10;
+        c.fillStyle = '#e2e8f0';
+        c.fillRect(pad, y, maxW, 2);
+        y += 28;
+        c.fillStyle = '#94a3b8';
+        c.font = '700 19px Inter, system-ui, sans-serif';
+    });
+    c.fillStyle = '#fef2f2';
+    c.fillRect(pad, y - 8, maxW, 100);
+    c.fillStyle = '#64748b'; c.font = '700 19px Inter, system-ui, sans-serif';
+    c.fillText('ESTIMASI BIAYA', pad + 18, y + 28);
+    c.fillText('DP MASUK', pad + 18, y + 68);
+    c.fillStyle = '#b91c1c'; c.font = '800 26px Inter, system-ui, sans-serif';
+    c.fillText(notaRupiah(d.estimate), pad + 250, y + 28);
+    c.fillStyle = '#15803d';
+    c.fillText(notaRupiah(d.dp), pad + 250, y + 68);
+    y += 122;
+    c.fillStyle = '#b91c1c'; c.font = '800 22px Inter, system-ui, sans-serif';
+    c.fillText('KETENTUAN SERVIS', pad, y);
+    y += 12;
+    c.fillStyle = '#dc2626';
+    c.fillRect(pad + 260, y - 16, maxW - 260, 2);
+    y += 26;
+    c.fillStyle = '#475569'; c.font = '600 20px Inter, system-ui, sans-serif';
+    ['1. Nota wajib dibawa saat pengambilan unit.',
+     '2. Estimasi dapat berubah sesuai hasil diagnosa.',
+     '3. Data penting harap di-backup sebelum servis.',
+     '4. Keputusan teknisi utama dalam penentuan perbaikan.'
+    ].forEach(t => { c.fillText(t, pad, y); y += 30; });
+    y += 16;
+    c.fillStyle = '#111111';
+    c.fillRect(0, y, W, H - y);
+    c.fillStyle = '#ffffff'; c.font = '600 16px Inter, system-ui, sans-serif';
+    c.fillText('Terima kasih telah mempercayakan servis di SUKABUMI FLASHER', pad, y + 38);
+    c.textAlign = 'right';
+    c.font = '800 22px Inter, system-ui, sans-serif';
+    c.fillText('Powered by SUKABUMI FLASHER', W - pad, y + 38);
+    c.textAlign = 'left';
+    const a = document.createElement('a');
+    a.href = cv.toDataURL('image/png');
+    a.download = 'nota-digital-' + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.png';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    notaFlash('Gambar nota digital tersimpan ke device.');
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     updateClock();
@@ -2509,12 +3574,14 @@ document.addEventListener('DOMContentLoaded', async function () {
     initNav();
     renderQuickActions();
     initReceivePage();
+    initUpdateServis();
     initFloatDrag();
     initSparepart();
     initLogin();
 
     window.addEventListener('hashchange', () => {
         if (!getToken()) return;
+        if (isReceiveHash()) { openServisBaru(); return; }
         const k = pageFromHash();
         if (k) navigateTo(k);
     });
@@ -2528,7 +3595,9 @@ document.addEventListener('DOMContentLoaded', async function () {
         } catch (err) {
             console.error('Gagal memuat data dari API:', err);
         }
+        const wantReceive = isReceiveHash() || isReceiveOpen();
         navigateTo(pageFromHash() || getSavedPage());
+        if (wantReceive) openServisBaru();
     } else {
         showLogin();
     }

@@ -56,6 +56,9 @@ class ServiceOrderBase(BaseModel):
     model: Optional[str] = None
     damagetype: Optional[str] = None
     device_password: Optional[str] = None
+    imei: Optional[str] = None
+    check_fisik: Optional[List[str]] = None
+    check_len: Optional[List[str]] = None
     repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: Optional[str] = "RECEIVED"
@@ -70,6 +73,9 @@ class ServiceReceiveIn(BaseModel):
     customer_phone: Optional[str] = None
     device: str
     device_password: Optional[str] = None
+    imei: Optional[str] = None
+    check_fisik: Optional[List[str]] = None
+    check_len: Optional[List[str]] = None
     damagetype: Optional[str] = None
     repair_plan: Optional[str] = None
     estimate: Optional[float] = 0
@@ -89,6 +95,9 @@ class ServiceOrderUpdate(BaseModel):
     model: Optional[str] = None
     damagetype: Optional[str] = None
     device_password: Optional[str] = None
+    imei: Optional[str] = None
+    check_fisik: Optional[List[str]] = None
+    check_len: Optional[List[str]] = None
     repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: Optional[str] = None
@@ -113,6 +122,9 @@ class ServiceOrderList(BaseModel):
     model: Optional[str] = None
     damagetype: Optional[str] = None
     device_password: Optional[str] = None
+    imei: Optional[str] = None
+    check_fisik: Optional[List[str]] = None
+    check_len: Optional[List[str]] = None
     repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: str

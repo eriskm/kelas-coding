@@ -10,6 +10,7 @@ from sqlalchemy import (
     ForeignKey,
     Text,
     Date,
+    JSON,
 )
 from sqlalchemy.orm import relationship
 
@@ -66,6 +67,9 @@ class ServiceOrder(Base):
     model = Column(String(60))
     damagetype = Column(String(120))
     device_password = Column(String(120))
+    imei = Column(String(80))
+    check_fisik = Column(JSON, default=list)
+    check_len = Column(JSON, default=list)
     repair_plan = Column(Text)
     technician = Column(String(60))
     status = Column(String(30), default="RECEIVED")

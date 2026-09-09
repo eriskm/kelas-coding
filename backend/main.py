@@ -1,4 +1,4 @@
-"""BOSS SF - Service System : FastAPI Application Entry.
+"""SUKABUMI FLASHER - Business Operating System : FastAPI Application Entry.
 
 Layer:
    App        -> main.py  (menggabungkan seluruh router + static)
@@ -33,7 +33,7 @@ class NoCacheStaticFiles(StaticFiles):
         return response
 
 app = FastAPI(
-    title="BOSS SF - Service System API",
+    title="SUKABUMI FLASHER - Business Operating System API",
     description="POS & Service Management untuk toko servis smartphone",
     version="1.0.0",
 )
@@ -64,12 +64,18 @@ def _migrate_schema():
     migrations = [
         ("service_orders", "device_password", "VARCHAR(120)"),
         ("service_orders", "repair_plan", "TEXT"),
+        ("service_orders", "imei", "VARCHAR(80)"),
+        ("service_orders", "check_fisik", "TEXT"),
+        ("service_orders", "check_len", "TEXT"),
     ]
     with engine.begin() as conn:
         for table, column, dtype in migrations:
             cols = [r[1] for r in conn.execute(text(f"PRAGMA table_info({table})")).fetchall()]
             if column not in cols:
                 conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {dtype}"))
+        # Backfill aman untuk data lama: checklist default, IMEI dibiarkan NULL.
+        conn.execute(text("UPDATE service_orders SET check_fisik = '[]' WHERE check_fisik IS NULL"))
+        conn.execute(text("UPDATE service_orders SET check_len = '[\"unit_saja\"]' WHERE check_len IS NULL"))
 
 
 # ---------- Mount routers ----------
