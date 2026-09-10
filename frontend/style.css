@@ -2353,7 +2353,7 @@ select.range-pill.range-select option { color: #0f172a; }
 /* ============================================
    NOTA PENERIMAAN SERVICE (thermal preview)
    ============================================ */
-#pageNota { width: min(560px, calc(100vw - 24px)); }
+#pageNota { width: min(560px, calc(100vw - 24px)); z-index: 9600; }
 .nota-preview-wrap {
     background: #f1f5f9;
     border: 1px solid #e2e8f0;

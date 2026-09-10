@@ -1277,6 +1277,7 @@ function usVal(id) { const el = document.getElementById(id); return el ? el.valu
 function usNum(id) { return parseFloat(usVal(id)) || 0; }
 
 let _usNo = '';
+let _usTgl = '';
 // Baseline checklist dari server per No. Servis — untuk dirty-guard:
 // checklist hanya dikirim saat user benar-benar mengubahnya.
 let _usCheckBaseline = '';
@@ -1290,6 +1291,7 @@ function _usServerChecklist(o) {
 function openUpdateServis(o) {
     _txEditId = o.id;
     _usNo = o.no_servis || '';
+    _usTgl = (o.service_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
     _txEditCustomerId = o.customer_id || (o.customer || {}).id || null;
     document.getElementById('usTitle').textContent = 'UPDATE DATA SERVIS #' + (o.no_servis || o.id);
     document.getElementById('usHeadDevice').textContent = o.device || '-';
@@ -1332,6 +1334,7 @@ function closeUpdateServis() {
     _txEditId = null;
     _txEditCustomerId = null;
     _usNo = '';
+    _usTgl = '';
 }
 
 // Status unit: SATU sumber tulis (usSetStatus) + SATU sumber baca (usGetStatus).
@@ -1346,8 +1349,8 @@ function usSetStatus(s) {
         badge.textContent = s;
         badge.className = 'tx-status st-' + String(s || '').toUpperCase().replace(/\s+/g, '_');
     }
-    const rp = document.getElementById('usReprintBtn');
-    if (rp) rp.classList.toggle('hidden', s !== 'CASH');
+    // Tombol cetak nota selalu tampil — bisa cetak ulang kapan pun
+    // (lengkapi data / update status) tanpa harus menunggu status CASH.
 }
 
 function usGetStatus() {
@@ -1386,21 +1389,27 @@ function usFinUpdate() {
 }
 
 function usReprint() {
+    // Cetak ulang nota penerimaan dari data form terkini (live),
+    // tapi No. Servis & Tanggal terima tetap pakai data asli server
+    // agar nota cetak ulang identik dengan nota awal.
+    let _usCheckNow = null;
+    try { _usCheckNow = collectChecklist('us'); } catch (_) {}
     _lastNota = {
-        no: document.getElementById('usTitle').textContent.replace('UPDATE DATA SERVIS #', '') || '-',
-        tgl: new Date().toISOString().slice(0, 10),
+        no: _usNo || document.getElementById('usTitle').textContent.replace('UPDATE DATA SERVIS #', '') || '-',
+        tgl: _usTgl || new Date().toISOString().slice(0, 10),
         nama: usVal('usNama'),
         phone: usVal('usPhone'),
         device: usVal('usDevice'),
         damage: usVal('usDamage'),
         plan: usVal('usPlan'),
-        estimate: usNum('usFinFinal') || usNum('usEstimate'),
+        estimate: usNum('usEstimate'),
         dp: usNum('usDp'),
         technician: usVal('usTechnician'),
-        status: usVal('usQuickStatus'),
-        imei: '',
+        status: usGetStatus(),
+        imei: usVal('usImei'),
         password: usVal('usPassword'),
     };
+    if (_usCheckNow) _lastNota.checklist = _usCheckNow;
     openNota();
 }
 
@@ -3059,7 +3068,13 @@ function openNota() {
     renderNotaDigital(notaData());
     const fb = document.getElementById('notaFeedback');
     if (fb) fb.classList.add('hidden');
-    document.getElementById('pageNota').classList.add('open');
+    const win = document.getElementById('pageNota');
+    // Nota harus selalu di depan (mis. saat dibuka dari Update Data Servis
+    // yang juga float-window). appendChild menaikkan urutan tumpuk,
+    // zIndex memastikan menang dari #pageUpdateServis.
+    try { document.body.appendChild(win); } catch (_) {}
+    win.style.zIndex = '9600';
+    win.classList.add('open');
 }
 
 function closeNota() {
