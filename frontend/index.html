@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=10">
+    <link rel="stylesheet" href="/static/style.css?v=13">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -233,7 +233,7 @@
 
                     <!-- Star Cards -->
                     <div class="px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="starCards"></div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3" id="starCards"></div>
                     </div>
 
                     <!-- Quick Actions + Insight -->
@@ -301,6 +301,9 @@
                                 <button type="button" onclick="showServisBaru()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
                                     <i class="fa-solid fa-plus"></i> Servis Baru
                                 </button>
+                                <button type="button" onclick="openClaimReceive()" class="receive-back-btn" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
+                                    <i class="fa-solid fa-shield-halved"></i> Klaim Garansi
+                                </button>
                             </div>
                         </div>
 
@@ -314,8 +317,7 @@
                                             <th>Device</th>
                                             <th>User / WA</th>
                                             <th>Status</th>
-                                            <th>Kerusakan</th>
-                                            <th>Perbaikan</th>
+                                            <th>Kerusakan / Tindakan</th>
                                             <th>Teknisi</th>
                                             <th class="text-right">Laba</th>
                                             <th class="text-center">Aksi</th>
@@ -362,6 +364,17 @@
                         <div class="panel overflow-hidden">
                             <div class="overflow-x-auto">
                                 <table class="tx-table pl-table w-full text-sm">
+                                    <colgroup>
+                                        <col style="width:44px">
+                                        <col style="width:140px">
+                                        <col style="width:115px">
+                                        <col style="width:150px">
+                                        <col style="width:200px">
+                                        <col style="width:105px">
+                                        <col style="width:100px">
+                                        <col style="width:110px">
+                                        <col style="width:135px">
+                                    </colgroup>
                                     <thead>
                                         <tr>
                                             <th>No</th>
@@ -392,6 +405,38 @@
                         </div>
                     </section>
 
+                    <!-- Popup menu aksi pelanggan (fixed, anti-terpotong tabel) -->
+                    <div id="plMenu" class="pl-menu hidden" role="menu">
+                        <button type="button" class="pl-menu-item" onclick="plMenuAct('edit')"><i class="fa-solid fa-pen"></i> Edit Pelanggan</button>
+                        <button type="button" class="pl-menu-item" onclick="plMenuAct('baru')"><i class="fa-solid fa-plus"></i> Servis Baru</button>
+                        <button type="button" class="pl-menu-item" onclick="plMenuAct('riwayat')"><i class="fa-solid fa-clock-rotate-left"></i> Riwayat Servis</button>
+                        <div class="pl-menu-sep"></div>
+                        <button type="button" class="pl-menu-item is-danger" onclick="plMenuAct('hapus')"><i class="fa-solid fa-trash"></i> Hapus Pelanggan</button>
+                    </div>
+
+                    <!-- Popup edit pelanggan -->
+                    <div id="plEditPopup" class="audit-overlay hidden" onclick="if(event.target===this)plEditClose()" role="dialog" aria-label="Edit Pelanggan">
+                        <div class="rsp-card pl-edit-card">
+                            <h3 class="rsp-title">Edit Pelanggan</h3>
+                            <p class="float-sub">Perbarui data identitas pelanggan</p>
+                            <div class="flex flex-col gap-3 mt-3 text-left">
+                                <div class="field">
+                                    <label class="field-label" for="plEditName">Nama Konsumen</label>
+                                    <input class="receive-input" type="text" id="plEditName" autocomplete="off">
+                                </div>
+                                <div class="field">
+                                    <label class="field-label" for="plEditPhone">No. WhatsApp</label>
+                                    <input class="receive-input" type="text" id="plEditPhone" inputmode="tel" autocomplete="off">
+                                </div>
+                            </div>
+                            <div id="plEditFeedback" class="hidden receive-feedback text-left mt-3"></div>
+                            <div class="pl-edit-btns">
+                                <button type="button" class="receive-back-btn" onclick="plEditClose()">Batal</button>
+                                <button type="button" class="receive-submit-btn" id="plEditSaveBtn" onclick="plEditSave()"><i class="fa-solid fa-check"></i> Simpan</button>
+                            </div>
+                        </div>
+                    </div>
+
                     <!-- ===== FLOATING WINDOW: HISTORI PELANGGAN ===== -->
                     <section id="pageHistory" class="float-window" role="dialog" aria-label="Histori Servis Pelanggan">
                         <div class="float-titlebar" id="histTitlebar">
@@ -417,7 +462,9 @@
                                                 <th>No. Servis</th>
                                                 <th>Tanggal</th>
                                                 <th>Device</th>
+                                                <th>Kerusakan</th>
                                                 <th>Tindakan</th>
+                                                <th>Teknisi</th>
                                                 <th class="text-right">Harga</th>
                                                 <th>Status</th>
                                             </tr>
@@ -440,6 +487,9 @@
                                 </h2>
                                 <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftar garansi servis pelanggan</p>
                             </div>
+                            <button type="button" onclick="openClaimReceive()" class="receive-back-btn" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
+                                <i class="fa-solid fa-shield-halved"></i> Terima Klaim Garansi
+                            </button>
                         </div>
 
                         <div class="gr-top-row">
@@ -610,6 +660,284 @@
                         </div>
                     </section>
 
+                    <!-- ===== FLOATING WINDOW: PENERIMAAN KLAIM GARANSI ===== -->
+                    <section id="pageClaimReceive" class="float-window" role="dialog" aria-label="Penerimaan Klaim Garansi">
+                        <div class="float-titlebar" id="claimReceiveTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="receive-title-icon"><i class="fa-solid fa-shield-halved"></i></span>
+                                <div class="min-w-0">
+                                    <h2 class="float-title">Penerimaan Klaim Garansi</h2>
+                                    <p class="float-sub">Cari servis asal → verifikasi garansi → buat claim baru</p>
+                                </div>
+                            </div>
+                            <button type="button" class="float-close" onclick="closeClaimReceive()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        <div class="float-body">
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-magnifying-glass"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">1. Cari Servis Asal</h3>
+                                        <span class="text-[10.5px] text-gray-400">No. servis / nota / WA / IMEI / nama customer (min. 2 huruf)</span>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-[1fr_130px_auto] gap-3.5 pt-1">
+                                    <div class="field">
+                                        <label class="field-label" for="clrSearch">Kata kunci</label>
+                                        <input class="receive-input" type="text" id="clrSearch" placeholder="cth. SV-2026..., 0812..., IMEI, nama..." autocomplete="off">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrWarrantyDays">Garansi (hari)</label>
+                                        <input class="receive-input" type="number" id="clrWarrantyDays" min="1" max="365" value="30">
+                                    </div>
+                                    <div class="field justify-end">
+                                        <label class="field-label">&nbsp;</label>
+                                        <button type="button" onclick="claimRSearch()" id="clrSearchBtn" class="receive-back-btn">
+                                            <i class="fa-solid fa-magnifying-glass"></i> Cari
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="clrResults" class="mt-3 space-y-2"></div>
+                            </div>
+                            <div class="panel receive-panel mt-3 hidden" id="clrOriginWrap">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-file-lines"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">2. Servis Asal &amp; Validasi Garansi</h3>
+                                        <span class="text-[10.5px] text-gray-400">Data referensi — tidak diubah oleh claim</span>
+                                    </div>
+                                </div>
+                                <div class="rc-cust-grid" id="clrOriginCard"></div>
+                                <div class="flex flex-wrap items-center gap-2 pt-2" id="clrBadges"></div>
+                                <p class="text-[11px] text-gray-400 pt-1">Garansi VALID berarti customer masih dalam periode garansi — bukan berarti claim otomatis diterima.</p>
+                                <div id="clrHistory" class="pt-2"></div>
+                            </div>
+                            <div class="panel receive-panel mt-3 hidden" id="clrFormWrap">
+                                <form id="claimReceiveForm" autocomplete="off">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-file-circle-plus"></i></span>
+                                        <div>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">3. Data Claim Baru</h3>
+                                            <span class="text-[10.5px] text-gray-400">Keluhan baru + kondisi saat diterima</span>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                        <div class="field">
+                                            <label class="field-label" for="clrDate">Tanggal Claim</label>
+                                            <input class="receive-input" type="date" id="clrDate">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clrReceivedBy">User Penerima (CS)</label>
+                                            <input class="receive-input" type="text" id="clrReceivedBy" placeholder="Nama CS yang menerima">
+                                        </div>
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="clrComplaint">Keluhan Claim <b class="text-red-500">*</b></label>
+                                            <textarea class="receive-input" id="clrComplaint" rows="2" placeholder="Keluhan customer saat klaim..." required></textarea>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clrPhysical">Kondisi Fisik Saat Diterima</label>
+                                            <input class="receive-input" type="text" id="clrPhysical" placeholder="cth. mulus, ada lecet...">
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="clrCompleteness">Kelengkapan</label>
+                                            <input class="receive-input" type="text" id="clrCompleteness" placeholder="cth. unit + charger...">
+                                        </div>
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="clrCsNote">Catatan CS</label>
+                                            <textarea class="receive-input" id="clrCsNote" rows="2" placeholder="Catatan tambahan..."></textarea>
+                                        </div>
+                                    </div>
+                                    <div class="rc-check-wrap">
+                                        <p class="field-label rc-check-title">Checklist Kondisi Unit Saat Klaim Diterima</p>
+                                        <div class="rc-check-groups" id="clrCheckGroups"></div>
+                                    </div>
+                                    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
+                                        <button type="submit" id="clrSubmitBtn" class="receive-submit-btn">
+                                            <i class="fa-solid fa-check-double"></i>
+                                            <span id="clrSubmitText">Buat Claim Garansi</span>
+                                        </button>
+                                        <div id="clrFeedback" class="hidden receive-feedback"></div>
+                                    </div>
+                                </form>
+                            </div>
+                            <div class="panel receive-panel mt-3 hidden" id="clrResultWrap">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-list-check"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">4. Workflow Claim</h3>
+                                        <span class="text-[10.5px] text-gray-400">Verifikasi → cek teknisi → keputusan → proses → selesai</span>
+                                    </div>
+                                </div>
+                                <div id="clrResultCard"></div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3">
+                                    <div class="field">
+                                        <label class="field-label" for="clrStatus">Status Proses Claim</label>
+                                        <select class="receive-input" id="clrStatus">
+                                            <option value="MASUK">Masuk</option>
+                                            <option value="VERIFIKASI">Verifikasi</option>
+                                            <option value="CEK">Cek (pemeriksaan teknisi)</option>
+                                            <option value="DITERIMA">Diterima</option>
+                                            <option value="DITOLAK">Ditolak</option>
+                                            <option value="PROSES">Proses</option>
+                                            <option value="SELESAI">Selesai</option>
+                                            <option value="DITUTUP">Ditutup / Keluar</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrDecision">Hasil Claim</label>
+                                        <select class="receive-input" id="clrDecision">
+                                            <option value="BELUM_DIPUTUSKAN">Belum Diputuskan</option>
+                                            <option value="DITERIMA">Diterima</option>
+                                            <option value="DITOLAK">Ditolak</option>
+                                        </select>
+                                    </div>
+                                    <div class="field sm:col-span-2">
+                                        <label class="field-label" for="clrRejectReason">Alasan Penolakan (wajib bila Ditolak)</label>
+                                        <textarea class="receive-input" id="clrRejectReason" rows="2" placeholder="cth. kerusakan akibat jatuh, garansi expired..."></textarea>
+                                    </div>
+                                </div>
+                                <div class="receive-panel-head pt-3">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Pemeriksaan Teknisi</h3>
+                                    </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
+                                    <div class="field">
+                                        <label class="field-label" for="clrTechInspection">Hasil Pemeriksaan</label>
+                                        <textarea class="receive-input" id="clrTechInspection" rows="2"></textarea>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrCause">Penyebab Kerusakan</label>
+                                        <textarea class="receive-input" id="clrCause" rows="2"></textarea>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrMatches">Sesuai Pekerjaan Sebelumnya?</label>
+                                        <select class="receive-input" id="clrMatches">
+                                            <option value="">— Pilih —</option>
+                                            <option value="YA">Ya</option>
+                                            <option value="TIDAK">Tidak</option>
+                                            <option value="SEBAGIAN">Sebagian</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrTechRec">Rekomendasi Teknisi</label>
+                                        <select class="receive-input" id="clrTechRec">
+                                            <option value="">— Belum ada —</option>
+                                            <option value="DITERIMA">Claim Diterima</option>
+                                            <option value="DITOLAK">Claim Ditolak</option>
+                                        </select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrTechnician">Teknisi Pemeriksa</label>
+                                        <select class="receive-input" id="clrTechnician"><option value="">— Pilih Teknisi —</option></select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrAction">Tindakan yang Diperlukan</label>
+                                        <input class="receive-input" type="text" id="clrAction">
+                                    </div>
+                                    <div class="field sm:col-span-2">
+                                        <label class="field-label" for="clrTechNote">Catatan Teknisi</label>
+                                        <textarea class="receive-input" id="clrTechNote" rows="2"></textarea>
+                                    </div>
+                                    <div class="field sm:col-span-2">
+                                        <div class="flex flex-wrap gap-4 text-[12.5px] font-semibold text-gray-600 dark:text-gray-300">
+                                            <label class="flex items-center gap-2"><input type="checkbox" id="clrDrop" class="w-4 h-4 accent-red-600"> Indikasi jatuh / benturan</label>
+                                            <label class="flex items-center gap-2"><input type="checkbox" id="clrLiquid" class="w-4 h-4 accent-red-600"> Indikasi cairan</label>
+                                            <label class="flex items-center gap-2"><input type="checkbox" id="clrThirdParty" class="w-4 h-4 accent-red-600"> Bekas pihak lain</label>
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrCustomerCost">Biaya Customer (Rp, 0 bila garansi)</label>
+                                        <input class="receive-input" type="number" id="clrCustomerCost" min="0" value="0">
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="clrInternalCost">Biaya Internal (Rp)</label>
+                                        <input class="receive-input" type="number" id="clrInternalCost" min="0" value="0">
+                                    </div>
+                                </div>
+                                <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
+                                    <button type="button" onclick="claimRSave()" id="clrSaveBtn" class="receive-submit-btn">
+                                        <i class="fa-solid fa-floppy-disk"></i>
+                                        <span id="clrSaveText">Simpan Workflow</span>
+                                    </button>
+                                    <button type="button" onclick="claimRPrint()" class="receive-back-btn">
+                                        <i class="fa-solid fa-receipt"></i> Cetak Nota Claim
+                                    </button>
+                                    <div id="clrWorkflowFeedback" class="hidden receive-feedback"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ===== FLOATING WINDOW: DETAIL TRANSAKSI ===== -->
+                    <section id="pageTxDetail" class="float-window" role="dialog" aria-label="Detail Transaksi">
+                        <div class="float-titlebar" id="txDetailTitlebar">
+                            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                <span class="receive-title-icon"><i class="fa-solid fa-eye"></i></span>
+                                <div class="min-w-0 flex-1">
+                                    <h2 class="float-title">Detail Transaksi</h2>
+                                    <p class="float-sub">Ringkasan read-only — ubah via Update Data Servis</p>
+                                    <p class="us-head-meta"><span id="txdTitle">TRANSAKSI #-</span><span class="us-dot" aria-hidden="true">&bull;</span><span id="txdHeadDevice">-</span><span class="us-dot" aria-hidden="true">&bull;</span><span id="txdHeadCustomer">-</span></p>
+                                </div>
+                            </div>
+                            <div class="us-titlebar-right">
+                                <span id="txdHeadStatus" class="tx-status">-</span>
+                                <button type="button" class="float-close" onclick="closeTxDetail()" aria-label="Tutup">
+                                    <i class="fa-solid fa-xmark"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="float-body">
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-user-check"></i></span>
+                                    <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Konsumen &amp; Unit</h3></div>
+                                </div>
+                                <div class="rc-cust-grid" id="txdCustomer"></div>
+                            </div>
+                            <div class="panel receive-panel mt-3">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                                    <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Diagnosa &amp; Pengerjaan</h3></div>
+                                </div>
+                                <div class="rc-cust-grid" id="txdWork"></div>
+                                <div class="pt-2" id="txdChecklist"></div>
+                            </div>
+                            <div class="panel receive-panel mt-3">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-calculator"></i></span>
+                                    <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Keuangan</h3></div>
+                                </div>
+                                <div class="rc-cust-grid" id="txdFinance"></div>
+                            </div>
+                            <div class="panel receive-panel mt-3">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
+                                    <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Garansi &amp; Klaim</h3><span class="text-[10.5px] text-gray-400">Garansi 30 hari dibuat saat status CASH</span></div>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2" id="txdWarranty"></div>
+                                <div id="txdClaims" class="pt-2"></div>
+                            </div>
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 pt-3">
+                                <button type="button" onclick="txdGoEdit()" class="receive-submit-btn">
+                                    <i class="fa-solid fa-pen-to-square"></i> Update Data
+                                </button>
+                                <button type="button" onclick="txdPrintNota()" class="receive-back-btn">
+                                    <i class="fa-solid fa-receipt"></i> Nota Penerimaan
+                                </button>
+                                <button type="button" id="txdWarrantyBtn" onclick="txdPrintWarranty()" class="hidden receive-back-btn">
+                                    <i class="fa-solid fa-shield-halved"></i> Nota Garansi
+                                </button>
+                                <button type="button" onclick="txdGoClaim()" class="receive-back-btn">
+                                    <i class="fa-solid fa-file-circle-plus"></i> Buat Klaim
+                                </button>
+                            </div>
+                        </div>
+                    </section>
+
                     <!-- ===== PAGE: SPAREPART ===== -->
                     <section id="pageSparepart" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
 
@@ -626,16 +954,16 @@
                             </button>
                         </div>
 
-                        <div class="gr-kpi-grid" id="spKpi"></div>
+                        <div class="sp-top-row">
+                            <div class="gr-kpi-grid" id="spKpi"></div>
+                            <div class="sp-search-wrap">
+                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                                <input type="text" id="spSearch" class="receive-input pl-9" placeholder="Cari sparepart..." autocomplete="off">
+                            </div>
+                        </div>
 
                         <div class="panel overflow-hidden">
-                            <div class="px-4 pt-4">
-                                <div class="relative">
-                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
-                                    <input type="text" id="spSearch" class="receive-input pl-9" placeholder="Cari jenis, merek, device, kategori..." autocomplete="off">
-                                </div>
-                            </div>
-                            <div class="overflow-x-auto mt-3">
+                            <div class="overflow-x-auto">
                                 <table class="tx-table sp-table w-full text-sm">
                                     <thead>
                                         <tr>
@@ -1368,7 +1696,7 @@
                                             <textarea class="receive-input" id="usDamage" rows="2" required></textarea>
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="usPlan">Rencana Tindakan Perbaikan</label>
+                                            <label class="field-label" for="usPlan">Tindakan Perbaikan</label>
                                             <textarea class="receive-input" id="usPlan" rows="2"></textarea>
                                         </div>
                                     </div>
@@ -1490,6 +1818,25 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="panel receive-panel hidden" id="usWarrantyPanel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Closing &amp; Masa Garansi</h3><span class="text-[10.5px] text-gray-400">Berlaku sejak Tgl CASH</span></div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="usWarrantyMonths">Pilih Masa Garansi Toko</label>
+                                        <select class="receive-input" id="usWarrantyMonths">
+                                            <option value="1" selected>1 Bulan</option>
+                                            <option value="3">3 Bulan</option>
+                                            <option value="6">6 Bulan</option>
+                                            <option value="0">Tidak Garansi</option>
+                                        </select>
+                                    </div>
+                                    <div class="flex flex-wrap items-center gap-2 pt-2">
+                                        <span id="usWarrantyPill" class="tx-status st-VALID"><i class="fa-solid fa-circle"></i>Active</span>
+                                        <span id="usWarrantyInfo" class="text-[12px] text-gray-500 dark:text-gray-400"></span>
+                                    </div>
+                                </div>
                                 <div class="panel receive-panel">
                                     <div class="receive-panel-head">
                                         <span class="receive-head-ico"><i class="fa-solid fa-bolt"></i></span>
@@ -1511,6 +1858,9 @@
                                     <button type="button" id="usReprintBtn" onclick="usReprint()" class="receive-back-btn w-full justify-center mt-3" title="Cetak ulang nota penerimaan dengan data terkini">
                                         <i class="fa-solid fa-receipt"></i> Cetak Nota Penerimaan
                                     </button>
+                                    <button type="button" id="usWarrantyBtn" onclick="usWarrantyPrint()" class="hidden receive-back-btn w-full justify-center mt-3" title="Cetak nota garansi 30 hari (tersedia setelah status CASH)">
+                                        <i class="fa-solid fa-shield-halved"></i> Cetak Nota Garansi
+                                    </button>
                                     <button type="submit" id="usSaveBtn" class="receive-submit-btn w-full justify-center mt-3">
                                         <i class="fa-solid fa-check-double"></i>
                                         <span id="usSaveText">Simpan Perubahan Servis</span>
@@ -1518,11 +1868,42 @@
                                     <p class="us-keys"><span><kbd>F8</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd></span> Simpan Perubahan Servis</p>
                                     <div id="usFeedback" class="hidden receive-feedback mt-3"></div>
                                 </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Klaim Garansi</h3><span class="text-[10.5px] text-gray-400">Claim berulang tetap mengacu ke servis ini</span></div>
+                                    </div>
+                                    <div id="usClaimHistory" class="text-[12px] text-gray-500 dark:text-gray-400">Belum ada data klaim.</div>
+                                    <button type="button" onclick="usClaimNew()" class="receive-back-btn w-full justify-center mt-3" title="Buat claim garansi baru dari servis ini">
+                                        <i class="fa-solid fa-file-circle-plus"></i> Buat Klaim dari Servis Ini
+                                    </button>
+                                </div>
                             </div>
                             </div>
                         </form>
                         </div>
                     </section>
+
+                    <!-- ========== POPUP: KONFIRMASI WA UNIT DONE ========== -->
+                    <div id="doneWaPopup" class="audit-overlay hidden" onclick="if(event.target===this)doneWaClose()" role="dialog" aria-label="Kirim konfirmasi WhatsApp">
+                        <div class="rsp-card donewa-card">
+                            <div class="donewa-head">
+                                <span class="donewa-ico"><i class="fa-brands fa-whatsapp"></i></span>
+                                <div class="min-w-0">
+                                    <h3 class="rsp-title">Unit Selesai ✅</h3>
+                                    <p class="float-sub">Kirim konfirmasi ke pelanggan?</p>
+                                </div>
+                            </div>
+                            <p class="donewa-to" id="doneWaTo"></p>
+                            <div class="donewa-preview" id="doneWaPreview"></div>
+                            <div class="donewa-warn hidden" id="doneWaWarn"></div>
+                            <div class="donewa-btns">
+                                <button type="button" class="receive-back-btn donewa-later" onclick="doneWaClose()">Nanti Saja</button>
+                                <button type="button" class="receive-submit-btn donewa-send" id="doneWaSendBtn" onclick="doneWaSend()"><i class="fa-brands fa-whatsapp"></i> Kirim via WA</button>
+                            </div>
+                            <p class="donewa-note">WhatsApp terbuka dengan pesan siap kirim — tekan kirim di WA untuk menyelesaikan.</p>
+                        </div>
+                    </div>
 
                     <!-- ===== FLOATING WINDOW: NOTA PENERIMAAN SERVICE ===== -->
                     <section id="pageNota" class="float-window" role="dialog" aria-label="Nota Penerimaan Service">
@@ -1632,6 +2013,88 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=11"></script>
+    <!-- ========== POPUP: AUDIT TUTUP KAS ========== -->
+    <div id="auditKasPopup" class="audit-overlay hidden" onclick="if(event.target===this)closeAuditKas()" role="alertdialog" aria-label="Audit Tutup Kas">
+        <div class="rsp-card">
+            <div class="rsp-check"><i class="fa-solid fa-vault"></i></div>
+            <h3 class="rsp-title">Audit Tutup Kas</h3>
+            <p class="audit-desc">Masukan total uang fisik (aliran kas) yang ada di laci saat ini</p>
+            <div class="field text-left mt-3">
+                <label class="field-label" for="auditKasNominal">Total Uang Fisik</label>
+                <div class="relative">
+                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                    <input class="receive-input pl-9" type="number" id="auditKasNominal" min="1" placeholder="cth. 1500000" autocomplete="off">
+                </div>
+            </div>
+            <div id="auditKasFeedback" class="hidden receive-feedback text-left mt-3"></div>
+            <div class="rsp-btns">
+                <button type="button" onclick="submitAuditKas()" id="auditKasLockBtn" class="receive-submit-btn rsp-btn">
+                    <i class="fa-solid fa-lock"></i>
+                    <span id="auditKasLockText">Kunci &amp; Arsip</span>
+                </button>
+                <button type="button" onclick="closeAuditKas()" class="receive-back-btn rsp-btn">
+                    <i class="fa-solid fa-xmark"></i> Batal
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== POPUP: PENGATURAN BEBAN HARIAN ========== -->
+    <div id="bebanPopup" class="audit-overlay hidden" onclick="if(event.target===this)closeBeban()" role="dialog" aria-label="Pengaturan Beban Harian">
+        <div class="rsp-card beban-card">
+            <button type="button" class="float-close beban-close" onclick="closeBeban()" aria-label="Tutup">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center gap-2.5">
+                <span class="receive-title-icon"><i class="fa-solid fa-money-check-dollar"></i></span>
+                <div class="min-w-0">
+                    <h3 class="rsp-title">Pengaturan Beban Harian</h3>
+                    <p class="float-sub">Kelola beban rutin toko</p>
+                </div>
+            </div>
+            <div class="beban-form mt-2 text-left">
+                <div class="beban-form-row">
+                    <input class="receive-input flex-1 min-w-0" type="text" id="bebanNama" placeholder="Nama beban (misal: Listrik)" autocomplete="off" aria-label="Nama beban">
+                    <input class="receive-input beban-nilai" type="number" id="bebanNilai" min="0" placeholder="Rp" autocomplete="off" aria-label="Nilai rupiah">
+                </div>
+                <div class="beban-form-row">
+                    <select class="receive-input flex-1 min-w-0" id="bebanKategori" aria-label="Sektor beban">
+                        <option value="Operasional" selected>Operasional</option>
+                        <option value="Gaji">Gaji</option>
+                    </select>
+                    <button type="button" onclick="bebanAdd()" id="bebanAddBtn" class="receive-submit-btn beban-tambah">
+                        <i class="fa-solid fa-plus"></i> <span id="bebanAddText">Tambah</span>
+                    </button>
+                </div>
+            </div>
+            <div class="overflow-x-auto mt-2 beban-tablewrap">
+                <table class="tx-table beban-table w-full text-sm">
+                    <thead>
+                        <tr>
+                            <th>Kategori</th>
+                            <th>Uraian</th>
+                            <th>Nilai (Rp)</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody id="bebanBody"></tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="2">Total Beban</td>
+                            <td id="bebanTotal">0</td>
+                            <td></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+            <div id="bebanFeedback" class="hidden receive-feedback text-left mt-2"></div>
+            <button type="button" onclick="bebanSave()" id="bebanSaveBtn" class="beban-simpan">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span id="bebanSaveText">SIMPAN &amp; KEMBALI KE DASHBOARD</span>
+            </button>
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=14"></script>
 </body>
 </html>

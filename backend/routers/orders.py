@@ -105,6 +105,13 @@ def _to_list_schema(o):
         estimate=o.estimate,
         payment=o.payment,
         service_date=o.service_date,
+        final_price=o.final_price,
+        part_cost=o.part_cost,
+        modal_jasa=o.modal_jasa,
+        modal_lainnya=o.modal_lainnya,
+        cash_date=o.cash_date,
+        cash_at=o.cash_at,
+        warranty_months=o.warranty_months,
         created_at=o.created_at,
         customer_name=o.customer.name if o.customer else None,
         customer_phone=o.customer.phone if o.customer else None,
@@ -206,8 +213,52 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate, db: Session = 
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
-    for key, val in data.model_dump(exclude_unset=True).items():
+    payload = data.model_dump(exclude_unset=True)
+    # Masa garansi toko hanya 0 (tidak garansi) / 1 / 3 / 6 bulan.
+    if "warranty_months" in payload and payload["warranty_months"] not in (0, 1, 3, 6):
+        raise HTTPException(status_code=400,
+                            detail="Masa garansi tidak valid. Pilihan: 1, 3, 6 bulan atau 0 (tidak garansi)")
+    # Syarat CASH: Tindakan Perbaikan + Harga Final + Teknisi wajib isi.
+    # Modal Part kosong dianggap Rp0 (bukan error).
+    # Syarat DONE (lebih ringan): Tindakan Perbaikan + Teknisi wajib isi.
+    if payload.get("status") == "CASH":
+        missing = []
+        plan = payload.get("repair_plan", order.repair_plan)
+        if not (plan or "").strip():
+            missing.append("Tindakan Perbaikan")
+        final = payload.get("final_price", order.final_price)
+        if not (final or 0) > 0:
+            missing.append("Harga Final")
+        tech = payload.get("technician", order.technician)
+        if not (tech or "").strip():
+            missing.append("Teknisi Penanggung Jawab")
+        if missing:
+            raise HTTPException(status_code=400,
+                                detail="Status CASH wajib melengkapi: " + ", ".join(missing))
+        if payload.get("part_cost") is None and order.part_cost is None:
+            payload["part_cost"] = 0
+    elif payload.get("status") == "DONE":
+        missing = []
+        plan = payload.get("repair_plan", order.repair_plan)
+        if not (plan or "").strip():
+            missing.append("Tindakan Perbaikan")
+        tech = payload.get("technician", order.technician)
+        if not (tech or "").strip():
+            missing.append("Teknisi Penanggung Jawab")
+        if missing:
+            raise HTTPException(status_code=400,
+                                detail="Status DONE wajib melengkapi: " + ", ".join(missing))
+    for key, val in payload.items():
         setattr(order, key, val)
+    # Awal masa garansi: dikunci saat pertama kali CASH, tidak berubah setelahnya.
+    # Default 1 bulan bila CASH tanpa pilihan masa garansi.
+    # cash_at = jam penetapan CASH (scope periode kas 16:00).
+    if order.status == "CASH" and order.cash_date is None:
+        order.cash_date = date.today()
+    if order.status == "CASH" and order.cash_at is None:
+        order.cash_at = datetime.now()
+    if order.status == "CASH" and order.warranty_months is None:
+        order.warranty_months = 1
     db.commit()
     db.refresh(order)
     return order

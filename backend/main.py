@@ -14,7 +14,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
 from database import Base, engine
-from routers import dashboard, orders, customers, auth
+from routers import dashboard, orders, customers, auth, claims, expenses
 from routers.auth import get_authenticated_user
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -50,11 +50,12 @@ app.add_middleware(
 
 @app.on_event("startup")
 def on_startup():
-    """Buat tabel + seed dummy jika database masih kosong."""
+    """Buat tabel + pastikan superadmin ada. Data dummy TIDAK di-seed
+    otomatis (jalankan `python seed.py` manual bila butuh data contoh)."""
     Base.metadata.create_all(bind=engine)
     _migrate_schema()
-    from seed import seed as run_seed
-    run_seed()
+    from seed import ensure_admin
+    ensure_admin()
 
 
 def _migrate_schema():
@@ -67,6 +68,13 @@ def _migrate_schema():
         ("service_orders", "imei", "VARCHAR(80)"),
         ("service_orders", "check_fisik", "TEXT"),
         ("service_orders", "check_len", "TEXT"),
+        ("service_orders", "final_price", "FLOAT"),
+        ("service_orders", "part_cost", "FLOAT"),
+        ("service_orders", "modal_jasa", "FLOAT"),
+        ("service_orders", "modal_lainnya", "FLOAT"),
+        ("service_orders", "cash_date", "DATE"),
+        ("service_orders", "cash_at", "DATETIME"),
+        ("service_orders", "warranty_months", "INTEGER"),
     ]
     with engine.begin() as conn:
         for table, column, dtype in migrations:
@@ -76,6 +84,9 @@ def _migrate_schema():
         # Backfill aman untuk data lama: checklist default, IMEI dibiarkan NULL.
         conn.execute(text("UPDATE service_orders SET check_fisik = '[]' WHERE check_fisik IS NULL"))
         conn.execute(text("UPDATE service_orders SET check_len = '[\"unit_saja\"]' WHERE check_len IS NULL"))
+        conn.execute(text("UPDATE service_orders SET part_cost = 0 WHERE part_cost IS NULL"))
+        conn.execute(text("UPDATE service_orders SET modal_jasa = 0 WHERE modal_jasa IS NULL"))
+        conn.execute(text("UPDATE service_orders SET modal_lainnya = 0 WHERE modal_lainnya IS NULL"))
 
 
 # ---------- Mount routers ----------
@@ -83,6 +94,8 @@ app.include_router(auth.router)
 app.include_router(dashboard.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(orders.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(customers.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(claims.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(expenses.router, dependencies=[Depends(get_authenticated_user)])
 
 
 # ---------- Mount frontend (static) ----------
@@ -90,7 +103,14 @@ app.include_router(customers.router, dependencies=[Depends(get_authenticated_use
 def root():
     index_path = os.path.join(FRONTEND_DIR, "index.html")
     if os.path.isfile(index_path):
-        return FileResponse(index_path)
+        return FileResponse(
+            index_path,
+            headers={
+                "Cache-Control": "no-cache, no-store, must-revalidate",
+                "Pragma": "no-cache",
+                "Expires": "0",
+            },
+        )
     return {"detail": "Frontend index.html tidak ditemukan"}
 
 

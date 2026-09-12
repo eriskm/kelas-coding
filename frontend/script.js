@@ -511,6 +511,8 @@ function initFloatDrag() {
     makeFloatDraggable('pageKeu', 'keuTitlebar', closeKeu);
     makeFloatDraggable('pageNota', 'notaTitlebar', closeNota);
     makeFloatDraggable('pageUpdateServis', 'updateTitlebar', closeUpdateServis);
+    makeFloatDraggable('pageTxDetail', 'txDetailTitlebar', closeTxDetail);
+    makeFloatDraggable('pageClaimReceive', 'claimReceiveTitlebar', closeClaimReceive);
 }
 
 // ─────────────────────────────────────────────
@@ -624,48 +626,78 @@ async function apiDel(path) {
 
 // Warna semantik KPI (ref: warna-reference.png):
 // hijau=pemasukan, biru=finansial utama, amber=beban,
-// dinamis=bersih (hijau/merah), target=kartu putih netral
-const STAR_META = [
-    { emoji: '💰', tint: 'kpi-green' },
-    { emoji: '⚡', tint: 'kpi-blue' },
-    { emoji: '💸', tint: 'kpi-amber' },
-    { emoji: '🏆', tint: 'kpi-green' },
-    { emoji: '🎯', tint: 'kpi-target' },
-];
+// dinamis=bersih (hijau/merah), target=kartu putih netral + progress bar
+const STAR_META = {
+    omset: { emoji: '💰', tint: 'kpi-green' },
+    laba_kotor: { emoji: '⚡', tint: 'kpi-blue' },
+    beban: { emoji: '💸', tint: 'kpi-amber' },
+    laba_bersih: { emoji: '🏆', tint: 'kpi-green' },
+    cts: { emoji: '🎯' },
+    cto: { emoji: '🏭' },
+};
 
 const kpiRupiah = v => 'Rp ' + (Number(v) || 0).toLocaleString('en-US');
 
+// Visibility Card Target Operasional (CTO):
+// - CTS < 100% (belum tercapai) → HIDDEN
+// - CTS tercapai & CTO belum → SHOW
+// - CTO tercapai → HIDDEN
+// Memakai flag `tercapai` dari API (hasil formula laba vs target yg sudah ada).
+function shouldShowCto(byKey) {
+    const ctsOk = byKey['cts'] ? !!byKey['cts'].tercapai : true;
+    const ctoOk = byKey['cto'] ? !!byKey['cto'].tercapai : false;
+    return ctsOk && !ctoOk;
+}
+
+function kpiProgressBar(pct, tercapai) {
+    const w = Math.max(0, Math.min(100, Number(pct) || 0));
+    const cls = tercapai ? 'is-done' : 'is-run';
+    const txt = tercapai ? 'TERCAPAI' : String(Number(pct) || 0).replace('.', ',') + '%';
+    return `<div class="kpi-progress"><i class="${cls}" style="width:${w}%"></i></div>`
+        + `<div class="kpi-caption">${tercapai ? '✅ ' : ''}${escapeHtml(txt)}</div>`;
+}
+
 // ─────────────────────────────────────────────
-// RENDER: STAR CARDS (dari API overview)
+// RENDER: STAR CARDS (dari API overview — key-driven)
 // ─────────────────────────────────────────────
 
 async function renderStarCards() {
     const data = await apiGet('/overview');
-    const cards = data.star_cards.map((c, i) => {
-        let m = STAR_META[i] || {};
-        if (i === 3) {
-            m = Number(c.value) < 0 ? { emoji: '🏆', tint: 'kpi-red' } : { emoji: '🏆', tint: 'kpi-green' };
-        }
+    const byKey = {};
+    (data.star_cards || []).forEach(c => { if (c && c.key) byKey[c.key] = c; });
+    // Visibility CTO: tampil hanya saat CTS tercapai & CTO belum tercapai.
+    // Sumber: flag `tercapai` bawaan API (formula CTS/CTO tidak diubah).
+    const order = ['omset', 'laba_kotor', 'beban', 'laba_bersih', 'cts'];
+    if (shouldShowCto(byKey)) order.push('cto');
+    const cards = order.map(key => {
+        const c = byKey[key];
+        if (!c) return '';
+        const m = STAR_META[key] || {};
         const cvalue = typeof c.value === 'number' ? kpiRupiah(c.value) : c.value;
-        if (i === 4) {
-            const bersih = data.star_cards[3] ? Number(data.star_cards[3].value) || 0 : 0;
-            const target = Number(c.value) || 0;
-            const kurang = Math.max(0, target - bersih);
+        if (key === 'laba_bersih') {
+            const tint = Number(c.value) < 0 ? 'kpi-red' : 'kpi-green';
+            return `
+            <div class="star-card ${tint} kpi-solid">
+                <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${m.emoji}</span></div>
+                <div class="kpi-value">${cvalue}</div>
+                ${c.sub ? `<div class="kpi-caption kpi-caption-light">${escapeHtml(c.sub)}</div>` : ''}
+            </div>`;
+        }
+        if (key === 'cts' || key === 'cto') {
             return `
             <div class="star-card kpi-target">
-                <div class="kpi-top"><span class="kpi-label-dark">🎯 ${c.label}</span>${c.change ? `<span class="kpi-pct">${c.change}</span>` : ''}</div>
+                <div class="kpi-top"><span class="kpi-label-dark">${m.emoji} ${escapeHtml(c.label)}</span></div>
                 <div class="kpi-value-dark">${cvalue}</div>
-                ${target > 0 ? `<div class="kpi-caption">Kurang ${kpiRupiah(kurang)} lagi</div>` : ''}
-            </div>
-            `;
+                ${kpiProgressBar(c.progress, c.tercapai)}
+                ${c.sub ? `<div class="kpi-caption">${escapeHtml(c.sub)}</div>` : ''}
+            </div>`;
         }
         return `
             <div class="star-card ${m.tint} kpi-solid">
-                <div class="kpi-top"><span class="kpi-label">${c.label}</span><span class="kpi-emoji">${m.emoji}</span></div>
+                <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${m.emoji}</span></div>
                 <div class="kpi-value">${cvalue}</div>
-                ${c.change ? `<span class="kpi-badge"><i class="fa-solid fa-arrow-${c.up ? 'up' : 'down'}"></i>${c.change}</span>` : ''}
-            </div>
-        `;
+                ${c.sub ? `<div class="kpi-caption kpi-caption-light">${escapeHtml(c.sub)}</div>` : ''}
+            </div>`;
     }).join('');
     document.getElementById('starCards').innerHTML = cards;
 }
@@ -684,7 +716,7 @@ function renderQuickActions() {
 
     document.getElementById('quickActions').innerHTML = actions.map((a, i) => {
         const featured = i === 0 ? ' qa-card-featured' : '';
-        const go = i === 0 ? ' onclick="openServisBaru()"' : '';
+        const go = i === 0 ? ' onclick="openServisBaru()"' : i === 1 ? ' onclick="openAuditKas()"' : i === 2 ? ' onclick="openBeban()"' : i === 3 ? ' onclick="showSparepart()"' : '';
         return `
             <button class="qa-card ${a.tint}${featured}"${go}>
                 <span class="qa-card-icon"><i class="${a.icon}"></i></span>
@@ -1105,14 +1137,16 @@ function txRowHtml(o, num) {
     return `<tr>
         <td class="tx-num">${num}</td>
         <td class="tx-cell-muted">${txDate(o.service_date)}</td>
-        <td><span class="tx-device">${escapeHtml(o.device || '-')}</span></td>
+        <td><span class="tx-device tx-ellipsis" title="${escapeHtml(o.device || '-')}">${escapeHtml(o.device || '-')}</span></td>
         <td>
             <div class="tx-user">${escapeHtml(o.customer_name || '-')}</div>
             <div class="tx-cell-muted">${escapeHtml(o.customer_phone || '')}</div>
         </td>
         <td>${txStatusBadge(o.status)}</td>
-        <td class="tx-cell-muted">${escapeHtml(o.damagetype || '-')}</td>
-        <td class="tx-cell-muted">${escapeHtml(o.repair_plan || '-')}</td>
+        <td>
+            <div class="tx-user tx-ellipsis" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</div>
+            <div class="tx-cell-muted tx-ellipsis" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</div>
+        </td>
         <td class="tx-cell-muted">${escapeHtml(o.technician || '-')}</td>
         <td class="tx-laba">${txLaba(o)}</td>
         <td class="tx-aksi">
@@ -1240,8 +1274,168 @@ async function loadTxPage(page) {
     }
 }
 
-function txDetail(id) {
-    alert('Detail transaksi #' + id + ' (belum diimplementasikan)');
+let _txdOrder = null; // order aktif di window Detail Transaksi (read-only)
+
+function txdCheckLabels(keys, master) {
+    const map = {};
+    (master || []).forEach(x => { map[x.key] = x.label; });
+    return (keys || []).map(k => map[k] || k).filter(Boolean);
+}
+
+async function txDetail(id) {
+    let o;
+    try {
+        o = await apiGet('/orders/' + id);
+    } catch (err) {
+        alert(err.message);
+        return;
+    }
+    _txdOrder = o;
+    const cust = o.customer || {};
+    document.getElementById('txdTitle').textContent = 'TRANSAKSI #' + (o.no_servis || o.id);
+    document.getElementById('txdHeadDevice').textContent = o.device || '-';
+    document.getElementById('txdHeadCustomer').textContent = cust.name || '-';
+    const badge = document.getElementById('txdHeadStatus');
+    if (badge) {
+        badge.textContent = o.status || '-';
+        badge.className = 'tx-status st-' + String(o.status || '').toUpperCase().replace(/\s+/g, '_');
+    }
+    const row = (k, v) => `<div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">${escapeHtml(k)}</span><b class="text-[13px] text-gray-800 dark:text-gray-100">${escapeHtml(v || '-')}</b></div>`;
+    document.getElementById('txdCustomer').innerHTML =
+        row('No. Servis', o.no_servis) + row('Tanggal Terima', notaTgl((o.service_date || '').slice(0, 10))) +
+        row('Nama Konsumen', cust.name) + row('No. WhatsApp', cust.phone) +
+        row('Device', o.device) + row('IMEI', o.imei) +
+        row('Password / Pola', o.device_password ? '••••••' : '-') + row('Teknisi', o.technician);
+    document.getElementById('txdWork').innerHTML =
+        row('Analisa Kerusakan', o.damagetype) + row('Tindakan Perbaikan', o.repair_plan) +
+        row('Status', o.status) + row('Tgl CASH', o.cash_date ? notaTgl((o.cash_date || '').slice(0, 10)) : '-');
+    const fisik = txdCheckLabels(o.check_fisik, (typeof CHECK_FISIK !== 'undefined' ? CHECK_FISIK : []));
+    const len = txdCheckLabels(o.check_len, (typeof CHECK_LEN !== 'undefined' ? CHECK_LEN : []));
+    document.getElementById('txdChecklist').innerHTML =
+        '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">Kondisi unit saat diterima</p>'
+        + '<div class="text-[12.5px] text-gray-600 dark:text-gray-300">'
+        + (fisik.length ? escapeHtml(fisik.join(' · ')) : 'Tidak ada catatan fisik')
+        + ' <span class="text-gray-400">| ' + escapeHtml(len.join(' · ') || 'Unit saja') + '</span></div>';
+    const rupiah = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+    const final = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : o.estimate;
+    document.getElementById('txdFinance').innerHTML =
+        row('Estimasi', rupiah(o.estimate)) + row('DP', rupiah(o.payment)) +
+        row('Harga Final', rupiah(final)) + row('Modal Part', rupiah(o.part_cost)) +
+        row('Sisa (Final − DP)', rupiah((Number(final) || 0) - (Number(o.payment) || 0)));
+    const wbox = document.getElementById('txdWarranty');
+    if (o.status === 'CASH' && o.cash_date) {
+        const _txdm = (o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : null;
+        const end = warrantyEndFor((o.cash_date || '').slice(0, 10), _txdm);
+        wbox.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge(_txdm === 0 ? 'EXPIRED' : 'VALID')
+            + '<span class="text-[12px] text-gray-500 dark:text-gray-400">' + escapeHtml(warrantyLabel(_txdm) + (end ? ' s/d ' + notaTgl(end) : '')) + '</span>';
+    } else if (o.status === 'CASH') {
+        wbox.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge('VALID')
+            + '<span class="text-[12px] text-gray-500 dark:text-gray-400">30 hari (awal masa menunggu sinkronisasi)</span>';
+    } else {
+        wbox.innerHTML = '<span class="text-[12px] text-gray-400">Garansi dibuat saat status menjadi CASH.</span>';
+    }
+    const wb = document.getElementById('txdWarrantyBtn');
+    if (wb) wb.classList.toggle('hidden', o.status !== 'CASH');
+    const cbox = document.getElementById('txdClaims');
+    cbox.innerHTML = '<span class="text-[12px] text-gray-400"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat histori klaim...</span>';
+    document.getElementById('pageTxDetail').classList.add('open');
+    try {
+        const rows = await apiGet('/claims/by-service/' + o.id);
+        cbox.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori klaim (' + rows.length + ')</p>'
+            + (rows.length ? rows.map(c => `
+                <div class="clr-result">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <b class="text-[12.5px]">${escapeHtml(c.claim_no)}</b>
+                        <span class="flex gap-1.5">${clrStatusBadge(c.claim_status)}${clrStatusBadge(c.decision)}</span>
+                    </div>
+                    <div class="text-[11px] text-gray-400 mt-0.5">${escapeHtml(c.complaint || '')}</div>
+                </div>`).join('')
+                : '<div class="text-[12px] text-gray-400">Belum ada claim untuk servis ini.</div>');
+    } catch (_) {
+        cbox.innerHTML = '<div class="text-[12px] text-gray-400">Histori klaim tidak dapat dimuat.</div>';
+    }
+}
+
+function closeTxDetail() {
+    document.getElementById('pageTxDetail').classList.remove('open');
+    _txdOrder = null;
+}
+
+function txdGoEdit() {
+    const o = _txdOrder;
+    closeTxDetail();
+    if (o) openUpdateServis(o);
+}
+
+function txdPrintNota() {
+    const o = _txdOrder;
+    if (!o) return;
+    const cust = o.customer || {};
+    _lastNota = {
+        no: o.no_servis || '-',
+        tgl: (o.service_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+        nama: cust.name || '',
+        phone: cust.phone || '',
+        device: o.device || '',
+        damage: o.damagetype || '',
+        plan: o.repair_plan || '',
+        estimate: Number(o.estimate) || 0,
+        dp: Number(o.payment) || 0,
+        technician: o.technician || '',
+        status: o.status || '',
+        imei: o.imei || '',
+        password: o.device_password || '',
+    };
+    try { _lastNota.checklist = { fisik: o.check_fisik || [], len: o.check_len || ['unit_saja'] }; } catch (_) {}
+    closeTxDetail();
+    openNota();
+}
+
+function txdPrintWarranty() {
+    const o = _txdOrder;
+    if (!o || o.status !== 'CASH') return;
+    const cust = o.customer || {};
+    const cash = ((o.cash_date || '').slice(0, 10)) || new Date().toISOString().slice(0, 10);
+    const final = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : (Number(o.estimate) || 0);
+    const mths = (o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : null;
+    _lastWarranty = {
+        kind: 'WARRANTY',
+        no: o.no_servis || '-',
+        tgl: cash,
+        nama: cust.name || '',
+        phone: cust.phone || '',
+        device: o.device || '',
+        imei: o.imei || '',
+        plan: o.repair_plan || '',
+        technician: o.technician || '',
+        final: Number(final) || 0,
+        part: Number(o.part_cost) || 0,
+        warranty_months: mths === null ? 1 : mths,
+        warranty_label: warrantyLabel(mths),
+        warranty_days: WARRANTY_DAYS,
+        warranty_end: warrantyEndFor(cash, mths),
+        status: 'CASH',
+    };
+    _notaMode = 'WARRANTY';
+    renderWarrantyNotaPreview(_lastWarranty);
+    renderWarrantyNotaDigital(_lastWarranty);
+    const fb = document.getElementById('notaFeedback');
+    if (fb) fb.classList.add('hidden');
+    const win = document.getElementById('pageNota');
+    try { document.body.appendChild(win); } catch (_) {}
+    win.style.zIndex = '9600';
+    win.classList.add('open');
+}
+
+function txdGoClaim() {
+    const keyword = (_txdOrder && _txdOrder.no_servis) || '';
+    closeTxDetail();
+    openClaimReceive();
+    if (keyword) {
+        const s = document.getElementById('clrSearch');
+        if (s) s.value = keyword;
+        claimRSearch();
+    }
 }
 
 let _txEditId = null;
@@ -1278,6 +1472,8 @@ function usNum(id) { return parseFloat(usVal(id)) || 0; }
 
 let _usNo = '';
 let _usTgl = '';
+let _usCashDate = ''; // awal masa garansi (dikunci backend saat pertama CASH)
+let _usStatusInit = ''; // status saat form dibuka — untuk deteksi transisi ke DONE
 // Baseline checklist dari server per No. Servis — untuk dirty-guard:
 // checklist hanya dikirim saat user benar-benar mengubahnya.
 let _usCheckBaseline = '';
@@ -1292,6 +1488,7 @@ function openUpdateServis(o) {
     _txEditId = o.id;
     _usNo = o.no_servis || '';
     _usTgl = (o.service_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
+    _usCashDate = (o.cash_date || '').slice(0, 10) || '';
     _txEditCustomerId = o.customer_id || (o.customer || {}).id || null;
     document.getElementById('usTitle').textContent = 'UPDATE DATA SERVIS #' + (o.no_servis || o.id);
     document.getElementById('usHeadDevice').textContent = o.device || '-';
@@ -1306,20 +1503,27 @@ function openUpdateServis(o) {
     document.getElementById('usEstimate').value = (o.estimate !== null && o.estimate !== undefined) ? o.estimate : '';
     document.getElementById('usDp').value = (o.payment !== null && o.payment !== undefined) ? o.payment : '';
     document.getElementById('usTechnician').value = o.technician || '';
-    // Finance dummy: nilai awal dari data tersimpan
-    document.getElementById('usFinFinal').value = (o.estimate !== null && o.estimate !== undefined) ? o.estimate : '';
-    document.getElementById('usFinPart').value = '';
+    // Finance: nilai awal dari data tersimpan (final/part sudah persisten di server).
+    const _usFinalInit = (o.final_price !== null && o.final_price !== undefined) ? o.final_price
+        : ((o.estimate !== null && o.estimate !== undefined) ? o.estimate : '');
+    document.getElementById('usFinFinal').value = _usFinalInit;
+    document.getElementById('usFinPart').value = (o.part_cost !== null && o.part_cost !== undefined) ? o.part_cost : '';
+    // Modal jasa/lainnya: dari server bila sudah tersimpan (atribut transaksi),
+    // selain itu kosong (mode Manual) agar tidak menimpa data.
     document.getElementById('usFinPartKe').value = 'Toko';
     document.getElementById('usFinJasaMode').value = 'Manual';
-    document.getElementById('usFinJasa').value = '';
+    document.getElementById('usFinJasa').value = (o.modal_jasa !== null && o.modal_jasa !== undefined) ? o.modal_jasa : '';
     document.getElementById('usFinJasaKe').value = o.technician || '';
-    document.getElementById('usFinLain').value = '';
+    document.getElementById('usFinLain').value = (o.modal_lainnya !== null && o.modal_lainnya !== undefined) ? o.modal_lainnya : '';
     // Checklist awal: SELALU dari data server per No. Servis (bukan dummy,
     // bukan store lokal). Setelah refresh pun tampil sama persis.
     const _usCheck = _usServerChecklist(o);
     applyChecklist('us', _usCheck);
     _usCheckBaseline = JSON.stringify(_usCheck);
     _checkStore[_usNo] = _usCheck;
+    const _wmSel = document.getElementById('usWarrantyMonths');
+    if (_wmSel) _wmSel.value = String((o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : 1);
+    _usStatusInit = o.status || 'ANALISA';
     usSetStatus(o.status || 'ANALISA');
     usFinUpdate();
     const fb = document.getElementById('usFeedback');
@@ -1327,6 +1531,7 @@ function openUpdateServis(o) {
     const txt = document.getElementById('usSaveText');
     if (txt) txt.textContent = 'Simpan Perubahan Servis';
     document.getElementById('pageUpdateServis').classList.add('open');
+    try { usLoadClaimHistory(o.id); } catch (_) {}
 }
 
 function closeUpdateServis() {
@@ -1335,6 +1540,72 @@ function closeUpdateServis() {
     _txEditCustomerId = null;
     _usNo = '';
     _usTgl = '';
+    _usCashDate = '';
+}
+
+// ── Konfirmasi WA otomatis saat unit berubah ke DONE ──
+let _doneWaData = null;
+
+function doneWaMessage(d) {
+    const L = [];
+    L.push('Halo ' + (d.nama || 'Kak') + ' 🙏');
+    L.push('Kabar baik! Servis Anda sudah SELESAI ✅');
+    L.push('');
+    L.push('No. Servis: ' + (d.no || '-'));
+    L.push('Device: ' + (d.device || '-'));
+    if (d.damage) L.push('Kerusakan: ' + d.damage);
+    if (d.plan) L.push('Tindakan: ' + d.plan);
+    L.push('Biaya: ' + usRupiah(d.final));
+    if ((Number(d.dp) || 0) > 0) L.push('DP masuk: ' + usRupiah(d.dp) + ' • Sisa: ' + usRupiah(Math.max(0, (Number(d.final) || 0) - (Number(d.dp) || 0))));
+    L.push('');
+    L.push('Silakan ambil unit Anda di SUKABUMI FLASHER.');
+    L.push('Terima kasih atas kepercayaan Anda 🙏');
+    return L.join('\n');
+}
+
+function doneWaShow(d) {
+    _doneWaData = d || null;
+    const to = document.getElementById('doneWaTo');
+    if (to) to.textContent = 'Ke: ' + ((d && d.nama) || '-') + ' • ' + ((d && d.phone) || '(no. WA kosong)');
+    const pv = document.getElementById('doneWaPreview');
+    if (pv) pv.textContent = doneWaMessage(d || {});
+    const num = notaWaNumber(d && d.phone);
+    const warn = document.getElementById('doneWaWarn');
+    if (warn) {
+        if (!num) {
+            warn.classList.remove('hidden');
+            warn.textContent = 'No. WA kosong — isi Nomor WhatsApp lalu simpan ulang untuk mengirim.';
+        } else warn.classList.add('hidden');
+    }
+    const send = document.getElementById('doneWaSendBtn');
+    if (send) send.classList.toggle('hidden', !num);
+    const ov = document.getElementById('doneWaPopup');
+    if (ov) ov.classList.remove('hidden');
+}
+
+function doneWaClose() {
+    const ov = document.getElementById('doneWaPopup');
+    if (ov) ov.classList.add('hidden');
+    _doneWaData = null;
+}
+
+function doneWaSend() {
+    const d = _doneWaData;
+    if (!d) return;
+    const msg = doneWaMessage(d);
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
+    } catch (_) {}
+    const num = notaWaNumber(d.phone);
+    if (!num) return;
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+    doneWaClose();
+    const fb = document.getElementById('usFeedback');
+    if (fb) {
+        fb.classList.remove('hidden', 'error');
+        fb.classList.add('success');
+        fb.innerHTML = '<i class="fa-solid fa-circle-check"></i> Membuka WhatsApp pelanggan — tekan kirim di WA untuk menyelesaikan.';
+    }
 }
 
 // Status unit: SATU sumber tulis (usSetStatus) + SATU sumber baca (usGetStatus).
@@ -1349,8 +1620,17 @@ function usSetStatus(s) {
         badge.textContent = s;
         badge.className = 'tx-status st-' + String(s || '').toUpperCase().replace(/\s+/g, '_');
     }
-    // Tombol cetak nota selalu tampil — bisa cetak ulang kapan pun
-    // (lengkapi data / update status) tanpa harus menunggu status CASH.
+    // Tombol Cetak Nota Penerimaan hanya relevan di awal (ANALISA/KONFIRMASI).
+    // Lewat dari itu pakai Cetak Nota Garansi (saat CASH) / kelola via klaim.
+    const rp = document.getElementById('usReprintBtn');
+    if (rp) rp.classList.toggle('hidden', !(s === 'ANALISA' || s === 'KONFIRMASI'));
+    // Nota garansi HANYA tersedia setelah CASH (masa garansi dibuat saat CASH).
+    const wb = document.getElementById('usWarrantyBtn');
+    if (wb) wb.classList.toggle('hidden', s !== 'CASH');
+    // Panel Closing & Masa Garansi ikut status CASH.
+    const wp = document.getElementById('usWarrantyPanel');
+    if (wp) wp.classList.toggle('hidden', s !== 'CASH');
+    if (s === 'CASH') { try { usWarrantyUpdate(); } catch (_) {} }
 }
 
 function usGetStatus() {
@@ -1442,6 +1722,8 @@ function initUpdateServis() {
     });
     const jm = document.getElementById('usFinJasaMode');
     if (jm && !jm.dataset.usBound) { jm.dataset.usBound = '1'; jm.addEventListener('change', usFinUpdate); }
+    const wm = document.getElementById('usWarrantyMonths');
+    if (wm && !wm.dataset.usBound) { wm.dataset.usBound = '1'; wm.addEventListener('change', usWarrantyUpdate); }
     const sa = document.getElementById('usStatus');
     if (sa && !sa.dataset.usBound) { sa.dataset.usBound = '1'; sa.addEventListener('change', () => usSetStatus(sa.value)); }
     const sb = document.getElementById('usQuickStatus');
@@ -1461,6 +1743,44 @@ function initUpdateServis() {
             try {
                 const _usCheckNow = collectChecklist('us');
                 const _usCheckChanged = JSON.stringify(_usCheckNow) !== _usCheckBaseline;
+                const _usSt = usGetStatus();
+                // Syarat CASH: blokir simpan bila belum lengkap.
+                // Modal Part kosong dianggap Rp0 (bukan error).
+                // Syarat DONE (lebih ringan): Tindakan Perbaikan + Teknisi.
+                if (_usSt === 'CASH') {
+                    const _missing = [];
+                    if (!usVal('usPlan').trim()) _missing.push(['Tindakan Perbaikan', 'usPlan']);
+                    if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final', 'usFinFinal']);
+                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (_missing.length) {
+                        if (fb) {
+                            fb.classList.remove('hidden');
+                            fb.classList.add('error');
+                            fb.textContent = 'Status CASH wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
+                        }
+                        const _first = document.getElementById(_missing[0][1]);
+                        if (_first) _first.focus({ preventScroll: true });
+                        if (btn) btn.disabled = false;
+                        if (txt) txt.textContent = 'Simpan Perubahan Servis';
+                        return;
+                    }
+                } else if (_usSt === 'DONE') {
+                    const _missing = [];
+                    if (!usVal('usPlan').trim()) _missing.push(['Tindakan Perbaikan', 'usPlan']);
+                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (_missing.length) {
+                        if (fb) {
+                            fb.classList.remove('hidden');
+                            fb.classList.add('error');
+                            fb.textContent = 'Status DONE wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
+                        }
+                        const _first = document.getElementById(_missing[0][1]);
+                        if (_first) _first.focus({ preventScroll: true });
+                        if (btn) btn.disabled = false;
+                        if (txt) txt.textContent = 'Simpan Perubahan Servis';
+                        return;
+                    }
+                }
                 const _usPayload = {
                     device: usVal('usDevice').trim(),
                     device_password: usVal('usPassword'),
@@ -1469,8 +1789,13 @@ function initUpdateServis() {
                     repair_plan: usVal('usPlan').trim(),
                     estimate: usNum('usEstimate'),
                     payment: usNum('usDp'),
+                    final_price: usNum('usFinFinal') || 0,
+                    part_cost: usVal('usFinPart') === '' ? 0 : usNum('usFinPart'),
+                    modal_jasa: usNum('usFinJasa') || 0,
+                    modal_lainnya: usNum('usFinLain') || 0,
+                    warranty_months: usWarrantyMonths(),
                     technician: usVal('usTechnician'),
-                    status: usGetStatus(),
+                    status: _usSt,
                 };
                 // Checklist hanya dikirim bila user mengubahnya eksplisit.
                 // Jika tidak disentuh, field dihilangkan agar data server tidak tertimpa.
@@ -1485,6 +1810,13 @@ function initUpdateServis() {
                         phone: usVal('usPhone').trim(),
                     });
                 }
+                // Segarkan cash_date (dikunci backend saat pertama CASH) + tombol garansi.
+                try {
+                    const _saved = await apiGet('/orders/' + _txEditId);
+                    _usCashDate = (_saved.cash_date || '').slice(0, 10) || _usCashDate;
+                    const _wm2 = document.getElementById('usWarrantyMonths');
+                    if (_wm2 && _saved.warranty_months !== null && _saved.warranty_months !== undefined) _wm2.value = String(_saved.warranty_months);
+                } catch (_) {}
                 usSetStatus(usGetStatus());
                 if (_usCheckChanged) {
                     _usCheckBaseline = JSON.stringify(_usCheckNow);
@@ -1496,6 +1828,21 @@ function initUpdateServis() {
                     fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Data servis tersimpan di server. Rincian kas di panel kanan masih hitungan lokal (belum masuk KAS).`;
                 }
                 renderTransaksi();
+                // Transisi ke DONE → tawarkan kirim konfirmasi WA ke pelanggan.
+                const _wasDone = (_usStatusInit === 'DONE');
+                _usStatusInit = _usSt;
+                if (_usSt === 'DONE' && !_wasDone) {
+                    doneWaShow({
+                        nama: usVal('usNama').trim(),
+                        phone: usVal('usPhone').trim(),
+                        device: usVal('usDevice').trim(),
+                        no: _usNo,
+                        damage: usVal('usDamage').trim(),
+                        plan: usVal('usPlan').trim(),
+                        final: usNum('usFinFinal'),
+                        dp: usNum('usDp'),
+                    });
+                }
             } catch (err) {
                 if (fb) {
                     fb.classList.remove('hidden');
@@ -1511,6 +1858,8 @@ function initUpdateServis() {
     if (document.body.dataset.usKeys !== '1') {
         document.body.dataset.usKeys = '1';
         document.addEventListener('keydown', function (e) {
+            const dw = document.getElementById('doneWaPopup');
+            if (dw && !dw.classList.contains('hidden') && e.key === 'Escape') { doneWaClose(); return; }
             const win = document.getElementById('pageUpdateServis');
             if (!win || !win.classList.contains('open')) return;
             if (e.key === 'F8' || ((e.ctrlKey || e.metaKey) && String(e.key).toLowerCase() === 's')) {
@@ -1758,8 +2107,8 @@ function renderGaransi() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="tx-num">${idx + 1}</td>
-            <td><span class="tx-device">${escapeHtml(g.nama)}</span></td>
-            <td class="tx-cell-muted">${escapeHtml(g.device)}</td>
+            <td><span class="tx-device tx-ellipsis" title="${escapeHtml(g.nama)}">${escapeHtml(g.nama)}</span></td>
+            <td class="tx-cell-muted tx-ellipsis" title="${escapeHtml(g.device)}">${escapeHtml(g.device)}</td>
             <td class="tx-cell-muted">${txDate(g.mulai)}</td>
             <td class="tx-cell-muted">${txDate(g.akhir)}</td>
             <td>${grStatusBadge(g)}</td>
@@ -1799,8 +2148,8 @@ function renderGaransi() {
 // ─────────────────────────────────────────────
 
 // ─────────────────────────────────────────────
-// HALAMAN PELANGGAN (master + ringkasan servis — tahap UI: dummy data)
-// Backend diintegrasikan tahap berikutnya (GET /api/customers/summary + histori).
+// HALAMAN PELANGGAN (master + ringkasan servis — data real backend)
+// Backend: GET /api/customers/summary + /{id}/detail + PUT + DELETE.
 // ─────────────────────────────────────────────
 
 const PL_PER_PAGE = 10;
@@ -1826,64 +2175,67 @@ function initPlToolbar() {
     }
 }
 
-function plFiltered() {
-    const q = _plQuery.trim().toLowerCase();
-    return PL_DUMMY.filter(c => {
-        if (_plDate && (c.last || '') !== _plDate) return false;
-        if (!q) return true;
-        return [c.name, c.phone, c.device, c.plan]
-            .some(f => (f || '').toLowerCase().includes(q));
-    });
+// Menu aksi pelanggan — ID-based (bukan index tabel).
+let _plMenuId = null;
+
+function plFind(id) {
+    return (_plView || []).find(c => c && c.id === id) || null;
 }
 
-const PL_DUMMY = [
-    { name: 'Andi Pratama', phone: '081234567890', device: 'Samsung Galaxy A55', plan: 'Ganti LCD + frame', price: 550000, total: 3, last: '2026-09-02', hist: [
-        { no: 'SV-20260902-003', tgl: '2026-09-02', device: 'Samsung Galaxy A55', plan: 'Ganti LCD + frame', price: 550000, status: 'Repair' },
-        { no: 'SV-20260718-009', tgl: '2026-07-18', device: 'Samsung Galaxy A55', plan: 'Ganti baterai', price: 350000, status: 'Done' },
-        { no: 'SV-20260530-002', tgl: '2026-05-30', device: 'Samsung Galaxy A55', plan: 'Flash + servis ringan', price: 150000, status: 'Done' },
-    ]},
-    { name: 'Siti Rahma', phone: '085725566668', device: 'iPhone 13', plan: 'Ganti baterai', price: 350000, total: 5, last: '2026-09-01', hist: [
-        { no: 'SV-20260901-014', tgl: '2026-09-01', device: 'iPhone 13', plan: 'Ganti baterai', price: 350000, status: 'Done' },
-        { no: 'SV-20260812-006', tgl: '2026-08-12', device: 'iPhone 13', plan: 'Ganti kamera depan', price: 290000, status: 'Done' },
-        { no: 'SV-20260702-001', tgl: '2026-07-02', device: 'iPhone 13', plan: 'Servis konektor cas', price: 120000, status: 'Done' },
-    ]},
-    { name: 'Budi Santoso', phone: '082138475690', device: 'Xiaomi Redmi Note 13', plan: 'Ganti konektor cas', price: 45000, total: 4, last: '2026-08-28', hist: [
-        { no: 'SV-20260828-007', tgl: '2026-08-28', device: 'Xiaomi Redmi Note 13', plan: 'Ganti konektor cas', price: 45000, status: 'Done' },
-        { no: 'SV-20260720-002', tgl: '2026-07-20', device: 'Xiaomi Redmi Note 13', plan: 'Ganti LCD', price: 475000, status: 'Done' },
-    ]},
-    { name: 'Dewi Lestari', phone: '081112345678', device: 'Oppo Reno 11', plan: 'Ganti LCD OLED', price: 790000, total: 2, last: '2026-08-25', hist: [
-        { no: 'SV-20260825-005', tgl: '2026-08-25', device: 'Oppo Reno 11', plan: 'Ganti LCD OLED', price: 790000, status: 'Repair' },
-        { no: 'SV-20260614-003', tgl: '2026-06-14', device: 'Oppo Reno 11', plan: 'Ganti backdoor', price: 125000, status: 'Done' },
-    ]},
-    { name: 'Agus Wijaya', phone: '083856712090', device: 'Vivo V30', plan: 'Ganti backdoor', price: 125000, total: 1, last: '2026-08-22', hist: [
-        { no: 'SV-20260822-001', tgl: '2026-08-22', device: 'Vivo V30', plan: 'Ganti backdoor', price: 125000, status: 'Done' },
-    ]},
-    { name: 'Rina Marlina', phone: '087731209845', device: 'Realme C55', plan: 'Ganti fleksibel LCD', price: 50000, total: 6, last: '2026-08-20', hist: [
-        { no: 'SV-20260820-002', tgl: '2026-08-20', device: 'Realme C55', plan: 'Ganti fleksibel LCD', price: 50000, status: 'Done' },
-        { no: 'SV-20260805-008', tgl: '2026-08-05', device: 'Realme C55', plan: 'Ganti konektor cas', price: 45000, status: 'Done' },
-        { no: 'SV-20260711-004', tgl: '2026-07-11', device: 'Realme C55', plan: 'Flash ulang', price: 100000, status: 'Done' },
-    ]},
-    { name: 'Hendra Gunawan', phone: '081904556677', device: 'Infinix Note 40', plan: 'Ganti buzzer', price: 60000, total: 2, last: '2026-08-18', hist: [
-        { no: 'SV-20260818-009', tgl: '2026-08-18', device: 'Infinix Note 40', plan: 'Ganti buzzer', price: 60000, status: 'Done' },
-    ]},
-    { name: 'Putri Ayu', phone: '082221078934', device: 'Samsung Galaxy S23', plan: 'Ganti kamera belakang', price: 420000, total: 3, last: '2026-08-15', hist: [
-        { no: 'SV-20260815-006', tgl: '2026-08-15', device: 'Samsung Galaxy S23', plan: 'Ganti kamera belakang', price: 420000, status: 'Done' },
-        { no: 'SV-20260709-002', tgl: '2026-07-09', device: 'Samsung Galaxy S23', plan: 'Ganti baterai', price: 195000, status: 'Done' },
-    ]},
-    { name: 'Fajar Ramadhan', phone: '085643219870', device: 'Poco X6', plan: 'Ganti LCD ORI', price: 475000, total: 1, last: '2026-08-10', hist: [
-        { no: 'SV-20260810-003', tgl: '2026-08-10', device: 'Poco X6', plan: 'Ganti LCD ORI', price: 475000, status: 'Repair' },
-    ]},
-    { name: 'Nina Kurnia', phone: '081327654019', device: 'iPhone 12', plan: 'Ganti LCD INCELL', price: 680000, total: 4, last: '2026-08-08', hist: [
-        { no: 'SV-20260808-012', tgl: '2026-08-08', device: 'iPhone 12', plan: 'Ganti LCD INCELL', price: 680000, status: 'Done' },
-        { no: 'SV-20260628-005', tgl: '2026-06-28', device: 'iPhone 12', plan: 'Ganti baterai', price: 350000, status: 'Done' },
-    ]},
-    { name: 'Doni Saputra', phone: '082134809572', device: 'Samsung Galaxy A35', plan: 'Ganti baterai', price: 195000, total: 2, last: '2026-08-05', hist: [
-        { no: 'SV-20260805-001', tgl: '2026-08-05', device: 'Samsung Galaxy A35', plan: 'Ganti baterai', price: 195000, status: 'Done' },
-    ]},
-    { name: 'Lina Hartati', phone: '083812745690', device: 'Vivo Y36', plan: 'Servis mati total', price: 250000, total: 1, last: '2026-08-01', hist: [
-        { no: 'SV-20260801-004', tgl: '2026-08-01', device: 'Vivo Y36', plan: 'Servis mati total', price: 250000, status: 'Analisa' },
-    ]},
-];
+function plMenuToggle(id, btn) {
+    const menu = document.getElementById('plMenu');
+    if (!menu) return;
+    if (_plMenuId === id && !menu.classList.contains('hidden')) { plMenuClose(); return; }
+    _plMenuId = id;
+    menu.dataset.id = id;
+    menu.classList.remove('hidden');
+    const r = btn.getBoundingClientRect();
+    const mw = 200, mh = 196;
+    let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+    left = Math.max(8, left);
+    let top = r.bottom + 6;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+}
+
+function plMenuClose() {
+    const menu = document.getElementById('plMenu');
+    if (menu) menu.classList.add('hidden');
+    _plMenuId = null;
+}
+
+if (!window._plMenuBound) {
+    window._plMenuBound = true;
+    document.addEventListener('click', function (e) {
+        const menu = document.getElementById('plMenu');
+        if (!menu || menu.classList.contains('hidden')) return;
+        if (e.target.closest('#plMenu') || e.target.closest('[data-plmenu-btn]')) return;
+        plMenuClose();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        plMenuClose();
+        const pe = document.getElementById('plEditPopup');
+        if (pe && !pe.classList.contains('hidden')) plEditClose();
+    });
+    window.addEventListener('resize', plMenuClose);
+    document.addEventListener('scroll', function () { plMenuClose(); }, true);
+}
+
+function plMenuAct(act) {
+    const menu = document.getElementById('plMenu');
+    const id = Number((menu || {}).dataset.id);
+    plMenuClose();
+    if (!id) return;
+    if (act === 'detail') plDetailOpen(id, false);
+    else if (act === 'riwayat') plDetailOpen(id, true);
+    else if (act === 'edit') plEditOpen(id);
+    else if (act === 'baru') plServisBaru(id);
+    else if (act === 'hapus') plDelete(id);
+}
+
+// (PL_DUMMY dihapus — tabel memakai data real GET /api/customers/summary.)
 
 function plRupiah(v) {
     if (v === null || v === undefined) return '-';
@@ -1895,28 +2247,161 @@ async function renderPelanggan() {
     await loadPlPage(1);
 }
 
-function plHist(idx) {
-    const c = (_plView.length ? _plView : PL_DUMMY)[idx];
-    if (!c) return;
-    document.getElementById('histTitle').textContent = 'Histori — ' + c.name;
-    document.getElementById('histSub').textContent = c.phone + ' • ' + c.total + '× servis';
-    document.getElementById('histSummary').innerHTML = renderCustSummary(c);
-    document.getElementById('plHistBody').innerHTML = c.hist.map((h, i) => `
-        <tr>
-            <td class="tx-num">${i + 1}</td>
-            <td class="tx-cell-muted">${escapeHtml(h.no)}</td>
-            <td class="tx-cell-muted">${txDate(h.tgl)}</td>
-            <td><span class="tx-device">${escapeHtml(h.device)}</span></td>
-            <td class="tx-cell-muted">${escapeHtml(h.plan)}</td>
-            <td class="tx-laba">${plRupiah(h.price)}</td>
-            <td>${txStatusBadge(h.status)}</td>
-        </tr>
-    `).join('');
+// Detail pelanggan (data real by ID) + Riwayat Servis — jendela Histori.
+async function plDetailOpen(id, toHistory) {
+    const title = document.getElementById('histTitle');
+    const sub = document.getElementById('histSub');
+    const summary = document.getElementById('histSummary');
+    const tbody = document.getElementById('plHistBody');
+    if (title) title.textContent = 'Memuat...';
+    if (sub) sub.textContent = '';
+    if (summary) summary.innerHTML = '<div class="history-empty"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat data pelanggan...</div>';
+    if (tbody) tbody.innerHTML = '';
     document.getElementById('pageHistory').classList.add('open');
+    try {
+        const d = await apiGet('/customers/' + id + '/detail');
+        const c = d.customer || {};
+        if (title) title.textContent = 'Detail — ' + (c.name || '-');
+        if (sub) sub.textContent = (c.phone || '-') + ' • ' + d.total_servis + '× servis';
+        if (summary) {
+            const initial = ((c.name || '?').trim().charAt(0) || '?').toUpperCase();
+            summary.innerHTML = `<div class="rc-cust">
+                <div class="rc-cust-top"><span class="rc-cust-ava">${escapeHtml(initial)}</span>
+                <div class="rc-cust-id"><b>${escapeHtml(c.name || '-')}</b><span>${escapeHtml(c.phone || '-')}</span></div>
+                <span class="rc-cust-total">${d.total_servis}× servis</span></div>
+                <div class="rc-cust-grid pl-agg">
+                <div><span>Jumlah Device</span><b>${d.device_count} device</b></div>
+                <div><span>Total Servis</span><b>${d.total_servis}×</b></div>
+                <div><span>Total Transaksi</span><b>${plRupiah(d.total_nilai)}</b></div>
+                <div><span>Terakhir Servis</span><b>${d.last_at ? txDate(d.last_at) : '-'}</b></div>
+                </div></div>`;
+        }
+        if (tbody) {
+            const rows = d.orders || [];
+            tbody.innerHTML = rows.length ? rows.map((o, i) => {
+                const harga = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : o.estimate;
+                const tgl = (o.service_date || '') || (o.created_at || '').slice(0, 10);
+                return `
+                <tr>
+                    <td class="tx-num">${i + 1}</td>
+                    <td class="tx-cell-muted">${escapeHtml(o.no_servis || '-')}</td>
+                    <td class="tx-cell-muted">${txDate(tgl)}</td>
+                    <td><span class="tx-device">${escapeHtml(o.device || '-')}</span></td>
+                    <td class="tx-cell-muted">${escapeHtml(o.damagetype || '-')}</td>
+                    <td class="tx-cell-muted">${escapeHtml(o.repair_plan || '-')}</td>
+                    <td class="tx-cell-muted">${escapeHtml(o.technician || '-')}</td>
+                    <td class="tx-laba">${plRupiah(harga)}</td>
+                    <td>${txStatusBadge(o.status)}</td>
+                </tr>`;
+            }).join('') : '<tr><td colspan="9" class="text-center text-gray-400 py-6">Belum ada riwayat servis.</td></tr>';
+        }
+        if (toHistory && tbody) {
+            const panel = tbody.closest('.panel');
+            if (panel) {
+                const scroller = document.querySelector('#pageHistory .float-body');
+                if (scroller) scroller.scrollTop = scroller.scrollHeight;
+            }
+        }
+    } catch (err) {
+        if (title) title.textContent = 'Detail Pelanggan';
+        if (summary) summary.innerHTML = `<div class="history-empty"><i class="fa-solid fa-circle-exclamation"></i> ${escapeHtml(err.message || 'Gagal memuat.')}</div>`;
+    }
 }
 
 function closePlHist() {
     document.getElementById('pageHistory').classList.remove('open');
+}
+
+// Edit pelanggan (Nama + WA) — data real by ID.
+let _plEditId = null;
+
+async function plEditOpen(id) {
+    _plEditId = id;
+    const fb = document.getElementById('plEditFeedback');
+    if (fb) fb.classList.add('hidden');
+    try {
+        const c = await apiGet('/customers/' + id);
+        document.getElementById('plEditName').value = c.name || '';
+        document.getElementById('plEditPhone').value = c.phone || '';
+    } catch (err) {
+        if (fb) {
+            fb.classList.remove('hidden', 'success');
+            fb.classList.add('error');
+            fb.textContent = err.message;
+        }
+    }
+    document.getElementById('plEditPopup').classList.remove('hidden');
+    setTimeout(() => { const el = document.getElementById('plEditName'); if (el) el.focus({ preventScroll: true }); }, 60);
+}
+
+function plEditClose() {
+    const ov = document.getElementById('plEditPopup');
+    if (ov) ov.classList.add('hidden');
+    _plEditId = null;
+}
+
+async function plEditSave() {
+    if (!_plEditId) return;
+    const name = (document.getElementById('plEditName').value || '').trim();
+    const phone = (document.getElementById('plEditPhone').value || '').trim();
+    const fb = document.getElementById('plEditFeedback');
+    if (!name) {
+        if (fb) {
+            fb.classList.remove('hidden', 'success');
+            fb.classList.add('error');
+            fb.textContent = 'Nama konsumen wajib diisi.';
+        }
+        return;
+    }
+    const btn = document.getElementById('plEditSaveBtn');
+    if (btn) btn.disabled = true;
+    try {
+        await apiPut('/customers/' + _plEditId, { name, phone });
+        plEditClose();
+        await loadPlPage(_plPage);
+    } catch (err) {
+        if (fb) {
+            fb.classList.remove('hidden', 'success');
+            fb.classList.add('error');
+            fb.textContent = err.message;
+        }
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Servis Baru dengan pelanggan terisi otomatis (data real by ID).
+async function plServisBaru(id) {
+    let c = plFind(id);
+    if (!c) {
+        try { c = await apiGet('/customers/' + id); } catch (_) { return; }
+    }
+    openServisBaru();
+    const n = document.getElementById('rcName');
+    const p = document.getElementById('rcPhone');
+    if (n) n.value = c.name || '';
+    if (p) p.value = c.phone || '';
+    try { loadSmartHistory(); } catch (_) {}
+    const d = document.getElementById('rcDevice');
+    if (d) setTimeout(() => d.focus({ preventScroll: true }), 120);
+}
+
+// Hapus pelanggan — diblokir bila relasi servis/klaim masih aktif.
+async function plDelete(id) {
+    const c = plFind(id);
+    const total = c ? (Number(c.total_servis) || 0) : 0;
+    const name = c ? c.name : ('#' + id);
+    if (total > 0) {
+        alert('"' + name + '" memiliki ' + total + ' data servis — tidak dapat dihapus karena masih memiliki relasi aktif.');
+        return;
+    }
+    if (!confirm('Hapus pelanggan "' + name + '"?')) return;
+    try {
+        await apiDel('/customers/' + id);
+        await loadPlPage(_plPage);
+    } catch (err) {
+        alert(err.message || 'Gagal menghapus pelanggan.');
+    }
 }
 
 async function loadPlPage(page) {
@@ -1925,64 +2410,77 @@ async function loadPlPage(page) {
     const loading = document.getElementById('plLoading');
     const pagination = document.getElementById('plPagination');
     if (!body) return;
-
-    const data = plFiltered();
-    _plView = data;
-    const total = data.length;
-    const totalPages = Math.max(1, Math.ceil(total / PL_PER_PAGE));
-    _plPage = Math.min(Math.max(1, page), totalPages);
+    plMenuClose();
     body.innerHTML = '';
-    loading.classList.add('hidden');
     empty.classList.add('hidden');
+    loading.classList.remove('hidden');
+    try {
+        const params = new URLSearchParams({ page: String(page || 1), limit: String(PL_PER_PAGE) });
+        if (_plQuery.trim()) params.set('q', _plQuery.trim());
+        if (_plDate) params.set('date', _plDate);
+        const data = await apiGet('/customers/summary?' + params.toString());
+        const items = (data && data.items) || [];
+        _plView = items;
+        _plPage = (data && data.page) || 1;
+        const total = (data && data.total) || 0;
+        const totalPages = (data && data.total_pages) || 1;
+        loading.classList.add('hidden');
+        if (!items.length) {
+            empty.innerHTML = (_plQuery.trim() || _plDate)
+                ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Pelanggan tidak ditemukan.'
+                : '<i class="fa-solid fa-users text-3xl mb-2 block opacity-40"></i>Belum ada pelanggan.';
+            empty.classList.remove('hidden');
+            pagination.classList.add('hidden');
+            return;
+        }
+        const start = (_plPage - 1) * PL_PER_PAGE;
+        items.forEach((c, i) => {
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+            <td class="tx-num">${start + i + 1}</td>
+            <td><span class="tx-device tx-ellipsis" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span></td>
+            <td class="tx-cell-muted">${escapeHtml(c.phone || '-')}</td>
+            <td class="tx-cell-muted tx-ellipsis pl-c-device" title="${escapeHtml(c.last_device || '')}">${escapeHtml(c.last_device || '-')}</td>
+            <td class="tx-cell-muted tx-ellipsis pl-c-action" title="${escapeHtml(c.last_action || '')}">${escapeHtml(c.last_action || '-')}</td>
+            <td class="tx-laba">${c.last_price ? plRupiah(c.last_price) : '-'}</td>
+            <td class="tx-cell-muted text-center">${c.total_servis} servis</td>
+            <td class="tx-cell-muted">${c.last_at ? txDate(c.last_at) : '-'}</td>
+            <td class="tx-aksi"><div class="pl-aksi">
+                <button type="button" class="pl-detail-btn" onclick="plDetailOpen(${c.id}, false)">Detail</button>
+                <button type="button" class="tx-view-btn" data-plmenu-btn title="Menu" onclick="plMenuToggle(${c.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            </div></td>
+        `;
+            body.appendChild(tr);
+        });
 
-    if (total === 0) {
-        empty.innerHTML = _plQuery.trim()
-            ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Pelanggan tidak ditemukan.'
-            : '<i class="fa-solid fa-users text-3xl mb-2 block opacity-40"></i>Belum ada pelanggan.';
+        const end = start + items.length;
+        if (total > PL_PER_PAGE) pagination.classList.remove('hidden');
+        else pagination.classList.add('hidden');
+        const info = document.getElementById('plInfo');
+        if (info) info.textContent = 'Halaman ' + _plPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + total + ' pelanggan)';
+
+        const pageBtns = document.getElementById('plPageBtns');
+        if (pageBtns) {
+            pageBtns.innerHTML = '';
+            const mkBtn = (txt, p, disabled, active) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.textContent = txt;
+                b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
+                if (!disabled) b.addEventListener('click', () => loadPlPage(p));
+                return b;
+            };
+            pageBtns.appendChild(mkBtn('← Sebelumnya', _plPage - 1, _plPage === 1, false));
+            for (let p = 1; p <= totalPages; p++) {
+                pageBtns.appendChild(mkBtn(String(p), p, false, p === _plPage));
+            }
+            pageBtns.appendChild(mkBtn('Berikutnya →', _plPage + 1, _plPage === totalPages, false));
+        }
+    } catch (err) {
+        loading.classList.add('hidden');
+        empty.innerHTML = '<i class="fa-solid fa-circle-exclamation text-3xl mb-2 block opacity-40"></i>' + escapeHtml(err.message || 'Gagal memuat data.');
         empty.classList.remove('hidden');
         pagination.classList.add('hidden');
-        return;
-    }
-
-    const start = (_plPage - 1) * PL_PER_PAGE;
-    data.slice(start, start + PL_PER_PAGE).forEach((c, i) => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td class="tx-num">${start + i + 1}</td>
-            <td><span class="tx-device">${escapeHtml(c.name)}</span></td>
-            <td class="tx-cell-muted">${escapeHtml(c.phone)}</td>
-            <td class="tx-cell-muted">${escapeHtml(c.device)}</td>
-            <td class="tx-cell-muted">${escapeHtml(c.plan)}</td>
-            <td class="tx-laba">${plRupiah(c.price)}</td>
-            <td class="tx-cell-muted text-center">${c.total}×</td>
-            <td class="tx-cell-muted">${txDate(c.last)}</td>
-            <td class="tx-aksi"><button type="button" class="tx-view-btn" title="Lihat Histori" onclick="plHist(${start + i})"><i class="fa-solid fa-clock-rotate-left"></i></button></td>
-        `;
-        body.appendChild(tr);
-    });
-
-    const end = start + Math.min(PL_PER_PAGE, total - start);
-    if (total > PL_PER_PAGE) pagination.classList.remove('hidden');
-    else pagination.classList.add('hidden');
-    const info = document.getElementById('plInfo');
-    if (info) info.textContent = 'Halaman ' + _plPage + '  ' + start + ' - ' + end + '  (dari ' + total + ' pelanggan)';
-
-    const pageBtns = document.getElementById('plPageBtns');
-    if (pageBtns) {
-        pageBtns.innerHTML = '';
-        const mkBtn = (txt, p, disabled, active) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.textContent = txt;
-            b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
-            if (!disabled) b.addEventListener('click', () => loadPlPage(p));
-            return b;
-        };
-        pageBtns.appendChild(mkBtn('← Sebelumnya', _plPage - 1, _plPage === 1, false));
-        for (let p = 1; p <= totalPages; p++) {
-            pageBtns.appendChild(mkBtn(String(p), p, false, p === _plPage));
-        }
-        pageBtns.appendChild(mkBtn('Berikutnya →', _plPage + 1, _plPage === totalPages, false));
     }
 }
 
@@ -3033,6 +3531,9 @@ async function initReceivePage() {
 // ─────────────────────────────────────────────
 
 let _lastNota = null;
+let _notaMode = 'SERVICE'; // SERVICE | CLAIM | WARRANTY — menentukan template & teks nota
+let _lastClaim = null; // claim garansi terakhir (untuk nota claim & workflow)
+let _lastWarranty = null; // nota garansi terakhir (terbit saat status CASH)
 
 const NOTA_DUMMY = {
     no: 'SV-20260908-2525',
@@ -3075,6 +3576,8 @@ function openNota() {
     try { document.body.appendChild(win); } catch (_) {}
     win.style.zIndex = '9600';
     win.classList.add('open');
+    _notaMode = 'SERVICE';
+    try { notaDigitalFit(); } catch (_) {}
 }
 
 function closeNota() {
@@ -3165,15 +3668,18 @@ function notaPrintCSS() {
 }
 
 function notaPrint() {
-    const d = notaData();
+    const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
+    const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
+    const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    const text = isClaim ? claimNotaText(d) : isWarranty ? warrantyNotaText(d) : notaText(d);
     const w = window.open('', '_blank', 'width=360,height=640');
     if (!w) {
         notaFlash('Popup diblokir browser — izinkan popup untuk mencetak.', true);
         return;
     }
     w.document.write('<!DOCTYPE html><html><head><meta charset="utf-8"><title>Nota ' +
-        escapeHtml(d.no) + '</title><style>' + notaPrintCSS() + '</style></head><body>' +
-        '<div class="nota">' + escapeHtml(notaText(d)) + '</div>' +
+        escapeHtml(d.no || d.claim_no) + '</title><style>' + notaPrintCSS() + '</style></head><body>' +
+        '<div class="nota">' + escapeHtml(text) + '</div>' +
         '<script>window.onload=function(){window.print();};<' + '/script></body></html>');
     w.document.close();
 }
@@ -3194,8 +3700,14 @@ function notaFlash(msg, isErr) {
 }
 
 function notaShareWA() {
-    const d = notaData();
-    const msg = 'Halo ' + (d.nama || 'Kak') + ', unit Anda sudah terdaftar di SUKABUMI FLASHER.\n\n' + notaText(d);
+    const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
+    const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
+    const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    const msg = isClaim
+        ? 'Halo ' + (d.nama || 'Kak') + ', unit Anda sudah kami terima sebagai klaim garansi di SUKABUMI FLASHER.\n\n' + claimNotaText(d)
+        : isWarranty
+        ? 'Halo ' + (d.nama || 'Kak') + ', servis Anda sudah selesai dan bergaransi 30 hari di SUKABUMI FLASHER.\n\n' + warrantyNotaText(d)
+        : 'Halo ' + (d.nama || 'Kak') + ', unit Anda sudah terdaftar di SUKABUMI FLASHER.\n\n' + notaText(d);
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
     } catch (_) {}
@@ -3206,8 +3718,10 @@ function notaShareWA() {
 }
 
 function notaSaveImage() {
-    const d = notaData();
-    const lines = notaText(d).split('\n');
+    const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
+    const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
+    const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    const lines = (isClaim ? claimNotaText(d) : isWarranty ? warrantyNotaText(d) : notaText(d)).split('\n');
     const fs = 22, lh = 29, pad = 24, W = 560;
     const H = lines.length * lh + pad * 2;
     const cv = document.createElement('canvas');
@@ -3246,7 +3760,36 @@ function notaSwitch(tab) {
     if (td) td.classList.toggle('is-active', isD);
     const win = document.getElementById('pageNota');
     if (win) win.classList.toggle('nota-wide', isD);
-    if (isD) renderNotaDigital(notaData());
+    if (isD) { renderNotaDigital(notaData()); notaDigitalFit(); }
+}
+
+// Kanvas Nota Digital fix 1066px: preview diskala agar muat, export selalu 1:1.
+function notaDigitalFit() {
+    try {
+        const wrap = document.getElementById('notaDigital');
+        const win = document.getElementById('pageNota');
+        if (!wrap || !win || !win.classList.contains('open')) return;
+        const sheet = wrap.querySelector('.nps-sheet');
+        if (!sheet) return;
+        const avail = wrap.clientWidth || 0;
+        const s = avail > 0 ? Math.min(1, avail / 1066) : 1;
+        if (s < 1) {
+            sheet.style.transform = 'scale(' + s + ')';
+            sheet.style.transformOrigin = 'top left';
+            wrap.style.height = Math.ceil(sheet.offsetHeight * s) + 'px';
+            wrap.style.overflow = 'hidden';
+        } else {
+            sheet.style.transform = '';
+            sheet.style.transformOrigin = '';
+            wrap.style.height = '';
+            wrap.style.overflow = '';
+        }
+    } catch (_) {}
+}
+
+if (!window._npsFitBound) {
+    window._npsFitBound = true;
+    window.addEventListener('resize', function () { try { notaDigitalFit(); } catch (_) {} });
 }
 
 function notaJam() {
@@ -3277,6 +3820,45 @@ function notaEstimasiSelesai(d) {
     return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate());
 }
 
+// Nomor WhatsApp TOKO — satu-satunya sumber (tampil di Nota Digital).
+// Nomor WA customer tetap dari data servis (d.phone). Jangan dicampur.
+const SHOP_WA = '628111737030';
+function shopWaDisplay() {
+    const p = String(SHOP_WA || '').replace(/\D/g, '').replace(/^62/, '');
+    if (p.length === 10) return '+62 ' + p.slice(0, 3) + '-' + p.slice(3, 7) + '-' + p.slice(7);
+    return '+' + String(SHOP_WA || '').replace(/\D/g, '');
+}
+
+// Snapshot KONDISI SERVIS pada Nota Penerimaan (bukan histori/timeline).
+// Lifecycle resmi: DITERIMA → ANALISA → WAIT PART → REPAIR → DONE.
+// CASH/FAILED/CANCEL bukan bagian lifecycle penerimaan — bila muncul
+// (nota dibuka di luar alur normal), tampil apa adanya secara netral.
+function notaSnapshotStatus(status) {
+    const s = String(status || '').toUpperCase().replace(/\s+/g, '_');
+    const map = {
+        DITERIMA:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
+        RECEIVED:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
+        ANALISA:   { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
+        WAIT_PART: { label: 'WAIT PART', cls: 'nps-amber',   stage: 2, sub: 'Menunggu sparepart datang.' },
+        REPAIR:    { label: 'REPAIR',    cls: 'nps-blue',    stage: 3, sub: 'Unit sedang dikerjakan teknisi.' },
+        DONE:      { label: 'DONE',      cls: 'nps-green',   stage: 4, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+    };
+    if (map[s]) return map[s];
+    return { label: String(status || '-'), cls: 'nps-neutral', stage: -1, sub: 'Kondisi unit saat nota dibuat.' };
+}
+
+const NPS_STAGES = ['DITERIMA', 'ANALISA', 'WAIT PART', 'REPAIR', 'DONE'];
+
+// Label checklist nota (fisik/len) dari master yang sudah ada.
+function notaChecklistText(list, master) {
+    try {
+        const arr = Array.isArray(list) ? list : [];
+        if (!arr.length) return '-';
+        const labels = txdCheckLabels(arr, master);
+        return (labels && labels.length ? labels.join(' • ') : '-');
+    } catch (_) { return '-'; }
+}
+
 function renderNotaDigital(d) {
     const el = document.getElementById('notaDigital');
     if (!el) return;
@@ -3288,112 +3870,110 @@ function renderNotaDigital(d) {
     const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
         + encodeURIComponent('SUKABUMI FLASHER ' + (d.no || ''));
     const stCls = notaStatusClass(d.status).replace('nd-', '');
+    // Snapshot kondisi servis saat nota dibuat (bukan histori/timeline).
+    const st = notaSnapshotStatus(d.status);
+    const waShop = shopWaDisplay();
+    const sisa = (Number(d.estimate) || 0) - (Number(d.dp) || 0);
+    const imeiTxt = (d.imei || '').trim() || '-';
+    const fisikTxt = notaChecklistText(d.checklist && d.checklist.fisik, CHECK_FISIK);
+    const lenTxt = notaChecklistText(d.checklist && d.checklist.len, CHECK_LEN);
     el.innerHTML = `
-    <div class="ndr-sheet">
-        <div class="ndr-head">
-            <div class="ndr-brand">
-                <span class="ndr-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
-                <div><b>SUKABUMI FLASHER</b><span>BUSINESS OPERATING SYSTEM</span></div>
+    <div class="nps-sheet">
+        <div class="nps-head">
+            <div class="nps-brand">
+                <span class="nps-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
+                <div><b>SUKABUMI FLASHER</b><span>SMARTPHONE SERVICE LAB</span></div>
             </div>
-            <div class="ndr-contact">
+            <div class="nps-contact">
+                <div><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waShop)}</div>
                 <div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
                 <div><i class="fa-regular fa-clock"></i>Jam: ${escapeHtml(jam)}</div>
             </div>
         </div>
-        <div class="ndr-title-row">
-            <div class="ndr-title">
-                <h3>NOTA <em>PENERIMAAN</em> SERVICE</h3>
-                <div class="ndr-state ndr-${stCls}">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <div><b>STATUS: ${escapeHtml(d.status || '-')}</b><span>Simpan nota ini sebagai bukti penerimaan &amp; pengambilan unit Anda.</span></div>
+        <div class="nps-body">
+            <div class="nps-titlerow">
+                <div class="nps-title">
+                    <h3>NOTA <em>PENERIMAAN</em> SERVICE</h3>
+                    <div class="nps-idlabel"><span class="nps-rule"></span><i class="fa-solid fa-play"></i>NOMER SERVICE<span class="nps-rule"></span></div>
+                    <div class="nps-id">${escapeHtml(d.no || '-')}</div>
+                </div>
+                <div class="nps-proof">
+                    <span class="nps-proof-ico"><i class="fa-solid fa-clipboard-check"></i></span>
+                    <div><b>BUKTI PENERIMAAN BARANG<br><em>UNTUK PERBAIKAN</em></b><span>Harap simpan nota ini untuk pengambilan unit.</span></div>
                 </div>
             </div>
-            <div class="ndr-nonum">
-                <span>NOMOR SERVIS</span>
-                <b>${escapeHtml(d.no || '-')}</b>
-                <div class="ndr-strip"><i class="fa-solid fa-shield-halved"></i>Simpan nota ini sebagai bukti servis Anda</div>
-            </div>
-        </div>
-        <div class="ndr-grid3">
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-user"></i>PELANGGAN</div>
-                <div class="ndr-name">${escapeHtml(d.nama)}</div>
-                <div class="ndr-line"><i class="fa-solid fa-phone"></i>${escapeHtml(d.phone)}</div>
-            </div>
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>DEVICE</div>
-                <div class="ndr-name">${escapeHtml(d.device)}</div>
-                <div class="ndr-kv">IMEI <span>${escapeHtml(imei)}</span></div>
-                <div class="ndr-kv">No. Servis <span>${escapeHtml(d.no || '-')}</span></div>
-            </div>
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-hashtag"></i>PENERIMAAN</div>
-                <div class="ndr-name">${escapeHtml(d.no || '-')}</div>
-                <div class="ndr-line"><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
-                <div class="ndr-line"><i class="fa-regular fa-clock"></i>${escapeHtml(jam)}</div>
-            </div>
-        </div>
-        <div class="ndr-grid3">
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>DETAIL PERBAIKAN</div>
-                <div class="ndr-sec"><span>Keluhan</span><p>${escapeHtml(d.damage)}</p></div>
-                <div class="ndr-sec"><span>Pekerjaan / Tindakan</span><p class="ndr-check"><i class="fa-solid fa-check"></i>${escapeHtml(d.plan)}</p></div>
-                <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(teknisi)}</p></div>
-                <div class="ndr-sec"><span>Estimasi Biaya</span><p class="ndr-price">${escapeHtml(notaRupiah(d.estimate))}</p></div>
-                <div class="ndr-sec"><span>DP Masuk</span><p>${escapeHtml(notaRupiah(d.dp))}</p></div>
-            </div>
-            <div class="ndr-card is-green">
-                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>JADWAL SERVIS</div>
-                <div class="ndr-sched">
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar"></i></span><div><span>Diterima</span><b>${escapeHtml(tgl)}</b></div></div>
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar-check"></i></span><div><span>Estimasi Selesai</span><b>${escapeHtml(selesai)}</b></div></div>
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-clock"></i></span><div><span>Status</span><b>${escapeHtml(d.status || '-')}</b></div></div>
+            <div class="nps-cols">
+                <div class="nps-main">
+                    <div class="nps-card">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-user"></i></span>PELANGGAN</div>
+                        <div class="nps-name">${escapeHtml(d.nama || '-')}</div>
+                        <div class="nps-line"><i class="fa-brands fa-whatsapp"></i>${escapeHtml(d.phone || '-')}</div>
+                    </div>
+                    <div class="nps-card">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>DEVICE</div>
+                        <div class="nps-name">${escapeHtml(d.device || '-')}</div>
+                        <div class="nps-kv"><span>IMEI</span><b>${escapeHtml(imeiTxt)}</b></div>
+                    </div>
+                    <div class="nps-card">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>KELUHAN / DIAGNOSA</div>
+                        <p class="nps-text">${escapeHtml(d.damage || '-')}</p>
+                    </div>
+                    <div class="nps-card">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-list-check"></i></span>RENCANA TINDAKAN</div>
+                        <p class="nps-text">${escapeHtml(d.plan || '-')}</p>
+                    </div>
+                    <div class="nps-card">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-box-open"></i></span>KELENGKAPAN</div>
+                        <p class="nps-text">${escapeHtml(lenTxt)}</p>
+                    </div>
+                    <div class="nps-card">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>KONDISI FISIK MASUK</div>
+                        <p class="nps-text">${escapeHtml(fisikTxt)}</p>
+                    </div>
                 </div>
-                <div class="ndr-note"><i class="fa-solid fa-circle-info"></i><span>${d.garansi ? escapeHtml(d.garansi) : 'Estimasi dapat berubah sesuai hasil diagnosa teknisi.'}</span></div>
+                <div class="nps-side">
+                    <div class="nps-cost">
+                        <div class="nps-cost-head">ESTIMASI BIAYA (PERKIRAAN)</div>
+                        <div class="nps-cost-row"><span>Estimasi</span><b>${escapeHtml(notaRupiah(d.estimate))}</b></div>
+                        <div class="nps-cost-row"><span>DP</span><b>${escapeHtml(notaRupiah(d.dp))}</b></div>
+                        <div class="nps-cost-row is-total"><span>Sisa</span><b>${escapeHtml(notaRupiah(sisa))}</b></div>
+                        <p class="nps-cost-note">${d.garansi ? escapeHtml(d.garansi) : 'Estimasi dapat berubah sesuai hasil diagnosa teknisi.'}</p>
+                    </div>
+                    <div class="nps-progress">
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-chart-line"></i></span>STATUS</div>
+                        <div class="nps-statusline">
+                            <span class="nps-pill ${st.cls}">${escapeHtml(st.label)}</span>
+                        </div>
+                        <div class="nps-steps">${NPS_STAGES.map((s, i) => {
+                            const cls = st.stage < 0 ? '' : (i < st.stage ? ' is-past' : (i === st.stage ? ' is-now' : ''));
+                            return `<div class="nps-tstep${cls}"><span class="nps-tdot"></span>${s}</div>`;
+                        }).join('')}</div>
+                        ${st.stage >= 0 ? `<div class="nps-segbar">${NPS_STAGES.map((s, i) => `<span class="nps-seg${i <= st.stage ? ' on' : ''}"></span>`).join('')}<span class="nps-segnum">${st.stage + 1}/5</span></div>` : ''}
+                        <p class="nps-statussub">${escapeHtml(st.sub)}</p>
+                        <p class="nps-received">Diterima pada: <b>${escapeHtml(tgl)}</b> | <b>${escapeHtml(jam)}</b></p>
+                    </div>
+                </div>
             </div>
-            <div class="ndr-card">
-                <div class="ndr-cap is-green-t"><i class="fa-solid fa-shield-halved"></i>SYARAT PENGAMBILAN</div>
-                <ul class="ndr-yes">
-                    <li><i class="fa-solid fa-check"></i><span>Tunjukkan nota / No. Servis</span></li>
-                    <li><i class="fa-solid fa-check"></i><span>Pelunasan sisa biaya servis</span></li>
-                    <li><i class="fa-solid fa-check"></i><span>Cek kondisi unit saat pengambilan</span></li>
-                </ul>
-                <div class="ndr-nohead"><i class="fa-solid fa-triangle-exclamation"></i>TIDAK TERMASUK</div>
-                <ul class="ndr-no">
-                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kehilangan data / password</span></li>
-                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kerusakan akibat kelalaian pemilik</span></li>
-                    <li><i class="fa-regular fa-circle-xmark"></i><span>Aksesoris yang tidak dititipkan</span></li>
-                </ul>
-            </div>
-        </div>
-        <div class="ndr-grid3 ndr-row3">
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI SERVIS</div>
-                <p class="ndr-desc">Scan QR untuk verifikasi nota dan melihat status servis Anda.</p>
-                <div class="ndr-pill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
-            </div>
-            <div class="ndr-qrwrap">
-                <img src="${qrUrl}" alt="QR servis" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
-                <div class="ndr-kode-fallback" style="display:none"><span>KODE SERVIS</span><b>${escapeHtml(d.no || '-')}</b></div>
-            </div>
-            <div class="ndr-pink">
-                <span class="ndr-shield"><i class="fa-solid fa-shield-halved"></i></span>
-                <p>Nota ini hanya berlaku di<br><b>SUKABUMI FLASHER<br>BUSINESS OPERATING SYSTEM</b></p>
-                <div class="ndr-thanks">Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</div>
-            </div>
-        </div>
-        <div class="ndr-terms">
-            <div class="ndr-terms-head">KETENTUAN SERVIS<span></span></div>
-            <div class="ndr-terms-grid">
-                <div><span><i class="fa-regular fa-file-lines"></i></span><p><b>1.</b> Nota ini wajib dibawa saat pengambilan unit.</p></div>
-                <div><span><i class="fa-solid fa-shield-halved"></i></span><p><b>2.</b> Estimasi dapat berubah sesuai hasil diagnosa teknisi.</p></div>
-                <div><span><i class="fa-solid fa-mobile-screen-button"></i></span><p><b>3.</b> Data penting harap di-backup sebelum servis.</p></div>
-                <div><span><i class="fa-solid fa-triangle-exclamation"></i></span><p><b>4.</b> Keputusan teknisi adalah yang utama dalam penentuan perbaikan.</p></div>
+            <div class="nps-qrbox">
+                <div class="nps-qrleft">
+                    <div class="nps-qrtitle">CEK <em>STATUS</em> SERVICE</div>
+                    <p>Scan QR atau buka link berikut untuk melihat status terbaru unit Anda.</p>
+                    <div class="nps-linkpill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+                </div>
+                <div class="nps-qrwrap">
+                    <img src="${qrUrl}" alt="QR servis" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.nps-kode-fallback');if(f)f.style.display='flex';">
+                    <div class="nps-kode-fallback" style="display:none"><span>KODE SERVIS</span><b>${escapeHtml(d.no || '-')}</b></div>
+                </div>
+                <div class="nps-trust">
+                    <div class="nps-trow"><i class="fa-solid fa-shield-halved"></i><div><b>DATA UNIT AMAN</b><span>Kami menjaga data dan privasi perangkat Anda.</span></div></div>
+                    <div class="nps-trow"><i class="fa-regular fa-clock"></i><div><b>ESTIMASI PENGERJAAN</b><span>Akan diinformasikan setelah proses diagnosa.</span></div></div>
+                    <div class="nps-trow"><i class="fa-solid fa-phone"></i><div><b>BUTUH BANTUAN?</b><span>Hubungi kami di ${escapeHtml(waShop)}</span></div></div>
+                </div>
             </div>
         </div>
-        <div class="ndr-foot">
-            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</span></div>
-            <div class="ndr-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+        <div class="nps-foot">
+            <div class="nps-foot-l"><i class="fa-regular fa-circle-check"></i><span>Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</span></div>
+            <div class="nps-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
         </div>
     </div>`;
 }
@@ -3418,8 +3998,14 @@ function notaDigitalText(d) {
 }
 
 function notaDigitalShareWA() {
-    const d = notaData();
-    const msg = 'Halo ' + (d.nama || 'Kak') + ', berikut nota digital servis Anda di SUKABUMI FLASHER.\n\n' + notaDigitalText(d);
+    const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
+    const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
+    const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    const msg = isClaim
+        ? 'Halo ' + (d.nama || 'Kak') + ', berikut nota digital klaim garansi Anda di SUKABUMI FLASHER.\n\n' + claimNotaDigitalText(d)
+        : isWarranty
+        ? 'Halo ' + (d.nama || 'Kak') + ', berikut nota digital garansi servis Anda di SUKABUMI FLASHER.\n\n' + warrantyNotaDigitalText(d)
+        : 'Halo ' + (d.nama || 'Kak') + ', berikut nota digital servis Anda di SUKABUMI FLASHER.\n\n' + notaDigitalText(d);
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
     } catch (_) {}
@@ -3445,16 +4031,16 @@ function notaCanvasWrap(ctx, text, maxW) {
 async function notaSaveDigitalImage() {
     const d = notaData();
     const node = document.getElementById('notaDigital');
-    if (node && typeof html2canvas !== 'undefined') {
+    const sheet = node ? node.querySelector('.nps-sheet') : null;
+    if (sheet && typeof html2canvas !== 'undefined') {
+        const prevT = sheet.style.transform;
+        const prevO = sheet.style.transformOrigin;
         try {
             notaFlash('Menyiapkan gambar nota...');
-            // Export optimal untuk WhatsApp: target lebar ±1080px, tajam, ringan.
-            // Scale dinamis dari lebar aktual node; tinggi mengikuti proporsional.
-            const targetWidth = 1080;
-            const rect = node.getBoundingClientRect();
-            const actualWidth = (rect && rect.width) || node.offsetWidth || 0;
-            const scale = actualWidth > 0 ? Math.min(targetWidth / actualWidth, 2) : 2;
-            const canvas = await html2canvas(node, { backgroundColor: '#eef1f5', scale: scale, useCORS: true, logging: false });
+            // Export exact 1:1 dari kanvas fix 1066px (lepas skala preview dulu).
+            sheet.style.transform = '';
+            sheet.style.transformOrigin = '';
+            const canvas = await html2canvas(sheet, { backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
             const fname = 'nota-digital-' + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.png';
             if (canvas.toBlob) {
                 const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
@@ -3474,6 +4060,13 @@ async function notaSaveDigitalImage() {
             notaFlash('Gambar nota digital tersimpan ke device.');
             return;
         } catch (_) { /* fallback ke gambar manual di bawah */ }
+        finally {
+            try {
+                sheet.style.transform = prevT || '';
+                sheet.style.transformOrigin = prevO || '';
+                notaDigitalFit();
+            } catch (_) {}
+        }
     }
     notaSaveDigitalImageManual(d);
 }
@@ -3582,6 +4175,1197 @@ function notaSaveDigitalImageManual(d) {
     notaFlash('Gambar nota digital tersimpan ke device.');
 }
 
+// ─────────────────────────────────────────────
+// KLAIM GARANSI — Penerimaan → Verifikasi → Cek → Keputusan → Proses → Selesai
+// Prinsip: servis lama = histori (tidak diubah). Claim = record baru (CLM-...)
+// yang berelasi ke servis asal. Claim berulang untuk servis sama bisa.
+// ─────────────────────────────────────────────
+
+let _clrOrigin = null; // servis asal terpilih (hasil /claims/lookup)
+let _clrResults = []; // hasil pencarian terakhir
+let _clrClaim = null; // claim aktif di window ini (hasil /claims/receive)
+
+function openClaimReceive() {
+    _clrOrigin = null;
+    _clrClaim = null;
+    const res = document.getElementById('clrResults');
+    if (res) res.innerHTML = '';
+    const _wd0 = document.getElementById('clrWarrantyDays');
+    if (_wd0) { _wd0.value = 30; _wd0.disabled = false; _wd0.title = ''; }
+    ['clrOriginWrap', 'clrFormWrap', 'clrResultWrap'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('hidden');
+    });
+    const fb = document.getElementById('clrFeedback');
+    if (fb) fb.classList.add('hidden');
+    const wfb = document.getElementById('clrWorkflowFeedback');
+    if (wfb) wfb.classList.add('hidden');
+    const dt = document.getElementById('clrDate');
+    if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
+    document.getElementById('pageClaimReceive').classList.add('open');
+    try { renderChecklist('clr', 'clrCheckGroups', 'Kondisi unit saat klaim diterima.'); } catch (_) {}
+    const s = document.getElementById('clrSearch');
+    if (s) setTimeout(() => s.focus({ preventScroll: true }), 80);
+}
+
+function closeClaimReceive() {
+    document.getElementById('pageClaimReceive').classList.remove('open');
+    _clrOrigin = null;
+    _clrClaim = null;
+    _clrResults = [];
+}
+
+function clrWarrantyBadge(st) {
+    return '<span class="tx-status st-' + escapeHtml(st || '') + '"><i class="fa-solid fa-circle"></i>' + escapeHtml(st || '-') + '</span>';
+}
+
+function clrStatusBadge(st) {
+    return '<span class="tx-status st-' + String(st || '').toUpperCase().replace(/\s+/g, '_') + '"><i class="fa-solid fa-circle"></i>' + escapeHtml(st || '-') + '</span>';
+}
+
+async function claimRSearch() {
+    const q = (document.getElementById('clrSearch') || {}).value || '';
+    const box = document.getElementById('clrResults');
+    if (!box) return;
+    if (q.trim().length < 2) {
+        box.innerHTML = '<div class="text-[12px] text-gray-400">Ketik minimal 2 huruf untuk mencari.</div>';
+        return;
+    }
+    box.innerHTML = '<div class="text-[12px] text-gray-400"><i class="fa-solid fa-circle-notch fa-spin"></i> Mencari servis asal...</div>';
+    try {
+        const days = parseInt((document.getElementById('clrWarrantyDays') || {}).value, 10) || 30;
+        const rows = await apiGet('/claims/lookup?q=' + encodeURIComponent(q.trim()) + '&warranty_days=' + days);
+        _clrResults = rows || [];
+        if (!_clrResults.length) {
+            box.innerHTML = '<div class="text-[12px] text-gray-400">Servis asal tidak ditemukan. Coba kata kunci lain.</div>';
+            return;
+        }
+        box.innerHTML = _clrResults.map(o => `
+            <div class="clr-hit${_clrOrigin && _clrOrigin.id === o.id ? ' is-active' : ''}" onclick="claimRSelect(${o.id})">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <b class="text-[13px] text-gray-800 dark:text-gray-100">${escapeHtml(o.no_servis)}</b>
+                    ${clrWarrantyBadge(o.warranty_status)}
+                </div>
+                <div class="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">${escapeHtml(o.customer_name || '-')} · ${escapeHtml(o.customer_phone || '-')} · ${escapeHtml(o.device || '-')}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">Garansi s/d ${escapeHtml(notaTgl(o.warranty_end))}${o.claim_count ? ' · ' + o.claim_count + ' claim sebelumnya' : ''}</div>
+            </div>`).join('');
+    } catch (err) {
+        box.innerHTML = '<div class="text-[12px] text-red-500">' + escapeHtml(err.message) + '</div>';
+    }
+}
+
+async function claimRSelect(id) {
+    const o = (_clrResults || []).find(x => x.id === id);
+    if (!o) return;
+    _clrOrigin = o;
+    _clrClaim = null;
+    document.querySelectorAll('#clrResults .clr-hit').forEach(el => el.classList.remove('is-active'));
+    try {
+        const rows = await apiGet('/claims/by-service/' + o.id);
+        o._freshClaims = rows || [];
+    } catch (_) { o._freshClaims = null; }
+    const card = document.getElementById('clrOriginCard');
+    if (card) {
+        const row = (k, v) => `<div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">${escapeHtml(k)}</span><b class="text-[13px] text-gray-800 dark:text-gray-100">${escapeHtml(v || '-')}</b></div>`;
+        card.innerHTML =
+            row('No. Servis', o.no_servis) + row('Tanggal Servis', notaTgl(o.service_date)) +
+            row('Customer', o.customer_name) + row('WhatsApp', o.customer_phone) +
+            row('Device', o.device) + row('IMEI', o.imei) +
+            row('Kerusakan', o.damagetype) + row('Perbaikan', o.repair_plan) +
+            row('Teknisi', o.technician) + row('Garansi Sampai', notaTgl(o.warranty_end) + ' (' + o.warranty_days + ' hari)');
+    }
+    const badges = document.getElementById('clrBadges');
+    if (badges) {
+        const _setTxt = (o.warranty_months === null || o.warranty_months === undefined)
+            ? o.warranty_days + ' hari (data lama)'
+            : (Number(o.warranty_months) === 0 ? 'tanpa garansi toko' : o.warranty_months + ' bulan');
+        badges.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge(o.warranty_status)
+            + '<span class="text-[11px] text-gray-400">(' + escapeHtml(_setTxt) + ')</span>'
+            + '<span class="text-[11px] font-bold text-gray-400 ml-2">STATUS SERVIS:</span>' + clrStatusBadge(o.status)
+            + (Number(o.warranty_months) === 0 ? '<span class="text-[11px] text-red-500">Servis ini tanpa garansi — claim tercatat EXPIRED (riwayat).</span>' : '');
+    }
+    const _wdInput = document.getElementById('clrWarrantyDays');
+    if (_wdInput) {
+        if (o.warranty_months !== null && o.warranty_months !== undefined) {
+            _wdInput.value = o.warranty_days;
+            _wdInput.disabled = true;
+            _wdInput.title = 'Mengikuti setting garansi toko di servis asal';
+        } else {
+            _wdInput.disabled = false;
+            _wdInput.title = '';
+        }
+    }
+    const hist = document.getElementById('clrHistory');
+    if (hist) {
+        const list = o._freshClaims !== null && o._freshClaims !== undefined ? o._freshClaims : null;
+        const items = list !== null ? list : (o.claims || []);
+        hist.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori Claim Servis Ini (' + items.length + ')</p>'
+            + (items.length ? items.map(c => `
+                <div class="clr-result">
+                    <div class="flex items-center justify-between gap-2 flex-wrap">
+                        <b class="text-[12.5px]">${escapeHtml(c.claim_no)}</b>
+                        <span class="flex gap-1.5">${clrStatusBadge(c.claim_status)}${c.decision ? clrStatusBadge(c.decision) : ''}</span>
+                    </div>
+                    <div class="text-[11px] text-gray-400 mt-0.5">Tgl claim: ${escapeHtml(c.claim_date || '-')}</div>
+                </div>`).join('')
+                : '<div class="text-[12px] text-gray-400">Belum ada claim untuk servis ini — claim baru akan menjadi yang pertama.</div>');
+    }
+    document.getElementById('clrOriginWrap').classList.remove('hidden');
+    document.getElementById('clrFormWrap').classList.remove('hidden');
+    document.getElementById('clrResultWrap').classList.add('hidden');
+    // Tandai pilihan aktif tanpa render ulang (hasil pencarian tetap terlihat).
+    const box = document.getElementById('clrResults');
+    if (box) {
+        const hits = box.querySelectorAll('.clr-hit');
+        (_clrResults || []).forEach((r, i) => { if (hits[i]) hits[i].classList.toggle('is-active', r.id === id); });
+    }
+}
+
+function claimRFeedback(msg, isErr) {
+    const fb = document.getElementById('clrFeedback');
+    if (!fb) return;
+    fb.classList.remove('hidden', 'success', 'error');
+    fb.classList.add(isErr ? 'error' : 'success');
+    fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+}
+
+async function claimRSubmit(e) {
+    if (e) e.preventDefault();
+    if (!_clrOrigin) { claimRFeedback('Pilih dulu servis asalnya.', true); return; }
+    const complaint = (document.getElementById('clrComplaint') || {}).value || '';
+    if (!complaint.trim()) { claimRFeedback('Keluhan claim wajib diisi.', true); return; }
+    const btn = document.getElementById('clrSubmitBtn');
+    const txt = document.getElementById('clrSubmitText');
+    if (btn) btn.disabled = true;
+    if (txt) txt.textContent = 'Menyimpan...';
+    try {
+        let chk = { fisik: [], len: ['unit_saja'] };
+        try { chk = collectChecklist('clr'); } catch (_) {}
+        const payload = {
+            service_order_id: _clrOrigin.id,
+            complaint: complaint.trim(),
+            physical_condition: ((document.getElementById('clrPhysical') || {}).value || '').trim(),
+            completeness: ((document.getElementById('clrCompleteness') || {}).value || '').trim(),
+            cs_note: ((document.getElementById('clrCsNote') || {}).value || '').trim(),
+            check_fisik: chk.fisik,
+            check_len: chk.len,
+            warranty_days: parseInt((document.getElementById('clrWarrantyDays') || {}).value, 10) || 30,
+            received_by: ((document.getElementById('clrReceivedBy') || {}).value || '').trim(),
+            claim_date: (document.getElementById('clrDate') || {}).value || undefined,
+        };
+        const c = await apiPost('/claims/receive', payload);
+        _clrClaim = c;
+        claimRFeedback('Claim ' + c.claim_no + ' dibuat. Servis asal tidak berubah.', false);
+        try { applyChecklist('clr', { fisik: [], len: ['unit_saja'] }); } catch (_) {}
+        const form = document.getElementById('claimReceiveForm');
+        if (form) form.reset();
+        const dt = document.getElementById('clrDate');
+        if (dt) dt.value = new Date().toISOString().slice(0, 10);
+        claimRRenderResult(c);
+        document.getElementById('clrResultWrap').classList.remove('hidden');
+        document.getElementById('clrResultWrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (err) {
+        claimRFeedback(err.message, true);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (txt) txt.textContent = 'Buat Claim Garansi';
+    }
+}
+
+function claimRRenderResult(c) {
+    const card = document.getElementById('clrResultCard');
+    if (card) {
+        card.innerHTML = `
+            <div class="clr-result">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">Claim ID</span>
+                    <b class="text-[16px] text-gray-800 dark:text-gray-100">${escapeHtml(c.claim_no)}</b></div>
+                    ${clrWarrantyBadge(c.warranty_status)}
+                </div>
+                <div class="text-[12px] text-gray-500 dark:text-gray-400 mt-1">Servis asal <b>${escapeHtml(c.origin_no_servis || '')}</b> · Tgl claim ${escapeHtml(notaTgl(c.claim_date))} · ${escapeHtml(c.customer_name || '')}</div>
+                <div class="flex gap-1.5 mt-2 flex-wrap"><span class="text-[11px] font-bold text-gray-400">PROSES:</span>${clrStatusBadge(c.claim_status)}
+                <span class="text-[11px] font-bold text-gray-400 ml-1">HASIL:</span>${clrStatusBadge(c.decision)}</div>
+            </div>`;
+    }
+    const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = v === null || v === undefined ? '' : v; };
+    set('clrStatus', c.claim_status || 'MASUK');
+    set('clrDecision', c.decision || 'BELUM_DIPUTUSKAN');
+    set('clrRejectReason', c.reject_reason || '');
+    set('clrTechInspection', c.inspection_result || '');
+    set('clrCause', c.cause || '');
+    set('clrMatches', c.matches_previous || '');
+    set('clrTechRec', c.tech_recommendation || '');
+    set('clrTechnician', c.technician || '');
+    set('clrAction', c.action_needed || '');
+    set('clrTechNote', c.tech_note || '');
+    set('clrCustomerCost', c.customer_cost || 0);
+    set('clrInternalCost', c.internal_cost || 0);
+    const chk = (id, v) => { const el = document.getElementById(id); if (el) el.checked = !!v; };
+    chk('clrDrop', c.drop_indication);
+    chk('clrLiquid', c.liquid_indication);
+    chk('clrThirdParty', c.third_party_work);
+}
+
+function claimRWorkflowFeedback(msg, isErr) {
+    const fb = document.getElementById('clrWorkflowFeedback');
+    if (!fb) return;
+    fb.classList.remove('hidden', 'success', 'error');
+    fb.classList.add(isErr ? 'error' : 'success');
+    fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+}
+
+async function claimRSave() {
+    if (!_clrClaim) { claimRWorkflowFeedback('Belum ada claim aktif.', true); return; }
+    const decision = (document.getElementById('clrDecision') || {}).value || 'BELUM_DIPUTUSKAN';
+    const reject = ((document.getElementById('clrRejectReason') || {}).value || '').trim();
+    if (decision === 'DITOLAK' && !reject) {
+        claimRWorkflowFeedback('Claim DITOLAK wajib menyertakan alasan penolakan.', true);
+        return;
+    }
+    const btn = document.getElementById('clrSaveBtn');
+    const txt = document.getElementById('clrSaveText');
+    if (btn) btn.disabled = true;
+    if (txt) txt.textContent = 'Menyimpan...';
+    try {
+        const payload = {
+            claim_status: (document.getElementById('clrStatus') || {}).value || undefined,
+            decision: decision,
+            reject_reason: reject || null,
+            inspection_result: ((document.getElementById('clrTechInspection') || {}).value || '').trim() || null,
+            cause: ((document.getElementById('clrCause') || {}).value || '').trim() || null,
+            matches_previous: (document.getElementById('clrMatches') || {}).value || null,
+            tech_recommendation: (document.getElementById('clrTechRec') || {}).value || null,
+            technician: (document.getElementById('clrTechnician') || {}).value || null,
+            action_needed: ((document.getElementById('clrAction') || {}).value || '').trim() || null,
+            tech_note: ((document.getElementById('clrTechNote') || {}).value || '').trim() || null,
+            drop_indication: document.getElementById('clrDrop') && document.getElementById('clrDrop').checked ? 1 : 0,
+            liquid_indication: document.getElementById('clrLiquid') && document.getElementById('clrLiquid').checked ? 1 : 0,
+            third_party_work: document.getElementById('clrThirdParty') && document.getElementById('clrThirdParty').checked ? 1 : 0,
+            customer_cost: parseFloat((document.getElementById('clrCustomerCost') || {}).value) || 0,
+            internal_cost: parseFloat((document.getElementById('clrInternalCost') || {}).value) || 0,
+        };
+        const c = await apiPut('/claims/' + _clrClaim.id, payload);
+        _clrClaim = c;
+        claimRRenderResult(c);
+        claimRWorkflowFeedback('Workflow claim ' + c.claim_no + ' tersimpan.', false);
+        if (_clrOrigin) { try { claimRSelectRefresh(c); } catch (_) {} }
+    } catch (err) {
+        claimRWorkflowFeedback(err.message, true);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (txt) txt.textContent = 'Simpan Workflow';
+    }
+}
+
+// Segarkan badge histori di kartu servis asal setelah workflow berubah.
+function claimRSelectRefresh(c) {
+    const hist = document.getElementById('clrHistory');
+    if (!hist || !_clrOrigin) return;
+    const items = (_clrOrigin._freshClaims || _clrOrigin.claims || []).slice();
+    const i = items.findIndex(x => x.claim_no === c.claim_no);
+    const row = { claim_no: c.claim_no, claim_status: c.claim_status, decision: c.decision, claim_date: c.claim_date };
+    if (i >= 0) items[i] = row; else items.unshift(row);
+    _clrOrigin._freshClaims = items;
+    _clrOrigin.claim_count = items.length;
+    hist.querySelectorAll('.clr-result').forEach(() => {});
+    // Render ulang ringkas tanpa fetch ulang.
+    const tmp = _clrOrigin._freshClaims;
+    _clrOrigin._freshClaims = tmp;
+    hist.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori Claim Servis Ini (' + tmp.length + ')</p>'
+        + tmp.map(x => `
+            <div class="clr-result">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <b class="text-[12.5px]">${escapeHtml(x.claim_no)}</b>
+                    <span class="flex gap-1.5">${clrStatusBadge(x.claim_status)}${x.decision ? clrStatusBadge(x.decision) : ''}</span>
+                </div>
+                <div class="text-[11px] text-gray-400 mt-0.5">Tgl claim: ${escapeHtml(x.claim_date || '-')}</div>
+            </div>`).join('');
+}
+
+function claimRPrint() {
+    if (!_clrClaim) { claimRWorkflowFeedback('Buat dulu claim-nya sebelum mencetak nota.', true); return; }
+    openClaimNota(_clrClaim);
+}
+
+// Dari halaman Update Data Servis: buat claim baru mengacu ke servis ini.
+function usClaimNew() {
+    const keyword = _usNo || '';
+    openClaimReceive();
+    if (keyword) {
+        const s = document.getElementById('clrSearch');
+        if (s) s.value = keyword;
+        claimRSearch();
+    }
+}
+
+async function usLoadClaimHistory(serviceId) {
+    const box = document.getElementById('usClaimHistory');
+    if (!box || !serviceId) return;
+    box.innerHTML = '<span class="text-gray-400"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat histori klaim...</span>';
+    try {
+        const rows = await apiGet('/claims/by-service/' + serviceId);
+        if (!rows || !rows.length) {
+            box.innerHTML = 'Belum ada claim untuk servis ini.';
+            return;
+        }
+        box.innerHTML = rows.map(c => `
+            <div class="clr-result">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <b class="text-[12.5px] text-gray-800 dark:text-gray-100">${escapeHtml(c.claim_no)}</b>
+                    <span class="flex gap-1.5">${clrStatusBadge(c.claim_status)}${clrStatusBadge(c.decision)}</span>
+                </div>
+                <div class="text-[11px] text-gray-400 mt-0.5">${escapeHtml(c.complaint || '')}</div>
+                ${c.decision === 'DITOLAK' && c.reject_reason ? '<div class="text-[11px] text-red-500 mt-0.5">Alasan: ' + escapeHtml(c.reject_reason) + '</div>' : ''}
+            </div>`).join('');
+    } catch (_) {
+        box.innerHTML = 'Histori klaim tidak dapat dimuat.';
+    }
+}
+
+// ── Nota Penerimaan CLAIM (berbeda dari nota servis baru) ──
+
+function claimOutToNota(c) {
+    return {
+        kind: 'CLAIM',
+        no: c.claim_no,
+        claim_no: c.claim_no,
+        origin_no: c.origin_no_servis || '',
+        tgl: c.claim_date,
+        claim_date: c.claim_date,
+        nama: c.customer_name || '',
+        phone: c.customer_phone || '',
+        device: c.origin_device || '',
+        imei: c.origin_imei || '',
+        damage: c.complaint || '',
+        complaint: c.complaint || '',
+        physical: c.physical_condition || '',
+        completeness: c.completeness || '',
+        plan: c.action_needed || c.cs_note || '',
+        estimate: c.customer_cost || 0,
+        dp: 0,
+        technician: c.technician || '',
+        status: c.claim_status || '',
+        claim_status: c.claim_status || '',
+        decision: c.decision || '',
+        warranty_status: c.warranty_status || '',
+        warranty_start: c.warranty_start || '',
+        warranty_end: c.warranty_end || '',
+        cs_note: c.cs_note || '',
+        reject_reason: c.reject_reason || '',
+    };
+}
+
+function openClaimNota(c) {
+    const d = claimOutToNota(c);
+    _lastClaim = d;
+    _notaMode = 'CLAIM';
+    renderClaimNotaPreview(d);
+    renderClaimNotaDigital(d);
+    const fb = document.getElementById('notaFeedback');
+    if (fb) fb.classList.add('hidden');
+    const win = document.getElementById('pageNota');
+    try { document.body.appendChild(win); } catch (_) {}
+    win.style.zIndex = '9600';
+    win.classList.add('open');
+}
+
+function renderClaimNotaPreview(d) {
+    const el = document.getElementById('notaPreview');
+    if (!el) return;
+    const row = (k, v) => `<div class="nt-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v || '-')}</b></div>`;
+    el.innerHTML = `
+        <div class="nt-head">
+            <div class="nt-brand">SUKABUMI FLASHER</div>
+            <div class="nt-sub">BUSINESS OPERATING SYSTEM</div>
+            <div class="nt-title">NOTA PENERIMAAN CLAIM GARANSI</div>
+        </div>
+        <div class="nt-sep"></div>
+        ${row('Claim ID', d.claim_no)}
+        ${row('Servis Asal', d.origin_no)}
+        ${row('Tgl Claim', notaTgl(d.tgl))}
+        <div class="nt-sep"></div>
+        ${row('Konsumen', d.nama)}
+        ${row('No. WA', d.phone)}
+        ${row('Device', d.device)}
+        ${row('IMEI', d.imei)}
+        <div class="nt-sep"></div>
+        <div class="nt-label">Keluhan claim:</div>
+        <div class="nt-val">${escapeHtml(d.complaint)}</div>
+        <div class="nt-label">Kondisi / kelengkapan:</div>
+        <div class="nt-val">${escapeHtml([d.physical, d.completeness].filter(Boolean).join(' · '))}</div>
+        <div class="nt-sep"></div>
+        ${row('Garansi', d.warranty_status + ' s/d ' + notaTgl(d.warranty_end))}
+        ${row('Hasil', d.decision)}
+        ${row('Status', d.claim_status)}
+        ${row('Biaya', notaRupiah(d.estimate))}
+        <div class="nt-sep"></div>
+        <div class="nt-foot">Simpan nota claim ini sebagai<br>bukti pengambilan unit.<br>Terima kasih!</div>`;
+}
+
+function renderClaimNotaDigital(d) {
+    const el = document.getElementById('notaDigital');
+    if (!el) return;
+    const tgl = notaTglSlash(d.tgl);
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
+        + encodeURIComponent('SUKABUMI FLASHER ' + (d.claim_no || ''));
+    el.innerHTML = `
+    <div class="ndr-sheet ndr-doc-claim">
+        <div class="ndr-head">
+            <div class="ndr-brand">
+                <span class="ndr-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
+                <div><b>SUKABUMI FLASHER</b><span>BUSINESS OPERATING SYSTEM</span></div>
+            </div>
+            <div class="ndr-contact"><div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div></div>
+        </div>
+        <div class="ndr-title-row">
+            <div class="ndr-title">
+                <h3>NOTA <em>PENERIMAAN</em> CLAIM GARANSI</h3>
+                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><b>PG</b><span>NOTA PENERIMAAN CLAIM GARANSI</span></div>
+                <div class="ndr-state ndr-amber">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div><b>GARANSI: ${escapeHtml(d.warranty_status || '-')}</b><span>Claim mengacu ke servis ${escapeHtml(d.origin_no || '-')} — histori servis tidak berubah.</span></div>
+                </div>
+            </div>
+            <div class="ndr-nonum">
+                <span>CLAIM ID</span>
+                <b>${escapeHtml(d.claim_no || '-')}</b>
+                <div class="ndr-strip"><i class="fa-solid fa-shield-halved"></i>Simpan nota claim ini sebagai bukti Anda</div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-user"></i>PELANGGAN</div>
+                <div class="ndr-name">${escapeHtml(d.nama)}</div>
+                <div class="ndr-line"><i class="fa-solid fa-phone"></i>${escapeHtml(d.phone)}</div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>DEVICE</div>
+                <div class="ndr-name">${escapeHtml(d.device)}</div>
+                <div class="ndr-kv">IMEI <span>${escapeHtml(d.imei)}</span></div>
+                <div class="ndr-kv">Servis asal <span>${escapeHtml(d.origin_no)}</span></div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-hashtag"></i>CLAIM</div>
+                <div class="ndr-name">${escapeHtml(d.claim_no)}</div>
+                <div class="ndr-line"><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
+                <div class="ndr-line"><i class="fa-solid fa-shield-halved"></i>${escapeHtml(d.warranty_status)}</div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>DETAIL CLAIM</div>
+                <div class="ndr-sec"><span>Keluhan claim</span><p>${escapeHtml(d.complaint)}</p></div>
+                <div class="ndr-sec"><span>Kondisi / kelengkapan</span><p>${escapeHtml([d.physical, d.completeness].filter(Boolean).join(' · '))}</p></div>
+                <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(d.technician || '-')}</p></div>
+                <div class="ndr-sec"><span>Biaya customer</span><p class="ndr-price">${escapeHtml(notaRupiah(d.estimate))}</p></div>
+            </div>
+            <div class="ndr-card is-green">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>STATUS CLAIM</div>
+                <div class="ndr-sched">
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-shield-halved"></i></span><div><span>Garansi</span><b>${escapeHtml(d.warranty_status || '-')} s/d ${escapeHtml(notaTglSlash(d.warranty_end))}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-gavel"></i></span><div><span>Hasil</span><b>${escapeHtml(d.decision || '-')}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-clock"></i></span><div><span>Status proses</span><b>${escapeHtml(d.claim_status || '-')}</b></div></div>
+                </div>
+                <div class="ndr-note"><i class="fa-solid fa-circle-info"></i><span>Garansi VALID bukan berarti claim otomatis diterima — menunggu keputusan teknisi.</span></div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap is-green-t"><i class="fa-solid fa-shield-halved"></i>SYARAT PENGAMBILAN</div>
+                <ul class="ndr-yes">
+                    <li><i class="fa-solid fa-check"></i><span>Tunjukkan nota claim / Claim ID</span></li>
+                    <li><i class="fa-solid fa-check"></i><span>Tunjukkan nota servis asal</span></li>
+                    <li><i class="fa-solid fa-check"></i><span>Cek kondisi unit saat pengambilan</span></li>
+                </ul>
+                <div class="ndr-nohead"><i class="fa-solid fa-triangle-exclamation"></i>KETENTUAN CLAIM</div>
+                <ul class="ndr-no">
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Keputusan teknisi bersifat final</span></li>
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kerusakan jatuh / cairan tidak ditanggung</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="ndr-grid3 ndr-row3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI CLAIM</div>
+                <p class="ndr-desc">Scan QR untuk verifikasi nota claim Anda.</p>
+                <div class="ndr-pill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.claim_no || '')}</div>
+            </div>
+            <div class="ndr-qrwrap">
+                <img src="${qrUrl}" alt="QR claim" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
+                <div class="ndr-kode-fallback" style="display:none"><span>KODE CLAIM</span><b>${escapeHtml(d.claim_no || '-')}</b></div>
+            </div>
+            <div class="ndr-pink">
+                <span class="ndr-shield"><i class="fa-solid fa-shield-halved"></i></span>
+                <p>Nota claim hanya berlaku di<br><b>SUKABUMI FLASHER<br>BUSINESS OPERATING SYSTEM</b></p>
+                <div class="ndr-thanks">Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</div>
+            </div>
+        </div>
+        <div class="ndr-foot">
+            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>Claim mengacu ke servis ${escapeHtml(d.origin_no || '-')} — histori servis tidak berubah.</span></div>
+            <div class="ndr-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+        </div>
+    </div>`;
+}
+
+function claimNotaText(d) {
+    const L = [];
+    const sep = '--------------------------------';
+    const kv = (k, v) => {
+        const s = k + ' : ' + (v || '-');
+        notaWrap(s, 32).forEach(x => L.push(x));
+    };
+    L.push('        SUKABUMI FLASHER');
+    L.push('   BUSINESS OPERATING SYSTEM');
+    L.push(' NOTA PENERIMAAN CLAIM GARANSI');
+    L.push(sep);
+    kv('Claim', d.claim_no);
+    kv('Servis asal', d.origin_no);
+    kv('Tgl claim', notaTgl(d.tgl));
+    L.push(sep);
+    kv('Konsumen', d.nama);
+    kv('WA', d.phone);
+    kv('Device', d.device);
+    kv('IMEI', d.imei);
+    L.push(sep);
+    L.push('Keluhan claim:');
+    notaWrap(d.complaint, 32).forEach(x => L.push(x));
+    L.push('Kondisi:');
+    notaWrap([d.physical, d.completeness].filter(Boolean).join(' · '), 32).forEach(x => L.push(x));
+    L.push(sep);
+    kv('Garansi', (d.warranty_status || '-') + ' s/d ' + notaTgl(d.warranty_end));
+    kv('Hasil', d.decision);
+    kv('Status', d.claim_status);
+    kv('Biaya', notaRupiah(d.estimate));
+    kv('Teknisi', (d.technician || '').trim() || '-');
+    L.push(sep);
+    L.push('Simpan nota claim ini sebagai');
+    L.push('bukti pengambilan unit.');
+    L.push('Terima kasih!');
+    return L.join('\n');
+}
+
+function claimNotaDigitalText(d) {
+    return '*NOTA PENERIMAAN CLAIM GARANSI*\n*SUKABUMI FLASHER - Business Operating System*\n'
+        + '--------------------------\n'
+        + 'Claim ID : ' + (d.claim_no || '-') + '\n'
+        + 'Servis asal : ' + (d.origin_no || '-') + '\n'
+        + 'Garansi : ' + (d.warranty_status || '-') + ' s/d ' + notaTgl(d.warranty_end) + '\n'
+        + 'Hasil : ' + (d.decision || '-') + '\n'
+        + 'Status : ' + (d.claim_status || '-') + '\n'
+        + 'Nama : ' + (d.nama || '-') + '\n'
+        + 'WA : ' + (d.phone || '-') + '\n'
+        + 'Device : ' + (d.device || '-') + '\n'
+        + 'Keluhan : ' + (d.complaint || '-') + '\n'
+        + 'Biaya : ' + notaRupiah(d.estimate) + '\n'
+        + 'Tgl Claim : ' + notaTgl(d.tgl) + '\n'
+        + '--------------------------\n'
+        + 'Simpan nota claim ini sebagai bukti pengambilan unit. Terima kasih! - *SUKABUMI FLASHER*';
+}
+
+// ── Nota GARANSI (terbit saat status CASH, masa 30 hari dari cash_date) ──
+
+const WARRANTY_DAYS = 30; // fallback data lama (tanpa setting bulan)
+
+function addMonths(dateStr, months) {
+    const m = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '';
+    let y = Number(m[1]), mo = Number(m[2]) - 1 + (Number(months) || 0);
+    const d = Number(m[3]);
+    y += Math.floor(mo / 12); mo = ((mo % 12) + 12) % 12;
+    const last = new Date(y, mo + 1, 0).getDate();
+    const dt = new Date(y, mo, Math.min(d, last));
+    const p = n => String(n).padStart(2, '0');
+    return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate());
+}
+
+function warrantyLabel(m) {
+    if (m === null || m === undefined || m === '') return '30 hari';
+    if (Number(m) === 0) return 'Tanpa garansi';
+    return m + ' bulan';
+}
+
+function warrantyEndFor(cash, m) {
+    if (m === null || m === undefined || m === '') return warrantyEndOf(cash, WARRANTY_DAYS);
+    if (Number(m) === 0) return '';
+    return addMonths(cash, Number(m));
+}
+
+function usWarrantyMonths() {
+    const el = document.getElementById('usWarrantyMonths');
+    return el ? parseInt(el.value, 10) : 1;
+}
+
+function usWarrantyUpdate() {
+    const m = usWarrantyMonths();
+    const pill = document.getElementById('usWarrantyPill');
+    const info = document.getElementById('usWarrantyInfo');
+    const cash = _usCashDate || new Date().toISOString().slice(0, 10);
+    if (Number(m) === 0) {
+        if (pill) { pill.className = 'tx-status st-EXPIRED'; pill.innerHTML = '<i class="fa-solid fa-circle"></i>Tanpa garansi'; }
+        if (info) info.textContent = 'Servis ini tidak bergaransi toko.';
+    } else {
+        const end = warrantyEndFor(cash, m);
+        if (pill) { pill.className = 'tx-status st-VALID'; pill.innerHTML = '<i class="fa-solid fa-circle"></i>Active'; }
+        if (info) info.textContent = warrantyLabel(m) + ' sejak ' + notaTgl(cash) + ' s/d ' + notaTgl(end) + '.';
+    }
+}
+
+function warrantyEndOf(cashDate, days) {
+    const m = String(cashDate || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!m) return '';
+    const dt = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]) + (days || WARRANTY_DAYS));
+    const p = n => String(n).padStart(2, '0');
+    return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate());
+}
+
+function usWarrantyPrint() {
+    if (usGetStatus() !== 'CASH') return;
+    // cash_date dikunci backend saat simpan CASH; bila baru dipilih & belum
+    // disimpan, pakai hari ini sebagai provisional (akan sama saat disimpan).
+    const cash = _usCashDate || new Date().toISOString().slice(0, 10);
+    const mths = usWarrantyMonths();
+    const d = {
+        kind: 'WARRANTY',
+        no: _usNo || '-',
+        tgl: cash,
+        nama: usVal('usNama'),
+        phone: usVal('usPhone'),
+        device: usVal('usDevice'),
+        imei: usVal('usImei'),
+        plan: usVal('usPlan'),
+        technician: usVal('usTechnician'),
+        final: usNum('usFinFinal'),
+        part: usVal('usFinPart') === '' ? 0 : usNum('usFinPart'),
+        warranty_months: mths,
+        warranty_label: warrantyLabel(mths),
+        warranty_days: WARRANTY_DAYS,
+        warranty_end: warrantyEndFor(cash, mths),
+        status: 'CASH',
+    };
+    _lastWarranty = d;
+    _notaMode = 'WARRANTY';
+    renderWarrantyNotaPreview(d);
+    renderWarrantyNotaDigital(d);
+    const fb = document.getElementById('notaFeedback');
+    if (fb) fb.classList.add('hidden');
+    const win = document.getElementById('pageNota');
+    try { document.body.appendChild(win); } catch (_) {}
+    win.style.zIndex = '9600';
+    win.classList.add('open');
+}
+
+function renderWarrantyNotaPreview(d) {
+    const el = document.getElementById('notaPreview');
+    if (!el) return;
+    const row = (k, v) => `<div class="nt-row"><span>${escapeHtml(k)}</span><b>${escapeHtml(v || '-')}</b></div>`;
+    el.innerHTML = `
+        <div class="nt-head">
+            <div class="nt-brand">SUKABUMI FLASHER</div>
+            <div class="nt-sub">BUSINESS OPERATING SYSTEM</div>
+            <div class="nt-title">NOTA GARANSI SERVICE</div>
+        </div>
+        <div class="nt-sep"></div>
+        ${row('No. Servis', d.no)}
+        ${row('Tgl Selesai', notaTgl(d.tgl))}
+        <div class="nt-sep"></div>
+        ${row('Konsumen', d.nama)}
+        ${row('No. WA', d.phone)}
+        ${row('Device', d.device)}
+        ${row('IMEI', d.imei)}
+        <div class="nt-sep"></div>
+        <div class="nt-label">Tindakan perbaikan:</div>
+        <div class="nt-val">${escapeHtml(d.plan)}</div>
+        ${row('Teknisi', (d.technician || '').trim() || '-')}
+        ${row('Biaya Final', notaRupiah(d.final))}
+        <div class="nt-sep"></div>
+        ${row('Garansi', d.warranty_label)}
+        ${row('Berlaku s/d', d.warranty_end ? notaTgl(d.warranty_end) : '-')}
+        <div class="nt-sep"></div>
+        <div class="nt-foot">${d.warranty_months === 0 ? 'Servis ini tidak bergaransi toko.<br>' : 'Garansi ' + escapeHtml(d.warranty_label) + ' untuk pekerjaan yang sama.<br>'}Simpan nota ini sebagai bukti garansi.<br>Terima kasih!</div>`;
+}
+
+function renderWarrantyNotaDigital(d) {
+    const el = document.getElementById('notaDigital');
+    if (!el) return;
+    const tgl = notaTglSlash(d.tgl);
+    const sampai = notaTglSlash(d.warranty_end);
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
+        + encodeURIComponent('SUKABUMI FLASHER GARANSI ' + (d.no || ''));
+    el.innerHTML = `
+    <div class="ndr-sheet ndr-doc-warranty">
+        <div class="ndr-head">
+            <div class="ndr-brand">
+                <span class="ndr-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
+                <div><b>SUKABUMI FLASHER</b><span>BUSINESS OPERATING SYSTEM</span></div>
+            </div>
+            <div class="ndr-contact"><div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div></div>
+        </div>
+        <div class="ndr-title-row">
+            <div class="ndr-title">
+                <h3>NOTA <em>GARANSI</em> SERVICE</h3>
+                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><b>NG</b><span>NOTA GARANSI SERVICE</span></div>
+                <div class="ndr-state ndr-green">
+                    <i class="fa-solid fa-shield-halved"></i>
+                    <div><b>${escapeHtml(d.warranty_months === 0 ? 'TANPA GARANSI' : 'GARANSI ' + String(d.warranty_label).toUpperCase())}</b><span>${escapeHtml(d.warranty_end ? 'Berlaku s/d ' + notaTglSlash(d.warranty_end) + ' untuk pekerjaan yang sama.' : 'Servis ini tidak bergaransi toko.')}</span></div>
+                </div>
+            </div>
+            <div class="ndr-nonum">
+                <span>NO. SERVIS</span>
+                <b>${escapeHtml(d.no || '-')}</b>
+                <div class="ndr-strip"><i class="fa-solid fa-shield-halved"></i>Simpan nota ini sebagai bukti garansi</div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-user"></i>PELANGGAN</div>
+                <div class="ndr-name">${escapeHtml(d.nama)}</div>
+                <div class="ndr-line"><i class="fa-solid fa-phone"></i>${escapeHtml(d.phone)}</div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>DEVICE</div>
+                <div class="ndr-name">${escapeHtml(d.device)}</div>
+                <div class="ndr-kv">IMEI <span>${escapeHtml(d.imei)}</span></div>
+                <div class="ndr-kv">Selesai <span>${escapeHtml(tgl)}</span></div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>GARANSI</div>
+                <div class="ndr-name">${escapeHtml(d.warranty_label)}</div>
+                <div class="ndr-line"><i class="fa-regular fa-calendar-check"></i>${escapeHtml(d.warranty_end ? 's/d ' + sampai : 'tanpa garansi')}</div>
+                <div class="ndr-line"><i class="fa-solid fa-screwdriver-wrench"></i>${escapeHtml(d.technician || '-')}</div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>PEKERJAAN GARANSI</div>
+                <div class="ndr-sec"><span>Tindakan perbaikan</span><p class="ndr-check"><i class="fa-solid fa-check"></i>${escapeHtml(d.plan)}</p></div>
+                <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(d.technician || '-')}</p></div>
+                <div class="ndr-sec"><span>Biaya final</span><p class="ndr-price">${escapeHtml(notaRupiah(d.final))}</p></div>
+            </div>
+            <div class="ndr-card is-green">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>MASA GARANSI</div>
+                <div class="ndr-sched">
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar-check"></i></span><div><span>Mulai</span><b>${escapeHtml(tgl)}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar"></i></span><div><span>Berakhir</span><b>${escapeHtml(sampai)}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-shield-halved"></i></span><div><span>Cakupan</span><b>Pekerjaan yang sama</b></div></div>
+                </div>
+                <div class="ndr-note"><i class="fa-solid fa-circle-info"></i><span>Garansi tidak mencakup kerusakan jatuh, cairan, atau pengerjaan pihak lain.</span></div>
+            </div>
+            <div class="ndr-card">
+                <div class="ndr-cap is-green-t"><i class="fa-solid fa-file-circle-check"></i>KLAIM GARANSI</div>
+                <ul class="ndr-yes">
+                    <li><i class="fa-solid fa-check"></i><span>Tunjukkan nota garansi ini</span></li>
+                    <li><i class="fa-solid fa-check"></i><span>Datang sebelum masa berakhir</span></li>
+                    <li><i class="fa-solid fa-check"></i><span>Keluhan sama dengan pekerjaan</span></li>
+                </ul>
+                <div class="ndr-nohead"><i class="fa-solid fa-triangle-exclamation"></i>TIDAK DITANGGUNG</div>
+                <ul class="ndr-no">
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Rusak jatuh / benturan</span></li>
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kena cairan</span></li>
+                    <li><i class="fa-regular fa-circle-xmark"></i><span>Dikerjakan pihak lain</span></li>
+                </ul>
+            </div>
+        </div>
+        <div class="ndr-grid3 ndr-row3">
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI GARANSI</div>
+                <p class="ndr-desc">Scan QR untuk verifikasi garansi servis Anda.</p>
+                <div class="ndr-pill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+            </div>
+            <div class="ndr-qrwrap">
+                <img src="${qrUrl}" alt="QR garansi" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
+                <div class="ndr-kode-fallback" style="display:none"><span>GARANSI</span><b>${escapeHtml(d.no || '-')}</b></div>
+            </div>
+            <div class="ndr-pink">
+                <span class="ndr-shield"><i class="fa-solid fa-shield-halved"></i></span>
+                <p>Nota garansi hanya berlaku di<br><b>SUKABUMI FLASHER<br>BUSINESS OPERATING SYSTEM</b></p>
+                <div class="ndr-thanks">Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</div>
+            </div>
+        </div>
+        <div class="ndr-foot">
+            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>${escapeHtml(d.warranty_months === 0 ? 'Servis ini tidak bergaransi toko.' : 'Garansi ' + d.warranty_label + ' untuk pekerjaan yang sama.')}</span></div>
+            <div class="ndr-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+        </div>
+    </div>`;
+}
+
+function warrantyNotaText(d) {
+    const L = [];
+    const sep = '--------------------------------';
+    const kv = (k, v) => {
+        const s = k + ' : ' + (v || '-');
+        notaWrap(s, 32).forEach(x => L.push(x));
+    };
+    L.push('        SUKABUMI FLASHER');
+    L.push('   BUSINESS OPERATING SYSTEM');
+    L.push('      NOTA GARANSI SERVICE');
+    L.push(sep);
+    kv('No', d.no);
+    kv('Tgl selesai', notaTgl(d.tgl));
+    L.push(sep);
+    kv('Konsumen', d.nama);
+    kv('WA', d.phone);
+    kv('Device', d.device);
+    kv('IMEI', d.imei);
+    L.push(sep);
+    L.push('Tindakan:');
+    notaWrap(d.plan, 32).forEach(x => L.push(x));
+    kv('Teknisi', (d.technician || '').trim() || '-');
+    kv('Biaya final', notaRupiah(d.final));
+    L.push(sep);
+    kv('Garansi', d.warranty_label);
+    kv('Berlaku s/d', d.warranty_end ? notaTgl(d.warranty_end) : '-');
+    L.push(sep);
+    L.push(d.warranty_months === 0 ? 'Tanpa garansi toko.' : 'Garansi pekerjaan yang sama.');
+    L.push('Simpan sebagai bukti garansi.');
+    L.push('Terima kasih!');
+    return L.join('\n');
+}
+
+function warrantyNotaDigitalText(d) {
+    return '*NOTA GARANSI SERVICE*\n*SUKABUMI FLASHER - Business Operating System*\n'
+        + '--------------------------\n'
+        + 'No. Servis : ' + (d.no || '-') + '\n'
+        + 'Tgl Selesai : ' + notaTgl(d.tgl) + '\n'
+        + 'Nama : ' + (d.nama || '-') + '\n'
+        + 'Device : ' + (d.device || '-') + '\n'
+        + 'Tindakan : ' + (d.plan || '-') + '\n'
+        + 'Teknisi : ' + ((d.technician || '').trim() || '-') + '\n'
+        + 'Biaya Final : ' + notaRupiah(d.final) + '\n'
+        + 'Garansi : ' + (d.warranty_label || '-') + (d.warranty_end ? ' s/d ' + notaTgl(d.warranty_end) : '') + '\n'
+        + '--------------------------\n'
+        + 'Garansi pekerjaan yang sama. Simpan sebagai bukti garansi. Terima kasih! - *SUKABUMI FLASHER*';
+}
+
+function initClaimReceive() {
+    try { renderChecklist('clr', 'clrCheckGroups', 'Kondisi unit saat klaim diterima.'); } catch (_) {}
+    const techFill = async () => {
+        const sel = document.getElementById('clrTechnician');
+        if (!sel || sel.options.length > 1) return;
+        try {
+            const techs = await apiGet('/orders/technicians');
+            sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+        } catch (_) {}
+    };
+    techFill();
+    const s = document.getElementById('clrSearch');
+    if (s && !s.dataset.clrBound) {
+        s.dataset.clrBound = '1';
+        s.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); claimRSearch(); } });
+    }
+    const form = document.getElementById('claimReceiveForm');
+    if (form && !form.dataset.clrBound) {
+        form.dataset.clrBound = '1';
+        form.addEventListener('submit', claimRSubmit);
+    }
+}
+
+// ─────────────────────────────────────────────
+// AUDIT TUTUP KAS (popup dari dashboard — tahap UI, tersimpan lokal)
+// ─────────────────────────────────────────────
+
+function openAuditKas() {
+    const ov = document.getElementById('auditKasPopup');
+    if (!ov) return;
+    const input = document.getElementById('auditKasNominal');
+    if (input) input.value = '';
+    const fb = document.getElementById('auditKasFeedback');
+    if (fb) fb.classList.add('hidden');
+    const txt = document.getElementById('auditKasLockText');
+    if (txt) txt.textContent = 'Kunci & Arsip';
+    ov.classList.remove('hidden');
+    if (input) setTimeout(() => input.focus({ preventScroll: true }), 60);
+}
+
+function closeAuditKas() {
+    const ov = document.getElementById('auditKasPopup');
+    if (ov) ov.classList.add('hidden');
+}
+
+function auditKasFeedback(msg, isErr) {
+    const fb = document.getElementById('auditKasFeedback');
+    if (!fb) return;
+    fb.classList.remove('hidden', 'success', 'error');
+    fb.classList.add(isErr ? 'error' : 'success');
+    fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+}
+
+function submitAuditKas() {
+    const input = document.getElementById('auditKasNominal');
+    const nominal = Math.round(parseFloat(input ? input.value : '') || 0);
+    if (!(nominal > 0)) {
+        auditKasFeedback('Isi dulu total uang fisik di laci (Rp).', true);
+        if (input) input.focus({ preventScroll: true });
+        return;
+    }
+    const btn = document.getElementById('auditKasLockBtn');
+    const txt = document.getElementById('auditKasLockText');
+    if (btn) btn.disabled = true;
+    if (txt) txt.textContent = 'Mengunci...';
+    try {
+        try {
+            localStorage.setItem('bsf_audit_kas', JSON.stringify({
+                nominal: nominal,
+                at: new Date().toISOString(),
+            }));
+        } catch (_) {}
+        const jam = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        auditKasFeedback('Kas dikunci Rp ' + nominal.toLocaleString('id-ID') + ' • ' + jam + ' — arsip dipindahkan.', false);
+        setTimeout(closeAuditKas, 1400);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (txt) txt.textContent = 'Kunci & Arsip';
+    }
+}
+
+if (!window._auditKasKeys) {
+    window._auditKasKeys = true;
+    document.addEventListener('keydown', function (e) {
+        const ov = document.getElementById('auditKasPopup');
+        if (!ov || ov.classList.contains('hidden')) return;
+        if (e.key === 'Escape') closeAuditKas();
+        else if (e.key === 'Enter' && document.activeElement
+            && document.activeElement.id === 'auditKasNominal') submitAuditKas();
+    });
+}
+
+// ─────────────────────────────────────────────
+// PENGATURAN BEBAN HARIAN (popup dari dashboard — tahap UI, tersimpan lokal)
+// ─────────────────────────────────────────────
+
+const BEBAN_DEFAULT = [
+    { kategori: 'Gaji', nama: 'Analize Service Officer', nilai: 200000 },
+    { kategori: 'Gaji', nama: 'Customer Service', nilai: 200000 },
+    { kategori: 'Operasional', nama: 'Sewa tempat', nilai: 170000 },
+    { kategori: 'Operasional', nama: 'Pulsa', nilai: 5000 },
+    { kategori: 'Operasional', nama: 'Listrik', nilai: 14000 },
+    { kategori: 'Operasional', nama: 'Internet', nilai: 16000 },
+];
+const BEBAN_STORE_KEY = 'bsf_beban_harian_v2';
+
+let _bebanList = [];
+let _bebanEditIdx = -1;
+let _bebanDeleted = [];
+let _bebanOnline = true;
+
+function bebanLoad() {
+    try {
+        const raw = localStorage.getItem(BEBAN_STORE_KEY);
+        if (raw) {
+            const arr = JSON.parse(raw);
+            if (Array.isArray(arr)) return arr;
+        }
+    } catch (_) {}
+    return BEBAN_DEFAULT.map(b => ({ ...b }));
+}
+
+function bebanRupiah(v) {
+    return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+}
+
+function bebanNum(v) {
+    return (Number(v) || 0).toLocaleString('en-US');
+}
+
+async function bebanMigrateOnce(rows) {
+    // Migrasi sekali data lokal lama ke server, lalu hapus kunci lokal.
+    try {
+        for (const b of rows) {
+            await apiPost('/expenses', { kategori: b.kategori, uraian: b.nama, nilai: b.nilai });
+        }
+    } catch (_) {}
+    try { localStorage.removeItem(BEBAN_STORE_KEY); } catch (_) {}
+}
+
+async function openBeban() {
+    _bebanEditIdx = -1;
+    _bebanDeleted = [];
+    const kat = document.getElementById('bebanKategori');
+    const nama = document.getElementById('bebanNama');
+    const nilai = document.getElementById('bebanNilai');
+    if (kat) kat.value = 'Operasional';
+    if (nama) nama.value = '';
+    if (nilai) nilai.value = '';
+    const addTxt = document.getElementById('bebanAddText');
+    if (addTxt) addTxt.textContent = 'Tambah';
+    const fb = document.getElementById('bebanFeedback');
+    if (fb) fb.classList.add('hidden');
+    _bebanList = [];
+    _bebanOnline = true;
+    bebanRender();
+    document.getElementById('bebanPopup').classList.remove('hidden');
+    try {
+        const page = await apiGet('/expenses?limit=100');
+        const rows = (page && page.items) || [];
+        if (!rows.length) {
+            const lokal = bebanLoad();
+            if (lokal.length) await bebanMigrateOnce(lokal);
+            const page2 = await apiGet('/expenses?limit=100');
+            _bebanList = ((page2 && page2.items) || []).map(r => ({ id: r.id, kategori: r.kategori, nama: r.uraian, nilai: r.nilai }));
+            if (!_bebanList.length) {
+                // Seed bawaan referensi bila server benar-benar kosong.
+                for (const b of BEBAN_DEFAULT) {
+                    try {
+                        const created = await apiPost('/expenses', { kategori: b.kategori, uraian: b.nama, nilai: b.nilai });
+                        _bebanList.push({ id: created.id, kategori: created.kategori, nama: created.uraian, nilai: created.nilai });
+                    } catch (_) { break; }
+                }
+            }
+        } else {
+            _bebanList = rows.map(r => ({ id: r.id, kategori: r.kategori, nama: r.uraian, nilai: r.nilai }));
+        }
+    } catch (_) {
+        // Offline/fallback: mode lokal seperti sebelumnya.
+        _bebanOnline = false;
+        _bebanList = bebanLoad();
+        bebanFeedback('Server tidak terjangkau — mode lokal (tersimpan di perangkat).', true);
+    }
+    bebanRender();
+    if (nama) setTimeout(() => nama.focus({ preventScroll: true }), 60);
+}
+
+function closeBeban() {
+    const ov = document.getElementById('bebanPopup');
+    if (ov) ov.classList.add('hidden');
+    _bebanEditIdx = -1;
+}
+
+function bebanRender() {
+    const body = document.getElementById('bebanBody');
+    if (!body) return;
+    if (!_bebanList.length) {
+        body.innerHTML = `<tr><td colspan="4"><div class="beban-empty"><i class="fa-solid fa-receipt"></i>Belum ada beban — tambah lewat form di atas.</div></td></tr>`;
+    } else {
+    body.innerHTML = _bebanList.map((b, i) => {
+        const isGaji = String(b.kategori || '').toLowerCase().includes('gaji');
+        return `
+        <tr>
+            <td><span class="beban-cat ${isGaji ? 'is-gaji' : 'is-ops'}">${escapeHtml(b.kategori)}</span></td>
+            <td class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(b.nama)}</td>
+            <td>${bebanNum(b.nilai)}</td>
+            <td>
+                <button type="button" class="beban-ico is-edit" title="Edit" onclick="bebanEdit(${i})"><i class="fa-solid fa-pen"></i></button>
+                <button type="button" class="beban-ico is-del" title="Hapus" onclick="bebanDel(${i})"><i class="fa-solid fa-trash"></i></button>
+            </td>
+        </tr>`;
+    }).join('');
+    }
+    const total = _bebanList.reduce((a, b) => a + (Number(b.nilai) || 0), 0);
+    const tfoot = document.getElementById('bebanTotal');
+    if (tfoot) tfoot.textContent = bebanNum(total);
+    const info = document.getElementById('bebanInfo');
+    if (info) info.textContent = _bebanList.length + ' beban • Total ' + bebanRupiah(total);
+}
+
+function bebanFeedback(msg, isErr) {
+    const fb = document.getElementById('bebanFeedback');
+    if (!fb) return;
+    fb.classList.remove('hidden', 'success', 'error');
+    fb.classList.add(isErr ? 'error' : 'success');
+    fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+}
+
+function bebanAdd() {
+    const kat = (document.getElementById('bebanKategori') || {}).value || 'Operasional';
+    const nama = ((document.getElementById('bebanNama') || {}).value || '').trim();
+    const nilai = Math.round(parseFloat((document.getElementById('bebanNilai') || {}).value) || 0);
+    if (!nama) {
+        bebanFeedback('Isi dulu nama bebannya.', true);
+        const el = document.getElementById('bebanNama');
+        if (el) el.focus({ preventScroll: true });
+        return;
+    }
+    if (!(nilai >= 0)) {
+        bebanFeedback('Nilai harus angka 0 atau lebih.', true);
+        return;
+    }
+    if (_bebanEditIdx >= 0 && _bebanList[_bebanEditIdx]) {
+        _bebanList[_bebanEditIdx] = { kategori: kat, nama: nama, nilai: nilai };
+        _bebanEditIdx = -1;
+        const addTxt = document.getElementById('bebanAddText');
+        if (addTxt) addTxt.textContent = 'Tambah';
+        bebanFeedback('Beban diperbarui (belum tersimpan — klik Simpan).', false);
+    } else {
+        _bebanList.push({ kategori: kat, nama: nama, nilai: nilai });
+        bebanFeedback('Beban ditambahkan (belum tersimpan — klik Simpan).', false);
+    }
+    document.getElementById('bebanNama').value = '';
+    document.getElementById('bebanNilai').value = '';
+    bebanRender();
+}
+
+function bebanEdit(i) {
+    const b = _bebanList[i];
+    if (!b) return;
+    _bebanEditIdx = i;
+    document.getElementById('bebanKategori').value = b.kategori;
+    document.getElementById('bebanNama').value = b.nama;
+    document.getElementById('bebanNilai').value = b.nilai;
+    const addTxt = document.getElementById('bebanAddText');
+    if (addTxt) addTxt.textContent = 'Update';
+    document.getElementById('bebanNama').focus({ preventScroll: true });
+}
+
+function bebanDel(i) {
+    const b = _bebanList[i];
+    if (!b) return;
+    if (!confirm('Hapus beban "' + b.nama + '"?')) return;
+    if (b.id) _bebanDeleted.push(b.id);
+    _bebanList.splice(i, 1);
+    if (_bebanEditIdx === i) {
+        _bebanEditIdx = -1;
+        const addTxt = document.getElementById('bebanAddText');
+        if (addTxt) addTxt.textContent = 'Tambah';
+    }
+    bebanRender();
+}
+
+async function bebanSave() {
+    const total = _bebanList.reduce((a, b) => a + (Number(b.nilai) || 0), 0);
+    if (!confirm('Simpan ' + _bebanList.length + ' beban dengan total ' + bebanRupiah(total) + '?')) return;
+    const btn = document.getElementById('bebanSaveBtn');
+    const txt = document.getElementById('bebanSaveText');
+    const LABEL = 'SIMPAN & KEMBALI KE DASHBOARD';
+    if (btn) btn.disabled = true;
+    if (txt) txt.textContent = 'MENYIMPAN...';
+    try {
+        if (_bebanOnline) {
+            for (const id of _bebanDeleted) {
+                try { await apiDel('/expenses/' + id); } catch (_) {}
+            }
+            _bebanDeleted = [];
+            for (const b of _bebanList) {
+                if (b.id) {
+                    try { await apiPut('/expenses/' + b.id, { kategori: b.kategori, uraian: b.nama, nilai: b.nilai }); } catch (_) {}
+                } else {
+                    try {
+                        const created = await apiPost('/expenses', { kategori: b.kategori, uraian: b.nama, nilai: b.nilai });
+                        b.id = created.id;
+                    } catch (_) {}
+                }
+            }
+        } else {
+            try { localStorage.setItem(BEBAN_STORE_KEY, JSON.stringify(_bebanList)); } catch (_) {}
+        }
+        bebanFeedback('Tersimpan: ' + _bebanList.length + ' beban, total ' + bebanRupiah(total) + ' — kembali ke dashboard.', false);
+        try { await loadDashboard(); } catch (_) {}
+        setTimeout(closeBeban, 1200);
+    } catch (err) {
+        bebanFeedback(err.message, true);
+    } finally {
+        if (btn) btn.disabled = false;
+        if (txt) txt.textContent = LABEL;
+    }
+}
+
+if (!window._bebanKeys) {
+    window._bebanKeys = true;
+    document.addEventListener('keydown', function (e) {
+        const ov = document.getElementById('bebanPopup');
+        if (!ov || ov.classList.contains('hidden')) return;
+        if (e.key === 'Escape') closeBeban();
+        else if (e.key === 'Enter' && document.activeElement
+            && ['bebanNama', 'bebanNilai'].includes(document.activeElement.id)) bebanAdd();
+    });
+}
+
 document.addEventListener('DOMContentLoaded', async function () {
     initTheme();
     updateClock();
@@ -3590,6 +5374,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     renderQuickActions();
     initReceivePage();
     initUpdateServis();
+    initClaimReceive();
     initFloatDrag();
     initSparepart();
     initLogin();

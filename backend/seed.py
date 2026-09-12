@@ -10,11 +10,11 @@ SUPERADMIN_USERNAME = "superadmin"
 SUPERADMIN_PASSCODE = "Admin4100"
 
 
-def seed():
+def ensure_admin():
+    """Pastikan akun superadmin ada. Aman dipanggil tiap startup (idempotent)."""
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
 
-    # ---------- Super Admin (idempotent) ----------
     admin = db.query(User).filter(User.username == SUPERADMIN_USERNAME).first()
     if not admin:
         salt = secrets.token_hex(16)
@@ -30,6 +30,12 @@ def seed():
         )
         db.commit()
         print("Super admin dibuat.")
+    db.close()
+
+
+def seed():
+    ensure_admin()
+    db = SessionLocal()
 
     if db.query(Customer).count() > 0:
         print("Database sudah berisi data, skip seeding.")
