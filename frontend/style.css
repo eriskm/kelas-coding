@@ -290,6 +290,55 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     background: #16171d;
     border-color: rgba(255,255,255,0.08);
 }
+/* CTO FLOATING CARD — non-blocking, draggable (drag via header).
+   Muncul hanya saat CTS tercapai & CTO belum (logic di shouldShowCto).
+   position:fixed tidak pernah memicu scrollbar body. z-index di bawah overlay. */
+.cto-float {
+    display: none;
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 280px;
+    max-width: calc(100vw - 32px);
+    z-index: 8000;
+    background: #ecfeff;
+    border: 1px solid #a5f3fc;
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(8, 145, 178, 0.28);
+    padding: 10px 12px 12px;
+}
+.cto-float.open { display: block; }
+.cto-float-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    cursor: grab;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px dashed #a5f3fc;
+}
+.cto-float-head:active { cursor: grabbing; }
+.cto-grip { color: #0891b2; font-size: 13px; }
+.cto-head-txt { display: flex; flex-direction: column; line-height: 1.25; }
+.cto-head-txt b { font-size: 12.5px; font-weight: 800; color: #0e7490; }
+.cto-head-txt span { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: #67b8c9; }
+.cto-float-val { font-size: 21px; font-weight: 800; color: #0f172a; line-height: 1.15; }
+.dark .cto-float {
+    background: rgba(34,211,238,0.12);
+    border-color: rgba(34,211,238,0.28);
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(8px);
+}
+.dark .cto-head-txt b { color: #67e8f9; }
+.dark .cto-float-val { color: #f1f5f9; }
+.dark .cto-float-head { border-bottom-color: rgba(34,211,238,0.28); }
+@media (max-width: 639px) {
+    .cto-float { width: 232px; right: 12px; bottom: 12px; padding: 8px 10px 10px; }
+    .cto-float-val { font-size: 18px; }
+}
 .kpi-label-dark { font-size: 11px; font-weight: 600; color: #6b7280; }
 .dark .kpi-label-dark { color: #9ca3af; }
 .kpi-value-dark { font-size: 20px; font-weight: 800; color: #0f172a; line-height: 1.15; }
@@ -560,9 +609,9 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     flex-direction: column;
     align-items: center;
     gap: 2px;
-    padding: 6px 10px;
+    padding: 6px 8px;
     border-radius: 8px;
-    font-size: 10px;
+    font-size: 9.5px;
     font-weight: 500;
     color: #94a3b8;
     background: none;
@@ -1357,10 +1406,11 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .tx-table .tx-user { font-weight: 600; font-size: 12.5px; color: #334155; }
 .dark .tx-table .tx-user { color: #cbd5e1; }
 .tx-table .tx-laba { text-align: right; font-weight: 700; color: #059669; }
+.dark .tx-table .tx-laba { color: #34d399; }
 .tx-table .tx-aksi { text-align: center; white-space: nowrap; }
-/* UI AUDIT P0 — min-width proporsional per halaman (base 900px hanya fallback) */
+/* UI AUDIT P0 — min-width proporsional per halaman (base 900px hanya fallback).
+   Pelanggan 860px diatur di blok tabel Pelanggan; di sini hanya Transaksi + Garansi. */
 #pageTransaksi .tx-table { min-width: 720px; }
-#pagePelanggan .tx-table { min-width: 680px; }
 #pageGaransi .tx-table { min-width: 620px; }
 /* UI AUDIT P0 — kolom Aksi sticky agar selalu terjangkau saat scroll */
 #pageTransaksi .tx-table th:last-child, #pageTransaksi .tx-table td:last-child,
@@ -1386,6 +1436,9 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     display: block; max-width: 210px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* Utilitas global: sel satu baris anti-wrap (dipakai semua tabel) */
+.tx-table .tx-nowrap { white-space: nowrap; }
+.tx-table .tx-statuscell { white-space: nowrap; }
 /* UI AUDIT P1 — toolbar Transaksi sebaris di desktop, wrap hanya di layar kecil */
 #pageTransaksi .tx-toolbar { flex-wrap: nowrap; }
 #pageTransaksi .tx-search-wrap { flex: 1 1 auto; min-width: 0; max-width: none; }
@@ -1394,6 +1447,19 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     #pageTransaksi .tx-toolbar { flex-wrap: wrap; }
     #pageTransaksi #txDateFilter { width: auto; }
 }
+/* Tabel Transaksi — konsisten seperti Pelanggan: satu row = satu transaksi,
+   tinggi baris seragam, semua sel vertical-align middle, padding seragam,
+   tiap baris teks satu baris (ellipsis + tooltip), compact dense mudah discan. */
+#pageTransaksi .tx-table tbody td { vertical-align: middle; }
+#pageTransaksi .tx-table .tx-nowrap { white-space: nowrap; }
+#pageTransaksi .tx-table .tx-laba { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#pageTransaksi .tx-table .tx-cust,
+#pageTransaksi .tx-table .tx-work { vertical-align: middle; }
+#pageTransaksi .tx-table .tx-line-main,
+#pageTransaksi .tx-table .tx-line-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 210px; line-height: 1.4; }
+#pageTransaksi .tx-table .tx-line-main { font-weight: 600; }
+#pageTransaksi .tx-table .tx-line-sub { min-height: 1.4em; }
+#pageTransaksi .tx-table .tx-statuscell { white-space: nowrap; }
 
 .tx-status {
     display: inline-flex;
@@ -1497,16 +1563,13 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     .sp-top-row .gr-kpi-grid { flex: 1 1 auto; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
     .sp-search-wrap { flex: 0 0 230px; display: flex; }
 }
-.tx-view-btn.tx-claim-btn:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
-.dark .tx-view-btn.tx-claim-btn:hover { background: rgba(37,99,235,0.2); color: #93c5fd; }
-.dark .tx-status { background: rgba(255,255,255,0.08); color: #e2e8f0; }
+/* Badge status memakai warna semantiknya sendiri (terang & gelap) */
 
 /* Sparepart: tombol aksi + indikator stok */
 .tx-view-btn.tx-edit-btn:hover { background: #eff6ff; color: #2563eb; border-color: #bfdbfe; }
 .dark .tx-view-btn.tx-edit-btn:hover { background: rgba(37,99,235,0.2); color: #93c5fd; }
 .tx-view-btn.tx-del-btn:hover { background: #fef2f2; color: #dc2626; border-color: #fecaca; }
 .dark .tx-view-btn.tx-del-btn:hover { background: rgba(220,38,38,0.2); color: #fca5a5; }
-.tx-aksi .tx-view-btn + .tx-view-btn { margin-left: 6px; }
 .tx-table .tx-laba-muted { text-align: right; font-weight: 600; color: #64748b; }
 .dark .tx-table .tx-laba-muted { color: #94a3b8; }
 .qty-ok { font-weight: 700; color: #334155; }
@@ -1525,49 +1588,49 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .qty-flag.low { background: #fef3c7; color: #b45309; }
 .qty-flag.out { background: #fee2e2; color: #b91c1c; }
-.dark .qty-flag.low { background: rgba(217,119,6,0.2); }
-.dark .qty-flag.out { background: rgba(220,38,38,0.2); }
+.dark .qty-flag.low { background: rgba(217,119,6,0.2); color: #fbbf24; }
+.dark .qty-flag.out { background: rgba(220,38,38,0.2); color: #fca5a5; }
 
-/* Garansi: +7% proporsional */
-.gr-table thead th { padding: 13.2px 16.8px; font-size: 12.5px; }
-.gr-table tbody td { padding: 14.4px 16.8px; font-size: 15.1px; }
-.gr-table .tx-device { font-size: 15px; }
-/* Table Card Transaksi: +1% keseluruhan isi card tabel */
-#pageTransaksi .panel.overflow-hidden { zoom: 1.01; }
-/* Table Card Garansi: +5% keseluruhan isi card tabel */
-#pageGaransi .panel.overflow-hidden { zoom: 1.03; }
-/* Proporsi khusus tabel Pelanggan */
-.pl-table thead th { padding: 6px 7px; font-size: 9px; letter-spacing: .03em; }
-/* Table Card Pelanggan: skala isi card tabel */
-#pagePelanggan .panel.overflow-hidden { zoom: 0.93; }
-/* Table Card Sparepart: -3% isi card tabel */
-#pageSparepart .panel.overflow-hidden { zoom: 0.97; }
+/* Skala tabel disamakan (semua zoom:1 = tanpa skala) agar proporsional konsisten */
+/* Tabel Pelanggan — konsisten seperti Transaksi: satu row = satu pelanggan,
+   tinggi baris seragam, semua sel vertical-align middle, padding seragam,
+   tiap kolom satu baris (ellipsis + tooltip), compact dense mudah discan. */
+.pl-table thead th { padding: 9px 12px; border-bottom-width: 1px; }
 /* Date filter Pelanggan: hanya tinggi dipadatkan, lebar tetap */
 #plDateFilter { padding-top: 6px; padding-bottom: 6px; }
 #plSearch { padding-top: 6px; padding-bottom: 6px; }
-.pl-table tbody td { padding: 3px 8px; font-size: 13px; border-bottom-color: #f8fafc; }
+.pl-table tbody td { padding: 9px 12px; vertical-align: middle; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dark .pl-table tbody td { border-bottom-color: rgba(255,255,255,0.03); }
-.pl-table thead th { border-bottom-width: 1px; }
-#pagePelanggan #plPagination { padding-top: 10px; padding-bottom: 10px; }
-.pl-table .tx-device, .pl-table .tx-user { font-size: 13px; }
-.pl-table .tx-cell-muted { font-size: 12px; }
-.pl-table .tx-laba { font-size: 11px; }
+#pagePelanggan #plPagination { padding-top: 12px; padding-bottom: 12px; }
+/* Samakan perilaku scroll dengan Transaksi: auto-layout + min-width,
+   tidak ada fixed/colgroup — kolom mengikuti isi, row tidak ambigu. */
+#pagePelanggan .tx-table { min-width: 860px; width: 100%; table-layout: auto; }
+#pagePelanggan .tx-table th, #pagePelanggan .tx-table td { vertical-align: middle; }
+#pagePelanggan .pl-table .tx-ellipsis { max-width: 210px; }
+#pagePelanggan .pl-table .pl-c-phone,
+#pagePelanggan .pl-table .pl-c-total,
+#pagePelanggan .pl-table .pl-c-date,
+#pagePelanggan .pl-table .tx-laba { white-space: nowrap; font-variant-numeric: tabular-nums; }
+#pagePelanggan .pl-table .pl-c-total { text-align: center; }
+@media (max-width: 639px) {
+    #pagePelanggan .tx-toolbar { flex-wrap: wrap; }
+}
 
 /* Rapat vertikal khusus tabel Garansi (hemat ruang, tanpa scroll) */
 .gr-table thead th { padding: 8px 13px; }
 .gr-table tbody td { padding: 8px 13px; }
 
-/* Sparepart: tabel compact proporsional */
-.sp-table thead th { padding: 10.2px 12px; font-size: 10.7px; }
-.sp-table tbody td { padding: 9.2px 12px; font-size: 12px; }
-.sp-table .tx-view-btn { width: 28.6px; height: 28.6px; font-size: 12px; border-radius: 8.2px; }
-.sp-table .tx-aksi .tx-view-btn + .tx-view-btn { margin-left: 6.6px; }
+/* Sparepart: samakan baseline tabel lain (10 kolom tetap compact via min-width + scroll) */
+.sp-table thead th { padding: 9px 12px; font-size: 11.5px; }
+.sp-table tbody td { padding: 9px 12px; font-size: 13px; vertical-align: middle; }
 
 /* Keuangan */
 .ku-sub { font-size: 11.5px; color: #6b7280; margin: -6px 0 12px; }
 .dark .ku-sub { color: #9ca3af; }
 .tx-table .tx-debit { text-align: right; font-weight: 700; color: #16a34a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dark .tx-table .tx-debit { color: #4ade80; }
 .tx-table .tx-kredit { text-align: right; font-weight: 700; color: #dc2626; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.dark .tx-table .tx-kredit { color: #f87171; }
 .tx-table .tx-saldo { text-align: right; font-weight: 800; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .dark .tx-table .tx-saldo { color: #f1f5f9; }
 .tx-status.ku-masuk { background: #dcfce7; color: #15803d; }
@@ -1601,7 +1664,8 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .ku-kas-panel { display: flex; flex-direction: column; }
 .ku-kas-panel .ku-kas-form { margin-top: auto; }
 
-/* Buku Kas (ref: jarak-reference.png): Uraian kiri, Debit/Kredit center, Saldo kanan */
+/* Buku Kas (ref: jarak-reference.png): Uraian kiri, Debit/Kredit center, Saldo kanan.
+   Center di sini disengaja (menimpa right global .tx-debit/.tx-kredit yang dipakai Riwayat). */
 .cash-table { table-layout: auto; min-width: 0; }
 .cash-table th.numeric-c,
 .cash-table td.numeric-c {
@@ -1864,13 +1928,13 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageTransaksi .tx-table .tx-cell-muted { font-size: 12.5px; }
 #pageTransaksi .tx-table .tx-user { font-size: 13.5px; }
 
-/* Tabel Pelanggan: kompensasi zoom card 0.93 */
-#pagePelanggan .tx-table thead th { font-size: 11px; }
-#pagePelanggan .tx-table tbody td { font-size: 14px; }
+/* Tabel Pelanggan: samakan skala Transaksi (head 11.5 / body 13.5) */
+#pagePelanggan .tx-table thead th { font-size: 11.5px; }
+#pagePelanggan .tx-table tbody td { font-size: 13.5px; }
 #pagePelanggan .tx-table .tx-device,
-#pagePelanggan .tx-table .tx-user { font-size: 14px; }
-#pagePelanggan .tx-table .tx-cell-muted { font-size: 13px; }
-#pagePelanggan .tx-table .tx-laba { font-size: 12px; }
+#pagePelanggan .tx-table .tx-user { font-size: 13.5px; }
+#pagePelanggan .tx-table .tx-cell-muted { font-size: 12.5px; }
+#pagePelanggan .tx-table .tx-laba { font-size: 12.5px; }
 
 /* Tabel Garansi: normalisasi ke baseline (sebelumnya oversize) */
 #pageGaransi .tx-table thead th { font-size: 11.5px; }
@@ -1926,12 +1990,8 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageTxDetail #txdClaims .text-\[11px\] { font-size: 12px; }
 #pageTxDetail #txdClaims .text-\[12px\] { font-size: 13px; }
 
-/* Pelanggan: aksi Detail + dropdown menu (ID-based, fixed anti-terpotong) */
+/* Pelanggan: aksi titik-3 + dropdown menu (ID-based, fixed anti-terpotong) */
 .pl-aksi { display: inline-flex; align-items: center; gap: 6px; }
-.pl-detail-btn { font-size: 11.5px; font-weight: 700; color: #1d4ed8; background: #eff6ff; border: 1px solid #dbeafe; border-radius: 8px; padding: 5px 10px; cursor: pointer; white-space: nowrap; transition: all .12s; }
-.pl-detail-btn:hover { background: #dbeafe; border-color: #bfdbfe; }
-.dark .pl-detail-btn { background: rgba(37,99,235,.16); border-color: rgba(37,99,235,.35); color: #93c5fd; }
-.dark .pl-detail-btn:hover { background: rgba(37,99,235,.28); }
 .pl-menu { position: fixed; z-index: 9800; min-width: 200px; background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; box-shadow: 0 16px 40px rgba(15,23,42,.18); padding: 6px; }
 .pl-menu.hidden { display: none; }
 .dark .pl-menu { background: #1a1a24; border-color: rgba(255,255,255,.1); }
@@ -1946,6 +2006,17 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .dark .pl-menu-item.is-danger:hover { background: rgba(220,38,38,.14); }
 .pl-menu-sep { height: 1px; background: #eef1f5; margin: 5px 4px; }
 .dark .pl-menu-sep { background: rgba(255,255,255,.08); }
+/* Toast non-blocking pengganti alert() — bawah tengah, tumpuk, hilang otomatis */
+.toast-wrap { position: fixed; z-index: 9999; left: 50%; bottom: 22px; transform: translateX(-50%); display: flex; flex-direction: column; gap: 8px; align-items: center; pointer-events: none; width: min(420px, calc(100vw - 32px)); }
+.toast { pointer-events: auto; display: flex; align-items: center; gap: 9px; width: 100%; padding: 10px 14px; border-radius: 12px; font-size: 12.5px; font-weight: 600; color: #0f172a; background: #fff; border: 1px solid #e5e7eb; box-shadow: 0 16px 40px rgba(15,23,42,.22); animation: toast-in .18s ease-out; }
+.dark .toast { background: #1a1a24; border-color: rgba(255,255,255,.12); color: #f1f5f9; }
+.toast.is-success { border-left: 4px solid #16a34a; }
+.toast.is-success i { color: #16a34a; }
+.toast.is-error { border-left: 4px solid #dc2626; }
+.toast.is-error i { color: #dc2626; }
+.toast.is-info { border-left: 4px solid #2563eb; }
+.toast.is-info i { color: #2563eb; }
+@keyframes toast-in { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
 /* Agregat detail pelanggan (2x2 di bawah ringkasan) */
 .rc-cust-grid.pl-agg { grid-template-columns: 1fr 1fr; margin-top: 8px; }
 /* Popup edit pelanggan */
@@ -1954,11 +2025,7 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .pl-edit-btns { display: flex; gap: 8px; margin-top: 12px; }
 .pl-edit-btns .receive-back-btn { flex: 0 0 auto; justify-content: center; }
 .pl-edit-btns .receive-submit-btn { flex: 1; justify-content: center; padding: 10px 14px; border-radius: 10px; font-size: 13px; }
-/* Audit kolom Pelanggan: plafon Tindakan Terakhir 200px (hanya max-width) */
-#pagePelanggan .pl-table th:nth-child(5),
-#pagePelanggan .pl-table td.pl-c-action { max-width: 200px; }
-/* Kunci grid kolom tabel Pelanggan (fixed + colgroup): header & sel tidak bisa bergeser */
-#pagePelanggan .pl-table { table-layout: fixed; }
+/* Lebar plafon kolom Rencana Perbaikan Terakhir (isi dibatasi span ellipsis 210px) */
 
 /* Popup sukses Servis Baru */
 .rsp-overlay {
@@ -2224,6 +2291,53 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .rc-check:has(input:checked) { color: #15803d; font-weight: 700; }
 .dark .rc-check:has(input:checked) { color: #4ade80; }
 
+/* COMPACT: Kondisi & Kelengkapan Unit — Servis Baru only (#rcCheckGroups).
+   Scope terbatas agar Klaim/Update tidak ikut berubah. */
+#pageReceive .rc-check-wrap { margin-top: 10px; padding-top: 8px; }
+#pageReceive .rc-check-title { margin-bottom: 6px; }
+#pageReceive #rcCheckGroups { gap: 8px; min-width: 0; }
+#pageReceive #rcCheckGroups .rc-check-group { min-width: 0; }
+#pageReceive #rcCheckGroups .rc-check-group-head {
+    gap: 6px;
+    margin: 0 0 4px;
+    font-size: 11px;
+    letter-spacing: 0.5px;
+    line-height: 1.35;
+}
+#pageReceive #rcCheckGroups .rc-check-group-ico {
+    width: 22px; height: 22px;
+    border-radius: 6px;
+    font-size: 11px;
+}
+#pageReceive #rcCheckGroups .rc-check-grid { gap: 2px 10px; }
+#pageReceive #rcCheckGroups .rc-check {
+    font-size: 12px;
+    gap: 5px;
+    padding: 1px 0;
+    line-height: 1.35;
+    max-width: 100%;
+}
+#pageReceive #rcCheckGroups .rc-check input { width: 13px; height: 13px; }
+/* Desktop: grup berdampingan — sekat vertikal tipis, tanpa tumpukan top-border */
+@media (min-width: 641px) {
+    #pageReceive #rcCheckGroups .rc-check-group + .rc-check-group {
+        margin-top: 0;
+        padding-top: 0;
+        border-top: 0;
+        padding-left: 10px;
+        border-left: 1px dashed #e2e8f0;
+    }
+    .dark #pageReceive #rcCheckGroups .rc-check-group + .rc-check-group { border-left-color: rgba(255,255,255,0.1); }
+}
+/* Mobile: grup menumpuk — sekat horizontal ringkas, wrap natural tanpa scrollbar */
+@media (max-width: 640px) {
+    #pageReceive #rcCheckGroups { gap: 0; }
+    #pageReceive #rcCheckGroups .rc-check-group + .rc-check-group {
+        margin-top: 6px;
+        padding-top: 6px;
+    }
+}
+
 /* Histori Cerdas */
 .rc-hist .receive-panel-head { position: relative; }
 .rc-hist-state {
@@ -2243,7 +2357,6 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .rc-searching i { color: #2563eb; }
 
 /* Shortcut keycaps */
-.rc-shortcut { margin: 0; }
 .rc-keys { list-style: none; margin: 2px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .rc-keys li {
     display: flex;
@@ -2280,6 +2393,59 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .dark .rc-keys li.is-primary { background: rgba(220,38,38,0.12); border-color: rgba(220,38,38,0.35); }
 .rc-keys li.is-primary kbd { border-color: #fca5a5; }
+
+/* FLOATING SHORTCUT (Servis Baru) — icon saja default, popover saat diklik.
+   Absolute dalam overlay (tak menggeser layout, tak memicu scrollbar). */
+.rc-shortcut-fab {
+    position: absolute;
+    right: 14px;
+    bottom: 14px;
+    z-index: 60;
+    width: 42px;
+    height: 42px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.25);
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+    color: #fff;
+    font-size: 17px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    box-shadow: 0 10px 24px rgba(220,38,38,0.45);
+    transition: transform .15s, box-shadow .15s;
+}
+.rc-shortcut-fab:hover { transform: translateY(-2px); box-shadow: 0 14px 28px rgba(220,38,38,0.5); }
+.rc-shortcut-fab:active { transform: translateY(0); }
+.rc-shortcut-pop {
+    display: none;
+    position: absolute;
+    right: 12px;
+    bottom: 64px;
+    z-index: 61;
+    width: 264px;
+    max-width: calc(100% - 24px);
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 14px;
+    box-shadow: 0 16px 40px rgba(15,23,42,0.22);
+    padding: 12px 14px 14px;
+}
+.rc-shortcut-pop.open { display: block; }
+.rc-shortcut-pop-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+    border-bottom: 1px solid #f1f5f9;
+}
+.dark .rc-shortcut-pop {
+    background: #16171d;
+    border-color: rgba(255,255,255,0.1);
+    box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+}
+.dark .rc-shortcut-pop-head { border-bottom-color: rgba(255,255,255,0.08); }
 
 /* Eye toggle password */
 .rc-pw-toggle {
@@ -2861,6 +3027,9 @@ select.range-pill.range-select option { color: #0f172a; }
 }
 .ndr-nonum > span { display: block; font-size: 14px; color: #666; letter-spacing: 1px; padding: 14px 10px 0; }
 .ndr-nonum > b { display: block; font-size: 31px; font-weight: 800; padding: 6px 12px 16px; word-break: break-all; }
+/* Warna nomor per jenis nota: garansi = hijau, claim/komplain = oranye */
+.ndr-doc-warranty .ndr-nonum > b { color: #059669; }
+.ndr-doc-claim .ndr-nonum > b { color: #ea580c; }
 .ndr-strip {
     background: #d31111; color: #fff; font-size: 13px; font-weight: 600;
     padding: 11px 12px; display: flex; align-items: center; justify-content: center; gap: 8px;
@@ -3020,7 +3189,7 @@ select.range-pill.range-select option { color: #0f172a; }
 .nps-idlabel { display: flex; align-items: center; gap: 10px; margin-top: 14px; font-size: 18px; font-weight: 800; letter-spacing: 1px; color: #333; }
 .nps-idlabel i { color: #d31111; font-size: 16px; flex-shrink: 0; }
 .nps-idlabel .nps-rule { flex: 1; height: 3px; min-width: 20px; background: #d31111; border-radius: 2px; }
-.nps-id { font-size: 50px; font-weight: 800; color: #d31111; line-height: 1.05; word-break: break-all; }
+.nps-id { font-size: 50px; font-weight: 800; color: #2563eb; line-height: 1.05; word-break: break-all; }
 .nps-proof { flex: 0 0 330px; border: 2px solid #d31111; border-radius: 18px; padding: 20px; display: flex; gap: 16px; align-items: flex-start; background: #fff; }
 .nps-proof-ico { color: #d31111; display: inline-flex; align-items: center; justify-content: center; font-size: 34px; flex-shrink: 0; margin-top: 2px; }
 .nps-proof b { display: block; font-size: 20px; font-weight: 800; color: #111; line-height: 1.4; }

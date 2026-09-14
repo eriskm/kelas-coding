@@ -50,7 +50,7 @@ function setActiveNav(active, items) {
 // ROUTE PERSISTENCE (tahan refresh + URL hash)
 // ─────────────────────────────────────────────
 
-const VALID_PAGES = ['dashboard', 'transaksi', 'pelanggan', 'garansi', 'sparepart', 'keuangan'];
+const VALID_PAGES = ['dashboard', 'transaksi', 'pelanggan', 'garansi', 'sparepart', 'keuangan', 'akun'];
 
 // Servis Baru adalah floating overlay di atas halaman utama, jadi status bukanya
 // disimpan terpisah agar tahan refresh (bsf_page tetap menyimpan halaman dasar).
@@ -116,7 +116,7 @@ function scheduleReceiveDraft() {
 function restoreReceiveDraft() {
     let d = null;
     try { d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null'); } catch (_) { d = null; }
-    if (!d) return false;
+    if (!d) { try { rcMarkReq(); } catch (_) {} return false; }
     RECEIVE_DRAFT_FIELDS.forEach(id => {
         const el = document.getElementById(id);
         if (!el || d[id] === undefined) return;
@@ -128,11 +128,24 @@ function restoreReceiveDraft() {
         if (d._checklist && typeof applyChecklist === 'function') applyChecklist('rc', d._checklist);
     } catch (_) {}
     try { updateReceiveSteps(); } catch (_) {}
+    try { rcMarkReq(); } catch (_) {}
     return true;
 }
 
 function clearReceiveDraft() {
     try { localStorage.removeItem(RECEIVE_DRAFT_KEY); } catch (_) {}
+}
+
+// Tandai Rencana + Estimasi wajib (* merah) saat status Servis Baru = KONFIRMASI.
+// Global agar tahan refresh: dipanggil setiap restoreReceiveDraft().
+function rcMarkReq() {
+    try {
+        const req = ((document.getElementById('rcStatus') || {}).value === 'KONFIRMASI');
+        const pl = document.getElementById('rcPlanLabel');
+        if (pl) pl.innerHTML = 'Rencana Perbaikan' + (req ? ' <b class="text-red-500">*</b>' : '');
+        const es = document.getElementById('rcEstimateLabel');
+        if (es) es.innerHTML = 'Estimasi Biaya' + (req ? ' <b class="text-red-500">*</b>' : '');
+    } catch (_) {}
 }
 
 function savePage(key) {
@@ -159,6 +172,9 @@ function navigateTo(key) {
 }
 
 function showPage(name) {
+    // Penanda halaman aktif: hashchange yang dipicu savePage() di bawah
+    // tidak boleh menavigasi ulang (mencegah render ganda).
+    window._activePage = name;
     const isDash = name === 'dashboard';
     const isTransaksi = name === 'transaksi';
     const isPelanggan = name === 'pelanggan';
@@ -170,6 +186,10 @@ function showPage(name) {
     if (name === 'formAkun') { openFormAkun(); return; }
     savePage(name);
     try { localStorage.removeItem(RECEIVE_OPEN_KEY); } catch (_) {}
+    // Pindah halaman menutup semua menu titik-3 + popup sementara.
+    try { closeRowMenus(); } catch (_) {}
+    try { closeReceiveSuccessPopup(false); } catch (_) {}
+    try { doneWaClose(); } catch (_) {}
 
     document.getElementById('pageReceive').classList.remove('open');
     const _pgNota = document.getElementById('pageNota');
@@ -202,25 +222,40 @@ function showDashboard() { showPage('dashboard'); }
 function showTransaksi() { showPage('transaksi'); renderTransaksi(); }
 function showPelanggan() { showPage('pelanggan'); renderPelanggan(); }
 function showGaransi() { showPage('garansi'); renderGaransi(); }
-function showSparepart() { showPage('sparepart'); renderSparepart(); }
+function showSparepart() { _spPage = 1; showPage('sparepart'); renderSparepart(); }
 function showKeuangan() { showPage('keuangan'); renderKeuangan(); }
-function showAkun() { showPage('akun'); renderAkun(); }
 
 // ─────────────────────────────────────────────
-// KELOLA AKUN (tahap UI: dummy in-memory, backend tahap berikutnya)
+// KELOLA AKUN (data real backend — GET/POST/PUT /api/auth/users)
+// Hapus = nonaktifkan (active=0), bukan delete, agar histori login aman.
 // ─────────────────────────────────────────────
-const AKUN_DUMMY = [
-    { nama: 'Andi Pratama', username: 'andi_admin', role: 'Admin', status: 'Aktif', login: 'Hari ini, 08:30' },
-    { nama: 'Budi Santoso', username: 'budi_super', role: 'Admin', status: 'Aktif', login: 'Kemarin, 14:15' },
-    { nama: 'Citra Kirana', username: 'citra_tek', role: 'Teknisi', status: 'Aktif', login: 'Hari ini, 09:05' },
-    { nama: 'Doni Setiawan', username: 'doni_tek', role: 'Teknisi', status: 'Aktif', login: 'Hari ini, 10:20' },
-    { nama: 'Eko Wahyudi', username: 'eko_tek', role: 'Teknisi', status: 'Nonaktif', login: '12 Ags 2026, 16:45' },
-];
-
 let _akQuery = '';
 let _akRole = '';
 let _akStatus = '';
-let _akEditIdx = -1;
+let _akEditId = -1;
+let _akReq = 0;
+// State real dari backend. AKUN_DUMMY dipensiunkan.
+let _akView = [];
+
+function akNorm(r) {
+    const active = Number(r.active) === 1;
+    let login = 'Belum pernah login';
+    if (r.last_login) {
+        try {
+            const d = new Date(r.last_login);
+            login = d.toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })
+                + ', ' + d.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        } catch (_) { login = String(r.last_login).slice(0, 16).replace('T', ' '); }
+    }
+    return {
+        id: r.id,
+        nama: r.display_name || '-',
+        username: r.username || '-',
+        role: r.role || 'Teknisi',
+        status: active ? 'Aktif' : 'Nonaktif',
+        login: login,
+    };
+}
 
 function akRoleBadge(role) {
     const admin = role === 'Admin';
@@ -234,7 +269,7 @@ function akStatusBadge(status) {
 
 function akFiltered() {
     const q = _akQuery.trim().toLowerCase();
-    return AKUN_DUMMY.filter(a => {
+    return (_akView || []).filter(a => {
         if (_akRole && a.role !== _akRole) return false;
         if (_akStatus && a.status !== _akStatus) return false;
         if (!q) return true;
@@ -264,32 +299,43 @@ function initAkToolbar() {
     }
 }
 
-function renderAkun() {
+async function renderAkun() {
     initAkToolbar();
     initAkunForm();
+    const my = ++_akReq;
     const body = document.getElementById('akBody');
     if (!body) return;
-    const total = AKUN_DUMMY.length;
-    const aktif = AKUN_DUMMY.filter(a => a.status === 'Aktif').length;
-    const admin = AKUN_DUMMY.filter(a => a.role === 'Admin').length;
+    try {
+        const rows = await apiGet('/auth/users');
+        if (my !== _akReq) return; // respons basi — ada request lebih baru
+        _akView = (rows || []).map(akNorm);
+    } catch (err) {
+        if (my !== _akReq) return;
+        body.innerHTML = `<tr><td colspan="7"><div class="text-center text-sm text-gray-400 py-6">${escapeHtml(err.message || 'Gagal memuat akun.')}</div></td></tr>`;
+        return;
+    }
+    const total = _akView.length;
+    const aktif = _akView.filter(a => a.status === 'Aktif').length;
+    const admin = _akView.filter(a => a.role === 'Admin').length;
     const setNum = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     setNum('akTotal', total);
     setNum('akAktif', aktif);
     setNum('akAdmin', admin);
     const data = akFiltered();
-    body.innerHTML = data.map((a, i) => {
-        const idx = AKUN_DUMMY.indexOf(a);
+    body.innerHTML = data.map((a) => {
         return `
-        <tr class="tx-row${i % 2 ? ' bg-gray-50/50 dark:bg-white/[0.02]' : ''}">
-            <td class="text-center text-gray-500">${i + 1}</td>
+        <tr class="tx-row">
+            <td class="text-center text-gray-500">${_akView.indexOf(a) + 1}</td>
             <td class="font-semibold text-gray-800 dark:text-gray-200">${escapeHtml(a.nama)}</td>
             <td class="text-gray-500">${escapeHtml(a.username)}</td>
             <td class="text-center">${akRoleBadge(a.role)}</td>
             <td class="text-center">${akStatusBadge(a.status)}</td>
             <td class="text-gray-500 text-[11px]">${escapeHtml(a.login)}</td>
             <td class="text-center">
-                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun" onclick="akEdit(${idx})"><i class="fa-solid fa-pen-to-square"></i></button>
-                <button class="tx-view-btn tx-del-btn" title="Hapus Akun" onclick="akDel(${idx})"><i class="fa-solid fa-trash"></i></button>
+                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun" onclick="akEdit(${a.id})"><i class="fa-solid fa-pen-to-square"></i></button>
+                ${a.status === 'Aktif'
+                    ? `<button class="tx-view-btn tx-del-btn" title="Nonaktifkan Akun" onclick="akDeactivate(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-trash"></i></button>`
+                    : `<button class="tx-view-btn tx-edit-btn" title="Aktifkan Lagi" onclick="akReactivate(${a.id})"><i class="fa-solid fa-rotate-left"></i></button>`}
             </td>
         </tr>`;
     }).join('');
@@ -299,54 +345,78 @@ function renderAkun() {
         : 'Menampilkan ' + data.length + ' dari ' + total + ' akun (filter)';
 }
 
-function akEdit(i) {
-    const a = AKUN_DUMMY[i];
+function akEdit(id) {
+    const a = (_akView || []).find(x => x && x.id === id);
     if (!a) return;
-    _akEditIdx = i;
+    _akEditId = id;
     document.getElementById('akFormTitle').textContent = 'Edit Akun';
-    document.getElementById('akNama').value = a.nama || '';
+    document.getElementById('akNama').value = a.nama === '-' ? '' : a.nama;
     document.getElementById('akUsername').value = a.username || '';
+    document.getElementById('akUsername').disabled = true;
     document.getElementById('akPassword').value = '';
+    document.getElementById('akPassword').placeholder = 'Kosongkan bila tidak diganti';
     document.getElementById('akRole').value = a.role || 'Teknisi';
     document.getElementById('akStatus').value = a.status || 'Aktif';
     openFormAkun();
 }
 
-function akDel(i) {
-    const a = AKUN_DUMMY[i];
-    if (!a) return;
-    if (!confirm('Hapus akun "' + a.username + '"? (lokal, tidak memengaruhi database)')) return;
-    AKUN_DUMMY.splice(i, 1);
-    renderAkun();
+async function akDeactivate(id, username) {
+    if (!confirm('Nonaktifkan akun "' + username + '"? Akun tidak bisa login sampai diaktifkan lagi.')) return;
+    try {
+        await apiPut('/auth/users/' + id, { active: 0 });
+        renderAkun();
+    } catch (err) {
+        toast(err.message || 'Gagal menonaktifkan akun.');
+    }
+}
+
+async function akReactivate(id) {
+    try {
+        await apiPut('/auth/users/' + id, { active: 1 });
+        renderAkun();
+    } catch (err) {
+        toast(err.message || 'Gagal mengaktifkan akun.');
+    }
 }
 
 function initAkunForm() {
     const form = document.getElementById('akunForm');
     if (!form || form.dataset.bound) return;
     form.dataset.bound = '1';
-    form.addEventListener('submit', function (e) {
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
         const nama = document.getElementById('akNama').value.trim();
         const username = document.getElementById('akUsername').value.trim();
+        const passcode = document.getElementById('akPassword').value;
         if (!nama || !username) return;
-        if (AKUN_DUMMY.some((a, j) => j !== _akEditIdx && a.username.toLowerCase() === username.toLowerCase())) {
-            alert('Username sudah dipakai akun lain.');
-            return;
+        try {
+            if (_akEditId >= 0) {
+                const payload = {
+                    display_name: nama,
+                    role: document.getElementById('akRole').value,
+                    active: document.getElementById('akStatus').value === 'Aktif' ? 1 : 0,
+                };
+                if (passcode) payload.passcode = passcode;
+                await apiPut('/auth/users/' + _akEditId, payload);
+                _akEditId = -1;
+            } else {
+                if (!passcode || passcode.length < 4) {
+                    toast('Passcode minimal 4 karakter.');
+                    return;
+                }
+                await apiPost('/auth/users', {
+                    username: username,
+                    display_name: nama,
+                    role: document.getElementById('akRole').value,
+                    passcode: passcode,
+                    active: document.getElementById('akStatus').value === 'Aktif' ? 1 : 0,
+                });
+            }
+            renderAkun();
+            closeFormAkun();
+        } catch (err) {
+            toast(err.message || 'Gagal menyimpan akun.');
         }
-        const item = {
-            nama: nama,
-            username: username,
-            role: document.getElementById('akRole').value,
-            status: document.getElementById('akStatus').value,
-            login: (_akEditIdx >= 0 && AKUN_DUMMY[_akEditIdx]) ? AKUN_DUMMY[_akEditIdx].login : 'Belum pernah login',
-        };
-        if (_akEditIdx >= 0 && AKUN_DUMMY[_akEditIdx]) {
-            AKUN_DUMMY[_akEditIdx] = item;
-        } else {
-            AKUN_DUMMY.push(item);
-        }
-        renderAkun();
-        closeFormAkun();
     });
 }
 
@@ -359,7 +429,7 @@ function openServisBaru() {
     const _nb = document.getElementById('receiveNotaBtn');
     if (_nb) _nb.classList.add('hidden');
     const _st = document.getElementById('receiveSubmitText');
-    if (_st) _st.textContent = 'Terima dan Daftarkan Unit Servis';
+    if (_st) _st.textContent = 'Terima & Daftarkan Servis';
     updateReceiveSteps();
     loadSmartHistory();
     setActiveNav('servisbaru', document.querySelectorAll('.nav-link'));
@@ -414,9 +484,11 @@ function openFormAkun() {
     if (window.innerWidth < 640) toggleSidebar(false);
 }
 function showFormAkun() {
-    _akEditIdx = -1;
+    _akEditId = -1;
     document.getElementById('akFormTitle').textContent = 'Tambah Akun';
     document.getElementById('akunForm').reset();
+    document.getElementById('akUsername').disabled = false;
+    document.getElementById('akPassword').placeholder = 'Minimal 4 karakter';
     openFormAkun();
 }
 function closeFormAkun() {
@@ -513,6 +585,8 @@ function initFloatDrag() {
     makeFloatDraggable('pageUpdateServis', 'updateTitlebar', closeUpdateServis);
     makeFloatDraggable('pageTxDetail', 'txDetailTitlebar', closeTxDetail);
     makeFloatDraggable('pageClaimReceive', 'claimReceiveTitlebar', closeClaimReceive);
+    // CTO floating: pakai mekanisme drag existing (clamp viewport); Escape = noop (non-modal).
+    makeFloatDraggable('ctoFloat', 'ctoFloatHead', () => {});
 }
 
 // ─────────────────────────────────────────────
@@ -665,10 +739,9 @@ async function renderStarCards() {
     const data = await apiGet('/overview');
     const byKey = {};
     (data.star_cards || []).forEach(c => { if (c && c.key) byKey[c.key] = c; });
-    // Visibility CTO: tampil hanya saat CTS tercapai & CTO belum tercapai.
-    // Sumber: flag `tercapai` bawaan API (formula CTS/CTO tidak diubah).
+    // 5 card utama tetap di layout (CTO bukan bagian grid — dirender floating).
+    // Sumber data & formula tidak diubah.
     const order = ['omset', 'laba_kotor', 'beban', 'laba_bersih', 'cts'];
-    if (shouldShowCto(byKey)) order.push('cto');
     const cards = order.map(key => {
         const c = byKey[key];
         if (!c) return '';
@@ -683,7 +756,7 @@ async function renderStarCards() {
                 ${c.sub ? `<div class="kpi-caption kpi-caption-light">${escapeHtml(c.sub)}</div>` : ''}
             </div>`;
         }
-        if (key === 'cts' || key === 'cto') {
+        if (key === 'cts') {
             return `
             <div class="star-card kpi-target">
                 <div class="kpi-top"><span class="kpi-label-dark">${m.emoji} ${escapeHtml(c.label)}</span></div>
@@ -700,6 +773,29 @@ async function renderStarCards() {
             </div>`;
     }).join('');
     document.getElementById('starCards').innerHTML = cards;
+    renderCtoFloat(byKey);
+}
+
+// ─────────────────────────────────────────────
+// RENDER: CTO FLOATING CARD (non-blocking, draggable)
+// Visibility = shouldShowCto (CTS tercapai & CTO belum) — formula tak diubah.
+// Posisi drag milik user tidak direset saat re-render (hanya isi yang diganti).
+// ─────────────────────────────────────────────
+function renderCtoFloat(byKey) {
+    const el = document.getElementById('ctoFloat');
+    const body = document.getElementById('ctoFloatBody');
+    if (!el || !body) return;
+    if (!shouldShowCto(byKey) || !byKey['cto']) {
+        el.classList.remove('open');
+        return;
+    }
+    const c = byKey['cto'];
+    const cvalue = typeof c.value === 'number' ? kpiRupiah(c.value) : c.value;
+    body.innerHTML = `
+        <div class="cto-float-val">${cvalue}</div>
+        ${kpiProgressBar(c.progress, c.tercapai)}
+        ${c.sub ? `<div class="kpi-caption">${escapeHtml(c.sub)}</div>` : ''}`;
+    el.classList.add('open');
 }
 
 // ─────────────────────────────────────────────
@@ -784,30 +880,39 @@ function getCommonOpts() {
 
 // ─────────────────────────────────────────────
 // STATISTIK STATUS TRANSAKSI (ref: statistic-reference.png)
-// Tahap UI + dummy data — backend diintegrasikan tahap berikutnya.
+// Data real dari backend (GET /api/statistics/status → by_status).
+// STATUS_META = tampilan (warna/icon) per status form yang sah.
 // ─────────────────────────────────────────────
-const STATUS_TX_ORDER = ['Analisa', 'Konfirmasi', 'Wait Part', 'Repair', 'Done', 'Failed', 'Garansi', 'Refund', 'Cancel', 'Cash'];
-
-const STATUS_TX_DUMMY = [
-    { name: 'Analisa',    value: 3, color: '#64748b', cls: 'sm-slate',  icon: 'fa-magnifying-glass' },
-    { name: 'Konfirmasi', value: 1, color: '#f97316', cls: 'sm-orange', icon: 'fa-clipboard-check' },
-    { name: 'Wait Part',  value: 3, color: '#ca8a04', cls: 'sm-gold',   icon: 'fa-hourglass-half' },
-    { name: 'Repair',     value: 6, color: '#2563eb', cls: 'sm-blue',   icon: 'fa-screwdriver-wrench' },
-    { name: 'Done',       value: 6, color: '#16a34a', cls: 'sm-green',  icon: 'fa-circle-check' },
-    { name: 'Failed',     value: 1, color: '#dc2626', cls: 'sm-red',    icon: 'fa-circle-xmark' },
-    { name: 'Garansi',    value: 1, color: '#7c3aed', cls: 'sm-purple', icon: 'fa-shield-halved' },
-    { name: 'Refund',     value: 0, color: '#0d9488', cls: 'sm-teal',   icon: 'fa-rotate-left' },
-    { name: 'Cancel',     value: 0, color: '#e11d48', cls: 'sm-rose',   icon: 'fa-ban' },
-    { name: 'Cash',       value: 0, color: '#059669', cls: 'sm-emerald', icon: 'fa-cash-register' },
+const STATUS_META = [
+    { name: 'ANALISA',    color: '#64748b', cls: 'sm-slate',   icon: 'fa-magnifying-glass' },
+    { name: 'KONFIRMASI', color: '#f97316', cls: 'sm-orange',  icon: 'fa-clipboard-check' },
+    { name: 'WAIT PART',  color: '#ca8a04', cls: 'sm-gold',    icon: 'fa-hourglass-half' },
+    { name: 'REPAIR',     color: '#2563eb', cls: 'sm-blue',    icon: 'fa-screwdriver-wrench' },
+    { name: 'DONE',       color: '#16a34a', cls: 'sm-green',   icon: 'fa-circle-check' },
+    { name: 'CASH',       color: '#059669', cls: 'sm-emerald', icon: 'fa-cash-register' },
+    { name: 'FILED',      color: '#7c3aed', cls: 'sm-purple',  icon: 'fa-box-archive' },
+    { name: 'CANCEL',     color: '#dc2626', cls: 'sm-red',     icon: 'fa-ban' },
 ];
 
-const STATUS_TX_TOTAL = STATUS_TX_DUMMY.reduce((a, b) => a + b.value, 0); // 21
+async function statusCounts() {
+    try {
+        const st = await apiGet('/statistics/status');
+        const byName = {};
+        ((st && st.by_status) || []).forEach(r => { byName[r.name] = Number(r.value) || 0; });
+        return STATUS_META.map(m => ({ ...m, value: byName[m.name] || 0 }));
+    } catch (_) {
+        return STATUS_META.map(m => ({ ...m, value: 0 }));
+    }
+}
 
 async function initCharts() {
     const co = getCommonOpts();
+    const rows = await statusCounts();
+    const data = rows.map(s => s.value);
+    const max = Math.max(1, ...data);
 
-    // Statistik Status Transaksi — Smooth Line/Area per status (dummy)
-    const discrete = STATUS_TX_DUMMY.map((s, i) => ({
+    // Statistik Status Transaksi — Smooth Line/Area per status (real)
+    const discrete = rows.map((s, i) => ({
         seriesIndex: 0,
         dataPointIndex: i,
         fillColor: s.color,
@@ -817,14 +922,14 @@ async function initCharts() {
     statusChart = new ApexCharts(document.querySelector('#chartStatusTransaksi'), {
         ...co,
         chart: { ...co.chart, type: 'area', height: getChartHeight(), toolbar: { show: false }, zoom: { enabled: false } },
-        series: [{ name: 'Transaksi', data: STATUS_TX_DUMMY.map(s => s.value) }],
+        series: [{ name: 'Transaksi', data: data }],
         xaxis: {
-            categories: STATUS_TX_ORDER,
+            categories: rows.map(s => s.name),
             labels: { style: { fontSize: '9px', fontWeight: 600 }, rotate: 0, trim: false },
             axisBorder: { show: false },
             axisTicks: { show: false },
         },
-        yaxis: { min: 0, max: 7, tickAmount: 7, labels: { style: { fontSize: '10px' } } },
+        yaxis: { min: 0, max: max + 1, tickAmount: Math.min(max + 1, 7), labels: { style: { fontSize: '10px' } } },
         grid: { borderColor: chartGridColor(), strokeDashArray: 4, xaxis: { lines: { show: false } }, yaxis: { lines: { show: true } } },
         colors: ['#3b82f6'],
         fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02 } },
@@ -859,17 +964,23 @@ async function renderStatusMini() {
     const grid = document.getElementById('statusMiniGrid');
     const banner = document.getElementById('insightStatus');
     if (!grid) return;
-    // Dummy tahap UI — backend diintegrasikan tahap berikutnya.
-    const total = STATUS_TX_TOTAL;
+    const rows = await statusCounts();
+    const total = rows.reduce((a, b) => a + b.value, 0);
     const pct = v => total > 0 ? (v / total * 100).toFixed(1) + '%' : '0.0%';
-    grid.innerHTML = STATUS_TX_DUMMY.map(c => `
+    grid.innerHTML = rows.map(c => `
         <div class="sm-card ${c.cls}">
             <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.name}</div>
             <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">${pct(c.value)}</span></div>
         </div>
     `).join('');
     if (banner) {
-        const top = STATUS_TX_DUMMY.slice().sort((a, b) => b.value - a.value)[0];
+        if (!total) {
+            banner.innerHTML = `<span class="insight-ava insight-ava-ai"><i class="fa-solid fa-robot"></i></span>`
+                + `<p><b>Insight AI:</b> Belum ada transaksi tercatat.</p>`
+                + `<span class="insight-side"><i class="fa-solid fa-chart-line"></i></span>`;
+            return;
+        }
+        const top = rows.slice().sort((a, b) => b.value - a.value)[0];
         banner.innerHTML = `<span class="insight-ava insight-ava-ai"><i class="fa-solid fa-robot"></i></span>`
             + `<p><b>Insight AI:</b> ${top.name} mendominasi <b>${pct(top.value)} (${top.value} unit)</b> dari total transaksi.`
             + ` Teknisi sedang fokus melakukan pengerjaan perbaikan unit.</p>`
@@ -1000,14 +1111,18 @@ function initNav() {
                 showTransaksi();
             } else if (page === 'pelanggan') {
                 showPelanggan();
+            } else if (page === 'garansi') {
+                showGaransi();
             } else if (page === 'sparepart') {
                 showSparepart();
             } else if (page === 'keuangan') {
                 showKeuangan();
+            } else if (page === 'akun') {
+                showAkun();
             } else if (page === 'servisbaru') {
                 showPage('receive');
             } else {
-                showPage(page === 'dashboard' ? 'dashboard' : 'dashboard');
+                showPage('dashboard');
             }
         });
     });
@@ -1055,6 +1170,21 @@ function setAdminUI(user) {
     if (avatar) avatar.textContent = initial;
     const welcome = document.querySelector('.app-topbar h1 span.text-brand-500');
     if (welcome) welcome.textContent = user.display_name || 'Admin';
+    // Menu Kelola Akun hanya untuk Admin/Superadmin (selaras dengan require_admin backend).
+    const isAdmin = ['SUPERADMIN', 'ADMIN'].includes(String(user.role || '').toUpperCase());
+    document.querySelectorAll('[data-page="akun"]').forEach(el => {
+        el.style.display = isAdmin ? '' : 'none';
+    });
+    try { window._isAdmin = isAdmin; } catch (_) {}
+}
+
+function showAkun() {
+    if (window._isAdmin === false) {
+        toast('Hanya Admin yang boleh membuka Kelola Akun.');
+        showPage('dashboard');
+        return;
+    }
+    showPage('akun'); renderAkun();
 }
 
 async function loadDashboard() {
@@ -1115,6 +1245,7 @@ function txLaba(o) {
 }
 
 async function renderTransaksi() {
+    try { txMenuClose(); } catch (_) {}
     initTxToolbar();
     if (_txQuery.trim() || _txDate) await loadTxFiltered();
     else await loadTxPage(1);
@@ -1136,23 +1267,21 @@ function initTxToolbar() {
 function txRowHtml(o, num) {
     return `<tr>
         <td class="tx-num">${num}</td>
-        <td class="tx-cell-muted">${txDate(o.service_date)}</td>
+        <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.service_date || '')}">${txDate(o.service_date)}</td>
         <td><span class="tx-device tx-ellipsis" title="${escapeHtml(o.device || '-')}">${escapeHtml(o.device || '-')}</span></td>
-        <td>
-            <div class="tx-user">${escapeHtml(o.customer_name || '-')}</div>
-            <div class="tx-cell-muted">${escapeHtml(o.customer_phone || '')}</div>
+        <td class="tx-cust">
+            <div class="tx-line-main tx-user tx-ellipsis" title="${escapeHtml(o.customer_name || '-')}">${escapeHtml(o.customer_name || '-')}</div>
+            <div class="tx-line-sub tx-cell-muted tx-ellipsis" title="${escapeHtml(o.customer_phone || '-')}">${escapeHtml(o.customer_phone || '-')}</div>
         </td>
-        <td>${txStatusBadge(o.status)}</td>
-        <td>
-            <div class="tx-user tx-ellipsis" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</div>
-            <div class="tx-cell-muted tx-ellipsis" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</div>
+        <td class="tx-statuscell">${txStatusBadge(o.status)}</td>
+        <td class="tx-work">
+            <div class="tx-line-main tx-user tx-ellipsis" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</div>
+            <div class="tx-line-sub tx-cell-muted tx-ellipsis" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</div>
         </td>
-        <td class="tx-cell-muted">${escapeHtml(o.technician || '-')}</td>
-        <td class="tx-laba">${txLaba(o)}</td>
+        <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.technician || '-')}">${escapeHtml(o.technician || '-')}</td>
+        <td class="tx-laba tx-nowrap">${txLaba(o)}</td>
         <td class="tx-aksi">
-            <button type="button" class="tx-view-btn" title="Detail" onclick="txDetail(${o.id})"><i class="fa-solid fa-eye"></i></button>
-            <button type="button" class="tx-view-btn tx-edit-btn" title="Edit" onclick="txEdit(${o.id})"><i class="fa-solid fa-pen"></i></button>
-            <button type="button" class="tx-view-btn tx-del-btn" title="Hapus" onclick="txDel(${o.id})"><i class="fa-solid fa-trash"></i></button>
+            <button type="button" class="tx-view-btn" data-txmenu-btn title="Menu" onclick="txMenuToggle(${o.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
         </td>
     </tr>`;
 }
@@ -1196,7 +1325,7 @@ async function loadTxFiltered() {
             return;
         }
         body.innerHTML = hit.map((o, i) => txRowHtml(o, i + 1)).join('');
-        pagination.classList.remove('hidden');
+        pagination.classList.add('hidden');
         if (document.getElementById('txPageBtns')) document.getElementById('txPageBtns').innerHTML = '';
         const info = document.getElementById('txInfo');
         if (info) info.textContent = hit.length + ' hasil filter';
@@ -1248,24 +1377,25 @@ async function loadTxPage(page) {
             else pagination.classList.add('hidden');
         }
         const info = document.getElementById('txInfo');
-        if (info) info.textContent = 'Halaman ' + _txPage + '  ' + start + ' - ' + end + '  (dari ' + _txTotal + ' transaksi)';
+        if (info) info.textContent = 'Halaman ' + _txPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + _txTotal + ' transaksi)';
 
         const pageBtns = document.getElementById('txPageBtns');
         if (pageBtns) {
             pageBtns.innerHTML = '';
-            const mkBtn = (txt, p, disabled, active) => {
+            const mkBtn = (txt, p, disabled, active, label) => {
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.textContent = txt;
+                b.innerHTML = txt;
+                if (label) { b.title = label; b.setAttribute('aria-label', label); }
                 b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
                 if (!disabled) b.addEventListener('click', () => loadTxPage(p));
                 return b;
             };
-            pageBtns.appendChild(mkBtn('← Sebelumnya', _txPage - 1, _txPage === 1, false));
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _txPage - 1, _txPage === 1, false, 'Sebelumnya'));
             for (let p = 1; p <= _txTotalPages; p++) {
                 pageBtns.appendChild(mkBtn(String(p), p, false, p === _txPage));
             }
-            pageBtns.appendChild(mkBtn('Berikutnya →', _txPage + 1, _txPage === _txTotalPages, false));
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _txPage + 1, _txPage === _txTotalPages, false, 'Berikutnya'));
         }
     } catch (err) {
         loading.classList.add('hidden');
@@ -1287,7 +1417,7 @@ async function txDetail(id) {
     try {
         o = await apiGet('/orders/' + id);
     } catch (err) {
-        alert(err.message);
+        toast(err.message);
         return;
     }
     _txdOrder = o;
@@ -1303,11 +1433,11 @@ async function txDetail(id) {
     const row = (k, v) => `<div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">${escapeHtml(k)}</span><b class="text-[13px] text-gray-800 dark:text-gray-100">${escapeHtml(v || '-')}</b></div>`;
     document.getElementById('txdCustomer').innerHTML =
         row('No. Servis', o.no_servis) + row('Tanggal Terima', notaTgl((o.service_date || '').slice(0, 10))) +
-        row('Nama Konsumen', cust.name) + row('No. WhatsApp', cust.phone) +
+        row('Nama Pelanggan', cust.name) + row('Nomor WhatsApp', cust.phone) +
         row('Device', o.device) + row('IMEI', o.imei) +
-        row('Password / Pola', o.device_password ? '••••••' : '-') + row('Teknisi', o.technician);
+        row('Kunci Layar / Pola', o.device_password ? '••••••' : '-') + row('Teknisi', o.technician);
     document.getElementById('txdWork').innerHTML =
-        row('Analisa Kerusakan', o.damagetype) + row('Tindakan Perbaikan', o.repair_plan) +
+            row('Keluhan', o.damagetype) + row('Rencana Perbaikan', o.repair_plan) +
         row('Status', o.status) + row('Tgl CASH', o.cash_date ? notaTgl((o.cash_date || '').slice(0, 10)) : '-');
     const fisik = txdCheckLabels(o.check_fisik, (typeof CHECK_FISIK !== 'undefined' ? CHECK_FISIK : []));
     const len = txdCheckLabels(o.check_len, (typeof CHECK_LEN !== 'undefined' ? CHECK_LEN : []));
@@ -1319,7 +1449,7 @@ async function txDetail(id) {
     const rupiah = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
     const final = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : o.estimate;
     document.getElementById('txdFinance').innerHTML =
-        row('Estimasi', rupiah(o.estimate)) + row('DP', rupiah(o.payment)) +
+        row('Estimasi Biaya', rupiah(o.estimate)) + row('DP (Uang Muka)', rupiah(o.payment)) +
         row('Harga Final', rupiah(final)) + row('Modal Part', rupiah(o.part_cost)) +
         row('Sisa (Final − DP)', rupiah((Number(final) || 0) - (Number(o.payment) || 0)));
     const wbox = document.getElementById('txdWarranty');
@@ -1446,7 +1576,7 @@ async function txEdit(id) {
     try {
         o = await apiGet('/orders/' + id);
     } catch (err) {
-        alert(err.message);
+        toast(err.message);
         return;
     }
     openUpdateServis(o);
@@ -1456,15 +1586,265 @@ async function txDel(id) {
     if (!confirm('Hapus transaksi #' + id + '? Data yang dihapus tidak bisa dikembalikan.')) return;
     try {
         await apiDel('/orders/' + id);
+        txMenuClose();
         await renderTransaksi();
     } catch (err) {
-        alert(err.message);
+        toast(err.message);
     }
+}
+
+// Menu titik-3 kolom Aksi Transaksi (Detail / Ubah / Hapus) — pola sama seperti plMenu.
+let _txMenuId = null;
+
+function txMenuToggle(id, btn) {
+    const menu = document.getElementById('txMenu');
+    if (!menu) return;
+    if (_txMenuId === id && !menu.classList.contains('hidden')) { txMenuClose(); return; }
+    closeRowMenus('txMenu');
+    _txMenuId = id;
+    menu.dataset.id = id;
+    menu.classList.remove('hidden');
+    const r = btn.getBoundingClientRect();
+    const mw = 200, mh = 160;
+    let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+    left = Math.max(8, left);
+    let top = r.bottom + 6;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+}
+
+function txMenuClose() {
+    const menu = document.getElementById('txMenu');
+    if (menu) menu.classList.add('hidden');
+    _txMenuId = null;
+}
+
+if (!window._txMenuBound) {
+    window._txMenuBound = true;
+    document.addEventListener('click', function (e) {
+        const menu = document.getElementById('txMenu');
+        if (!menu || menu.classList.contains('hidden')) return;
+        if (e.target.closest('#txMenu') || e.target.closest('[data-txmenu-btn]')) return;
+        txMenuClose();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        txMenuClose();
+    });
+    window.addEventListener('resize', txMenuClose);
+    document.addEventListener('scroll', function () { txMenuClose(); }, true);
+}
+
+function txMenuAct(act) {
+    const menu = document.getElementById('txMenu');
+    const id = Number((menu || {}).dataset.id);
+    txMenuClose();
+    if (!id) return;
+    if (act === 'detail') txDetail(id);
+    else if (act === 'edit') txEdit(id);
+    else if (act === 'hapus') txDel(id);
+}
+
+// Penutup bersama menu titik-3 semua tabel (kecuali yang sedang dibuka).
+// Mencegah dua popup menu tumpuk (z-index sama).
+function closeRowMenus(exceptId) {
+    try {
+        ['txMenu', 'plMenu', 'grMenu', 'spMenu', 'kuMenu'].forEach(mid => {
+            if (mid === exceptId) return;
+            const m = document.getElementById(mid);
+            if (m) m.classList.add('hidden');
+        });
+        if (exceptId !== 'txMenu') _txMenuId = null;
+        if (exceptId !== 'plMenu') _plMenuId = null;
+        if (exceptId !== 'grMenu') { _grMenuIdx = null; try { _grMenuSid = null; } catch (_) {} }
+        if (exceptId !== 'spMenu') _spMenuId = null;
+        if (exceptId !== 'kuMenu') _kuMenuKey = null;
+    } catch (_) {}
+}
+
+// Menu titik-3 kolom Aksi Garansi (Detail / Klaim) — kunci service_order_id
+// (fallback idx bila id tak cocok, mis. data berubah di tengah jalan).
+let _grMenuSid = null;
+let _grMenuIdx = null;
+
+function grMenuToggle(sid, idx, btn) {
+    const menu = document.getElementById('grMenu');
+    if (!menu) return;
+    if (_grMenuSid === sid && !menu.classList.contains('hidden')) { grMenuClose(); return; }
+    closeRowMenus('grMenu');
+    _grMenuSid = sid;
+    _grMenuIdx = idx;
+    menu.dataset.sid = sid;
+    menu.dataset.idx = idx;
+    menu.classList.remove('hidden');
+    const r = btn.getBoundingClientRect();
+    const mw = 200, mh = 110;
+    let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+    left = Math.max(8, left);
+    let top = r.bottom + 6;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+}
+
+function grMenuClose() {
+    const menu = document.getElementById('grMenu');
+    if (menu) menu.classList.add('hidden');
+    _grMenuSid = null;
+    _grMenuIdx = null;
+}
+
+if (!window._grMenuBound) {
+    window._grMenuBound = true;
+    document.addEventListener('click', function (e) {
+        const menu = document.getElementById('grMenu');
+        if (!menu || menu.classList.contains('hidden')) return;
+        if (e.target.closest('#grMenu') || e.target.closest('[data-grmenu-btn]')) return;
+        grMenuClose();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        grMenuClose();
+    });
+    window.addEventListener('resize', grMenuClose);
+    document.addEventListener('scroll', function () { grMenuClose(); }, true);
+}
+
+function grMenuAct(act) {
+    const menu = document.getElementById('grMenu');
+    const sid = (menu || {}).dataset.sid;
+    let idx = (_grView || []).findIndex(x => x && String(x.service_order_id) === String(sid));
+    if (idx < 0) idx = Number((menu || {}).dataset.idx);
+    grMenuClose();
+    if (idx === null || idx === undefined || Number.isNaN(idx)) return;
+    if (act === 'detail') grDetail(idx);
+    else if (act === 'claim') grClaim(idx);
+}
+
+// Menu titik-3 kolom Aksi Sparepart (Ubah / Hapus) — id row.
+let _spMenuId = null;
+
+function spMenuToggle(id, btn) {
+    const menu = document.getElementById('spMenu');
+    if (!menu) return;
+    if (_spMenuId === id && !menu.classList.contains('hidden')) { spMenuClose(); return; }
+    closeRowMenus('spMenu');
+    _spMenuId = id;
+    menu.dataset.id = id;
+    menu.classList.remove('hidden');
+    const r = btn.getBoundingClientRect();
+    const mw = 200, mh = 110;
+    let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+    left = Math.max(8, left);
+    let top = r.bottom + 6;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+}
+
+function spMenuClose() {
+    const menu = document.getElementById('spMenu');
+    if (menu) menu.classList.add('hidden');
+    _spMenuId = null;
+}
+
+if (!window._spMenuBound) {
+    window._spMenuBound = true;
+    document.addEventListener('click', function (e) {
+        const menu = document.getElementById('spMenu');
+        if (!menu || menu.classList.contains('hidden')) return;
+        if (e.target.closest('#spMenu') || e.target.closest('[data-spmenu-btn]')) return;
+        spMenuClose();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        spMenuClose();
+    });
+    window.addEventListener('resize', spMenuClose);
+    document.addEventListener('scroll', function () { spMenuClose(); }, true);
+}
+
+function spMenuAct(act) {
+    const menu = document.getElementById('spMenu');
+    const id = Number((menu || {}).dataset.id);
+    spMenuClose();
+    if (!id) return;
+    if (act === 'edit') spEdit(id);
+    else if (act === 'hapus') spDel(id);
+}
+
+// Menu titik-3 Riwayat Kas manual (Ubah / Hapus) — baris otomatis tetap gembok.
+let _kuMenuKey = null;
+
+function kuMenuToggle(source, refId, btn) {
+    const menu = document.getElementById('kuMenu');
+    if (!menu) return;
+    const key = source + ':' + refId;
+    if (_kuMenuKey === key && !menu.classList.contains('hidden')) { kuMenuClose(); return; }
+    closeRowMenus('kuMenu');
+    _kuMenuKey = key;
+    menu.dataset.source = source;
+    menu.dataset.ref = refId;
+    menu.classList.remove('hidden');
+    const r = btn.getBoundingClientRect();
+    const mw = 200, mh = 110;
+    let left = Math.min(r.right - mw, window.innerWidth - mw - 8);
+    left = Math.max(8, left);
+    let top = r.bottom + 6;
+    if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+}
+
+function kuMenuClose() {
+    const menu = document.getElementById('kuMenu');
+    if (menu) menu.classList.add('hidden');
+    _kuMenuKey = null;
+}
+
+if (!window._kuMenuBound) {
+    window._kuMenuBound = true;
+    document.addEventListener('click', function (e) {
+        const menu = document.getElementById('kuMenu');
+        if (!menu || menu.classList.contains('hidden')) return;
+        if (e.target.closest('#kuMenu') || e.target.closest('[data-kumenu-btn]')) return;
+        kuMenuClose();
+    });
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        kuMenuClose();
+    });
+    window.addEventListener('resize', kuMenuClose);
+    document.addEventListener('scroll', function () { kuMenuClose(); }, true);
+}
+
+function kuMenuAct(act) {
+    const menu = document.getElementById('kuMenu');
+    const source = (menu || {}).dataset.source || 'manual';
+    const refId = Number((menu || {}).dataset.ref);
+    kuMenuClose();
+    if (!refId) return;
+    const row = (_kuView || []).find(x => x && x.source === source && Number(x.ref_id) === refId);
+    const ket = row ? row.ket : '';
+    if (act === 'edit') kuEditRow(source, refId);
+    else if (act === 'hapus') kuDelRow(source, refId, ket);
+}
+
+// Escape menutup popup sementara (sukses Servis Baru, konfirmasi WA DONE).
+// plEditPopup sudah ditutup Escape via _plMenuBound; menu row punya handler sendiri.
+if (!window._popEscBound) {
+    window._popEscBound = true;
+    document.addEventListener('keydown', function (e) {
+        if (e.key !== 'Escape') return;
+        try { closeReceiveSuccessPopup(false); } catch (_) {}
+        try { doneWaClose(); } catch (_) {}
+    });
 }
 
 // ─────────────────────────────────────────────
 // UPDATE DATA SERVIS (edit transaksi: kiri data, kanan finance + aksi)
-// Finance = dummy tahap UI (tanpa endpoint); data servis memakai PUT yang sudah ada.
+// Finance = hitungan lokal tersimpan via PUT /api/orders (final_price + modal_*).
 // ─────────────────────────────────────────────
 
 function usVal(id) { const el = document.getElementById(id); return el ? el.value : ''; }
@@ -1574,7 +1954,7 @@ function doneWaShow(d) {
     if (warn) {
         if (!num) {
             warn.classList.remove('hidden');
-            warn.textContent = 'No. WA kosong — isi Nomor WhatsApp lalu simpan ulang untuk mengirim.';
+            warn.textContent = 'Nomor WhatsApp kosong — isi Nomor WhatsApp lalu simpan ulang untuk mengirim.';
         } else warn.classList.add('hidden');
     }
     const send = document.getElementById('doneWaSendBtn');
@@ -1631,6 +2011,24 @@ function usSetStatus(s) {
     const wp = document.getElementById('usWarrantyPanel');
     if (wp) wp.classList.toggle('hidden', s !== 'CASH');
     if (s === 'CASH') { try { usWarrantyUpdate(); } catch (_) {} }
+    // DONE = pekerjaan sudah dilakukan: label berubah dari Rencana -> realisasi.
+    // Tanda * merah mengikuti syarat wajib tiap status:
+    // KONFIRMASI = Rencana + Estimasi; DONE = Tindakan + Teknisi; CASH = Rencana + Harga Final + Teknisi.
+    try {
+        const planBase = (s === 'DONE') ? 'Perbaikan / Tindakan Perbaikan' : 'Rencana Perbaikan';
+        const need = (fid) => (s === 'KONFIRMASI' && (fid === 'usPlan' || fid === 'usEstimate'))
+            || (s === 'DONE' && (fid === 'usPlan' || fid === 'usTechnician'))
+            || (s === 'CASH' && (fid === 'usPlan' || fid === 'usFinFinal' || fid === 'usTechnician'));
+        const mark = (labelId, base, fid) => {
+            const el = document.getElementById(labelId);
+            if (!el) return;
+            el.innerHTML = base + (need(fid) ? ' <b class="text-red-500">*</b>' : '');
+        };
+        mark('usPlanLabel', planBase, 'usPlan');
+        mark('usEstimateLabel', 'Estimasi Biaya', 'usEstimate');
+        mark('usTechnicianLabel', 'Teknisi Penanggung Jawab', 'usTechnician');
+        mark('usFinFinalLabel', 'Harga Final (total pembayaran pelanggan)', 'usFinFinal');
+    } catch (_) {}
 }
 
 function usGetStatus() {
@@ -1747,9 +2145,10 @@ function initUpdateServis() {
                 // Syarat CASH: blokir simpan bila belum lengkap.
                 // Modal Part kosong dianggap Rp0 (bukan error).
                 // Syarat DONE (lebih ringan): Tindakan Perbaikan + Teknisi.
+                // Syarat KONFIRMASI: Rencana Perbaikan + Estimasi Biaya Awal wajib diisi.
                 if (_usSt === 'CASH') {
                     const _missing = [];
-                    if (!usVal('usPlan').trim()) _missing.push(['Tindakan Perbaikan', 'usPlan']);
+                    if (!usVal('usPlan').trim()) _missing.push(['Rencana Perbaikan', 'usPlan']);
                     if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final', 'usFinFinal']);
                     if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
                     if (_missing.length) {
@@ -1766,13 +2165,29 @@ function initUpdateServis() {
                     }
                 } else if (_usSt === 'DONE') {
                     const _missing = [];
-                    if (!usVal('usPlan').trim()) _missing.push(['Tindakan Perbaikan', 'usPlan']);
+                    if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
                     if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
                     if (_missing.length) {
                         if (fb) {
                             fb.classList.remove('hidden');
                             fb.classList.add('error');
                             fb.textContent = 'Status DONE wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
+                        }
+                        const _first = document.getElementById(_missing[0][1]);
+                        if (_first) _first.focus({ preventScroll: true });
+                        if (btn) btn.disabled = false;
+                        if (txt) txt.textContent = 'Simpan Perubahan Servis';
+                        return;
+                    }
+                } else if (_usSt === 'KONFIRMASI') {
+                    const _missing = [];
+                    if (!usVal('usPlan').trim()) _missing.push(['Rencana Perbaikan', 'usPlan']);
+                    if (!(usNum('usEstimate') > 0)) _missing.push(['Estimasi Biaya', 'usEstimate']);
+                    if (_missing.length) {
+                        if (fb) {
+                            fb.classList.remove('hidden');
+                            fb.classList.add('error');
+                            fb.textContent = 'Status KONFIRMASI wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
                         }
                         const _first = document.getElementById(_missing[0][1]);
                         if (_first) _first.focus({ preventScroll: true });
@@ -1871,7 +2286,7 @@ function initUpdateServis() {
 }
 
 // ─────────────────────────────────────────────
-// HALAMAN GARANSI (mock data — tahap UI, tanpa backend)
+// HALAMAN GARANSI (data real backend)
 // ─────────────────────────────────────────────
 
 const GR_PER_PAGE = 10;
@@ -1880,27 +2295,16 @@ let _grQuery = '';
 let _grDate = '';
 let _grStatus = '';
 let _grView = [];
-let _grClaimIdx = -1;
+let _grClaimOrderId = null;
 
-// Dummy tahap UI — backend diintegrasikan tahap berikutnya.
 // `klaim: null` = belum klaim (status diturunkan dari tanggal).
 // `klaim: {...}` = sedang/dalam klaim (status Klaim).
-const GR_MOCK = [
-    { no: 'SV-20260710-001', nama: 'Ahmad Fauzi', phone: '081234567890', device: 'Samsung Galaxy A55', mulai: '2026-07-10', akhir: '2026-10-10', damage: 'Layar retak', plan: 'Ganti LCD + frame', price: 550000, klaim: null },
-    { no: 'SV-20260801-002', nama: 'Siti Nurhaliza', phone: '085725566668', device: 'iPhone 13', mulai: '2026-08-01', akhir: '2026-11-01', damage: 'Baterai drop', plan: 'Ganti baterai', price: 350000, klaim: null },
-    { no: 'SV-20260615-003', nama: 'Rudi Hartono', phone: '082138475690', device: 'Xiaomi Redmi Note 13', mulai: '2026-06-15', akhir: '2026-09-15', damage: 'Konektor cas longgar', plan: 'Ganti konektor cas', price: 45000, klaim: { tgl: '2026-09-03', keluhan: 'Cas kadang tidak mengisi', tindakan: 'Diagnosa ulang', status: 'Diproses' } },
-    { no: 'SV-20260820-004', nama: 'Maya Sari', phone: '083856712090', device: 'iPhone 15', mulai: '2026-08-20', akhir: '2026-11-20', damage: 'Layar pecah', plan: 'Ganti LCD', price: 1500000, klaim: null },
-    { no: 'SV-20260503-005', nama: 'Budi Santoso', phone: '087731209845', device: 'Realme C55', mulai: '2026-05-03', akhir: '2026-08-03', damage: 'Fleksibel robek', plan: 'Ganti fleksibel LCD', price: 50000, klaim: null },
-    { no: 'SV-20260725-006', nama: 'Dewi Lestari', phone: '081112345678', device: 'Oppo Reno 11', mulai: '2026-07-25', akhir: '2026-10-25', damage: 'Backdoor pecah', plan: 'Ganti backdoor', price: 125000, klaim: null },
-    { no: 'SV-20260412-007', nama: 'Andi Pratama', phone: '081904556677', device: 'Vivo Y36', mulai: '2026-04-12', akhir: '2026-07-12', damage: 'Mati total', plan: 'Servis mesin', price: 250000, klaim: null },
-    { no: 'SV-20260805-008', nama: 'Putri Ayu', phone: '082221078934', device: 'Samsung Galaxy S23', mulai: '2026-08-05', akhir: '2026-11-05', damage: 'Kamera buram', plan: 'Ganti kamera belakang', price: 420000, klaim: null },
-    { no: 'SV-20260628-009', nama: 'Hendra Gunawan', phone: '085643219870', device: 'Infinix Note 40', mulai: '2026-06-28', akhir: '2026-09-28', damage: 'Buzzer mati', plan: 'Ganti buzzer', price: 60000, klaim: null },
-    { no: 'SV-20260730-010', nama: 'Nina Kurnia', phone: '081327654019', device: 'iPhone 12', mulai: '2026-07-30', akhir: '2026-10-30', damage: 'LCD bergaris', plan: 'Ganti LCD INCELL', price: 680000, klaim: null },
-    { no: 'SV-20260812-011', nama: 'Fajar Ramadhan', phone: '082134809572', device: 'Poco X6', mulai: '2026-08-12', akhir: '2026-11-12', damage: 'LCD pecah', plan: 'Ganti LCD ORI', price: 475000, klaim: null },
-    { no: 'SV-20260320-012', nama: 'Rina Marlina', phone: '083812745690', device: 'Oppo A78', mulai: '2026-03-20', akhir: '2026-06-20', damage: 'Speaker sember', plan: 'Ganti speaker', price: 300000, klaim: null },
-    { no: 'SV-20260818-013', nama: 'Doni Saputra', phone: '081556677889', device: 'Samsung Galaxy A35', mulai: '2026-08-18', akhir: '2026-11-18', damage: 'Baterai boros', plan: 'Ganti baterai', price: 195000, klaim: null },
-    { no: 'SV-20260605-014', nama: 'Lina Hartati', phone: '082699887766', device: 'Vivo V30', mulai: '2026-06-05', akhir: '2026-09-05', damage: 'Baterai drop', plan: 'Ganti baterai', price: 195000, klaim: { tgl: '2026-09-04', keluhan: 'Baterai cepat habis setelah ganti', tindakan: 'Perbaikan ulang', status: 'Diajukan' } },
-];
+// Daftar garansi real dari backend (GET /api/claims/warranty-summary):
+// order CASH bergaransi + klaim berjalan. GR_MOCK dipensiunkan.
+// Bentuk item identik dengan mock lama: no, nama, phone, device,
+// mulai, akhir, damage, plan, price, klaim{tgl,keluhan,tindakan,status}.
+let _grAll = [];
+let _grReq = 0;
 
 function grDaysLeft(akhir) {
     const a = new Date(akhir + 'T00:00:00');
@@ -1932,7 +2336,7 @@ function grStatusBadge(g) {
 
 function grFiltered() {
     const q = _grQuery.trim().toLowerCase();
-    return GR_MOCK.filter(g => {
+    return (_grAll || []).filter(g => {
         if (q && ![g.nama, g.phone, g.device].some(f => (f || '').toLowerCase().includes(q))) return false;
         if (_grDate && !(g.mulai <= _grDate && _grDate <= g.akhir)) return false;
         if (_grStatus && grState(g).key !== _grStatus) return false;
@@ -1958,8 +2362,8 @@ function initGrToolbar() {
 function renderGrKpi() {
     const el = document.getElementById('grKpi');
     if (!el) return;
-    const n = { total: GR_MOCK.length, aktif: 0, segera: 0, expired: 0, klaim: 0 };
-    GR_MOCK.forEach(g => {
+    const n = { total: (_grAll || []).length, aktif: 0, segera: 0, expired: 0, klaim: 0 };
+    (_grAll || []).forEach(g => {
         const k = grState(g).key;
         if (k === 'aktif') n.aktif++;
         else if (k === 'segera') n.segera++;
@@ -1997,7 +2401,7 @@ function grDetail(idx) {
         <div><span>Tgl Mulai</span><b>${txDate(g.mulai)}</b></div>
         <div><span>Tgl Akhir</span><b>${txDate(g.akhir)}</b></div>
         <div><span>Kerusakan Sebelumnya</span><b>${escapeHtml(g.damage || '-')}</b></div>
-        <div><span>Tindakan Perbaikan</span><b>${escapeHtml(g.plan || '-')}</b></div>
+        <div><span>Rencana Perbaikan</span><b>${escapeHtml(g.plan || '-')}</b></div>
         <div><span>Nilai Servis</span><b>${plRupiah(g.price)}</b></div>`;
     document.getElementById('warrantyClaim').innerHTML = g.klaim ? `
         <div class="panel receive-panel mt-3">
@@ -2022,7 +2426,7 @@ function closeGrDetail() {
 function grClaim(idx) {
     const g = _grView[idx];
     if (!g) return;
-    _grClaimIdx = GR_MOCK.indexOf(g);
+    _grClaimOrderId = g.service_order_id || null;
     document.getElementById('clName').value = g.nama || '';
     document.getElementById('clPhone').value = g.phone || '';
     document.getElementById('clDevice').value = g.device || '';
@@ -2037,40 +2441,83 @@ function grClaim(idx) {
 
 function closeGrClaim() {
     document.getElementById('pageClaim').classList.remove('open');
-    _grClaimIdx = -1;
+    _grClaimOrderId = null;
 }
 
 function initClaimForm() {
     const form = document.getElementById('claimForm');
     if (!form || form.dataset.bound) return;
     form.dataset.bound = '1';
-    form.addEventListener('submit', function (e) {
+    // Klaim real: POST /api/claims/receive (record claim baru, servis lama tak diubah).
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
-        const g = GR_MOCK[_grClaimIdx];
-        if (!g) return;
+        if (!_grClaimOrderId) return;
         const btn = document.getElementById('claimSubmitBtn');
         const txt = document.getElementById('claimSubmitText');
         const fb = document.getElementById('claimFeedback');
+        const keluhan = document.getElementById('clKeluhan').value.trim();
+        if (!keluhan) {
+            fb.classList.remove('hidden');
+            fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Isi dulu keluhan claim.`;
+            return;
+        }
         btn.disabled = true;
         txt.textContent = 'Menyimpan...';
-        g.klaim = {
-            tgl: document.getElementById('clTgl').value,
-            keluhan: document.getElementById('clKeluhan').value.trim(),
-            tindakan: document.getElementById('clTindakan').value,
-            status: document.getElementById('clStatus').value,
-        };
-        fb.classList.remove('hidden');
-        fb.classList.add('success');
-        fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Klaim tercatat (lokal). Status garansi: <b>Klaim</b>.`;
-        btn.disabled = false;
-        txt.textContent = 'Ajukan Klaim';
-        renderGaransi();
+        try {
+            await apiPost('/claims/receive', {
+                service_order_id: _grClaimOrderId,
+                complaint: keluhan,
+                claim_date: document.getElementById('clTgl').value || undefined,
+            });
+            fb.classList.remove('hidden');
+            fb.classList.add('success');
+            fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Klaim tercatat di server. Status garansi: <b>Klaim</b>.`;
+            _grClaimOrderId = null;
+            renderGaransi();
+        } catch (err) {
+            fb.classList.remove('hidden');
+            fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(err.message || 'Gagal menyimpan klaim.')}`;
+        } finally {
+            btn.disabled = false;
+            txt.textContent = 'Ajukan Klaim';
+        }
     });
 }
 
-function renderGaransi() {
+async function renderGaransi() {
+    try { grMenuClose(); } catch (_) {}
     initGrToolbar();
     initClaimForm();
+    const my = ++_grReq;
+    try {
+        const data = await apiGet('/claims/warranty-summary');
+        if (my !== _grReq) return; // respons basi — ada request lebih baru
+        _grAll = ((data && data.items) || []).map(g => ({
+            service_order_id: g.service_order_id,
+            no: g.no || '-',
+            nama: g.nama || '-',
+            phone: g.phone || '-',
+            device: g.device || '-',
+            mulai: g.mulai,
+            akhir: g.akhir,
+            damage: g.damage,
+            plan: g.plan,
+            price: g.price,
+            klaim: g.klaim,
+        }));
+    } catch (err) {
+        if (my !== _grReq) return;
+        _grAll = [];
+        const loading = document.getElementById('grLoading');
+        if (loading) loading.classList.add('hidden');
+        const empty = document.getElementById('grEmpty');
+        if (empty) {
+            empty.innerHTML = '<i class="fa-solid fa-circle-exclamation text-3xl mb-2 block opacity-40"></i>' + escapeHtml(err.message || 'Gagal memuat data.');
+            empty.classList.remove('hidden');
+        }
+        renderGrKpi();
+        return;
+    }
     renderGrKpi();
     const body = document.getElementById('grBody');
     const empty = document.getElementById('grEmpty');
@@ -2097,6 +2544,8 @@ function renderGaransi() {
             : '<i class="fa-solid fa-shield-halved text-3xl mb-2 block opacity-40"></i>Belum ada data garansi.';
         empty.classList.remove('hidden');
         pagination.classList.add('hidden');
+        if (info) info.textContent = '';
+        if (pageBtns) pageBtns.innerHTML = '';
         return;
     }
 
@@ -2108,13 +2557,12 @@ function renderGaransi() {
         tr.innerHTML = `
             <td class="tx-num">${idx + 1}</td>
             <td><span class="tx-device tx-ellipsis" title="${escapeHtml(g.nama)}">${escapeHtml(g.nama)}</span></td>
-            <td class="tx-cell-muted tx-ellipsis" title="${escapeHtml(g.device)}">${escapeHtml(g.device)}</td>
-            <td class="tx-cell-muted">${txDate(g.mulai)}</td>
-            <td class="tx-cell-muted">${txDate(g.akhir)}</td>
+            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(g.device)}">${escapeHtml(g.device)}</span></td>
+            <td class="tx-cell-muted tx-nowrap">${txDate(g.mulai)}</td>
+            <td class="tx-cell-muted tx-nowrap">${txDate(g.akhir)}</td>
             <td>${grStatusBadge(g)}</td>
             <td class="tx-aksi">
-                <button type="button" class="tx-view-btn" title="Detail" onclick="grDetail(${idx})"><i class="fa-solid fa-eye"></i></button>
-                <button type="button" class="tx-view-btn tx-claim-btn" title="Klaim Garansi" onclick="grClaim(${idx})"><i class="fa-solid fa-file-circle-plus"></i></button>
+                <button type="button" class="tx-view-btn" data-grmenu-btn title="Menu" onclick="grMenuToggle(${g.service_order_id}, ${idx}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             </td>
         `;
         body.appendChild(tr);
@@ -2123,23 +2571,24 @@ function renderGaransi() {
     const end = start + rows.length;
     if (total > GR_PER_PAGE) pagination.classList.remove('hidden');
     else pagination.classList.add('hidden');
-    if (info) info.textContent = 'Halaman ' + _grPage + '  ' + start + ' - ' + end + '  (dari ' + total + ' garansi)';
+    if (info) info.textContent = 'Halaman ' + _grPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + total + ' garansi)';
 
     if (pageBtns) {
         pageBtns.innerHTML = '';
-        const mkBtn = (txt, p, disabled, active) => {
+        const mkBtn = (txt, p, disabled, active, label) => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.textContent = txt;
+            b.innerHTML = txt;
+            if (label) { b.title = label; b.setAttribute('aria-label', label); }
             b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
             if (!disabled) b.addEventListener('click', () => { _grPage = p; renderGaransi(); });
             return b;
         };
-        pageBtns.appendChild(mkBtn('← Sebelumnya', _grPage - 1, _grPage === 1, false));
+        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _grPage - 1, _grPage === 1, false, 'Sebelumnya'));
         for (let p = 1; p <= totalPages; p++) {
             pageBtns.appendChild(mkBtn(String(p), p, false, p === _grPage));
         }
-        pageBtns.appendChild(mkBtn('Berikutnya →', _grPage + 1, _grPage === totalPages, false));
+        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _grPage + 1, _grPage === totalPages, false, 'Berikutnya'));
     }
 }
 
@@ -2154,6 +2603,7 @@ function renderGaransi() {
 
 const PL_PER_PAGE = 10;
 let _plPage = 1;
+let _plReq = 0;
 let _plQuery = '';
 let _plDate = '';
 let _plView = [];
@@ -2186,6 +2636,7 @@ function plMenuToggle(id, btn) {
     const menu = document.getElementById('plMenu');
     if (!menu) return;
     if (_plMenuId === id && !menu.classList.contains('hidden')) { plMenuClose(); return; }
+    closeRowMenus('plMenu');
     _plMenuId = id;
     menu.dataset.id = id;
     menu.classList.remove('hidden');
@@ -2284,14 +2735,14 @@ async function plDetailOpen(id, toHistory) {
                 return `
                 <tr>
                     <td class="tx-num">${i + 1}</td>
-                    <td class="tx-cell-muted">${escapeHtml(o.no_servis || '-')}</td>
-                    <td class="tx-cell-muted">${txDate(tgl)}</td>
-                    <td><span class="tx-device">${escapeHtml(o.device || '-')}</span></td>
-                    <td class="tx-cell-muted">${escapeHtml(o.damagetype || '-')}</td>
-                    <td class="tx-cell-muted">${escapeHtml(o.repair_plan || '-')}</td>
-                    <td class="tx-cell-muted">${escapeHtml(o.technician || '-')}</td>
-                    <td class="tx-laba">${plRupiah(harga)}</td>
-                    <td>${txStatusBadge(o.status)}</td>
+                    <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.no_servis || '-')}">${escapeHtml(o.no_servis || '-')}</td>
+                    <td class="tx-cell-muted tx-nowrap">${txDate(tgl)}</td>
+                    <td><span class="tx-device tx-ellipsis" title="${escapeHtml(o.device || '-')}">${escapeHtml(o.device || '-')}</span></td>
+                    <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</span></td>
+                    <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</span></td>
+                    <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.technician || '-')}">${escapeHtml(o.technician || '-')}</td>
+                    <td class="tx-laba tx-nowrap">${plRupiah(harga)}</td>
+                    <td class="tx-statuscell">${txStatusBadge(o.status)}</td>
                 </tr>`;
             }).join('') : '<tr><td colspan="9" class="text-center text-gray-400 py-6">Belum ada riwayat servis.</td></tr>';
         }
@@ -2349,7 +2800,7 @@ async function plEditSave() {
         if (fb) {
             fb.classList.remove('hidden', 'success');
             fb.classList.add('error');
-            fb.textContent = 'Nama konsumen wajib diisi.';
+            fb.textContent = 'Nama pelanggan wajib diisi.';
         }
         return;
     }
@@ -2392,7 +2843,7 @@ async function plDelete(id) {
     const total = c ? (Number(c.total_servis) || 0) : 0;
     const name = c ? c.name : ('#' + id);
     if (total > 0) {
-        alert('"' + name + '" memiliki ' + total + ' data servis — tidak dapat dihapus karena masih memiliki relasi aktif.');
+        toast('"' + name + '" memiliki ' + total + ' data servis — tidak dapat dihapus karena masih memiliki relasi aktif.');
         return;
     }
     if (!confirm('Hapus pelanggan "' + name + '"?')) return;
@@ -2400,7 +2851,7 @@ async function plDelete(id) {
         await apiDel('/customers/' + id);
         await loadPlPage(_plPage);
     } catch (err) {
-        alert(err.message || 'Gagal menghapus pelanggan.');
+        toast(err.message || 'Gagal menghapus pelanggan.');
     }
 }
 
@@ -2410,6 +2861,7 @@ async function loadPlPage(page) {
     const loading = document.getElementById('plLoading');
     const pagination = document.getElementById('plPagination');
     if (!body) return;
+    const myReq = ++_plReq;
     plMenuClose();
     body.innerHTML = '';
     empty.classList.add('hidden');
@@ -2419,6 +2871,7 @@ async function loadPlPage(page) {
         if (_plQuery.trim()) params.set('q', _plQuery.trim());
         if (_plDate) params.set('date', _plDate);
         const data = await apiGet('/customers/summary?' + params.toString());
+        if (myReq !== _plReq) return; // respons basi — ada request lebih baru, abaikan
         const items = (data && data.items) || [];
         _plView = items;
         _plPage = (data && data.page) || 1;
@@ -2431,6 +2884,8 @@ async function loadPlPage(page) {
                 : '<i class="fa-solid fa-users text-3xl mb-2 block opacity-40"></i>Belum ada pelanggan.';
             empty.classList.remove('hidden');
             pagination.classList.add('hidden');
+            if (document.getElementById('plInfo')) document.getElementById('plInfo').textContent = '';
+            if (document.getElementById('plPageBtns')) document.getElementById('plPageBtns').innerHTML = '';
             return;
         }
         const start = (_plPage - 1) * PL_PER_PAGE;
@@ -2439,14 +2894,13 @@ async function loadPlPage(page) {
             tr.innerHTML = `
             <td class="tx-num">${start + i + 1}</td>
             <td><span class="tx-device tx-ellipsis" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span></td>
-            <td class="tx-cell-muted">${escapeHtml(c.phone || '-')}</td>
-            <td class="tx-cell-muted tx-ellipsis pl-c-device" title="${escapeHtml(c.last_device || '')}">${escapeHtml(c.last_device || '-')}</td>
-            <td class="tx-cell-muted tx-ellipsis pl-c-action" title="${escapeHtml(c.last_action || '')}">${escapeHtml(c.last_action || '-')}</td>
+            <td class="tx-cell-muted pl-c-phone" title="${escapeHtml(c.phone || '')}">${escapeHtml(c.phone || '-')}</td>
+            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(c.last_device || '')}">${escapeHtml(c.last_device || '-')}</span></td>
+            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(c.last_action || '')}">${escapeHtml(c.last_action || '-')}</span></td>
             <td class="tx-laba">${c.last_price ? plRupiah(c.last_price) : '-'}</td>
-            <td class="tx-cell-muted text-center">${c.total_servis} servis</td>
-            <td class="tx-cell-muted">${c.last_at ? txDate(c.last_at) : '-'}</td>
+            <td class="tx-cell-muted text-center pl-c-total">${c.total_servis} servis</td>
+            <td class="tx-cell-muted pl-c-date">${c.last_at ? txDate(c.last_at) : '-'}</td>
             <td class="tx-aksi"><div class="pl-aksi">
-                <button type="button" class="pl-detail-btn" onclick="plDetailOpen(${c.id}, false)">Detail</button>
                 <button type="button" class="tx-view-btn" data-plmenu-btn title="Menu" onclick="plMenuToggle(${c.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             </div></td>
         `;
@@ -2462,21 +2916,23 @@ async function loadPlPage(page) {
         const pageBtns = document.getElementById('plPageBtns');
         if (pageBtns) {
             pageBtns.innerHTML = '';
-            const mkBtn = (txt, p, disabled, active) => {
+            const mkBtn = (txt, p, disabled, active, label) => {
                 const b = document.createElement('button');
                 b.type = 'button';
-                b.textContent = txt;
+                b.innerHTML = txt;
+                if (label) { b.title = label; b.setAttribute('aria-label', label); }
                 b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
                 if (!disabled) b.addEventListener('click', () => loadPlPage(p));
                 return b;
             };
-            pageBtns.appendChild(mkBtn('← Sebelumnya', _plPage - 1, _plPage === 1, false));
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _plPage - 1, _plPage === 1, false, 'Sebelumnya'));
             for (let p = 1; p <= totalPages; p++) {
                 pageBtns.appendChild(mkBtn(String(p), p, false, p === _plPage));
             }
-            pageBtns.appendChild(mkBtn('Berikutnya →', _plPage + 1, _plPage === totalPages, false));
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _plPage + 1, _plPage === totalPages, false, 'Berikutnya'));
         }
     } catch (err) {
+        if (myReq !== _plReq) return; // respons basi — ada request lebih baru, abaikan
         loading.classList.add('hidden');
         empty.innerHTML = '<i class="fa-solid fa-circle-exclamation text-3xl mb-2 block opacity-40"></i>' + escapeHtml(err.message || 'Gagal memuat data.');
         empty.classList.remove('hidden');
@@ -2485,29 +2941,30 @@ async function loadPlPage(page) {
 }
 
 // ─────────────────────────────────────────────
-// HALAMAN SPAREPART (mock data — tahap UI, tanpa backend)
+// HALAMAN SPAREPART (data real backend)
 // ─────────────────────────────────────────────
 
 const SP_PER_PAGE = 10;
 let _spPage = 1;
 let _spQuery = '';
+let _spReq = 0;
+let _spEditId = -1;
+// State real dari backend (GET/POST/PUT/DELETE /api/spareparts). SP_MOCK dipensiunkan.
+let _spView = [];
 
-const SP_MOCK = [
-    { tgl: '2026-08-10', kategori: 'LCD', merek: 'Samsung', jenis: 'LCD Samsung A55 ORI', device: 'Galaxy A55', qty: 12, beli: 385000, jual: 550000 },
-    { tgl: '2026-08-08', kategori: 'Baterai', merek: 'Apple', jenis: 'Baterai iPhone 13', device: 'iPhone 13', qty: 8, beli: 210000, jual: 350000 },
-    { tgl: '2026-08-05', kategori: 'Konektor', merek: 'Xiaomi', jenis: 'Konektor Cas Redmi Note 13', device: 'Redmi Note 13', qty: 3, beli: 15000, jual: 45000 },
-    { tgl: '2026-08-01', kategori: 'Kamera', merek: 'Samsung', jenis: 'Kamera Belakang S23', device: 'Galaxy S23', qty: 5, beli: 275000, jual: 420000 },
-    { tgl: '2026-07-28', kategori: 'LCD', merek: 'Apple', jenis: 'LCD iPhone 12 INCELL', device: 'iPhone 12', qty: 6, beli: 450000, jual: 680000 },
-    { tgl: '2026-07-25', kategori: 'Baterai', merek: 'Oppo', jenis: 'Baterai Oppo A78', device: 'Oppo A78', qty: 0, beli: 95000, jual: 175000 },
-    { tgl: '2026-07-20', kategori: 'IC', merek: 'Universal', jenis: 'IC Power PMI632', device: 'All Xiaomi', qty: 20, beli: 25000, jual: 75000 },
-    { tgl: '2026-07-18', kategori: 'Casing', merek: 'Vivo', jenis: 'Backdoor Vivo V30', device: 'Vivo V30', qty: 4, beli: 65000, jual: 125000 },
-    { tgl: '2026-07-15', kategori: 'LCD', merek: 'Xiaomi', jenis: 'LCD Poco X6 ORI', device: 'Poco X6', qty: 9, beli: 310000, jual: 475000 },
-    { tgl: '2026-07-10', kategori: 'Fleksibel', merek: 'Realme', jenis: 'Fleksibel LCD Realme C55', device: 'Realme C55', qty: 15, beli: 18000, jual: 50000 },
-    { tgl: '2026-07-05', kategori: 'Baterai', merek: 'Samsung', jenis: 'Baterai Galaxy A35', device: 'Galaxy A35', qty: 2, beli: 110000, jual: 195000 },
-    { tgl: '2026-07-01', kategori: 'Kamera', merek: 'Apple', jenis: 'Kamera Depan iPhone 13', device: 'iPhone 13', qty: 7, beli: 185000, jual: 290000 },
-    { tgl: '2026-06-25', kategori: 'Speaker', merek: 'Infinix', jenis: 'Buzzer Note 40', device: 'Note 40', qty: 11, beli: 22000, jual: 60000 },
-    { tgl: '2026-06-20', kategori: 'LCD', merek: 'Oppo', jenis: 'LCD Reno 11 OLED', device: 'Reno 11', qty: 1, beli: 520000, jual: 790000 },
-];
+function spNorm(r) {
+    return {
+        id: r.id,
+        tgl: r.tanggal || (r.created_at || '').slice(0, 10),
+        kategori: r.kategori || '-',
+        merek: r.merek || '-',
+        jenis: r.jenis || '-',
+        device: r.device || '-',
+        qty: Number(r.qty) || 0,
+        beli: Number(r.harga_beli) || 0,
+        jual: Number(r.harga_jual) || 0,
+    };
+}
 
 function spRupiah(v) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(v) || 0);
@@ -2519,10 +2976,10 @@ function spQtyCell(qty) {
     return `<span class="qty-ok">${qty}</span>`;
 }
 
-function spEdit(i) {
-    const s = SP_MOCK[i];
+function spEdit(id) {
+    const s = (_spView || []).find(x => x && x.id === id);
     if (!s) return;
-    _spEditIdx = i;
+    _spEditId = id;
     document.getElementById('spfTitle').textContent = 'Edit Sparepart';
     document.getElementById('spfKategori').value = s.kategori || '';
     document.getElementById('spfMerek').value = s.merek || '';
@@ -2537,18 +2994,20 @@ function spEdit(i) {
     document.getElementById('pageSpare').classList.add('open');
 }
 
-function spDel(i) {
-    const s = SP_MOCK[i];
+async function spDel(id) {
+    const s = (_spView || []).find(x => x && x.id === id);
     if (!s) return;
-    if (!confirm('Hapus sparepart "' + s.jenis + '"? (lokal, hilang permanen setelah refresh tidak berpengaruh)')) return;
-    SP_MOCK.splice(i, 1);
-    renderSparepart();
+    if (!confirm('Hapus sparepart "' + s.jenis + '"?')) return;
+    try {
+        await apiDel('/spareparts/' + id);
+        renderSparepart();
+    } catch (err) {
+        toast(err.message || 'Gagal menghapus.');
+    }
 }
 
-let _spEditIdx = -1;
-
 function spAdd() {
-    _spEditIdx = -1;
+    _spEditId = -1;
     document.getElementById('spfTitle').textContent = 'Tambah Sparepart';
     document.getElementById('spareForm').reset();
     const fb = document.getElementById('spfFeedback');
@@ -2559,16 +3018,17 @@ function spAdd() {
 
 function closeSpare() {
     document.getElementById('pageSpare').classList.remove('open');
-    _spEditIdx = -1;
+    _spEditId = -1;
 }
 
-function renderSpKpi() {
+function renderSpKpi(src) {
     const el = document.getElementById('spKpi');
     if (!el) return;
-    const total = SP_MOCK.length;
-    const habis = SP_MOCK.filter(s => (s.qty || 0) <= 0).length;
-    const tipis = SP_MOCK.filter(s => (s.qty || 0) > 0 && (s.qty || 0) <= 5).length;
-    const nilai = SP_MOCK.reduce((a, s) => a + (Number(s.qty) || 0) * (Number(s.jual) || 0), 0);
+    const data = src || _spView || [];
+    const total = data.length;
+    const habis = data.filter(s => (s.qty || 0) <= 0).length;
+    const tipis = data.filter(s => (s.qty || 0) > 0 && (s.qty || 0) <= 5).length;
+    const nilai = data.reduce((a, s) => a + (Number(s.qty) || 0) * (Number(s.jual) || 0), 0);
     const cards = [
         { label: 'Total Item', value: total, unit: 'item', icon: 'fa-boxes-stacked', cls: 'sm-slate' },
         { label: 'Stok Habis', value: habis, unit: 'item', icon: 'fa-box-open', cls: 'sm-red' },
@@ -2585,12 +3045,58 @@ function renderSpKpi() {
 
 function spFiltered() {
     const q = _spQuery.trim().toLowerCase();
-    if (!q) return SP_MOCK.slice();
-    return SP_MOCK.filter(s => [s.jenis, s.merek, s.device, s.kategori]
+    if (!q) return (_spView || []).slice();
+    return (_spView || []).filter(s => [s.jenis, s.merek, s.device, s.kategori]
         .some(f => (f || '').toLowerCase().includes(q)));
 }
 
-function renderSparepart() {
+// Ambil SEMUA halaman sparepart (limit backend 100/halaman).
+// Mengembalikan array atau null bila respons basi.
+async function spFetchAll(q, my) {
+    let _all = [];
+    let _pg = 1;
+    for (;;) {
+        const params = new URLSearchParams({ page: String(_pg), limit: '100' });
+        if ((q || '').trim()) params.set('q', q.trim());
+        const data = await apiGet('/spareparts?' + params.toString());
+        if (my !== _spReq) return null; // respons basi — ada request lebih baru
+        const items = ((data && data.items) || []).map(spNorm);
+        _all = _all.concat(items);
+        const total = (data && data.total) || 0;
+        if (!_all.length || _all.length >= total || items.length < 100 || _pg >= 50) break;
+        _pg += 1;
+    }
+    return _all;
+}
+
+async function renderSparepart() {
+    try { spMenuClose(); } catch (_) {}
+    const my = ++_spReq;
+    try {
+        // Tabel memakai filter q; KPI selalu dari SELURUH stok (tanpa q)
+        // agar tidak ikut menyusut saat mencari.
+        _spView = await spFetchAll(_spQuery, my);
+        if (_spView === null) return;
+        if (_spQuery.trim()) {
+            const _allKpi = await spFetchAll('', my);
+            if (_allKpi === null) return;
+            renderSpKpi(_allKpi);
+        } else {
+            renderSpKpi(_spView);
+        }
+    } catch (err) {
+        if (my !== _spReq) return;
+        _spView = [];
+        const loading = document.getElementById('spLoading');
+        if (loading) loading.classList.add('hidden');
+        const empty = document.getElementById('spEmpty');
+        if (empty) {
+            empty.innerHTML = '<i class="fa-solid fa-circle-exclamation text-3xl mb-2 block opacity-40"></i>' + escapeHtml(err.message || 'Gagal memuat data.');
+            empty.classList.remove('hidden');
+        }
+        renderSpKpi();
+        return;
+    }
     renderSpKpi();
     const body = document.getElementById('spBody');
     const empty = document.getElementById('spEmpty');
@@ -2616,27 +3122,27 @@ function renderSparepart() {
             ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Sparepart tidak ditemukan.'
             : '<i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>Belum ada data sparepart.';
         pagination.classList.add('hidden');
+        if (info) info.textContent = '';
+        if (pageBtns) pageBtns.innerHTML = '';
         return;
     }
 
     const start = (_spPage - 1) * SP_PER_PAGE;
     const rows = data.slice(start, start + SP_PER_PAGE);
     rows.forEach((s, i) => {
-        const idx = SP_MOCK.indexOf(s);
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td class="tx-num">${start + i + 1}</td>
-            <td class="tx-cell-muted">${txDate(s.tgl)}</td>
-            <td class="tx-cell-muted">${escapeHtml(s.kategori)}</td>
-            <td class="tx-cell-muted">${escapeHtml(s.merek)}</td>
-            <td><span class="tx-device">${escapeHtml(s.jenis)}</span></td>
-            <td class="tx-cell-muted">${escapeHtml(s.device)}</td>
-            <td class="text-center">${spQtyCell(s.qty)}</td>
-            <td class="tx-laba-muted">${spRupiah(s.beli)}</td>
-            <td class="tx-laba">${spRupiah(s.jual)}</td>
+            <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(s.tgl || '')}">${txDate(s.tgl)}</td>
+            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(s.kategori)}">${escapeHtml(s.kategori)}</span></td>
+            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(s.merek)}">${escapeHtml(s.merek)}</span></td>
+            <td><span class="tx-device tx-ellipsis" title="${escapeHtml(s.jenis)}">${escapeHtml(s.jenis)}</span></td>
+            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(s.device)}">${escapeHtml(s.device)}</span></td>
+            <td class="text-center tx-nowrap">${spQtyCell(s.qty)}</td>
+            <td class="tx-laba-muted tx-nowrap">${spRupiah(s.beli)}</td>
+            <td class="tx-laba tx-nowrap">${spRupiah(s.jual)}</td>
             <td class="tx-aksi">
-                <button type="button" class="tx-view-btn tx-edit-btn" title="Edit" onclick="spEdit(${idx})"><i class="fa-solid fa-pen"></i></button>
-                <button type="button" class="tx-view-btn tx-del-btn" title="Hapus" onclick="spDel(${idx})"><i class="fa-solid fa-trash"></i></button>
+                <button type="button" class="tx-view-btn" data-spmenu-btn title="Menu" onclick="spMenuToggle(${s.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
             </td>
         `;
         body.appendChild(tr);
@@ -2645,23 +3151,24 @@ function renderSparepart() {
     const end = start + rows.length;
     if (total > SP_PER_PAGE) pagination.classList.remove('hidden');
     else pagination.classList.add('hidden');
-    if (info) info.textContent = 'Halaman ' + _spPage + '  ' + start + ' - ' + end + '  (dari ' + total + ' sparepart)';
+    if (info) info.textContent = 'Halaman ' + _spPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + total + ' sparepart)';
 
     if (pageBtns) {
         pageBtns.innerHTML = '';
-        const mkBtn = (txt, p, disabled, active) => {
+        const mkBtn = (txt, p, disabled, active, label) => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.textContent = txt;
+            b.innerHTML = txt;
+            if (label) { b.title = label; b.setAttribute('aria-label', label); }
             b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
             if (!disabled) b.addEventListener('click', () => { _spPage = p; renderSparepart(); });
             return b;
         };
-        pageBtns.appendChild(mkBtn('← Sebelumnya', _spPage - 1, _spPage === 1, false));
+        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _spPage - 1, _spPage === 1, false, 'Sebelumnya'));
         for (let p = 1; p <= totalPages; p++) {
             pageBtns.appendChild(mkBtn(String(p), p, false, p === _spPage));
         }
-        pageBtns.appendChild(mkBtn('Berikutnya →', _spPage + 1, _spPage === totalPages, false));
+        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _spPage + 1, _spPage === totalPages, false, 'Berikutnya'));
     }
 }
 
@@ -2678,84 +3185,85 @@ function initSparepart() {
     const form = document.getElementById('spareForm');
     if (form && !form.dataset.bound) {
         form.dataset.bound = '1';
-        form.addEventListener('submit', function (e) {
+        form.addEventListener('submit', async function (e) {
             e.preventDefault();
             const jenis = document.getElementById('spfJenis').value.trim();
             if (!jenis) return;
-            const item = {
-                tgl: new Date().toISOString().slice(0, 10),
-                kategori: document.getElementById('spfKategori').value.trim() || '-',
-                merek: document.getElementById('spfMerek').value.trim() || '-',
+            const payload = {
+                kategori: document.getElementById('spfKategori').value.trim() || null,
+                merek: document.getElementById('spfMerek').value.trim() || null,
                 jenis: jenis,
-                device: document.getElementById('spfDevice').value.trim() || '-',
+                device: document.getElementById('spfDevice').value.trim() || null,
                 qty: Math.max(0, parseInt(document.getElementById('spfQty').value, 10) || 0),
-                beli: Math.max(0, Number(document.getElementById('spfBeli').value) || 0),
-                jual: Math.max(0, Number(document.getElementById('spfJual').value) || 0),
+                harga_beli: Math.max(0, Number(document.getElementById('spfBeli').value) || 0),
+                harga_jual: Math.max(0, Number(document.getElementById('spfJual').value) || 0),
             };
-            if (_spEditIdx >= 0 && SP_MOCK[_spEditIdx]) {
-                item.tgl = SP_MOCK[_spEditIdx].tgl;
-                SP_MOCK[_spEditIdx] = item;
-            } else {
-                SP_MOCK.unshift(item);
-                _spPage = 1;
-            }
-            renderSparepart();
             const fb = document.getElementById('spfFeedback');
-            fb.classList.remove('hidden');
-            fb.classList.add('success');
-            fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Tersimpan (lokal, hilang setelah refresh).`;
+            try {
+                if (_spEditId >= 0) {
+                    await apiPut('/spareparts/' + _spEditId, payload);
+                    _spEditId = -1;
+                } else {
+                    await apiPost('/spareparts', payload);
+                    _spPage = 1;
+                }
+                renderSparepart();
+                fb.classList.remove('hidden');
+                fb.classList.add('success');
+                fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Tersimpan di stok.`;
+            } catch (err) {
+                fb.classList.remove('hidden');
+                fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(err.message || 'Gagal menyimpan.')}`;
+            }
         });
     }
 }
 
 // ─────────────────────────────────────────────
-// HALAMAN KEUANGAN (mock data — tahap UI, tanpa backend)
+// HALAMAN KEUANGAN (data real backend)
 // ─────────────────────────────────────────────
 
 const KU_PER_PAGE = 10;
 let _kuPage = 1;
+let _kuReq = 0;
+let _kuRiwReq = 0;
 let _profitChart = null;
-
-const KU_KAS = [
-    { uraian: 'Kas Aset Awal', debit: 5000000, kredit: null, saldo: 5000000 },
-    { uraian: 'Total Penjualan Service', debit: 3250000, kredit: null, saldo: 8250000 },
-    { uraian: 'Total Modal (Part + Jasa)', debit: null, kredit: 1100000, saldo: 7150000 },
-    { uraian: 'Total Beban (Gaji + Ops)', debit: null, kredit: 900000, saldo: 6250000 },
-];
-
-const KU_ALLOC = [
-    { nama: 'Bonus Karyawan', pct: 10, color: '#f59e0b' },
-    { nama: 'Pengelola', pct: 30, color: '#dc2626' },
-    { nama: 'Investor', pct: 30, color: '#2563eb' },
-    { nama: 'Kas Aset', pct: 30, color: '#16a34a' },
-];
-
-const KU_RIWAYAT = [
-    { tgl: '2026-09-03', jenis: 'Masuk', kategori: 'Penjualan Service', ket: 'Servis ganti LCD A55', nominal: 550000 },
-    { tgl: '2026-09-02', jenis: 'Keluar', kategori: 'Modal Part', ket: 'Beli LCD A55', nominal: 385000 },
-    { tgl: '2026-09-02', jenis: 'Masuk', kategori: 'Penjualan Service', ket: 'Ganti baterai iPhone 13', nominal: 350000 },
-    { tgl: '2026-09-01', jenis: 'Keluar', kategori: 'Beban Operasional', ket: 'Listrik & wifi', nominal: 450000 },
-    { tgl: '2026-08-30', jenis: 'Masuk', kategori: 'Penjualan Service', ket: 'Service ringan + flash', nominal: 150000 },
-    { tgl: '2026-08-29', jenis: 'Keluar', kategori: 'Beban Gaji', ket: 'Gaji teknisi paruh waktu', nominal: 1500000 },
-    { tgl: '2026-08-28', jenis: 'Masuk', kategori: 'Penjualan Service', ket: 'Ganti konektor cas', nominal: 120000 },
-    { tgl: '2026-08-27', jenis: 'Keluar', kategori: 'Modal Jasa', ket: 'Jasa pasang ke mitra', nominal: 200000 },
-    { tgl: '2026-08-26', jenis: 'Masuk', kategori: 'Lainnya', ket: 'Jual HP second', nominal: 900000 },
-    { tgl: '2026-08-25', jenis: 'Keluar', kategori: 'Modal Part', ket: 'Stok baterai & fleksibel', nominal: 640000 },
-    { tgl: '2026-08-24', jenis: 'Masuk', kategori: 'Penjualan Service', ket: 'Ganti kamera S23', nominal: 420000 },
-    { tgl: '2026-08-23', jenis: 'Keluar', kategori: 'Beban Operasional', ket: 'Sewa tempat', nominal: 2000000 },
-];
+// State real dari backend — tidak ada lagi array lokal (KU_* dipensiunkan).
+// Buku Kas = turunan order CASH + expenses + jurnal manual, scope periode kas aktif.
+let _kuFin = null;
+let _kuKasRows = [];
+let _kuAllocView = [];
+let _kuSelAlloc = -1;
 
 function kuRupiah(v) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(v) || 0);
 }
 
-function renderKeuangan() {
+async function renderKeuangan() {
     kuShowMain(true);
-    renderBukuKas();
-    renderAlloc();
-    renderRiwayat();
-    initProfitChart();
     initKuKasForm();
+    await loadKuFinance();
+    renderRiwayat();
+}
+
+// Satu-satunya sumber angka Buku Kas: backend (overview + riwayat periode aktif).
+async function loadKuFinance() {
+    const my = ++_kuReq;
+    const body = document.getElementById('kuKasBody');
+    try {
+        const [ov, rj] = await Promise.all([
+            apiGet('/overview'),
+            apiGet('/kas/riwayat?period=current&limit=100'),
+        ]);
+        if (my !== _kuReq) return; // respons basi — ada request lebih baru
+        _kuFin = (ov && ov.finance) || null;
+        _kuKasRows = ((rj && rj.items) || []).slice().reverse(); // menaik utk saldo berjalan
+        renderBukuKas();
+        renderAlloc();
+    } catch (err) {
+        if (my !== _kuReq) return;
+        if (body) body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Gagal memuat kas: ${escapeHtml(err.message || '')}</div></td></tr>`;
+    }
 }
 
 // ── Keuangan: pusat kontrol (main) vs arsip (riwayat) ──
@@ -2782,33 +3290,86 @@ function kuShowRiwayat() {
     renderRiwayat();
 }
 
-// Aksi utama Buku Kas — konfirmasi UI saja, tanpa mengubah data/logika bisnis.
-function kuTutupKas() {
-    if (!confirm('Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.')) return;
-    alert('Tutup kas diproses & arsip dipindahkan. (konfirmasi lokal — data & perhitungan tidak diubah)');
+// Tutup Kas real: kunci snapshot periode aktif ke server, buka periode baru.
+async function kuTutupKas() {
+    let counted = null;
+    try {
+        const raw = localStorage.getItem('bsf_audit_kas');
+        if (raw) counted = JSON.parse(raw).nominal;
+    } catch (_) {}
+    const msg = counted
+        ? 'Proses Tutup Kas & Pindah Arsip? Hitungan laci terakhir: Rp ' + Number(counted).toLocaleString('id-ID') + '. Selisih akan dicatat di arsip.'
+        : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.';
+    if (!confirm(msg)) return;
+    try {
+        const res = await apiPost('/kas/close', { cash_counted: counted });
+        try { localStorage.removeItem('bsf_audit_kas'); } catch (_) {}
+        const s = (res && res.snapshot) || {};
+        const f = s.finance || {};
+        const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+        toast('Tutup kas berhasil. Masuk ' + r(f.total_masuk) + ' • Keluar ' + r(f.total_keluar)
+            + ' • Saldo ' + r(f.saldo)
+            + (s.selisih !== null && s.selisih !== undefined ? ' • Selisih laci ' + r(s.selisih) : '')
+            + '. Periode baru dibuka.', 'success');
+        try { await loadDashboard(); } catch (_) {}
+        await loadKuFinance();
+        renderKuArsip();
+    } catch (err) {
+        toast(err.message || 'Gagal tutup kas.');
+    }
+}
+
+// Arsip periode yang sudah ditutup (snapshot dari server).
+async function renderKuArsip() {
+    const el = document.getElementById('kuArsip');
+    if (!el) return;
+    try {
+        const periods = await apiGet('/kas/periods');
+        const closed = (periods || []).filter(p => p && p.status === 'CLOSED' && p.snapshot);
+        if (!closed.length) { el.innerHTML = ''; el.classList.add('hidden'); return; }
+        el.classList.remove('hidden');
+        el.innerHTML = `<div class="panel"><h3 class="panel-title">Arsip Tutup Kas</h3>` + closed.map(p => {
+            let s = null;
+            try { s = JSON.parse(p.snapshot); } catch (_) { return ''; }
+            const f = (s && s.finance) || {};
+            const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+            return `<div class="al-row"><span class="al-dot" style="background:#64748b"></span>
+                <span class="al-name">Periode ${escapeHtml(String((s.period || {}).start_at || '').slice(0, 10))} — ditutup ${escapeHtml(String(p.closed_at || '').slice(0, 16).replace('T', ' '))} oleh ${escapeHtml(p.closed_by || '-')}</span>
+                <span class="al-nom">Masuk ${r(f.total_masuk)} • Keluar ${r(f.total_keluar)} • Saldo ${r(f.saldo)}${s.selisih !== null && s.selisih !== undefined ? ' • Selisih ' + r(s.selisih) : ''}</span>
+            </div>`;
+        }).join('') + `</div>`;
+    } catch (_) {
+        el.innerHTML = '';
+        el.classList.add('hidden');
+    }
 }
 
 function renderBukuKas() {
     const body = document.getElementById('kuKasBody');
+    const fin = _kuFin || {};
     if (body) {
-        body.innerHTML = KU_KAS.map(k => `
-            <tr>
-                <td><span class="tx-device">${escapeHtml(k.uraian)}</span></td>
-                <td class="tx-debit numeric-c">${k.debit ? kuRupiah(k.debit) : '<span class="text-green-500">-</span>'}</td>
-                <td class="tx-kredit numeric-c">${k.kredit ? kuRupiah(k.kredit) : '<span class="text-red-500">-</span>'}</td>
-                <td class="tx-saldo numeric-r">${kuRupiah(k.saldo)}</td>
-            </tr>
-        `).join('');
+        if (!_kuKasRows.length) {
+            body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada arus kas periode ini.<br>Servis CASH, beban, dan entri manual akan tercatat otomatis di sini.</div></td></tr>`;
+        } else {
+            body.innerHTML = _kuKasRows.map(k => {
+                const masuk = k.jenis === 'Masuk';
+                const _sub = [k.kategori || '', k.tgl || ''].filter(Boolean).join(' • ');
+                return `
+                <tr>
+                    <td><span class="tx-device tx-ellipsis" title="${escapeHtml(k.ket || '-')}">${escapeHtml(k.ket || '-')}</span>${_sub ? `<br><span class="text-[10.5px] text-gray-400 tx-ellipsis" title="${escapeHtml(_sub)}">${escapeHtml(_sub)}</span>` : ''}</td>
+                    <td class="tx-debit numeric-c">${masuk ? kuRupiah(k.nominal) : '<span class="text-green-500">-</span>'}</td>
+                    <td class="tx-kredit numeric-c">${masuk ? '<span class="text-red-500">-</span>' : kuRupiah(k.nominal)}</td>
+                    <td class="tx-saldo numeric-r">${kuRupiah(k.saldo)}</td>
+                </tr>`;
+            }).join('');
+        }
     }
     const sum = document.getElementById('kuKasSummary');
     if (sum) {
-        const masuk = KU_KAS.reduce((a, k) => a + (Number(k.debit) || 0), 0);
-        const keluar = KU_KAS.reduce((a, k) => a + (Number(k.kredit) || 0), 0);
-        const saldo = KU_KAS.length ? KU_KAS[KU_KAS.length - 1].saldo : 0;
         const cards = [
-            { label: 'Total Masuk', value: kuRupiah(masuk), icon: 'fa-arrow-trend-up', cls: 'sm-green' },
-            { label: 'Total Keluar', value: kuRupiah(keluar), icon: 'fa-arrow-trend-down', cls: 'sm-red' },
-            { label: 'Saldo Kas', value: kuRupiah(saldo), icon: 'fa-wallet', cls: 'sm-blue' },
+            { label: 'Total Masuk', value: kuRupiah(fin.total_masuk), icon: 'fa-arrow-trend-up', cls: 'sm-green' },
+            { label: 'Total Keluar', value: kuRupiah(fin.total_keluar), icon: 'fa-arrow-trend-down', cls: 'sm-red' },
+            { label: 'Saldo Kas', value: kuRupiah(fin.saldo), icon: 'fa-wallet', cls: 'sm-blue' },
         ];
         sum.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
@@ -2819,30 +3380,50 @@ function renderBukuKas() {
     }
 }
 
-let _kuSelAlloc = -1;
-
 function renderAlloc() {
     const list = document.getElementById('kuAllocList');
     const totalEl = document.getElementById('kuTotalProfit');
-    const total = 6250000;
+    const fin = _kuFin || {};
+    const total = Number(fin.laba_bersih) || 0;
+    const al = fin.alokasi || {};
+    const formed = !!fin.alokasi_terbentuk && total > 0;
     if (totalEl) totalEl.textContent = kuRupiah(total);
+    _kuAllocView = formed ? [
+        { nama: 'Bonus Karyawan', val: al.karyawan || 0, color: '#f59e0b' },
+        { nama: 'Pengelola', val: al.pengelola || 0, color: '#dc2626' },
+        { nama: 'Investor', val: al.investor || 0, color: '#2563eb' },
+        { nama: 'Kas Aset', val: al.kas_aset || 0, color: '#16a34a' },
+    ] : [];
+    updateProfitChart(_kuAllocView.map(a => (total > 0 ? a.val / total * 100 : 0)), formed);
     if (!list) return;
-    list.innerHTML = KU_ALLOC.map((a, i) => {
-        const nom = Math.round(total * a.pct / 100);
+    if (!formed) {
+        list.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">Alokasi belum terbentuk — target operasional (CTO) belum tercapai atau laba bersih ≤ 0.<br>Nominal dihitung otomatis dari server setelah target tercapai.</div>`;
+        return;
+    }
+    list.innerHTML = _kuAllocView.map((a, i) => {
+        const pct = total > 0 ? Math.round(a.val / total * 100) : 0;
         return `
         <div class="al-row${i === _kuSelAlloc ? ' is-sel' : ''}" data-alloc="${i}">
             <span class="al-dot" style="background:${a.color}"></span>
             <span class="al-name">${escapeHtml(a.nama)}</span>
-            <span class="al-pct">${a.pct}%</span>
-            <span class="al-nom">${kuRupiah(nom)}</span>
+            <span class="al-pct">${pct}%</span>
+            <span class="al-nom">${kuRupiah(a.val)}</span>
         </div>`;
     }).join('');
 }
 
-function initProfitChart() {
+function updateProfitChart(series, show) {
     const el = document.querySelector('#kuDonut');
     if (!el || typeof ApexCharts === 'undefined') return;
-    if (_profitChart) { _profitChart.updateOptions({ theme: { mode: isDark() ? 'dark' : 'light' } }); return; }
+    const labels = ['Bonus Karyawan', 'Pengelola', 'Investor', 'Kas Aset'];
+    const colors = ['#f59e0b', '#dc2626', '#2563eb', '#16a34a'];
+    el.style.display = show ? '' : 'none';
+    if (!show) return;
+    if (_profitChart) {
+        _profitChart.updateOptions({ labels, colors, theme: { mode: isDark() ? 'dark' : 'light' } });
+        _profitChart.updateSeries(series);
+        return;
+    }
     _profitChart = new ApexCharts(el, {
         chart: {
             fontFamily: 'Inter, system-ui, sans-serif', type: 'donut', height: 200, toolbar: { show: false },
@@ -2854,15 +3435,15 @@ function initProfitChart() {
                 },
             },
         },
-        series: KU_ALLOC.map(a => a.pct),
-        labels: KU_ALLOC.map(a => a.nama),
-        colors: KU_ALLOC.map(a => a.color),
+        series: series,
+        labels: labels,
+        colors: colors,
         theme: { mode: isDark() ? 'dark' : 'light' },
         legend: { show: false },
         dataLabels: { enabled: true, formatter: v => Math.round(v) + '%' },
         plotOptions: { pie: { donut: { size: '62%', labels: { show: false } } } },
         stroke: { width: 2 },
-        tooltip: { y: { formatter: v => v + '%' } },
+        tooltip: { y: { formatter: v => Math.round(v) + '%' } },
     });
     _profitChart.render();
 }
@@ -2871,22 +3452,37 @@ function initKuKasForm() {
     const form = document.getElementById('kuKasForm');
     if (!form || form.dataset.bound) return;
     form.dataset.bound = '1';
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const jenis = document.getElementById('kuKasJenis').value;
         const kategori = document.getElementById('kuKasKategori').value;
         const nominal = Number(document.getElementById('kuKasNominal').value) || 0;
         if (nominal <= 0) return;
-        const last = KU_KAS.length ? KU_KAS[KU_KAS.length - 1].saldo : 0;
-        const masuk = jenis === 'Masuk';
-        KU_KAS.push({
-            uraian: kategori,
-            debit: masuk ? nominal : null,
-            kredit: masuk ? null : nominal,
-            saldo: last + (masuk ? nominal : -nominal),
-        });
-        renderBukuKas();
-        document.getElementById('kuKasNominal').value = '';
+        const btn = form.querySelector('button[type="submit"]');
+        if (btn) btn.disabled = true;
+        try {
+            // Beban Gaji/Operasional = expenses (masuk hitungan beban + daftar Beban).
+            // Selain itu = jurnal kas manual (pemasukan non-servis / penyesuaian).
+            if (jenis === 'Keluar' && (kategori === 'Beban Gaji' || kategori === 'Beban Operasional')) {
+                await apiPost('/expenses', {
+                    kategori: kategori === 'Beban Gaji' ? 'Gaji' : 'Operasional',
+                    uraian: kategori + ' — entri Buku Kas',
+                    nilai: nominal,
+                });
+            } else {
+                await apiPost('/kas/entries', {
+                    jenis: jenis, kategori: kategori, keterangan: kategori, nominal: nominal,
+                });
+            }
+            document.getElementById('kuKasNominal').value = '';
+            await loadKuFinance();
+            renderRiwayat();
+            try { await loadDashboard(); } catch (_) {}
+        } catch (err) {
+            toast(err.message || 'Gagal menyimpan entri kas.');
+        } finally {
+            if (btn) btn.disabled = false;
+        }
     });
 }
 
@@ -2894,7 +3490,7 @@ let _kuQuery = '';
 let _kuJenis = '';
 let _kuDate = '';
 let _kuView = [];
-let _kuEditIdx = -1;
+let _kuEditId = -1; // id kas_entries yang sedang diedit (-1 = tambah baru)
 
 function initKuToolbar() {
     const s = document.getElementById('kuSearch');
@@ -2918,23 +3514,19 @@ function initKuToolbar() {
     }
 }
 
-function kuFiltered() {
-    const q = _kuQuery.trim().toLowerCase();
-    return KU_RIWAYAT.filter(r => {
-        if (_kuJenis && r.jenis !== _kuJenis) return false;
-        if (_kuDate && (r.tgl || '') !== _kuDate) return false;
-        if (!q) return true;
-        return [r.ket, r.kategori, r.jenis].some(f => (f || '').toLowerCase().includes(q));
-    });
-}
-
-function kuEdit(i) {
-    const r = _kuView[i];
+function kuEditRow(source, refId) {
+    if (source !== 'manual') {
+        toast(source === 'order'
+            ? 'Data otomatis dari transaksi servis — ubah via Update Data Servis.'
+            : 'Data beban — kelola via Input Beban di dashboard.');
+        return;
+    }
+    const r = (_kuView || []).find(x => x && x.source === 'manual' && x.ref_id === refId);
     if (!r) return;
-    _kuEditIdx = KU_RIWAYAT.indexOf(r);
+    _kuEditId = refId;
     document.getElementById('keJenis').value = r.jenis || 'Masuk';
     document.getElementById('keKategori').value = r.kategori || 'Lainnya';
-    document.getElementById('keKet').value = r.ket || '';
+    document.getElementById('keKet').value = (r.ket && r.ket !== r.kategori ? r.ket : '') || '';
     document.getElementById('keTgl').value = r.tgl || '';
     document.getElementById('keNominal').value = r.nominal || '';
     const fb = document.getElementById('keuFeedback');
@@ -2945,49 +3537,75 @@ function kuEdit(i) {
 
 function closeKeu() {
     document.getElementById('pageKeu').classList.remove('open');
-    _kuEditIdx = -1;
+    _kuEditId = -1;
 }
 
-function kuDel(i) {
-    const r = _kuView[i];
-    if (!r) return;
-    if (!confirm('Hapus "' + (r.ket || 'transaksi') + '"? (lokal, tidak memengaruhi database)')) return;
-    KU_RIWAYAT.splice(KU_RIWAYAT.indexOf(r), 1);
-    renderRiwayat();
+async function kuDelRow(source, refId, ket) {
+    if (source !== 'manual') {
+        toast(source === 'order'
+            ? 'Data otomatis dari transaksi servis — tidak dapat dihapus di sini.'
+            : 'Data beban — hapus via Input Beban di dashboard.');
+        return;
+    }
+    if (!confirm('Hapus "' + (ket || 'transaksi') + '" dari jurnal kas?')) return;
+    try {
+        await apiDel('/kas/entries/' + refId);
+        await loadKuFinance();
+        renderRiwayat();
+    } catch (err) {
+        toast(err.message || 'Gagal menghapus.');
+    }
 }
 
 function initKeuForm() {
     const form = document.getElementById('keuForm');
     if (!form || form.dataset.bound) return;
     form.dataset.bound = '1';
-    form.addEventListener('submit', function (e) {
+    // Form riwayat = jurnal kas manual (tersimpan di server).
+    form.addEventListener('submit', async function (e) {
         e.preventDefault();
         const ket = document.getElementById('keKet').value.trim();
         if (!ket) return;
-        const item = {
+        const payload = {
             tgl: document.getElementById('keTgl').value || new Date().toISOString().slice(0, 10),
             jenis: document.getElementById('keJenis').value,
             kategori: document.getElementById('keKategori').value,
             ket: ket,
             nominal: Math.max(1, Number(document.getElementById('keNominal').value) || 0),
         };
-        if (_kuEditIdx >= 0 && KU_RIWAYAT[_kuEditIdx]) {
-            KU_RIWAYAT[_kuEditIdx] = item;
-        } else {
-            KU_RIWAYAT.unshift(item);
-            _kuPage = 1;
-        }
-        renderRiwayat();
         const fb = document.getElementById('keuFeedback');
-        fb.classList.remove('hidden');
-        fb.classList.add('success');
-        fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Tersimpan (lokal, hilang setelah refresh).`;
+        try {
+            if (_kuEditId >= 0) {
+                await apiPut('/kas/entries/' + _kuEditId, {
+                    jenis: payload.jenis, kategori: payload.kategori,
+                    keterangan: payload.ket, nominal: payload.nominal, tanggal: payload.tgl,
+                });
+                _kuEditId = -1;
+            } else {
+                await apiPost('/kas/entries', {
+                    jenis: payload.jenis, kategori: payload.kategori,
+                    keterangan: payload.ket, nominal: payload.nominal, tanggal: payload.tgl,
+                });
+                _kuPage = 1;
+            }
+            await loadKuFinance();
+            renderRiwayat();
+            fb.classList.remove('hidden');
+            fb.classList.add('success');
+            fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Tersimpan di jurnal kas.`;
+        } catch (err) {
+            fb.classList.remove('hidden');
+            fb.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> ${escapeHtml(err.message || 'Gagal menyimpan.')}`;
+        }
     });
 }
 
-function renderRiwayat() {
+async function renderRiwayat() {
+    try { kuMenuClose(); } catch (_) {}
     initKuToolbar();
     initKeuForm();
+    renderKuArsip();
+    const my = ++_kuRiwReq;
     const body = document.getElementById('kuBody');
     const empty = document.getElementById('kuEmpty');
     const pagination = document.getElementById('kuPagination');
@@ -2995,66 +3613,85 @@ function renderRiwayat() {
     const pageBtns = document.getElementById('kuPageBtns');
     if (!body) return;
 
+    const loading = document.getElementById('kuLoading');
     body.innerHTML = '';
     empty.classList.add('hidden');
+    pagination.classList.add('hidden');
+    if (loading) loading.classList.remove('hidden');
 
-    const data = kuFiltered();
-    _kuView = data;
-    const total = data.length;
-    const totalPages = Math.max(1, Math.ceil(total / KU_PER_PAGE));
-    if (_kuPage > totalPages) _kuPage = totalPages;
-    if (_kuPage < 1) _kuPage = 1;
+    try {
+        const params = new URLSearchParams({ page: String(_kuPage), limit: String(KU_PER_PAGE) });
+        if (_kuQuery.trim()) params.set('q', _kuQuery.trim());
+        if (_kuJenis) params.set('jenis', _kuJenis);
+        if (_kuDate) params.set('date', _kuDate);
+        const data = await apiGet('/kas/riwayat?' + params.toString());
+        if (my !== _kuRiwReq) return; // respons basi — ada request lebih baru
+        if (loading) loading.classList.add('hidden');
+        const items = (data && data.items) || [];
+        _kuView = items;
+        _kuPage = (data && data.page) || 1;
+        const total = (data && data.total) || 0;
+        const totalPages = (data && data.total_pages) || 1;
+        if (!items.length) {
+            empty.innerHTML = (_kuQuery.trim() || _kuJenis || _kuDate)
+                ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Tidak ada transaksi yang cocok dengan filter.'
+                : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada riwayat transaksi.';
+            empty.classList.remove('hidden');
+            pagination.classList.add('hidden');
+            if (info) info.textContent = '';
+            if (pageBtns) pageBtns.innerHTML = '';
+            return;
+        }
 
-    if (total === 0) {
-        empty.innerHTML = (_kuQuery.trim() || _kuJenis || _kuDate)
-            ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Tidak ada transaksi yang cocok dengan filter.'
-            : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada riwayat transaksi.';
-        empty.classList.remove('hidden');
-        pagination.classList.add('hidden');
-        return;
-    }
+        const start = (_kuPage - 1) * KU_PER_PAGE;
+        items.forEach((r, i) => {
+            const masuk = r.jenis === 'Masuk';
+            const manual = r.source === 'manual';
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="tx-num">${start + i + 1}</td>
+                <td class="tx-cell-muted tx-nowrap">${txDate(r.tgl)}</td>
+                <td><span class="tx-status ${masuk ? 'ku-masuk' : 'ku-keluar'}"><i class="fa-solid fa-circle"></i>${r.jenis}</span></td>
+                <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(r.kategori || '-')}">${escapeHtml(r.kategori || '-')}</span></td>
+                <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(r.ket || '-')}">${escapeHtml(r.ket || '-')}</span></td>
+                <td class="${masuk ? 'tx-debit' : 'tx-kredit'} tx-nowrap">${kuRupiah(r.nominal)}</td>
+                <td class="tx-aksi">${manual ? `
+                    <button type="button" class="tx-view-btn" data-kumenu-btn title="Menu" onclick="kuMenuToggle('${r.source}', ${r.ref_id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+                ` : `<span class="text-gray-300 dark:text-white/20" title="${r.source === 'order' ? 'Otomatis dari transaksi servis' : 'Otomatis dari beban'}"><i class="fa-solid fa-lock"></i></span>`}
+                </td>
+            `;
+            body.appendChild(tr);
+        });
 
-    const start = (_kuPage - 1) * KU_PER_PAGE;
-    const rows = data.slice(start, start + KU_PER_PAGE);
-    rows.forEach((r, i) => {
-        const idx = start + i;
-        const masuk = r.jenis === 'Masuk';
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td class="tx-num">${start + i + 1}</td>
-            <td class="tx-cell-muted">${txDate(r.tgl)}</td>
-            <td><span class="tx-status ${masuk ? 'ku-masuk' : 'ku-keluar'}"><i class="fa-solid fa-circle"></i>${r.jenis}</span></td>
-            <td class="tx-cell-muted">${escapeHtml(r.kategori)}</td>
-            <td class="tx-cell-muted">${escapeHtml(r.ket)}</td>
-            <td class="${masuk ? 'tx-debit' : 'tx-kredit'}">${kuRupiah(r.nominal)}</td>
-            <td class="tx-aksi">
-                <button type="button" class="tx-view-btn tx-edit-btn" title="Edit" onclick="kuEdit(${idx})"><i class="fa-solid fa-pen"></i></button>
-                <button type="button" class="tx-view-btn tx-del-btn" title="Hapus" onclick="kuDel(${idx})"><i class="fa-solid fa-trash"></i></button>
-            </td>
-        `;
-        body.appendChild(tr);
-    });
+        const end = start + items.length;
+        if (total > KU_PER_PAGE) pagination.classList.remove('hidden');
+        else pagination.classList.add('hidden');
+        if (info) info.textContent = 'Halaman ' + _kuPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + total + ' transaksi)';
 
-    const end = start + rows.length;
-    if (total > KU_PER_PAGE) pagination.classList.remove('hidden');
-    else pagination.classList.add('hidden');
-    if (info) info.textContent = 'Halaman ' + _kuPage + '  ' + start + ' - ' + end + '  (dari ' + total + ' transaksi)';
 
     if (pageBtns) {
         pageBtns.innerHTML = '';
-        const mkBtn = (txt, p, disabled, active) => {
+        const mkBtn = (txt, p, disabled, active, label) => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.textContent = txt;
+            b.innerHTML = txt;
+            if (label) { b.title = label; b.setAttribute('aria-label', label); }
             b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
             if (!disabled) b.addEventListener('click', () => { _kuPage = p; renderRiwayat(); });
             return b;
         };
-        pageBtns.appendChild(mkBtn('← Sebelumnya', _kuPage - 1, _kuPage === 1, false));
+        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _kuPage - 1, _kuPage === 1, false, 'Sebelumnya'));
         for (let p = 1; p <= totalPages; p++) {
             pageBtns.appendChild(mkBtn(String(p), p, false, p === _kuPage));
         }
-        pageBtns.appendChild(mkBtn('Berikutnya →', _kuPage + 1, _kuPage === totalPages, false));
+        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _kuPage + 1, _kuPage === totalPages, false, 'Berikutnya'));
+        }
+    } catch (err) {
+        if (my !== _kuRiwReq) return;
+        if (loading) loading.classList.add('hidden');
+        empty.innerHTML = '<i class="fa-solid fa-circle-exclamation text-3xl mb-2 block opacity-40"></i>' + escapeHtml(err.message || 'Gagal memuat data.');
+        empty.classList.remove('hidden');
+        pagination.classList.add('hidden');
     }
 }
 
@@ -3065,6 +3702,33 @@ function escapeHtml(str) {
         .replace(/</g, '&lt;')
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;');
+}
+
+// Toast non-blocking pengganti alert() — tumpuk maks 3, hilang otomatis.
+function toast(msg, type) {
+    try {
+        let wrap = document.getElementById('toastWrap');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.id = 'toastWrap';
+            wrap.className = 'toast-wrap';
+            wrap.setAttribute('role', 'status');
+            document.body.appendChild(wrap);
+        }
+        const t = document.createElement('div');
+        const kind = (type === 'success' || type === 'info') ? type : 'error';
+        t.className = 'toast is-' + kind;
+        const icon = kind === 'success' ? 'fa-circle-check' : kind === 'info' ? 'fa-circle-info' : 'fa-circle-exclamation';
+        const ic = document.createElement('i');
+        ic.className = 'fa-solid ' + icon;
+        const tx = document.createElement('span');
+        tx.textContent = msg;
+        t.appendChild(ic);
+        t.appendChild(tx);
+        wrap.appendChild(t);
+        while (wrap.children.length > 3) wrap.removeChild(wrap.firstChild);
+        setTimeout(() => { try { t.remove(); } catch (_) {} }, 3800);
+    } catch (_) {}
 }
 
 async function checkSession() {
@@ -3230,6 +3894,22 @@ function updateReceiveSteps() {
     });
 }
 
+function rcShortcutToggle() {
+    const pop = document.getElementById('rcShortcutPop');
+    if (pop) pop.classList.toggle('open');
+}
+
+// Klik area luar menutup popover (sekali ikat, tanpa mengganggu form/shortcut).
+if (!window._rcShortcutBound) {
+    window._rcShortcutBound = true;
+    document.addEventListener('click', function (e) {
+        const pop = document.getElementById('rcShortcutPop');
+        if (!pop || !pop.classList.contains('open')) return;
+        if (e.target.closest('#rcShortcutPop, #rcShortcutFab')) return;
+        pop.classList.remove('open');
+    });
+}
+
 function initReceiveShortcuts() {
     if (document.body.dataset.rcKeys === '1') return;
     document.body.dataset.rcKeys = '1';
@@ -3256,33 +3936,6 @@ function initReceiveShortcuts() {
             }
         }
     });
-}
-
-// Dummy histori tahap UI (ditampilkan bila API tidak mengembalikan data).
-const HISTORY_DUMMY = [
-    {
-        name: 'Budi Santoso', phone: '085725566668', total: 4,
-        device: 'Xiaomi Redmi Note 13', plan: 'Ganti konektor cas', price: 45000,
-        recent: [
-            { no: 'SV-20260820-011', device: 'Xiaomi Redmi Note 13', status: 'Done', date: '2026-08-20', price: 45000 },
-            { no: 'SV-20260715-004', device: 'Xiaomi Redmi Note 13', status: 'Done', date: '2026-07-15', price: 120000 },
-        ],
-    },
-    {
-        name: 'Dewi Lestari', phone: '081112345678', total: 2,
-        device: 'Oppo Reno 11', plan: 'Ganti LCD', price: 680000,
-        recent: [
-            { no: 'SV-20260802-007', device: 'Oppo Reno 11', status: 'Repair', date: '2026-08-02', price: 680000 },
-        ],
-    },
-];
-
-const normPhone = p => (p || '').replace(/\D/g, '').replace(/^62/, '0');
-
-function findDummyHistory(phone) {
-    const n = normPhone(phone);
-    if (!n) return null;
-    return HISTORY_DUMMY.find(d => normPhone(d.phone) === n) || null;
 }
 
 function renderCustSummary(o) {
@@ -3324,8 +3977,8 @@ async function loadSmartHistory() {
     const phone = phoneEl.value.trim();
     if (!phone) {
         const hint = (nameEl && nameEl.value.trim())
-            ? 'Ketik No. WhatsApp untuk auto-sync histori.'
-            : 'Ketik Nama / No. WhatsApp untuk cek histori pelanggan.';
+            ? 'Ketik Nomor WhatsApp untuk Histori Cerdas.'
+            : 'Ketik Nama / Nomor WhatsApp untuk cek histori pelanggan.';
         list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> ${hint}</div>`;
         setBadge('Kosong', 'empty');
         return;
@@ -3336,13 +3989,6 @@ async function loadSmartHistory() {
         const rows = await apiGet('/orders/history/' + encodeURIComponent(phone));
         if (phoneEl.value.trim() !== phone) return; // hasil basi, abaikan
         if (!rows.length) {
-            const dummy = findDummyHistory(phone);
-            if (dummy) {
-                setBadge('Ditemukan', 'found');
-                list.innerHTML = renderCustSummary(dummy)
-                    + historyItemsHtml(dummy.recent.map(r => ({ no_servis: r.no, device: r.device, model: '', status: r.status, created_at: r.date, estimate: r.price })));
-                return;
-            }
             list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-plus"></i> Pelanggan baru — belum memiliki histori servis.</div>`;
             setBadge('Baru', 'new');
             return;
@@ -3366,7 +4012,7 @@ async function loadSmartHistory() {
 
 // ─────────────────────────────────────────────
 // CHECKLIST UNIT — sumber tunggal (Servis Baru & Update konsisten)
-// Kondisi awal per No. Servis, tahap UI (lokal, tanpa DB/API).
+// Definisi master; nilai tersimpan permanen per No. Servis (check_fisik/check_len).
 // ─────────────────────────────────────────────
 
 const CHECK_FISIK = [
@@ -3400,8 +4046,8 @@ function renderChecklist(prefix, containerId, note) {
             </div>
         </div>`;
     box.innerHTML =
-        group('KONDISI FISIK SAAT DITERIMA', 'fa-mobile-screen-button', CHECK_FISIK)
-        + group('KELENGKAPAN SAAT DITERIMA', 'fa-box-open', CHECK_LEN)
+            group('Kondisi Fisik Saat Diterima', 'fa-mobile-screen-button', CHECK_FISIK)
+        + group('Kelengkapan Saat Diterima', 'fa-box-open', CHECK_LEN)
         + (note ? `<p class="field-hint">${note}</p>` : '');
 }
 
@@ -3423,6 +4069,10 @@ function applyChecklist(prefix, data) {
 }
 
 async function initReceivePage() {
+    // Guard anti double-binding: listener submit/input dipasang sekali saja.
+    // Pemanggilan ulang hanya me-restore draft (tanpa dobel POST/history).
+    if (window._initReceiveBound) { restoreReceiveDraft(); return; }
+    window._initReceiveBound = true;
     renderChecklist('rc', 'rcCheckGroups');
     applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
     restoreReceiveDraft();
@@ -3458,8 +4108,11 @@ async function initReceivePage() {
     const form = document.getElementById('receiveForm');
     form.addEventListener('input', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
     form.addEventListener('change', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
+    // KONFIRMASI di Servis Baru: tandai Rencana + Estimasi wajib (* merah).
+    const rcSt = document.getElementById('rcStatus');
+    if (rcSt && !rcSt.dataset.reqBound) { rcSt.dataset.reqBound = '1'; rcSt.addEventListener('change', rcMarkReq); }
+    rcMarkReq();
     initReceiveShortcuts();
-    restoreReceiveDraft();
     updateReceiveSteps();
 
     document.getElementById('receiveForm').addEventListener('submit', async function (e) {
@@ -3471,6 +4124,23 @@ async function initReceivePage() {
         btn.disabled = true;
         txt.textContent = 'Menyimpan...';
         try {
+            // Syarat KONFIRMASI di Servis Baru: Rencana + Estimasi wajib diisi.
+            const _rcSt = (document.getElementById('rcStatus') || {}).value || 'ANALISA';
+            if (_rcSt === 'KONFIRMASI') {
+                const _missing = [];
+                if (!(document.getElementById('rcPlan').value || '').trim()) _missing.push(['Rencana Perbaikan', 'rcPlan']);
+                if (!((parseFloat(document.getElementById('rcEstimate').value) || 0) > 0)) _missing.push(['Estimasi Biaya', 'rcEstimate']);
+                if (_missing.length) {
+                    fb.classList.remove('hidden');
+                    fb.classList.add('error');
+                    fb.textContent = 'Status KONFIRMASI wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
+                    const _first = document.getElementById(_missing[0][1]);
+                    if (_first) _first.focus({ preventScroll: true });
+                    btn.disabled = false;
+                    txt.textContent = 'Terima & Daftarkan Servis';
+                    return;
+                }
+            }
             const _rcCheck = collectChecklist('rc');
             const res = await apiPost('/orders/receive', {
                 customer_name: document.getElementById('rcName').value.trim(),
@@ -3500,7 +4170,7 @@ async function initReceivePage() {
                 plan: document.getElementById('rcPlan').value.trim(),
                 estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
                 dp: parseFloat(document.getElementById('rcDp').value) || 0,
-                technician: (document.getElementById('rcTechnician').selectedOptions[0] || {}).textContent || '',
+                technician: document.getElementById('rcTechnician').value || '',
                 status: document.getElementById('rcStatus').value,
                 imei: (document.getElementById('rcImei') || {}).value || '',
                 password: (document.getElementById('rcPassword') || {}).value || '',
@@ -3521,13 +4191,13 @@ async function initReceivePage() {
             fb.textContent = err.message;
         } finally {
             btn.disabled = false;
-            txt.textContent = 'Terima dan Daftarkan Unit Servis';
+            txt.textContent = 'Terima & Daftarkan Servis';
         }
     });
 }
 
 // ─────────────────────────────────────────────
-// NOTA PENERIMAAN SERVICE (tahap UI: dummy, tanpa DB/API)
+// NOTA PENERIMAAN SERVICE (data real dari transaksi terakhir)
 // ─────────────────────────────────────────────
 
 let _lastNota = null;
@@ -3535,25 +4205,14 @@ let _notaMode = 'SERVICE'; // SERVICE | CLAIM | WARRANTY — menentukan template
 let _lastClaim = null; // claim garansi terakhir (untuk nota claim & workflow)
 let _lastWarranty = null; // nota garansi terakhir (terbit saat status CASH)
 
-const NOTA_DUMMY = {
-    no: 'SV-20260908-2525',
-    tgl: '2026-09-08',
-    nama: 'Andi Pratama',
-    phone: '081234567890',
-    device: 'Samsung Galaxy A55',
-    damage: 'Layar retak, touch sebagian tidak berfungsi',
-    plan: 'Ganti LCD + frame, tes fungsi',
-    estimate: 550000,
-    dp: 100000,
-    technician: 'Teknisi 1',
-    status: 'ANALISA',
-    estimasi_selesai: '2026-09-11',
-    garansi: 'Garansi pengerjaan 30 hari untuk penggantian part yang sama.',
-    imei: '-',
-    password: '-',
-};
+// Placeholder pilihan teknisi tidak boleh bocor ke nota customer.
+function notaTechnician(v) {
+    const t = String(v || '').trim();
+    if (!t || t === '— Pilih Teknisi —' || t === '— Nama Teknisi —') return '-';
+    return t;
+}
 
-function notaData() { return _lastNota || NOTA_DUMMY; }
+function notaData() { return _lastNota; }
 
 function notaRupiah(v) {
     return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
@@ -3565,8 +4224,13 @@ function notaTgl(t) {
 }
 
 function openNota() {
-    renderNotaPreview(notaData());
-    renderNotaDigital(notaData());
+    const d = notaData();
+    if (!d) {
+        notaFlash('Belum ada data nota — buat Servis Baru dulu.', true);
+        return;
+    }
+    renderNotaPreview(d);
+    renderNotaDigital(d);
     const fb = document.getElementById('notaFeedback');
     if (fb) fb.classList.add('hidden');
     const win = document.getElementById('pageNota');
@@ -3598,8 +4262,8 @@ function renderNotaPreview(d) {
         ${row('No. Servis', d.no)}
         ${row('Tanggal', notaTgl(d.tgl))}
         <div class="nt-sep"></div>
-        ${row('Konsumen', d.nama)}
-        ${row('No. WA', d.phone)}
+        ${row('Pelanggan', d.nama)}
+        ${row('Nomor WhatsApp', d.phone)}
         ${row('Device', d.device)}
         <div class="nt-sep"></div>
         <div class="nt-label">Kerusakan:</div>
@@ -3609,7 +4273,7 @@ function renderNotaPreview(d) {
         <div class="nt-sep"></div>
         ${row('Estimasi', notaRupiah(d.estimate))}
         ${row('DP', notaRupiah(d.dp))}
-        ${row('Teknisi', (d.technician || '').trim() || '-')}
+        ${row('Teknisi', notaTechnician(d.technician))}
         ${row('Status', d.status)}
         <div class="nt-sep"></div>
         <div class="nt-foot">Simpan nota ini sebagai<br>bukti pengambilan unit.<br>Terima kasih!</div>`;
@@ -3641,7 +4305,7 @@ function notaText(d) {
     kv('No', d.no);
     kv('Tgl', notaTgl(d.tgl));
     L.push(sep);
-    kv('Konsumen', d.nama);
+    kv('Pelanggan', d.nama);
     kv('WA', d.phone);
     kv('Device', d.device);
     L.push(sep);
@@ -3652,7 +4316,7 @@ function notaText(d) {
     L.push(sep);
     kv('Estimasi', notaRupiah(d.estimate));
     kv('DP', notaRupiah(d.dp));
-    kv('Teknisi', (d.technician || '').trim() || '-');
+    kv('Teknisi', notaTechnician(d.technician));
     kv('Status', d.status);
     L.push(sep);
     L.push('Simpan nota ini sebagai');
@@ -3671,6 +4335,7 @@ function notaPrint() {
     const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
     const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
     const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    if (!d) { notaFlash('Belum ada data nota.', true); return; }
     const text = isClaim ? claimNotaText(d) : isWarranty ? warrantyNotaText(d) : notaText(d);
     const w = window.open('', '_blank', 'width=360,height=640');
     if (!w) {
@@ -3703,6 +4368,7 @@ function notaShareWA() {
     const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
     const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
     const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    if (!d) { notaFlash('Belum ada data nota.', true); return; }
     const msg = isClaim
         ? 'Halo ' + (d.nama || 'Kak') + ', unit Anda sudah kami terima sebagai klaim garansi di SUKABUMI FLASHER.\n\n' + claimNotaText(d)
         : isWarranty
@@ -3712,7 +4378,7 @@ function notaShareWA() {
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
     } catch (_) {}
     const num = notaWaNumber(d.phone);
-    if (!num) { notaFlash('No. WA kosong — teks nota sudah disalin.', true); return; }
+    if (!num) { notaFlash('Nomor WhatsApp kosong — teks nota sudah disalin.', true); return; }
     notaFlash('Teks nota disalin — membuka WhatsApp customer...');
     window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
 }
@@ -3721,6 +4387,7 @@ function notaSaveImage() {
     const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
     const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
     const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    if (!d) { notaFlash('Belum ada data nota.', true); return; }
     const lines = (isClaim ? claimNotaText(d) : isWarranty ? warrantyNotaText(d) : notaText(d)).split('\n');
     const fs = 22, lh = 29, pad = 24, W = 560;
     const H = lines.length * lh + pad * 2;
@@ -3746,7 +4413,7 @@ function notaSaveImage() {
     notaFlash('Gambar nota tersimpan ke device.');
 }
 
-// ── Nota Digital: modern, visual, untuk smartphone/WA (tahap UI, tanpa DB/API) ──
+// ── Nota Digital: modern, visual, untuk smartphone/WA (data real transaksi) ──
 
 function notaSwitch(tab) {
     const t = document.getElementById('notaThermalWrap');
@@ -3760,7 +4427,7 @@ function notaSwitch(tab) {
     if (td) td.classList.toggle('is-active', isD);
     const win = document.getElementById('pageNota');
     if (win) win.classList.toggle('nota-wide', isD);
-    if (isD) { renderNotaDigital(notaData()); notaDigitalFit(); }
+    if (isD) { const dd = notaData(); if (dd) { renderNotaDigital(dd); notaDigitalFit(); } }
 }
 
 // Kanvas Nota Digital fix 1066px: preview diskala agar muat, export selalu 1:1.
@@ -3862,10 +4529,9 @@ function notaChecklistText(list, master) {
 function renderNotaDigital(d) {
     const el = document.getElementById('notaDigital');
     if (!el) return;
-    const teknisi = (d.technician || '').trim() || '-';
+    const teknisi = notaTechnician(d.technician);
     const tgl = notaTglSlash(d.tgl);
     const jam = notaJam();
-    const selesai = notaTglSlash(notaEstimasiSelesai(d));
     const imei = (d.imei || '').trim() || '-';
     const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
         + encodeURIComponent('SUKABUMI FLASHER ' + (d.no || ''));
@@ -3923,11 +4589,11 @@ function renderNotaDigital(d) {
                         <p class="nps-text">${escapeHtml(d.plan || '-')}</p>
                     </div>
                     <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-box-open"></i></span>KELENGKAPAN</div>
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-box-open"></i></span>KELENGKAPAN SAAT DITERIMA</div>
                         <p class="nps-text">${escapeHtml(lenTxt)}</p>
                     </div>
                     <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>KONDISI FISIK MASUK</div>
+                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>KONDISI FISIK SAAT DITERIMA</div>
                         <p class="nps-text">${escapeHtml(fisikTxt)}</p>
                     </div>
                 </div>
@@ -3989,9 +4655,8 @@ function notaDigitalText(d) {
         + 'Keluhan : ' + (d.damage || '-') + '\n'
         + 'Estimasi : ' + notaRupiah(d.estimate) + '\n'
         + 'DP : ' + notaRupiah(d.dp) + '\n'
-        + 'Teknisi : ' + ((d.technician || '').trim() || '-') + '\n'
+        + 'Teknisi : ' + (notaTechnician(d.technician)) + '\n'
         + 'Tgl Terima : ' + notaTgl(d.tgl) + '\n'
-        + 'Estimasi Selesai : ' + notaTgl(notaEstimasiSelesai(d)) + '\n'
         + (d.garansi ? d.garansi + '\n' : '')
         + '--------------------------\n'
          + 'Simpan nota ini sebagai bukti pengambilan unit. Terima kasih! - *SUKABUMI FLASHER*';
@@ -4001,6 +4666,7 @@ function notaDigitalShareWA() {
     const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
     const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
     const d = isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+    if (!d) { notaFlash('Belum ada data nota.', true); return; }
     const msg = isClaim
         ? 'Halo ' + (d.nama || 'Kak') + ', berikut nota digital klaim garansi Anda di SUKABUMI FLASHER.\n\n' + claimNotaDigitalText(d)
         : isWarranty
@@ -4010,7 +4676,7 @@ function notaDigitalShareWA() {
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
     } catch (_) {}
     const num = notaWaNumber(d.phone);
-    if (!num) { notaFlash('No. WA kosong — teks nota sudah disalin.', true); return; }
+    if (!num) { notaFlash('Nomor WhatsApp kosong — teks nota sudah disalin.', true); return; }
     notaFlash('Nota digital disalin — membuka WhatsApp customer...');
     window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
 }
@@ -4030,6 +4696,7 @@ function notaCanvasWrap(ctx, text, maxW) {
 
 async function notaSaveDigitalImage() {
     const d = notaData();
+    if (!d) { notaFlash('Belum ada data nota.', true); return; }
     const node = document.getElementById('notaDigital');
     const sheet = node ? node.querySelector('.nps-sheet') : null;
     if (sheet && typeof html2canvas !== 'undefined') {
@@ -4084,8 +4751,7 @@ function notaSaveDigitalImageManual(d) {
         ['NO. SERVIS', d.no + '  •  Tgl: ' + notaTglSlash(d.tgl) + '  •  Jam: ' + notaJam()],
         ['KELUHAN', d.damage],
         ['TINDAKAN', d.plan],
-        ['TEKNISI', (d.technician || '').trim() || '-'],
-        ['ESTIMASI SELESAI', notaTglSlash(notaEstimasiSelesai(d))],
+        ['TEKNISI', notaTechnician(d.technician)],
     ];
     const lines = blocks.map(b => wrap(b[1]));
     const lh = 31;
@@ -4116,7 +4782,7 @@ function notaSaveDigitalImageManual(d) {
     c.font = '800 38px Inter, system-ui, sans-serif';
     c.fillText('NOTA PENERIMAAN SERVICE', pad, y);
     y += 18;
-    c.fillStyle = '#b91c1c';
+    c.fillStyle = '#2563eb';
     c.font = '700 25px ui-monospace, monospace';
     c.fillText(d.no || '-', pad, y + 30);
     y += 62;
@@ -4269,10 +4935,10 @@ async function claimRSelect(id) {
         const row = (k, v) => `<div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">${escapeHtml(k)}</span><b class="text-[13px] text-gray-800 dark:text-gray-100">${escapeHtml(v || '-')}</b></div>`;
         card.innerHTML =
             row('No. Servis', o.no_servis) + row('Tanggal Servis', notaTgl(o.service_date)) +
-            row('Customer', o.customer_name) + row('WhatsApp', o.customer_phone) +
-            row('Device', o.device) + row('IMEI', o.imei) +
-            row('Kerusakan', o.damagetype) + row('Perbaikan', o.repair_plan) +
-            row('Teknisi', o.technician) + row('Garansi Sampai', notaTgl(o.warranty_end) + ' (' + o.warranty_days + ' hari)');
+            row('Pelanggan', o.customer_name) + row('Nomor WhatsApp', o.customer_phone) +
+            row('Perangkat', o.device) + row('IMEI', o.imei) +
+        row('Keluhan', o.damagetype) + row('Rencana Perbaikan', o.repair_plan) +
+            row('Teknisi Penanggung Jawab', o.technician) + row('Garansi Sampai', notaTgl(o.warranty_end) + ' (' + o.warranty_days + ' hari)');
     }
     const badges = document.getElementById('clrBadges');
     if (badges) {
@@ -4299,7 +4965,7 @@ async function claimRSelect(id) {
     if (hist) {
         const list = o._freshClaims !== null && o._freshClaims !== undefined ? o._freshClaims : null;
         const items = list !== null ? list : (o.claims || []);
-        hist.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori Claim Servis Ini (' + items.length + ')</p>'
+        hist.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori Klaim Servis Ini (' + items.length + ')</p>'
             + (items.length ? items.map(c => `
                 <div class="clr-result">
                     <div class="flex items-center justify-between gap-2 flex-wrap">
@@ -4471,7 +5137,7 @@ function claimRSelectRefresh(c) {
     // Render ulang ringkas tanpa fetch ulang.
     const tmp = _clrOrigin._freshClaims;
     _clrOrigin._freshClaims = tmp;
-    hist.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori Claim Servis Ini (' + tmp.length + ')</p>'
+    hist.innerHTML = '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1.5">Histori Klaim Servis Ini (' + tmp.length + ')</p>'
         + tmp.map(x => `
             <div class="clr-result">
                 <div class="flex items-center justify-between gap-2 flex-wrap">
@@ -4584,8 +5250,8 @@ function renderClaimNotaPreview(d) {
         ${row('Servis Asal', d.origin_no)}
         ${row('Tgl Claim', notaTgl(d.tgl))}
         <div class="nt-sep"></div>
-        ${row('Konsumen', d.nama)}
-        ${row('No. WA', d.phone)}
+        ${row('Pelanggan', d.nama)}
+        ${row('Nomor WhatsApp', d.phone)}
         ${row('Device', d.device)}
         ${row('IMEI', d.imei)}
         <div class="nt-sep"></div>
@@ -4657,7 +5323,7 @@ function renderClaimNotaDigital(d) {
                 <div class="ndr-sec"><span>Keluhan claim</span><p>${escapeHtml(d.complaint)}</p></div>
                 <div class="ndr-sec"><span>Kondisi / kelengkapan</span><p>${escapeHtml([d.physical, d.completeness].filter(Boolean).join(' · '))}</p></div>
                 <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(d.technician || '-')}</p></div>
-                <div class="ndr-sec"><span>Biaya customer</span><p class="ndr-price">${escapeHtml(notaRupiah(d.estimate))}</p></div>
+                <div class="ndr-sec"><span>Biaya pelanggan</span><p class="ndr-price">${escapeHtml(notaRupiah(d.estimate))}</p></div>
             </div>
             <div class="ndr-card is-green">
                 <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>STATUS CLAIM</div>
@@ -4720,7 +5386,7 @@ function claimNotaText(d) {
     kv('Servis asal', d.origin_no);
     kv('Tgl claim', notaTgl(d.tgl));
     L.push(sep);
-    kv('Konsumen', d.nama);
+    kv('Pelanggan', d.nama);
     kv('WA', d.phone);
     kv('Device', d.device);
     kv('IMEI', d.imei);
@@ -4734,7 +5400,7 @@ function claimNotaText(d) {
     kv('Hasil', d.decision);
     kv('Status', d.claim_status);
     kv('Biaya', notaRupiah(d.estimate));
-    kv('Teknisi', (d.technician || '').trim() || '-');
+    kv('Teknisi', notaTechnician(d.technician));
     L.push(sep);
     L.push('Simpan nota claim ini sebagai');
     L.push('bukti pengambilan unit.');
@@ -4866,14 +5532,14 @@ function renderWarrantyNotaPreview(d) {
         ${row('No. Servis', d.no)}
         ${row('Tgl Selesai', notaTgl(d.tgl))}
         <div class="nt-sep"></div>
-        ${row('Konsumen', d.nama)}
-        ${row('No. WA', d.phone)}
+        ${row('Pelanggan', d.nama)}
+        ${row('Nomor WhatsApp', d.phone)}
         ${row('Device', d.device)}
         ${row('IMEI', d.imei)}
         <div class="nt-sep"></div>
         <div class="nt-label">Tindakan perbaikan:</div>
         <div class="nt-val">${escapeHtml(d.plan)}</div>
-        ${row('Teknisi', (d.technician || '').trim() || '-')}
+        ${row('Teknisi', notaTechnician(d.technician))}
         ${row('Biaya Final', notaRupiah(d.final))}
         <div class="nt-sep"></div>
         ${row('Garansi', d.warranty_label)}
@@ -5000,14 +5666,14 @@ function warrantyNotaText(d) {
     kv('No', d.no);
     kv('Tgl selesai', notaTgl(d.tgl));
     L.push(sep);
-    kv('Konsumen', d.nama);
+    kv('Pelanggan', d.nama);
     kv('WA', d.phone);
     kv('Device', d.device);
     kv('IMEI', d.imei);
     L.push(sep);
     L.push('Tindakan:');
     notaWrap(d.plan, 32).forEach(x => L.push(x));
-    kv('Teknisi', (d.technician || '').trim() || '-');
+    kv('Teknisi', notaTechnician(d.technician));
     kv('Biaya final', notaRupiah(d.final));
     L.push(sep);
     kv('Garansi', d.warranty_label);
@@ -5027,7 +5693,7 @@ function warrantyNotaDigitalText(d) {
         + 'Nama : ' + (d.nama || '-') + '\n'
         + 'Device : ' + (d.device || '-') + '\n'
         + 'Tindakan : ' + (d.plan || '-') + '\n'
-        + 'Teknisi : ' + ((d.technician || '').trim() || '-') + '\n'
+        + 'Teknisi : ' + (notaTechnician(d.technician)) + '\n'
         + 'Biaya Final : ' + notaRupiah(d.final) + '\n'
         + 'Garansi : ' + (d.warranty_label || '-') + (d.warranty_end ? ' s/d ' + notaTgl(d.warranty_end) : '') + '\n'
         + '--------------------------\n'
@@ -5058,7 +5724,7 @@ function initClaimReceive() {
 }
 
 // ─────────────────────────────────────────────
-// AUDIT TUTUP KAS (popup dari dashboard — tahap UI, tersimpan lokal)
+// AUDIT TUTUP KAS (popup dari dashboard — hitung uang laci, dibandingkan saat Tutup Kas)
 // ─────────────────────────────────────────────
 
 function openAuditKas() {
@@ -5107,7 +5773,7 @@ function submitAuditKas() {
             }));
         } catch (_) {}
         const jam = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-        auditKasFeedback('Kas dikunci Rp ' + nominal.toLocaleString('id-ID') + ' • ' + jam + ' — arsip dipindahkan.', false);
+        auditKasFeedback('Tercatat Rp ' + nominal.toLocaleString('id-ID') + ' • ' + jam + ' — akan dibandingkan saat Tutup Kas.', false);
         setTimeout(closeAuditKas, 1400);
     } finally {
         if (btn) btn.disabled = false;
@@ -5127,7 +5793,7 @@ if (!window._auditKasKeys) {
 }
 
 // ─────────────────────────────────────────────
-// PENGATURAN BEBAN HARIAN (popup dari dashboard — tahap UI, tersimpan lokal)
+// PENGATURAN BEBAN HARIAN (popup dari dashboard — tersimpan di server, fallback lokal bila offline)
 // ─────────────────────────────────────────────
 
 const BEBAN_DEFAULT = [
@@ -5195,19 +5861,16 @@ async function openBeban() {
         const page = await apiGet('/expenses?limit=100');
         const rows = (page && page.items) || [];
         if (!rows.length) {
-            const lokal = bebanLoad();
-            if (lokal.length) await bebanMigrateOnce(lokal);
+            // Server kosong: migrasikan HANYA data lokal milik user bila kuncinya ada.
+            // Daftar referensi bawaan (BEBAN_DEFAULT) tidak pernah dikirim ke server.
+            let arr = null;
+            try {
+                const raw = localStorage.getItem(BEBAN_STORE_KEY);
+                if (raw) { const parsed = JSON.parse(raw); if (Array.isArray(parsed)) arr = parsed; }
+            } catch (_) { arr = null; }
+            if (arr && arr.length) await bebanMigrateOnce(arr);
             const page2 = await apiGet('/expenses?limit=100');
             _bebanList = ((page2 && page2.items) || []).map(r => ({ id: r.id, kategori: r.kategori, nama: r.uraian, nilai: r.nilai }));
-            if (!_bebanList.length) {
-                // Seed bawaan referensi bila server benar-benar kosong.
-                for (const b of BEBAN_DEFAULT) {
-                    try {
-                        const created = await apiPost('/expenses', { kategori: b.kategori, uraian: b.nama, nilai: b.nilai });
-                        _bebanList.push({ id: created.id, kategori: created.kategori, nama: created.uraian, nilai: created.nilai });
-                    } catch (_) { break; }
-                }
-            }
         } else {
             _bebanList = rows.map(r => ({ id: r.id, kategori: r.kategori, nama: r.uraian, nilai: r.nilai }));
         }
@@ -5383,7 +6046,7 @@ document.addEventListener('DOMContentLoaded', async function () {
         if (!getToken()) return;
         if (isReceiveHash()) { openServisBaru(); return; }
         const k = pageFromHash();
-        if (k) navigateTo(k);
+        if (k && k !== window._activePage) navigateTo(k);
     });
 
     const user = await checkSession();
