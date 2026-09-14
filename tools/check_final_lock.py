@@ -74,15 +74,10 @@ def api(base, method, path, token=None, body=None):
         return -1, {"detail": str(e)}
 
 
-def phase_api(base):
-    st, me = api(base, "POST", "/api/auth/login", None,
-                 {"username": "superadmin", "passcode": "Admin4100"})
-    check("login superadmin", st == 200, st)
+def phase_api(base, tok):
+    st, _ = api(base, "GET", "/api/auth/me", tok)
+    check("sesi token valid", st == 200, st)
     if st != 200:
-        return
-    tok = me.get("token") or me.get("access_token")
-    check("token diterima", bool(tok))
-    if not tok:
         return
 
     st, o = api(base, "POST", "/api/orders/receive", tok,
@@ -133,6 +128,74 @@ def phase_api(base):
     check("bersihkan order TEST", st == 200, st)
 
 
+def phase_paths(base, tok):
+    """Regression khusus 4 initial path Servis Baru."""
+    base_payload = {"customer_name": "REGTEST-PATH", "customer_phone": "089999000222",
+                    "device": "REGTEST Path Device", "damagetype": "REGTEST"}
+    ids = []
+
+    def recv(extra):
+        p = dict(base_payload)
+        p.update(extra)
+        return api(base, "POST", "/api/orders/receive", tok, p)
+
+    def hist_len(oid):
+        st, hs = api(base, "GET", "/api/orders/%d/history" % oid, tok)
+        return (st, len(hs) if isinstance(hs, list) else hs)
+
+    # 1. TITIP → DITERIMA, chain 1
+    st, o = recv({"initial_path": "TITIP"})
+    check("path TITIP → DITERIMA", st == 201 and o.get("status") == "DITERIMA", st)
+    if st == 201:
+        ids.append(o["id"])
+        sth, n = hist_len(o["id"])
+        check("path TITIP chain=1", sth == 200 and n == 1, n)
+
+    # 2. PERBAIKAN tanpa teknisi → 400; lengkap → PERBAIKAN chain 5
+    st, _ = recv({"initial_path": "PERBAIKAN", "repair_plan": "REGTEST",
+                  "estimate": 500000})
+    check("path PERBAIKAN tanpa teknisi ditolak", st == 400, st)
+    st, o = recv({"initial_path": "PERBAIKAN", "repair_plan": "REGTEST",
+                  "estimate": 500000, "technician": "Budi"})
+    check("path PERBAIKAN → PERBAIKAN", st == 201 and o.get("status") == "PERBAIKAN", st)
+    if st == 201:
+        ids.append(o["id"])
+        sth, n = hist_len(o["id"])
+        check("path PERBAIKAN chain=5", sth == 200 and n == 5, n)
+
+    # 3. SPAREPART lengkap → MENUNGGU SPAREPART chain 5
+    st, o = recv({"initial_path": "SPAREPART", "repair_plan": "REGTEST",
+                  "estimate": 300000, "technician": "Andi"})
+    check("path SPAREPART → MENUNGGU SPAREPART",
+          st == 201 and o.get("status") == "MENUNGGU SPAREPART", st)
+    if st == 201:
+        ids.append(o["id"])
+        sth, n = hist_len(o["id"])
+        check("path SPAREPART chain=5", sth == 200 and n == 5, n)
+
+    # 4. TUNGGU tanpa final (null) → 400; final=0 boleh → SELESAI chain 6
+    st, _ = recv({"initial_path": "TUNGGU", "repair_plan": "REGTEST",
+                  "technician": "Budi"})
+    check("path TUNGGU tanpa final ditolak", st == 400, st)
+    st, o = recv({"initial_path": "TUNGGU", "repair_plan": "REGTEST",
+                  "technician": "Budi", "final_price": 0})
+    check("path TUNGGU final=0 → SELESAI", st == 201 and o.get("status") == "SELESAI", st)
+    if st == 201:
+        ids.append(o["id"])
+        sth, n = hist_len(o["id"])
+        check("path TUNGGU chain=6", sth == 200 and n == 6, n)
+
+    # 5. Tanpa initial_path → tetap DITERIMA (legacy)
+    st, o = recv({})
+    check("tanpa path → DITERIMA", st == 201 and o.get("status") == "DITERIMA", st)
+    if st == 201:
+        ids.append(o["id"])
+
+    for oid in ids:
+        st, _ = api(base, "DELETE", "/api/orders/%d" % oid, tok)
+        check("bersihkan order path %d" % oid, st == 200, st)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--db", default="servisku.db")
@@ -146,7 +209,15 @@ def main():
         check("buka DB", False, e)
     if not a.skip_api:
         print("== FASE 2: API " + a.base + " ==")
-        phase_api(a.base)
+        st, me = api(a.base, "POST", "/api/auth/login", None,
+                     {"username": "superadmin", "passcode": "Admin4100"})
+        check("login superadmin", st == 200, st)
+        tok = (me.get("token") or me.get("access_token")) if st == 200 else None
+        check("token diterima", bool(tok))
+        if tok:
+            phase_api(a.base, tok)
+            print("== FASE 3: INITIAL PATH ==")
+            phase_paths(a.base, tok)
     fails = [n for n, ok, _ in results if not ok]
     print("== %d/%d PASS ==" % (len(results) - len(fails), len(results)))
     sys.exit(1 if fails else 0)

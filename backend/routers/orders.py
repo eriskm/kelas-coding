@@ -9,8 +9,10 @@ from dependencies import get_db_session
 from models import Payment, ServiceOrder, Customer, StatusHistory, User
 from routers.auth import get_authenticated_user
 from statusflow import (
+    INITIAL_PATHS,
     SERVICE_STATUSES,
     TERMINAL_STATUSES,
+    check_initial_path,
     check_transition,
     lock_lunas_moment,
     payment_summary,
@@ -72,14 +74,31 @@ def order_history(phone: str, db: Session = Depends(get_db_session)):
 @router.post("/receive", response_model=schemas.ServiceOrderOut, status_code=201)
 def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_session),
                  user: User = Depends(get_authenticated_user)):
-    """Daftarkan unit servis baru (buat customer + service order sekaligus)."""
-    st = (data.status or "DITERIMA").strip() or "DITERIMA"
-    if st not in SERVICE_STATUSES:
-        raise HTTPException(status_code=400,
-                            detail="Status tidak valid: %s. Pilihan: %s" % (st, ", ".join(SERVICE_STATUSES)))
-    ok, msg = check_transition("", st)
-    if not ok:
-        raise HTTPException(status_code=400, detail=msg)
+    """Daftarkan unit servis baru (buat customer + service order sekaligus).
+
+    FINAL: initial path operasional (TITIP/PERBAIKAN/SPAREPART/TUNGGU),
+    bukan dropdown status bebas. Tanpa initial_path → DITERIMA (legacy).
+    """
+    path_key = (data.initial_path or "").strip().upper() or None
+    if path_key is not None:
+        target, chain, err = check_initial_path(path_key, {
+            "repair_plan": data.repair_plan,
+            "estimate": data.estimate,
+            "technician": data.technician,
+            "final_price": data.final_price,
+        })
+        if err:
+            raise HTTPException(status_code=400, detail=err)
+        st = target
+    else:
+        st = (data.status or "DITERIMA").strip() or "DITERIMA"
+        if st not in SERVICE_STATUSES:
+            raise HTTPException(status_code=400,
+                                detail="Status tidak valid: %s. Pilihan: %s" % (st, ", ".join(SERVICE_STATUSES)))
+        ok, msg = check_transition("", st)
+        if not ok:
+            raise HTTPException(status_code=400, detail=msg)
+        chain = ["DITERIMA"]
     customer = None
     if data.customer_phone:
         customer = (
@@ -115,12 +134,18 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
         unit_status="DI TOKO",
         estimate=data.estimate or 0,
         payment=data.dp or 0,
+        final_price=data.final_price,
         service_date=date.today(),
+        warranty_months=1 if st == "SELESAI" else None,
     )
     db.add(order)
     db.commit()
     db.refresh(order)
-    _log_transition(db, order.id, None, st, _actor(user), "pendaftaran unit")
+    _prev = None
+    _note = ("initial path: %s" % INITIAL_PATHS[path_key]["label"]) if path_key else "pendaftaran unit"
+    for _step in chain:
+        _log_transition(db, order.id, _prev, _step, _actor(user), _note)
+        _prev = _step
     db.commit()
     db.refresh(order)
     _attach_summary(db, order)

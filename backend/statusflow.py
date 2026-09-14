@@ -38,6 +38,69 @@ UNIT_STATUSES = ["DI TOKO", "DIAMBIL"]
 
 PAYMENT_KINDS = ["DP", "PELUNASAN"]
 
+# Initial path Servis Baru (kondisi operasional, bukan status bebas).
+# target = initial status; chain = histori yang benar-benar terjadi.
+INITIAL_PATHS = {
+    "TITIP": {
+        "target": "DITERIMA",
+        "label": "titip unit",
+        "chain": ["DITERIMA"],
+    },
+    "PERBAIKAN": {
+        "target": "PERBAIKAN",
+        "label": "masuk perbaikan",
+        "chain": ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "PERBAIKAN"],
+    },
+    "SPAREPART": {
+        "target": "MENUNGGU SPAREPART",
+        "label": "menunggu sparepart",
+        "chain": ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "MENUNGGU SPAREPART"],
+    },
+    "TUNGGU": {
+        "target": "SELESAI",
+        "label": "servis tunggu",
+        "chain": ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "PERBAIKAN", "SELESAI"],
+    },
+}
+
+
+def check_initial_path(path, fields: dict):
+    """Validasi guard per initial path. Return (target, chain, error).
+
+    fields: repair_plan, estimate, technician, final_price (None = tak terdefinisi).
+    Koreksi APPROVAL: TUNGGU menolak final NULL, mengizinkan 0.
+    """
+    spec = INITIAL_PATHS.get((path or "").strip().upper())
+    if spec is None:
+        return None, None, ("Initial path tidak valid. Pilihan: "
+                            + ", ".join(INITIAL_PATHS.keys()))
+    plan = (fields.get("repair_plan") or "").strip()
+    est = fields.get("estimate") or 0
+    tech = (fields.get("technician") or "").strip()
+    final = fields.get("final_price")
+    key = (path or "").strip().upper()
+    if key in ("PERBAIKAN", "SPAREPART"):
+        missing = []
+        if not plan:
+            missing.append("Rencana Perbaikan")
+        if not (est or 0) > 0:
+            missing.append("Estimasi Biaya")
+        if not tech:
+            missing.append("Teknisi Penanggung Jawab")
+        if missing:
+            return None, None, ("Path %s wajib melengkapi: %s" % (key, ", ".join(missing)))
+    elif key == "TUNGGU":
+        missing = []
+        if not plan:
+            missing.append("Rencana/Tindakan Perbaikan")
+        if not tech:
+            missing.append("Teknisi Penanggung Jawab")
+        if final is None:
+            missing.append("Harga Final (wajib terdefinisi, boleh 0)")
+        if missing:
+            return None, None, ("Path TUNGGU wajib melengkapi: %s" % ", ".join(missing))
+    return spec["target"], spec["chain"], ""
+
 # Status legacy → final (FINAL LOCK §12). CASH ditangani khusus (§3.1).
 LEGACY_STATUS_MAP = {
     "RECEIVED": "DITERIMA",

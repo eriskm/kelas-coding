@@ -1569,19 +1569,49 @@
                                             <input class="receive-input pl-9" type="number" id="rcDp" min="0" placeholder="100000">
                                         </div>
                                     </div>
+                                    <div class="field hidden" id="rcFinalWrap">
+                                        <label class="field-label" for="rcFinal" id="rcFinalLabel">Harga Final</label>
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                            <input class="receive-input pl-9" type="number" id="rcFinal" min="0" placeholder="500000">
+                                        </div>
+                                    </div>
                                     <div class="field">
-                                        <label class="field-label" for="rcTechnician">Teknisi Penanggung Jawab</label>
+                                        <label class="field-label" for="rcTechnician" id="rcTechnicianLabel">Teknisi Penanggung Jawab</label>
                                         <select class="receive-input" id="rcTechnician">
                                             <option value="">— Pilih Teknisi —</option>
                                         </select>
                                     </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcStatus">Status Servis</label>
-                                        <p class="text-[10.5px] text-gray-400" style="margin-top:-8px">Unit baru selalu DITERIMA (FINAL LOCK)</p>
-                                        <select class="receive-input" id="rcStatus">
-                                            <option value="DITERIMA" selected>Diterima</option>
-                                        </select>
+                                    <input type="hidden" id="rcStatus" value="DITERIMA">
+                                </div>
+                            </div>
+
+                            <!-- PANEL: KONDISI AWAL (initial path, bukan status bebas) -->
+                            <div class="panel receive-panel">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-route"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Kondisi Awal Unit</h3>
+                                        <span class="text-[10.5px] text-gray-400">Sejauh mana proses sudah terjadi saat nota dibuat</span>
                                     </div>
+                                </div>
+                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1" id="rcPathGroup" role="radiogroup" aria-label="Kondisi awal unit">
+                                    <label class="rc-path">
+                                        <input type="radio" name="rcPath" value="TITIP" checked>
+                                        <span class="rc-path-body"><b>Titip Unit</b><i>Analisa & diagnosa menyusul, unit ditinggal</i></span>
+                                    </label>
+                                    <label class="rc-path">
+                                        <input type="radio" name="rcPath" value="PERBAIKAN">
+                                        <span class="rc-path-body"><b>Masuk Perbaikan</b><i>Sudah konfirmasi, konsumen setuju, langsung dikerjakan</i></span>
+                                    </label>
+                                    <label class="rc-path">
+                                        <input type="radio" name="rcPath" value="SPAREPART">
+                                        <span class="rc-path-body"><b>Menunggu Sparepart</b><i>Sudah konfirmasi, sparepart dipesan, unit ditinggal</i></span>
+                                    </label>
+                                    <label class="rc-path">
+                                        <input type="radio" name="rcPath" value="TUNGGU">
+                                        <span class="rc-path-body"><b>Servis Tunggu</b><i>Ditunggu konsumen sampai selesai saat itu juga</i></span>
+                                    </label>
                                 </div>
                             </div>
 

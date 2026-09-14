@@ -78,12 +78,42 @@ function setReceiveHash() {
 // ─────────────────────────────────────────────
 // SERVIS BARU — draft autosave (tahan refresh)
 // ─────────────────────────────────────────────
-const RECEIVE_DRAFT_FIELDS = ['rcName', 'rcPhone', 'rcDevice', 'rcPassword', 'rcImei', 'rcDamage', 'rcPlan', 'rcEstimate', 'rcDp', 'rcTechnician', 'rcStatus'];
+const RECEIVE_DRAFT_FIELDS = ['rcName', 'rcPhone', 'rcDevice', 'rcPassword', 'rcImei', 'rcDamage', 'rcPlan', 'rcEstimate', 'rcDp', 'rcFinal', 'rcTechnician', 'rcStatus', 'rcPath'];
 let _rcDraftTimer = null;
+
+// Initial path Servis Baru (FINAL, bukan status bebas).
+// Path → initial status: TITIP→DITERIMA, PERBAIKAN→PERBAIKAN,
+// SPAREPART→MENUNGGU SPAREPART, TUNGGU→SELESAI.
+const RC_PATH_TARGET = {
+    TITIP: 'DITERIMA',
+    PERBAIKAN: 'PERBAIKAN',
+    SPAREPART: 'MENUNGGU SPAREPART',
+    TUNGGU: 'SELESAI',
+};
+
+function rcGetPath() {
+    try {
+        const c = document.querySelector('input[name="rcPath"]:checked');
+        const v = c ? c.value : 'TITIP';
+        return RC_PATH_TARGET[v] ? v : 'TITIP';
+    } catch (_) { return 'TITIP'; }
+}
+
+function rcApplyPath() {
+    const path = rcGetPath();
+    const hid = document.getElementById('rcStatus');
+    if (hid) hid.value = RC_PATH_TARGET[path];
+    const fw = document.getElementById('rcFinalWrap');
+    if (fw) fw.classList.toggle('hidden', path !== 'TUNGGU');
+    try { rcMarkReq(); } catch (_) {}
+    try { updateReceiveSteps(); } catch (_) {}
+    try { scheduleReceiveDraft(); } catch (_) {}
+}
 
 function collectReceiveDraft() {
     const d = {};
     RECEIVE_DRAFT_FIELDS.forEach(id => {
+        if (id === 'rcPath') { d.rcPath = rcGetPath(); return; }
         const el = document.getElementById(id);
         if (el) d[id] = el.value;
     });
@@ -118,12 +148,20 @@ function restoreReceiveDraft() {
     try { d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null'); } catch (_) { d = null; }
     if (!d) { try { rcMarkReq(); } catch (_) {} return false; }
     RECEIVE_DRAFT_FIELDS.forEach(id => {
+        if (id === 'rcPath') {
+            if (d.rcPath && RC_PATH_TARGET[d.rcPath]) {
+                const r = document.querySelector('input[name="rcPath"][value="' + d.rcPath + '"]');
+                if (r) r.checked = true;
+            }
+            return;
+        }
         const el = document.getElementById(id);
         if (!el || d[id] === undefined) return;
         // Jangan timpa pilihan teknisi bila option-nya belum ada (daftar async).
         if (id === 'rcTechnician' && d[id] && !Array.from(el.options).some(o => o.value === d[id])) return;
         el.value = d[id];
     });
+    try { rcApplyPath(); } catch (_) {}
     try {
         if (d._checklist && typeof applyChecklist === 'function') applyChecklist('rc', d._checklist);
     } catch (_) {}
@@ -136,15 +174,27 @@ function clearReceiveDraft() {
     try { localStorage.removeItem(RECEIVE_DRAFT_KEY); } catch (_) {}
 }
 
-// Tandai Rencana + Estimasi wajib (* merah) saat status Servis Baru = KONFIRMASI.
+// Tandai field wajib (* merah) mengikuti initial path Servis Baru:
+// PERBAIKAN/SPAREPART = Rencana + Estimasi + Teknisi;
+// TUNGGU = Rencana + Teknisi + Harga Final; TITIP = tanpa tanda.
 // Global agar tahan refresh: dipanggil setiap restoreReceiveDraft().
 function rcMarkReq() {
     try {
-        const req = ((document.getElementById('rcStatus') || {}).value === 'KONFIRMASI');
-        const pl = document.getElementById('rcPlanLabel');
-        if (pl) pl.innerHTML = 'Rencana Perbaikan' + (req ? ' <b class="text-red-500">*</b>' : '');
-        const es = document.getElementById('rcEstimateLabel');
-        if (es) es.innerHTML = 'Estimasi Biaya' + (req ? ' <b class="text-red-500">*</b>' : '');
+        const path = rcGetPath();
+        const need = (fid) => (path === 'PERBAIKAN' || path === 'SPAREPART')
+            ? (fid === 'rcPlan' || fid === 'rcEstimate' || fid === 'rcTechnician')
+            : (path === 'TUNGGU'
+                ? (fid === 'rcPlan' || fid === 'rcTechnician' || fid === 'rcFinal')
+                : false);
+        const mark = (labelId, base, fid) => {
+            const el = document.getElementById(labelId);
+            if (!el) return;
+            el.innerHTML = base + (need(fid) ? ' <b class="text-red-500">*</b>' : '');
+        };
+        mark('rcPlanLabel', 'Rencana Perbaikan', 'rcPlan');
+        mark('rcEstimateLabel', 'Estimasi Biaya', 'rcEstimate');
+        mark('rcTechnicianLabel', 'Teknisi Penanggung Jawab', 'rcTechnician');
+        mark('rcFinalLabel', 'Harga Final', 'rcFinal');
     } catch (_) {}
 }
 
@@ -4264,10 +4314,14 @@ async function initReceivePage() {
     const form = document.getElementById('receiveForm');
     form.addEventListener('input', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
     form.addEventListener('change', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
-    // KONFIRMASI di Servis Baru: tandai Rencana + Estimasi wajib (* merah).
-    const rcSt = document.getElementById('rcStatus');
-    if (rcSt && !rcSt.dataset.reqBound) { rcSt.dataset.reqBound = '1'; rcSt.addEventListener('change', rcMarkReq); }
-    rcMarkReq();
+    // Initial path Servis Baru: radio kondisi operasional (bukan status bebas).
+    document.querySelectorAll('input[name="rcPath"]').forEach(r => {
+        if (!r.dataset.pathBound) {
+            r.dataset.pathBound = '1';
+            r.addEventListener('change', rcApplyPath);
+        }
+    });
+    rcApplyPath();
     initReceiveShortcuts();
     updateReceiveSteps();
 
@@ -4280,23 +4334,31 @@ async function initReceivePage() {
         btn.disabled = true;
         txt.textContent = 'Menyimpan...';
         try {
-            // Syarat KONFIRMASI di Servis Baru: Rencana + Estimasi wajib diisi.
-            const _rcSt = (document.getElementById('rcStatus') || {}).value || 'ANALISA';
-            if (_rcSt === 'KONFIRMASI') {
-                const _missing = [];
-                if (!(document.getElementById('rcPlan').value || '').trim()) _missing.push(['Rencana Perbaikan', 'rcPlan']);
-                if (!((parseFloat(document.getElementById('rcEstimate').value) || 0) > 0)) _missing.push(['Estimasi Biaya', 'rcEstimate']);
-                if (_missing.length) {
-                    fb.classList.remove('hidden');
-                    fb.classList.add('error');
-                    fb.textContent = 'Status KONFIRMASI wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
-                    const _first = document.getElementById(_missing[0][1]);
-                    if (_first) _first.focus({ preventScroll: true });
-                    btn.disabled = false;
-                    txt.textContent = 'Terima & Daftarkan Servis';
-                    return;
-                }
+            // Guard initial path (mirror backend check_initial_path).
+            const _rcPath = rcGetPath();
+            const _rcTarget = RC_PATH_TARGET[_rcPath];
+            const _rcVal = id => ((document.getElementById(id) || {}).value || '').trim();
+            const _rcMissing = [];
+            if (_rcPath === 'PERBAIKAN' || _rcPath === 'SPAREPART') {
+                if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana Perbaikan', 'rcPlan']);
+                if (!((parseFloat((document.getElementById('rcEstimate') || {}).value) || 0) > 0)) _rcMissing.push(['Estimasi Biaya', 'rcEstimate']);
+                if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi Penanggung Jawab', 'rcTechnician']);
+            } else if (_rcPath === 'TUNGGU') {
+                if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana/Tindakan Perbaikan', 'rcPlan']);
+                if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi Penanggung Jawab', 'rcTechnician']);
+                if (((document.getElementById('rcFinal') || {}).value || '').trim() === '') _rcMissing.push(['Harga Final (wajib terdefinisi, boleh 0)', 'rcFinal']);
             }
+            if (_rcMissing.length) {
+                fb.classList.remove('hidden');
+                fb.classList.add('error');
+                fb.textContent = 'Path ' + _rcPath + ' wajib melengkapi: ' + _rcMissing.map(m => m[0]).join(', ') + '.';
+                const _first = document.getElementById(_rcMissing[0][1]);
+                if (_first) _first.focus({ preventScroll: true });
+                btn.disabled = false;
+                txt.textContent = 'Terima & Daftarkan Servis';
+                return;
+            }
+            const _rcFinalRaw = ((document.getElementById('rcFinal') || {}).value || '').trim();
             const _rcCheck = collectChecklist('rc');
             const res = await apiPost('/orders/receive', {
                 customer_name: document.getElementById('rcName').value.trim(),
@@ -4310,8 +4372,10 @@ async function initReceivePage() {
                 repair_plan: document.getElementById('rcPlan').value.trim(),
                 estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
                 dp: parseFloat(document.getElementById('rcDp').value) || 0,
+                final_price: _rcFinalRaw === '' ? null : (parseFloat(_rcFinalRaw) || 0),
                 technician: document.getElementById('rcTechnician').value,
-                status: document.getElementById('rcStatus').value,
+                status: _rcTarget,
+                initial_path: _rcPath,
             });
             fb.classList.remove('hidden');
             fb.classList.add('success');
@@ -4337,6 +4401,7 @@ async function initReceivePage() {
             if (_nb2) _nb2.classList.remove('hidden');
             this.reset();
             clearReceiveDraft();
+            try { rcApplyPath(); } catch (_) {}
             applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
             document.querySelectorAll('#rcSteps .rc-step').forEach(li => { li.classList.remove('is-active'); li.classList.add('is-done'); });
             loadSmartHistory();

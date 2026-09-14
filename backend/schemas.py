@@ -96,6 +96,8 @@ class ServiceReceiveIn(BaseModel):
     dp: Optional[float] = 0
     technician: Optional[str] = None
     status: Optional[str] = "DITERIMA"
+    final_price: Optional[float] = None  # wajib terdefinisi (boleh 0) untuk path TUNGGU
+    initial_path: Optional[str] = None  # TITIP | PERBAIKAN | SPAREPART | TUNGGU
 
 
 class ServiceOrderCreate(ServiceOrderBase):

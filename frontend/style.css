@@ -2512,6 +2512,21 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .dark .rc-submit { background: linear-gradient(180deg, rgba(20,20,28,0), #14141c 32%); }
 
+/* Initial path Servis Baru — radio cards kondisi operasional */
+.rc-path { display: block; cursor: pointer; }
+.rc-path input { position: absolute; opacity: 0; pointer-events: none; }
+.rc-path-body { display: block; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; transition: border-color .12s, background .12s; }
+.rc-path-body b { display: block; font-size: 13px; font-weight: 800; color: #0f172a; }
+.rc-path-body i { display: block; font-style: normal; font-size: 11px; color: #64748b; margin-top: 2px; }
+.rc-path input:checked + .rc-path-body { border-color: #dc2626; background: #fef2f2; }
+.rc-path input:checked + .rc-path-body b { color: #b91c1c; }
+.rc-path input:focus-visible + .rc-path-body { outline: 2px solid #dc2626; outline-offset: 2px; }
+.dark .rc-path-body { border-color: rgba(255,255,255,.1); }
+.dark .rc-path-body b { color: #f1f5f9; }
+.dark .rc-path-body i { color: #94a3b8; }
+.dark .rc-path input:checked + .rc-path-body { border-color: #dc2626; background: rgba(220,38,38,.12); }
+.dark .rc-path input:checked + .rc-path-body b { color: #fca5a5; }
+
 /* Stepper aktif: pulse halus */
 .rc-step.is-active .rc-dot { animation: rcPulse 1.8s ease-out infinite; }
 @keyframes rcPulse {
