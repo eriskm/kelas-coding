@@ -1474,13 +1474,17 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .tx-status i { font-size: 7px; }
 .tx-status.st-RECEIVED, .tx-status.st-DIAGNOSIS { background: #e0f2fe; color: #0369a1; }
+.tx-status.st-DITERIMA { background: #e0f2fe; color: #0369a1; }
+.tx-status.st-DIAGNOSA { background: #ede9fe; color: #6d28d9; }
+.tx-status.st-MENUNGGU_SPAREPART { background: #fef3c7; color: #b45309; }
+.tx-status.st-PERBAIKAN { background: #dbeafe; color: #1d4ed8; }
 .tx-status.st-ANALISA { background: #fef3c7; color: #b45309; }
 .tx-status.st-REPAIR, .tx-status.st-REPARASI { background: #fee2e2; color: #b91c1c; }
 .tx-status.st-QC { background: #e9d5ff; color: #7e22ce; }
 .tx-status.st-KONFIRMASI, .tx-status.st-WAITING_APPROVAL { background: #fff7ed; color: #c2410c; }
 .tx-status.st-READY { background: #dcfce7; color: #15803d; }
 .tx-status.st-COMPLETED, .tx-status.st-SELESAI { background: #d1fae5; color: #047857; }
-.tx-status.st-CANCELLED, .tx-status.st-BATAL, .tx-status.st-CANCEL { background: #fee2e2; color: #b91c1c; }
+.tx-status.st-CANCELLED, .tx-status.st-BATAL, .tx-status.st-CANCEL, .tx-status.st-FAILED, .tx-status.st-GAGAL { background: #fee2e2; color: #b91c1c; }
 .tx-status.st-DONE { background: #d1fae5; color: #047857; }
 .tx-status.st-CASH { background: #ccfbf1; color: #0f766e; }
 .tx-status.st-FILED { background: #f1f5f9; color: #475569; }
@@ -1496,10 +1500,8 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .tx-status.st-MASUK { background: #e0f2fe; color: #0369a1; }
 .tx-status.st-VERIFIKASI { background: #fef3c7; color: #b45309; }
 .tx-status.st-CEK { background: #ede9fe; color: #6d28d9; }
-.tx-status.st-DITERIMA { background: #d1fae5; color: #047857; }
 .tx-status.st-DITOLAK { background: #fee2e2; color: #b91c1c; }
 .tx-status.st-PROSES { background: #dbeafe; color: #1d4ed8; }
-.tx-status.st-SELESAI { background: #d1fae5; color: #047857; }
 .tx-status.st-DITUTUP { background: #f1f5f9; color: #475569; }
 .tx-status.st-BELUM_DIPUTUSKAN { background: #f1f5f9; color: #475569; }
 /* Penerimaan Klaim Garansi */
@@ -2687,6 +2689,8 @@ select.range-pill.range-select option { color: #0f172a; }
 .sm-purple  { background: #f5f3ff; } .sm-purple .sm-top, .sm-purple .sm-pct { color: #7c3aed; }
 .sm-rose    { background: #fff1f2; } .sm-rose .sm-top, .sm-rose .sm-pct { color: #e11d48; }
 .sm-emerald { background: #ecfdf5; } .sm-emerald .sm-top, .sm-emerald .sm-pct { color: #059669; }
+.sm-sky    { background: #f0f9ff; } .sm-sky .sm-top, .sm-sky .sm-pct { color: #0ea5e9; }
+.sm-violet { background: #f5f3ff; } .sm-violet .sm-top, .sm-violet .sm-pct { color: #8b5cf6; }
 .dark .sm-blue  { background: rgba(37,99,235,0.14); }
 .dark .sm-green { background: rgba(22,163,74,0.14); }
 .dark .sm-red   { background: rgba(220,38,38,0.14); }
@@ -2698,6 +2702,8 @@ select.range-pill.range-select option { color: #0f172a; }
 .dark .sm-purple  { background: rgba(124,58,237,0.16); }
 .dark .sm-rose    { background: rgba(225,29,72,0.14); }
 .dark .sm-emerald { background: rgba(5,150,105,0.14); }
+.dark .sm-sky    { background: rgba(14,165,233,0.14); }
+.dark .sm-violet { background: rgba(139,92,246,0.16); }
 
 /* Insight banner */
 .insight-banner {

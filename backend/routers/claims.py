@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from dependencies import get_db_session
-from models import ServiceOrder, Customer, WarrantyClaim
+from models import Payment, ServiceOrder, Customer, WarrantyClaim
+from statusflow import kewajiban, payment_summary
 import schemas
 
 router = APIRouter(prefix="/api/claims", tags=["claims"])
@@ -29,9 +30,20 @@ def _generate_claim_no() -> str:
     return "CLM-" + datetime.now().strftime("%Y%m%d") + "-" + str(random.randint(1000, 9999))
 
 
+def _as_date(v):
+    if v is None:
+        return None
+    if isinstance(v, datetime):
+        return v.date()
+    return v
+
+
 def _origin_warranty_start(o):
-    """Awal garansi: cash_date bila servis sudah CASH, fallback tanggal terima."""
-    return getattr(o, "cash_date", None) or o.service_date
+    """Awal garansi: tanggal unit diambil, fallback momen lunas, fallback tanggal terima."""
+    taken = _as_date(getattr(o, "taken_at", None))
+    if taken is not None:
+        return taken
+    return getattr(o, "lunas_date", None) or o.service_date
 
 
 def _add_months(d, months: int):
@@ -260,6 +272,78 @@ def list_claims(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
     return schemas.ClaimPage(total=total, page=page, limit=limit,
                              total_pages=total_pages,
                              items=[_claim_to_out(c) for c in rows])
+
+
+def _add_months(d, months: int):
+    import calendar
+    m = (d.month - 1 + months) % 12 + 1
+    y = d.year + (d.month - 1 + months) // 12
+    return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
+
+
+@router.get("/warranty-summary")
+def warranty_summary(db: Session = Depends(get_db_session)):
+    """Daftar garansi aktif: servis SELESAI + LUNAS + bergaransi (bukan status CASH)."""
+    from datetime import timedelta as _td
+    candidates = (
+        db.query(ServiceOrder)
+        .filter(ServiceOrder.status == "SELESAI", ServiceOrder.warranty_months != 0)
+        .order_by(ServiceOrder.lunas_date.desc().nullslast(), ServiceOrder.id.desc())
+        .limit(400)
+        .all()
+    )
+    # Saring LUNAS via jurnal payments (derive, bukan status).
+    ids = [o.id for o in candidates]
+    pays = db.query(Payment).filter(Payment.service_order_id.in_(ids)).all() if ids else []
+    by_order = {}
+    for p in pays:
+        by_order.setdefault(p.service_order_id, []).append(p)
+    orders = [o for o in candidates
+              if payment_summary(o, by_order.get(o.id, []))["payment_status"] == "LUNAS"][:200]
+    cids = [o.customer_id for o in orders]
+    names = {}
+    if cids:
+        from models import Customer
+        for c in db.query(Customer).filter(Customer.id.in_(cids)).all():
+            names[c.id] = (c.name, c.phone)
+    items = []
+    for o in orders:
+        mulai = (_as_date(getattr(o, "taken_at", None))
+                 or o.lunas_date
+                 or (o.created_at.date() if o.created_at else None))
+        months = o.warranty_months
+        if mulai is None:
+            akhir = None
+        elif months is None:
+            akhir = mulai + _td(days=30)  # legacy: 30 hari
+        else:
+            akhir = _add_months(mulai, months)
+        latest = (
+            db.query(WarrantyClaim)
+            .filter(WarrantyClaim.service_order_id == o.id)
+            .order_by(WarrantyClaim.claim_date.desc(), WarrantyClaim.id.desc())
+            .first()
+        )
+        nm, ph = names.get(o.customer_id, (None, None))
+        items.append({
+            "service_order_id": o.id,
+            "no": o.no_servis,
+            "nama": nm,
+            "phone": ph,
+            "device": o.device,
+            "mulai": mulai.isoformat() if mulai else None,
+            "akhir": akhir.isoformat() if akhir else None,
+            "damage": o.damagetype,
+            "plan": o.repair_plan,
+            "price": o.final_price if o.final_price not in (None,) else o.estimate,
+            "klaim": ({
+                "tgl": latest.claim_date.isoformat() if latest.claim_date else None,
+                "keluhan": latest.complaint,
+                "tindakan": latest.action_needed,
+                "status": latest.claim_status,
+            } if latest else None),
+        })
+    return {"items": items}
 
 
 @router.get("/by-service/{service_id}", response_model=list[schemas.ClaimOut])

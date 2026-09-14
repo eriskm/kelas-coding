@@ -62,7 +62,9 @@ class ServiceOrderBase(BaseModel):
     check_len: Optional[List[str]] = None
     repair_plan: Optional[str] = None
     technician: Optional[str] = None
-    status: Optional[str] = "RECEIVED"
+    status: Optional[str] = "DITERIMA"
+    unit_status: Optional[str] = "DI TOKO"
+    taken_at: Optional[datetime] = None
     estimate: Optional[float] = 0
     payment: Optional[float] = 0
     service_date: Optional[date] = None
@@ -70,9 +72,13 @@ class ServiceOrderBase(BaseModel):
     part_cost: Optional[float] = None
     modal_jasa: Optional[float] = None
     modal_lainnya: Optional[float] = None
-    cash_date: Optional[date] = None
-    cash_at: Optional[datetime] = None
+    lunas_date: Optional[date] = None
+    lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None
+    # Ringkasan pembayaran (derive, diisi router — bukan kolom DB).
+    payment_status: Optional[str] = None
+    total_bayar: Optional[float] = None
+    sisa: Optional[float] = None
 
 
 class ServiceReceiveIn(BaseModel):
@@ -89,7 +95,7 @@ class ServiceReceiveIn(BaseModel):
     estimate: Optional[float] = 0
     dp: Optional[float] = 0
     technician: Optional[str] = None
-    status: Optional[str] = "ANALISA"
+    status: Optional[str] = "DITERIMA"
 
 
 class ServiceOrderCreate(ServiceOrderBase):
@@ -109,6 +115,7 @@ class ServiceOrderUpdate(BaseModel):
     repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: Optional[str] = None
+    status_note: Optional[str] = None  # catatan wajib untuk GAGAL/BATAL/lompat-mundur/koreksi
     estimate: Optional[float] = None
     payment: Optional[float] = None
     final_price: Optional[float] = None
@@ -148,9 +155,14 @@ class ServiceOrderList(BaseModel):
     part_cost: Optional[float] = None
     modal_jasa: Optional[float] = None
     modal_lainnya: Optional[float] = None
-    cash_date: Optional[date] = None
-    cash_at: Optional[datetime] = None
+    lunas_date: Optional[date] = None
+    lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None
+    unit_status: Optional[str] = None
+    taken_at: Optional[datetime] = None
+    payment_status: Optional[str] = None
+    total_bayar: Optional[float] = None
+    sisa: Optional[float] = None
     created_at: datetime
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
@@ -167,6 +179,7 @@ class ServiceOrderPage(BaseModel):
 # ---------- Payment ----------
 class PaymentBase(BaseModel):
     service_order_id: int
+    kind: Optional[str] = "PELUNASAN"  # DP | PELUNASAN
     amount: float
     method: Optional[str] = "CASH"
     note: Optional[str] = None
@@ -180,6 +193,26 @@ class PaymentOut(PaymentBase):
     model_config = ConfigDict(from_attributes=True)
     id: int
     created_at: datetime
+
+
+class PaymentHistoryOut(BaseModel):
+    kewajiban: float
+    total_bayar: float
+    sisa: float
+    payment_status: str
+    items: List[PaymentOut]
+
+
+# ---------- StatusHistory ----------
+class StatusHistoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    service_order_id: int
+    dari_status: Optional[str] = None
+    ke_status: str
+    oleh: Optional[str] = None
+    waktu: Optional[datetime] = None
+    catatan: Optional[str] = None
 
 
 # ---------- Expense (beban toko per periode kas) ----------
@@ -364,3 +397,113 @@ class DashboardOverview(BaseModel):
     target_gaji: float
     insight: List[dict]
     star_cards: List[dict]
+
+
+# ---------- KasPeriod detail (arsip tutup kas) ----------
+class KasPeriodDetailOut(KasPeriodOut):
+    snapshot: Optional[str] = None
+
+
+class KasCloseIn(BaseModel):
+    cash_counted: Optional[float] = None  # hasil hitung uang laci (audit kas)
+
+
+# ---------- KasEntry (jurnal kas manual) ----------
+class KasEntryCreate(BaseModel):
+    jenis: str  # Masuk | Keluar
+    kategori: str
+    keterangan: str
+    nominal: Optional[float] = 0
+    tanggal: Optional[date] = None
+
+
+class KasEntryUpdate(BaseModel):
+    jenis: Optional[str] = None
+    kategori: Optional[str] = None
+    keterangan: Optional[str] = None
+    nominal: Optional[float] = None
+    tanggal: Optional[date] = None
+
+
+class KasEntryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    jenis: str
+    kategori: str
+    keterangan: str
+    nominal: float
+    tanggal: Optional[date] = None
+    created_at: datetime
+
+
+class KasEntryPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: List[KasEntryOut]
+
+
+class KasRiwayatItem(BaseModel):
+    tgl: Optional[str] = None
+    jenis: str
+    kategori: Optional[str] = None
+    ket: Optional[str] = None
+    nominal: float = 0
+    saldo: float = 0
+    source: str  # order | expense | manual
+    ref_id: Optional[int] = None
+
+
+class KasRiwayatPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    opening: float = 0
+    items: List[KasRiwayatItem]
+
+
+# ---------- Sparepart ----------
+class SparepartCreate(BaseModel):
+    kategori: Optional[str] = None
+    merek: Optional[str] = None
+    jenis: str
+    device: Optional[str] = None
+    qty: Optional[int] = 0
+    harga_beli: Optional[float] = 0
+    harga_jual: Optional[float] = 0
+    tanggal: Optional[date] = None
+
+
+class SparepartUpdate(BaseModel):
+    kategori: Optional[str] = None
+    merek: Optional[str] = None
+    jenis: Optional[str] = None
+    device: Optional[str] = None
+    qty: Optional[int] = None
+    harga_beli: Optional[float] = None
+    harga_jual: Optional[float] = None
+    tanggal: Optional[date] = None
+
+
+class SparepartOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    kategori: Optional[str] = None
+    merek: Optional[str] = None
+    jenis: str
+    device: Optional[str] = None
+    qty: int
+    harga_beli: float
+    harga_jual: float
+    tanggal: Optional[date] = None
+    created_at: datetime
+
+
+class SparepartPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: List[SparepartOut]

@@ -59,6 +59,9 @@ class Customer(Base):
 class ServiceOrder(Base):
     __tablename__ = "service_orders"
 
+    # Status servis kanonis (FINAL LOCK, Bahasa Indonesia).
+    # Payment: BELUM LUNAS/LUNAS (derive dari payments, tidak disimpan).
+    # Unit: DI TOKO/DIAMBIL (kolom unit_status + taken_at).
     id = Column(Integer, primary_key=True, index=True)
     no_servis = Column(String(50), unique=True, index=True, nullable=False)
     customer_id = Column(Integer, ForeignKey("customers.id"), nullable=False)
@@ -72,32 +75,41 @@ class ServiceOrder(Base):
     check_len = Column(JSON, default=list)
     repair_plan = Column(Text)
     technician = Column(String(60))
-    status = Column(String(30), default="RECEIVED")
+    status = Column(String(30), default="DITERIMA")
+    unit_status = Column(String(10), default="DI TOKO")
+    taken_at = Column(DateTime)
     estimate = Column(Float, default=0)
-    payment = Column(Float, default=0)
+    payment = Column(Float, default=0)  # DP era legacy; read-only arsip (sumber baru: payments)
     service_date = Column(Date, default=datetime.utcnow().date)
-    # Syarat CASH: harga final + modal part dicatat; cash_date = awal masa garansi.
+    # lunas_date/lunas_at = momen LUNAS pertama (dikunci sekali, rename dari cash_*).
     # warranty_months: 1/3/6 bulan pilihan toko, 0 = tidak garansi, NULL = legacy (30 hari).
     # Modal (part/jasa/lainnya) = atribut transaksi (diisi di Update Data Servis).
-    # cash_at = jam penetapan CASH (scope periode kas 16:00; cash_date hanya info tanggal).
+    # lunas_at = jam pelunasan (scope periode kas 16:00; lunas_date hanya info tanggal).
     final_price = Column(Float)
     part_cost = Column(Float, default=0)
     modal_jasa = Column(Float, default=0)
     modal_lainnya = Column(Float, default=0)
-    cash_date = Column(Date)
-    cash_at = Column(DateTime)
+    lunas_date = Column(Date)
+    lunas_at = Column(DateTime)
     warranty_months = Column(Integer)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     customer = relationship("Customer", back_populates="service_orders")
     payments = relationship("Payment", back_populates="service_order", cascade="all, delete-orphan")
+    status_history = relationship("StatusHistory", back_populates="service_order",
+                                  cascade="all, delete-orphan")
 
 
 class Payment(Base):
+    """Jurnal pembayaran per service order (SOURCE OF TRUTH pembayaran).
+    kind: DP | PELUNASAN. Append-only: tanpa PUT/DELETE baris.
+    """
+
     __tablename__ = "payments"
 
     id = Column(Integer, primary_key=True, index=True)
     service_order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False)
+    kind = Column(String(10), default="PELUNASAN")  # DP | PELUNASAN
     amount = Column(Float, nullable=False)
     method = Column(String(30), default="CASH")
     note = Column(String(200))
@@ -197,3 +209,52 @@ class WarrantyClaim(Base):
 
     service_order = relationship("ServiceOrder", backref="warranty_claims")
     customer = relationship("Customer", backref="warranty_claims")
+
+
+class Sparepart(Base):
+    """Stok sparepart toko. Satu-satunya sumber halaman Sparepart."""
+
+    __tablename__ = "spareparts"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kategori = Column(String(60))
+    merek = Column(String(60))
+    jenis = Column(String(120), nullable=False)
+    device = Column(String(120))
+    qty = Column(Integer, default=0)
+    harga_beli = Column(Float, default=0)
+    harga_jual = Column(Float, default=0)
+    tanggal = Column(Date)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class KasEntry(Base):
+    """Jurnal kas manual: pemasukan non-servis (cth. jual second, saldo awal)
+    dan penyesuaian kas yang tidak punya rumah di service_orders/expenses.
+    BUKAN duplikat order/expense — hanya untuk arus kas di luar keduanya."""
+
+    __tablename__ = "kas_entries"
+
+    id = Column(Integer, primary_key=True, index=True)
+    jenis = Column(String(10), nullable=False)  # Masuk | Keluar
+    kategori = Column(String(60), nullable=False)  # 'Saldo Awal' = modal awal (dihitung lintas periode)
+    keterangan = Column(String(200), nullable=False)
+    nominal = Column(Float, nullable=False, default=0)
+    tanggal = Column(Date)  # info tanggal kas
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class StatusHistory(Base):
+    """Jejak perubahan status servis (FINAL LOCK §10). Append-only."""
+
+    __tablename__ = "status_history"
+
+    id = Column(Integer, primary_key=True, index=True)
+    service_order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False, index=True)
+    dari_status = Column(String(30))  # NULL = awal (saat receive)
+    ke_status = Column(String(30), nullable=False)
+    oleh = Column(String(60))
+    waktu = Column(DateTime, default=datetime.utcnow, index=True)
+    catatan = Column(Text)
+
+    service_order = relationship("ServiceOrder", back_populates="status_history")

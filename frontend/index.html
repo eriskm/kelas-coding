@@ -306,6 +306,9 @@
                                 </div>
                                 <label class="tx-filter-label" for="txDateFilter">Tgl Terima</label>
                                 <input type="date" id="txDateFilter" class="receive-input" aria-label="Filter tanggal terima" title="Filter tanggal terima">
+                                <label class="tx-filter-label inline-flex items-center gap-1.5 cursor-pointer" title="Tampilkan SELESAI + DIAMBIL (riwayat)">
+                                    <input type="checkbox" id="txRiwayat"> Riwayat
+                                </label>
                                 <button type="button" onclick="showServisBaru()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
                                     <i class="fa-solid fa-plus"></i> Servis Baru
                                 </button>
@@ -938,7 +941,7 @@
                             <div class="panel receive-panel mt-3">
                                 <div class="receive-panel-head">
                                     <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
-                                    <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Garansi &amp; Klaim</h3><span class="text-[10.5px] text-gray-400">Garansi 30 hari dibuat saat status CASH</span></div>
+                                    <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Garansi &amp; Klaim</h3><span class="text-[10.5px] text-gray-400">Garansi dibuat saat servis SELESAI dan LUNAS</span></div>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2" id="txdWarranty"></div>
                                 <div id="txdClaims" class="pt-2"></div>
@@ -1574,13 +1577,9 @@
                                     </div>
                                     <div class="field">
                                         <label class="field-label" for="rcStatus">Status Servis</label>
-                                        <p class="text-[10.5px] text-gray-400" style="margin-top:-8px">Status unit saat data/nota dibuat</p>
+                                        <p class="text-[10.5px] text-gray-400" style="margin-top:-8px">Unit baru selalu DITERIMA (FINAL LOCK)</p>
                                         <select class="receive-input" id="rcStatus">
-                                            <option value="ANALISA" selected>Analisa</option>
-                                            <option value="KONFIRMASI">Konfirmasi</option>
-                                            <option value="WAIT PART">Tunggu Part</option>
-                                            <option value="REPAIR">Perbaikan</option>
-                                            <option value="DONE">Selesai</option>
+                                            <option value="DITERIMA" selected>Diterima</option>
                                         </select>
                                     </div>
                                 </div>
@@ -1756,14 +1755,15 @@
                                         <div class="field">
                                             <label class="field-label" for="usStatus">Status Servis</label>
                                             <select class="receive-input" id="usStatus">
+                                                <option value="DITERIMA">Diterima</option>
                                                 <option value="ANALISA">Analisa</option>
+                                                <option value="DIAGNOSA">Diagnosa</option>
                                                 <option value="KONFIRMASI">Konfirmasi</option>
-                                                <option value="WAIT PART">Tunggu Part</option>
-                                                <option value="REPAIR">Perbaikan</option>
-                                                <option value="DONE">Selesai</option>
-                                                <option value="CASH">Cash/Lunas</option>
-                                                <option value="FILED">Arsip</option>
-                                                <option value="CANCEL">Batal</option>
+                                                <option value="MENUNGGU SPAREPART">Menunggu Sparepart</option>
+                                                <option value="PERBAIKAN">Perbaikan</option>
+                                                <option value="SELESAI">Selesai</option>
+                                                <option value="GAGAL">Gagal</option>
+                                                <option value="BATAL">Batal</option>
                                             </select>
                                         </div>
                                     </div>
@@ -1849,7 +1849,7 @@
                                 <div class="panel receive-panel hidden" id="usWarrantyPanel">
                                     <div class="receive-panel-head">
                                         <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
-                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Closing &amp; Masa Garansi</h3><span class="text-[10.5px] text-gray-400">Berlaku sejak Tgl CASH</span></div>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Closing &amp; Masa Garansi</h3><span class="text-[10.5px] text-gray-400">Berlaku sejak unit diambil / lunas</span></div>
                                     </div>
                                     <div class="field">
                                         <label class="field-label" for="usWarrantyMonths">Pilih Masa Garansi Toko</label>
@@ -1865,28 +1865,82 @@
                                         <span id="usWarrantyInfo" class="text-[12px] text-gray-500 dark:text-gray-400"></span>
                                     </div>
                                 </div>
+                                <div class="panel receive-panel" id="usPayPanel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-money-bill-wave"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Pembayaran</h3><span class="text-[10.5px] text-gray-400" id="usPaySummary">Belum ada pembayaran</span></div>
+                                    </div>
+                                    <div id="usPayList" class="text-[12px] text-gray-500 dark:text-gray-400">Memuat...</div>
+                                    <div class="grid grid-cols-2 gap-2 pt-2">
+                                        <div class="field">
+                                            <label class="field-label" for="usPayKind">Jenis</label>
+                                            <select class="receive-input" id="usPayKind">
+                                                <option value="DP">DP</option>
+                                                <option value="PELUNASAN" selected>Pelunasan</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label class="field-label" for="usPayAmount">Nominal (Rp)</label>
+                                            <input class="receive-input" type="number" id="usPayAmount" min="1" placeholder="400000">
+                                        </div>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="usPayMethod">Metode</label>
+                                        <select class="receive-input" id="usPayMethod">
+                                            <option value="CASH">Tunai</option>
+                                            <option value="TRANSFER">Transfer</option>
+                                            <option value="QRIS">QRIS</option>
+                                        </select>
+                                    </div>
+                                    <button type="button" id="usPayBtn" onclick="usPaymentsSave()" class="receive-back-btn w-full justify-center mt-2">
+                                        <i class="fa-solid fa-plus"></i> Catat Pembayaran
+                                    </button>
+                                    <div id="usPayFeedback" class="hidden receive-feedback mt-2"></div>
+                                </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Riwayat Status</h3><span class="text-[10.5px] text-gray-400">Jejak perubahan tercatat</span></div>
+                                    </div>
+                                    <div id="usHistoryList" class="text-[12px] text-gray-500 dark:text-gray-400">Memuat...</div>
+                                </div>
                                 <div class="panel receive-panel">
                                     <div class="receive-panel-head">
                                         <span class="receive-head-ico"><i class="fa-solid fa-bolt"></i></span>
                                         <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Status Unit &amp; Aksi Cepat</h3></div>
                                     </div>
                                     <div class="field">
-                                        <label class="field-label" for="usQuickStatus">Update Status Unit Terkini</label>
-                                        <select class="receive-input" id="usQuickStatus">
-                                            <option value="ANALISA">Analisa</option>
-                                            <option value="KONFIRMASI">Konfirmasi</option>
-                                            <option value="WAIT PART">Tunggu Part</option>
-                                            <option value="REPAIR">Perbaikan</option>
-                                            <option value="DONE">Selesai</option>
-                                            <option value="CASH">Cash/Lunas</option>
-                                            <option value="FILED">Arsip</option>
-                                            <option value="CANCEL">Batal</option>
-                                        </select>
+                                        <label class="field-label" for="usQuickStatus">Update Status Servis Terkini</label>
+                                            <select class="receive-input" id="usQuickStatus">
+                                                <option value="DITERIMA">Diterima</option>
+                                                <option value="ANALISA">Analisa</option>
+                                                <option value="DIAGNOSA">Diagnosa</option>
+                                                <option value="KONFIRMASI">Konfirmasi</option>
+                                                <option value="MENUNGGU SPAREPART">Menunggu Sparepart</option>
+                                                <option value="PERBAIKAN">Perbaikan</option>
+                                                <option value="SELESAI">Selesai</option>
+                                                <option value="GAGAL">Gagal</option>
+                                                <option value="BATAL">Batal</option>
+                                            </select>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label" for="usStatusNote" id="usStatusNoteLabel">Catatan Status (wajib untuk Gagal/Batal)</label>
+                                        <textarea class="receive-input" id="usStatusNote" rows="2" placeholder="cth. Konsumen menolak estimasi Rp 500rb"></textarea>
+                                    </div>
+                                    <div class="field">
+                                        <label class="field-label">Status Unit</label>
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span id="usUnitBadge" class="tx-status"><i class="fa-solid fa-circle"></i>DI TOKO</span>
+                                            <span id="usUnitTaken" class="text-[12px] text-gray-500 dark:text-gray-400"></span>
+                                        </div>
+                                        <button type="button" id="usHandoverBtn" onclick="usHandover()" class="receive-back-btn w-full justify-center mt-2" title="Tandai unit sudah diserahkan ke konsumen">
+                                            <i class="fa-solid fa-hand-holding-hand"></i> Serahkan Unit (DIAMBIL)
+                                        </button>
                                     </div>
                                     <button type="button" id="usReprintBtn" onclick="usReprint()" class="receive-back-btn w-full justify-center mt-3" title="Cetak ulang nota penerimaan dengan data terkini">
                                         <i class="fa-solid fa-receipt"></i> Cetak Nota Penerimaan
                                     </button>
-                                    <button type="button" id="usWarrantyBtn" onclick="usWarrantyPrint()" class="hidden receive-back-btn w-full justify-center mt-3" title="Cetak nota garansi 30 hari (tersedia setelah status CASH)">
+                                    <button type="button" id="usWarrantyBtn" onclick="usWarrantyPrint()" class="hidden receive-back-btn w-full justify-center mt-3" title="Cetak nota garansi (tersedia setelah status SELESAI + LUNAS)">
                                         <i class="fa-solid fa-shield-halved"></i> Cetak Nota Garansi
                                     </button>
                                     <button type="submit" id="usSaveBtn" class="receive-submit-btn w-full justify-center mt-3">

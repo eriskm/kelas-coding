@@ -832,20 +832,20 @@ async function renderInsights() {
     const iconMap = {
         'Unit Masuk': 'fa-inbox',
         'Unit Selesai': 'fa-circle-check',
-        'Unit Cash': 'fa-money-bill-wave',
-        'Unit Pending': 'fa-clock',
+        'Unit Lunas': 'fa-money-bill-wave',
+        'Unit Aktif': 'fa-screwdriver-wrench',
     };
     const tintMap = {
         'Unit Masuk': 'in-blue',
         'Unit Selesai': 'in-green',
-        'Unit Cash': 'in-amber',
-        'Unit Pending': 'in-red',
+        'Unit Lunas': 'in-amber',
+        'Unit Aktif': 'in-red',
     };
     const colorMap = {
         'Unit Masuk': 'text-blue-600',
         'Unit Selesai': 'text-green-600',
-        'Unit Cash': 'text-amber-600',
-        'Unit Pending': 'text-red-600',
+        'Unit Lunas': 'text-amber-600',
+        'Unit Aktif': 'text-red-600',
     };
     document.getElementById('insightCards').innerHTML = items.map(it => {
         const tint = tintMap[it.label] || 'in-blue';
@@ -884,14 +884,15 @@ function getCommonOpts() {
 // STATUS_META = tampilan (warna/icon) per status form yang sah.
 // ─────────────────────────────────────────────
 const STATUS_META = [
-    { name: 'ANALISA',    color: '#64748b', cls: 'sm-slate',   icon: 'fa-magnifying-glass' },
-    { name: 'KONFIRMASI', color: '#f97316', cls: 'sm-orange',  icon: 'fa-clipboard-check' },
-    { name: 'WAIT PART',  color: '#ca8a04', cls: 'sm-gold',    icon: 'fa-hourglass-half' },
-    { name: 'REPAIR',     color: '#2563eb', cls: 'sm-blue',    icon: 'fa-screwdriver-wrench' },
-    { name: 'DONE',       color: '#16a34a', cls: 'sm-green',   icon: 'fa-circle-check' },
-    { name: 'CASH',       color: '#059669', cls: 'sm-emerald', icon: 'fa-cash-register' },
-    { name: 'FILED',      color: '#7c3aed', cls: 'sm-purple',  icon: 'fa-box-archive' },
-    { name: 'CANCEL',     color: '#dc2626', cls: 'sm-red',     icon: 'fa-ban' },
+    { name: 'DITERIMA',           color: '#0ea5e9', cls: 'sm-sky',     icon: 'fa-inbox' },
+    { name: 'ANALISA',            color: '#64748b', cls: 'sm-slate',   icon: 'fa-magnifying-glass' },
+    { name: 'DIAGNOSA',           color: '#8b5cf6', cls: 'sm-violet',  icon: 'fa-stethoscope' },
+    { name: 'KONFIRMASI',         color: '#f97316', cls: 'sm-orange',  icon: 'fa-clipboard-check' },
+    { name: 'MENUNGGU SPAREPART', color: '#ca8a04', cls: 'sm-gold',    icon: 'fa-hourglass-half' },
+    { name: 'PERBAIKAN',          color: '#2563eb', cls: 'sm-blue',    icon: 'fa-screwdriver-wrench' },
+    { name: 'SELESAI',            color: '#16a34a', cls: 'sm-green',   icon: 'fa-circle-check' },
+    { name: 'GAGAL',              color: '#ef4444', cls: 'sm-red',     icon: 'fa-triangle-exclamation' },
+    { name: 'BATAL',              color: '#dc2626', cls: 'sm-red',     icon: 'fa-ban' },
 ];
 
 async function statusCounts() {
@@ -1196,11 +1197,22 @@ async function loadDashboard() {
 // ─────────────────────────────────────────────
 
 const TX_STATUS_LABEL = {
+    // Kanonis FINAL LOCK (Bahasa Indonesia).
+    DITERIMA: 'Diterima',
+    ANALISA: 'Analisa',
+    DIAGNOSA: 'Diagnosa',
+    KONFIRMASI: 'Konfirmasi',
+    MENUNGGU_SPAREPART: 'Menunggu Sparepart',
+    PERBAIKAN: 'Perbaikan',
+    SELESAI: 'Selesai',
+    GAGAL: 'Gagal',
+    BATAL: 'Batal',
+    // Alias baca legacy / nota (tidak bisa ditulis lagi).
     RECEIVED: 'Diterima',
     DIAGNOSIS: 'Diagnosa',
-    ANALISA: 'Analisa',
     REPAIR: 'Perbaikan',
     REPARASI: 'Reparasi',
+    WAIT_PART: 'Tunggu Part',
     WAITING_PART: 'Tunggu Part',
     WAITING_APPROVAL: 'Tunggu Konfirmasi',
     READY: 'Siap Diambil',
@@ -1209,13 +1221,13 @@ const TX_STATUS_LABEL = {
     CANCELLED: 'Batal',
     BATAL: 'Batal',
     QC: 'QC',
-    KONFIRMASI: 'Konfirmasi',
     REVIEW: 'Review',
     DONE: 'Selesai',
-    CASH: 'Cash/Lunas',
-    FILED: 'Arsip',
+    CASH: 'Lunas (legacy)',
+    FILED: 'Arsip (legacy)',
     CANCEL: 'Batal',
-    WAIT_PART: 'Tunggu Part',
+    FAILED: 'Gagal',
+    GAGAL: 'Gagal',
 };
 
 function txStatusBadge(status) {
@@ -1238,6 +1250,7 @@ let _txTotalPages = 1;
 let _txReq = 0;
 let _txQuery = '';
 let _txDate = '';
+let _txRiwayat = false;
 
 function txLaba(o) {
     const val = Number(o.estimate) || 0;
@@ -1254,6 +1267,7 @@ async function renderTransaksi() {
 function initTxToolbar() {
     const s = document.getElementById('txSearch');
     const d = document.getElementById('txDateFilter');
+    const r = document.getElementById('txRiwayat');
     if (!s || !d || s.dataset.bound) return;
     s.dataset.bound = '1';
     let t = null;
@@ -1262,6 +1276,10 @@ function initTxToolbar() {
         t = setTimeout(() => { _txQuery = s.value; renderTransaksi(); }, 300);
     });
     d.addEventListener('change', () => { _txDate = d.value; renderTransaksi(); });
+    if (r && !r.dataset.bound) {
+        r.dataset.bound = '1';
+        r.addEventListener('change', () => { _txRiwayat = r.checked; renderTransaksi(); });
+    }
 }
 
 function txRowHtml(o, num) {
@@ -1301,7 +1319,7 @@ async function loadTxFiltered() {
 
     try {
         const q = _txQuery.trim().toLowerCase();
-        const rows = await apiGet('/orders/latest?limit=500');
+        const rows = await apiGet('/orders/latest?limit=500' + (_txRiwayat ? '&riwayat=true' : ''));
         if (myReq !== _txReq) return;
         const hit = (rows || []).filter(o => {
             if (_txDate) {
@@ -1351,7 +1369,7 @@ async function loadTxPage(page) {
     loading.classList.remove('hidden');
 
     try {
-        const res = await apiGet('/orders?page=' + _txPage + '&limit=' + TX_PER_PAGE);
+        const res = await apiGet('/orders?page=' + _txPage + '&limit=' + TX_PER_PAGE + (_txRiwayat ? '&riwayat=true' : ''));
         if (myReq !== _txReq) return;
         _txTotal = res.total || 0;
         _txTotalPages = res.total_pages || 1;
@@ -1438,7 +1456,8 @@ async function txDetail(id) {
         row('Kunci Layar / Pola', o.device_password ? '••••••' : '-') + row('Teknisi', o.technician);
     document.getElementById('txdWork').innerHTML =
             row('Keluhan', o.damagetype) + row('Rencana Perbaikan', o.repair_plan) +
-        row('Status', o.status) + row('Tgl CASH', o.cash_date ? notaTgl((o.cash_date || '').slice(0, 10)) : '-');
+        row('Status', o.status) + row('Tgl Lunas', o.lunas_date ? notaTgl((o.lunas_date || '').slice(0, 10)) : '-')
+        + row('Status Bayar', o.payment_status || '-') + row('Status Unit', (o.unit_status || 'DI TOKO') + (o.taken_at ? ' • ' + notaTgl(String(o.taken_at).slice(0, 10)) : ''));
     const fisik = txdCheckLabels(o.check_fisik, (typeof CHECK_FISIK !== 'undefined' ? CHECK_FISIK : []));
     const len = txdCheckLabels(o.check_len, (typeof CHECK_LEN !== 'undefined' ? CHECK_LEN : []));
     document.getElementById('txdChecklist').innerHTML =
@@ -1453,19 +1472,19 @@ async function txDetail(id) {
         row('Harga Final', rupiah(final)) + row('Modal Part', rupiah(o.part_cost)) +
         row('Sisa (Final − DP)', rupiah((Number(final) || 0) - (Number(o.payment) || 0)));
     const wbox = document.getElementById('txdWarranty');
-    if (o.status === 'CASH' && o.cash_date) {
+    if (o.status === 'SELESAI' && o.lunas_date) {
         const _txdm = (o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : null;
-        const end = warrantyEndFor((o.cash_date || '').slice(0, 10), _txdm);
+        const end = warrantyEndFor((o.lunas_date || '').slice(0, 10), _txdm);
         wbox.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge(_txdm === 0 ? 'EXPIRED' : 'VALID')
             + '<span class="text-[12px] text-gray-500 dark:text-gray-400">' + escapeHtml(warrantyLabel(_txdm) + (end ? ' s/d ' + notaTgl(end) : '')) + '</span>';
-    } else if (o.status === 'CASH') {
+    } else if (o.status === 'SELESAI') {
         wbox.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge('VALID')
             + '<span class="text-[12px] text-gray-500 dark:text-gray-400">30 hari (awal masa menunggu sinkronisasi)</span>';
     } else {
-        wbox.innerHTML = '<span class="text-[12px] text-gray-400">Garansi dibuat saat status menjadi CASH.</span>';
+        wbox.innerHTML = '<span class="text-[12px] text-gray-400">Garansi dibuat saat servis SELESAI dan LUNAS.</span>';
     }
     const wb = document.getElementById('txdWarrantyBtn');
-    if (wb) wb.classList.toggle('hidden', o.status !== 'CASH');
+    if (wb) wb.classList.toggle('hidden', o.status !== 'SELESAI');
     const cbox = document.getElementById('txdClaims');
     cbox.innerHTML = '<span class="text-[12px] text-gray-400"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat histori klaim...</span>';
     document.getElementById('pageTxDetail').classList.add('open');
@@ -1523,9 +1542,9 @@ function txdPrintNota() {
 
 function txdPrintWarranty() {
     const o = _txdOrder;
-    if (!o || o.status !== 'CASH') return;
+    if (!o || o.status !== 'SELESAI') return;
     const cust = o.customer || {};
-    const cash = ((o.cash_date || '').slice(0, 10)) || new Date().toISOString().slice(0, 10);
+    const cash = ((o.lunas_date || '').slice(0, 10)) || new Date().toISOString().slice(0, 10);
     const final = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : (Number(o.estimate) || 0);
     const mths = (o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : null;
     _lastWarranty = {
@@ -1544,7 +1563,7 @@ function txdPrintWarranty() {
         warranty_label: warrantyLabel(mths),
         warranty_days: WARRANTY_DAYS,
         warranty_end: warrantyEndFor(cash, mths),
-        status: 'CASH',
+        status: 'SELESAI',
     };
     _notaMode = 'WARRANTY';
     renderWarrantyNotaPreview(_lastWarranty);
@@ -1852,8 +1871,8 @@ function usNum(id) { return parseFloat(usVal(id)) || 0; }
 
 let _usNo = '';
 let _usTgl = '';
-let _usCashDate = ''; // awal masa garansi (dikunci backend saat pertama CASH)
-let _usStatusInit = ''; // status saat form dibuka — untuk deteksi transisi ke DONE
+let _usLunasDate = ''; // awal masa garansi (dikunci backend saat pelunasan penuh)
+let _usStatusInit = ''; // status saat form dibuka — untuk deteksi transisi ke SELESAI
 // Baseline checklist dari server per No. Servis — untuk dirty-guard:
 // checklist hanya dikirim saat user benar-benar mengubahnya.
 let _usCheckBaseline = '';
@@ -1868,7 +1887,7 @@ function openUpdateServis(o) {
     _txEditId = o.id;
     _usNo = o.no_servis || '';
     _usTgl = (o.service_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
-    _usCashDate = (o.cash_date || '').slice(0, 10) || '';
+    _usLunasDate = (o.cash_date || '').slice(0, 10) || '';
     _txEditCustomerId = o.customer_id || (o.customer || {}).id || null;
     document.getElementById('usTitle').textContent = 'UPDATE DATA SERVIS #' + (o.no_servis || o.id);
     document.getElementById('usHeadDevice').textContent = o.device || '-';
@@ -1903,9 +1922,14 @@ function openUpdateServis(o) {
     _checkStore[_usNo] = _usCheck;
     const _wmSel = document.getElementById('usWarrantyMonths');
     if (_wmSel) _wmSel.value = String((o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : 1);
-    _usStatusInit = o.status || 'ANALISA';
-    usSetStatus(o.status || 'ANALISA');
+    _usStatusInit = o.status || 'DITERIMA';
+    usSetStatus(o.status || 'DITERIMA');
     usFinUpdate();
+    const _noteEl = document.getElementById('usStatusNote');
+    if (_noteEl) _noteEl.value = '';
+    usUnitRefresh(o.unit_status || 'DI TOKO', o.taken_at || null);
+    try { usPaymentsLoad(o.id); } catch (_) {}
+    try { usHistoryLoad(o.id); } catch (_) {}
     const fb = document.getElementById('usFeedback');
     if (fb) fb.classList.add('hidden');
     const txt = document.getElementById('usSaveText');
@@ -1920,7 +1944,129 @@ function closeUpdateServis() {
     _txEditCustomerId = null;
     _usNo = '';
     _usTgl = '';
-    _usCashDate = '';
+    _usLunasDate = '';
+}
+
+// ── Status Unit (DI TOKO / DIAMBIL) — dimensi terpisah dari status servis ──
+let _usUnit = 'DI TOKO';
+let _usTakenAt = null;
+
+function usUnitRefresh(unitStatus, takenAt) {
+    _usUnit = unitStatus || 'DI TOKO';
+    _usTakenAt = takenAt || null;
+    usUnitUpdate();
+}
+
+function usUnitUpdate() {
+    const badge = document.getElementById('usUnitBadge');
+    if (badge) {
+        const taken = _usUnit === 'DIAMBIL';
+        badge.innerHTML = '<i class="fa-solid fa-circle"></i>' + (taken ? 'DIAMBIL' : 'DI TOKO');
+        badge.className = 'tx-status ' + (taken ? 'st-SELESAI' : 'st-KONFIRMASI');
+    }
+    const info = document.getElementById('usUnitTaken');
+    if (info) info.textContent = (_usTakenAt ? 'Diambil: ' + txDate(String(_usTakenAt).slice(0, 10)) : '');
+    const btn = document.getElementById('usHandoverBtn');
+    if (btn) btn.classList.toggle('hidden', _usUnit === 'DIAMBIL');
+}
+
+async function usHandover() {
+    if (!_txEditId) return;
+    if (!confirm('Tandai unit sudah diserahkan ke konsumen (DIAMBIL)?')) return;
+    try {
+        const o = await apiPost('/orders/' + _txEditId + '/handover', {});
+        usUnitRefresh(o.unit_status || 'DIAMBIL', o.taken_at || null);
+        const fb = document.getElementById('usFeedback');
+        if (fb) {
+            fb.classList.remove('hidden');
+            fb.classList.add('success');
+            fb.innerHTML = '<i class="fa-solid fa-circle-check"></i> Unit tercatat DIAMBIL.';
+        }
+        renderTransaksi();
+    } catch (err) {
+        toast(err.message || 'Gagal mencatat serah terima.');
+    }
+}
+
+// ── Pembayaran (jurnal payments: DP + PELUNASAN) ──
+function usPayRupiah(v) {
+    return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+}
+
+async function usPaymentsLoad(orderId) {
+    const list = document.getElementById('usPayList');
+    const sum = document.getElementById('usPaySummary');
+    if (list) list.innerHTML = 'Memuat...';
+    try {
+        const d = await apiGet('/payments/by-order/' + orderId);
+        if (list) {
+            list.innerHTML = (d.items && d.items.length)
+                ? d.items.map(p => `<div class="us-row"><span>${escapeHtml(p.kind || 'BAYAR')} • ${escapeHtml(p.method || 'CASH')}</span><b>${usPayRupiah(p.amount)}</b></div>`).join('')
+                : '<span class="text-gray-400">Belum ada pembayaran.</span>';
+        }
+        if (sum) sum.textContent = d.payment_status + ' • Bayar ' + usPayRupiah(d.total_bayar) + ' • Sisa ' + usPayRupiah(d.sisa);
+    } catch (_) {
+        if (list) list.innerHTML = '<span class="text-gray-400">Gagal memuat pembayaran.</span>';
+    }
+}
+
+async function usPaymentsSave() {
+    if (!_txEditId) return;
+    const fb = document.getElementById('usPayFeedback');
+    const kind = (document.getElementById('usPayKind') || {}).value || 'PELUNASAN';
+    const amount = parseFloat((document.getElementById('usPayAmount') || {}).value) || 0;
+    const method = (document.getElementById('usPayMethod') || {}).value || 'CASH';
+    if (fb) fb.classList.add('hidden');
+    if (!(amount > 0)) {
+        if (fb) {
+            fb.classList.remove('hidden');
+            fb.classList.add('error');
+            fb.textContent = 'Nominal pembayaran harus lebih dari 0.';
+        }
+        return;
+    }
+    try {
+        const d = await apiPost('/payments', { service_order_id: _txEditId, kind, amount, method });
+        const amt = document.getElementById('usPayAmount');
+        if (amt) amt.value = '';
+        await usPaymentsLoad(_txEditId);
+        if (d.payment_status === 'LUNAS') {
+            _usLunasDate = new Date().toISOString().slice(0, 10);
+            try { usWarrantyUpdate(); } catch (_) {}
+        }
+        renderTransaksi();
+        if (fb) {
+            fb.classList.remove('hidden');
+            fb.classList.add('success');
+            fb.innerHTML = '<i class="fa-solid fa-circle-check"></i> Pembayaran tercatat (' + d.payment_status + ').';
+        }
+    } catch (err) {
+        if (fb) {
+            fb.classList.remove('hidden');
+            fb.classList.add('error');
+            fb.textContent = err.message || 'Gagal mencatat pembayaran.';
+        }
+    }
+}
+
+// ── Riwayat status (timeline per order) ──
+async function usHistoryLoad(orderId) {
+    const el = document.getElementById('usHistoryList');
+    if (el) el.innerHTML = 'Memuat...';
+    try {
+        const rows = await apiGet('/orders/' + orderId + '/history');
+        if (el) {
+            el.innerHTML = (rows && rows.length)
+                ? rows.map(h => {
+                    const w = h.waktu ? String(h.waktu).slice(0, 16).replace('T', ' ') : '-';
+                    const dari = h.dari_status ? escapeHtml(h.dari_status) + ' → ' : '';
+                    return `<div class="us-row"><span>${dari}<b>${escapeHtml(h.ke_status || '-')}</b>${h.catatan ? ' • ' + escapeHtml(h.catatan) : ''}</span><b class="tx-cell-muted">${escapeHtml(w)}${h.oleh ? ' • ' + escapeHtml(h.oleh) : ''}</b></div>`;
+                }).join('')
+                : '<span class="text-gray-400">Belum ada riwayat.</span>';
+        }
+    } catch (_) {
+        if (el) el.innerHTML = '<span class="text-gray-400">Gagal memuat riwayat.</span>';
+    }
 }
 
 // ── Konfirmasi WA otomatis saat unit berubah ke DONE ──
@@ -1936,7 +2082,9 @@ function doneWaMessage(d) {
     if (d.damage) L.push('Kerusakan: ' + d.damage);
     if (d.plan) L.push('Tindakan: ' + d.plan);
     L.push('Biaya: ' + usRupiah(d.final));
-    if ((Number(d.dp) || 0) > 0) L.push('DP masuk: ' + usRupiah(d.dp) + ' • Sisa: ' + usRupiah(Math.max(0, (Number(d.final) || 0) - (Number(d.dp) || 0))));
+    const _sisaWa = (d.sisa !== undefined && d.sisa !== null) ? Number(d.sisa) || 0
+        : Math.max(0, (Number(d.final) || 0) - (Number(d.dp) || 0));
+    if ((Number(d.dp) || 0) > 0 || _sisaWa > 0) L.push('DP masuk: ' + usRupiah(d.dp) + ' • Sisa: ' + usRupiah(_sisaWa));
     L.push('');
     L.push('Silakan ambil unit Anda di SUKABUMI FLASHER.');
     L.push('Terima kasih atas kepercayaan Anda 🙏');
@@ -1988,8 +2136,9 @@ function doneWaSend() {
     }
 }
 
-// Status unit: SATU sumber tulis (usSetStatus) + SATU sumber baca (usGetStatus).
+// Status servis: SATU sumber tulis (usSetStatus) + SATU sumber baca (usGetStatus).
 // Kedua kontrol (usStatus & usQuickStatus) hanya mirror dari state yang sama.
+// FINAL LOCK: 9 status Bahasa Indonesia; CASH/FILED/legacy tidak valid lagi.
 function usSetStatus(s) {
     const a = document.getElementById('usStatus');
     const b = document.getElementById('usQuickStatus');
@@ -2000,25 +2149,26 @@ function usSetStatus(s) {
         badge.textContent = s;
         badge.className = 'tx-status st-' + String(s || '').toUpperCase().replace(/\s+/g, '_');
     }
-    // Tombol Cetak Nota Penerimaan hanya relevan di awal (ANALISA/KONFIRMASI).
-    // Lewat dari itu pakai Cetak Nota Garansi (saat CASH) / kelola via klaim.
+    // Tombol Cetak Nota Penerimaan hanya relevan di awal
+    // (DITERIMA/ANALISA/DIAGNOSA/KONFIRMASI). Lewat dari itu pakai nota garansi / klaim.
     const rp = document.getElementById('usReprintBtn');
-    if (rp) rp.classList.toggle('hidden', !(s === 'ANALISA' || s === 'KONFIRMASI'));
-    // Nota garansi HANYA tersedia setelah CASH (masa garansi dibuat saat CASH).
+    if (rp) rp.classList.toggle('hidden', !(['DITERIMA', 'ANALISA', 'DIAGNOSA', 'KONFIRMASI'].includes(s)));
+    // Panel Masa Garansi + tombol nota garansi tampil saat SELESAI.
     const wb = document.getElementById('usWarrantyBtn');
-    if (wb) wb.classList.toggle('hidden', s !== 'CASH');
-    // Panel Closing & Masa Garansi ikut status CASH.
+    if (wb) wb.classList.toggle('hidden', s !== 'SELESAI');
     const wp = document.getElementById('usWarrantyPanel');
-    if (wp) wp.classList.toggle('hidden', s !== 'CASH');
-    if (s === 'CASH') { try { usWarrantyUpdate(); } catch (_) {} }
-    // DONE = pekerjaan sudah dilakukan: label berubah dari Rencana -> realisasi.
+    if (wp) wp.classList.toggle('hidden', s !== 'SELESAI');
+    if (s === 'SELESAI') { try { usWarrantyUpdate(); } catch (_) {} }
+    // SELESAI = pekerjaan sudah dilakukan: label berubah dari Rencana -> realisasi.
     // Tanda * merah mengikuti syarat wajib tiap status:
-    // KONFIRMASI = Rencana + Estimasi; DONE = Tindakan + Teknisi; CASH = Rencana + Harga Final + Teknisi.
+    // KONFIRMASI = Rencana + Estimasi; PERBAIKAN = Teknisi;
+    // SELESAI = Tindakan + Teknisi; GAGAL/BATAL = Catatan.
     try {
-        const planBase = (s === 'DONE') ? 'Perbaikan / Tindakan Perbaikan' : 'Rencana Perbaikan';
+        const planBase = (s === 'SELESAI') ? 'Perbaikan / Tindakan Perbaikan' : 'Rencana Perbaikan';
         const need = (fid) => (s === 'KONFIRMASI' && (fid === 'usPlan' || fid === 'usEstimate'))
-            || (s === 'DONE' && (fid === 'usPlan' || fid === 'usTechnician'))
-            || (s === 'CASH' && (fid === 'usPlan' || fid === 'usFinFinal' || fid === 'usTechnician'));
+            || (s === 'PERBAIKAN' && fid === 'usTechnician')
+            || (s === 'SELESAI' && (fid === 'usPlan' || fid === 'usTechnician'))
+            || ((s === 'GAGAL' || s === 'BATAL') && fid === 'usStatusNote');
         const mark = (labelId, base, fid) => {
             const el = document.getElementById(labelId);
             if (!el) return;
@@ -2028,13 +2178,15 @@ function usSetStatus(s) {
         mark('usEstimateLabel', 'Estimasi Biaya', 'usEstimate');
         mark('usTechnicianLabel', 'Teknisi Penanggung Jawab', 'usTechnician');
         mark('usFinFinalLabel', 'Harga Final (total pembayaran pelanggan)', 'usFinFinal');
+        mark('usStatusNoteLabel', 'Catatan Status (wajib untuk Gagal/Batal)', 'usStatusNote');
     } catch (_) {}
+    try { usUnitUpdate(); } catch (_) {}
 }
 
 function usGetStatus() {
     const b = document.getElementById('usQuickStatus');
     const a = document.getElementById('usStatus');
-    return (b && b.value) || (a && a.value) || 'ANALISA';
+    return (b && b.value) || (a && a.value) || 'DITERIMA';
 }
 
 function usRupiah(v) {
@@ -2142,57 +2294,51 @@ function initUpdateServis() {
                 const _usCheckNow = collectChecklist('us');
                 const _usCheckChanged = JSON.stringify(_usCheckNow) !== _usCheckBaseline;
                 const _usSt = usGetStatus();
-                // Syarat CASH: blokir simpan bila belum lengkap.
-                // Modal Part kosong dianggap Rp0 (bukan error).
-                // Syarat DONE (lebih ringan): Tindakan Perbaikan + Teknisi.
-                // Syarat KONFIRMASI: Rencana Perbaikan + Estimasi Biaya Awal wajib diisi.
-                if (_usSt === 'CASH') {
-                    const _missing = [];
-                    if (!usVal('usPlan').trim()) _missing.push(['Rencana Perbaikan', 'usPlan']);
-                    if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final', 'usFinFinal']);
-                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
-                    if (_missing.length) {
-                        if (fb) {
-                            fb.classList.remove('hidden');
-                            fb.classList.add('error');
-                            fb.textContent = 'Status CASH wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
-                        }
-                        const _first = document.getElementById(_missing[0][1]);
-                        if (_first) _first.focus({ preventScroll: true });
-                        if (btn) btn.disabled = false;
-                        if (txt) txt.textContent = 'Simpan Perubahan Servis';
-                        return;
+                const _usNote = (usVal('usStatusNote') || '').trim();
+                // Syarat per status (FINAL LOCK, mirror backend):
+                // KONFIRMASI = Rencana + Estimasi; PERBAIKAN = Teknisi;
+                // SELESAI = Tindakan + Teknisi; GAGAL/BATAL = Catatan wajib.
+                const _needFail = (label) => {
+                    if (fb) {
+                        fb.classList.remove('hidden');
+                        fb.classList.add('error');
+                        fb.textContent = 'Status ' + _usSt + ' wajib melengkapi: ' + label + '.';
                     }
-                } else if (_usSt === 'DONE') {
-                    const _missing = [];
-                    if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
-                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
-                    if (_missing.length) {
-                        if (fb) {
-                            fb.classList.remove('hidden');
-                            fb.classList.add('error');
-                            fb.textContent = 'Status DONE wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
-                        }
-                        const _first = document.getElementById(_missing[0][1]);
-                        if (_first) _first.focus({ preventScroll: true });
-                        if (btn) btn.disabled = false;
-                        if (txt) txt.textContent = 'Simpan Perubahan Servis';
-                        return;
-                    }
-                } else if (_usSt === 'KONFIRMASI') {
+                };
+                const _needFocus = (id) => {
+                    const _first = document.getElementById(id);
+                    if (_first) _first.focus({ preventScroll: true });
+                    if (btn) btn.disabled = false;
+                    if (txt) txt.textContent = 'Simpan Perubahan Servis';
+                };
+                if (_usSt === 'KONFIRMASI') {
                     const _missing = [];
                     if (!usVal('usPlan').trim()) _missing.push(['Rencana Perbaikan', 'usPlan']);
                     if (!(usNum('usEstimate') > 0)) _missing.push(['Estimasi Biaya', 'usEstimate']);
                     if (_missing.length) {
-                        if (fb) {
-                            fb.classList.remove('hidden');
-                            fb.classList.add('error');
-                            fb.textContent = 'Status KONFIRMASI wajib melengkapi: ' + _missing.map(m => m[0]).join(', ') + '.';
-                        }
-                        const _first = document.getElementById(_missing[0][1]);
-                        if (_first) _first.focus({ preventScroll: true });
-                        if (btn) btn.disabled = false;
-                        if (txt) txt.textContent = 'Simpan Perubahan Servis';
+                        _needFail(_missing.map(m => m[0]).join(', '));
+                        _needFocus(_missing[0][1]);
+                        return;
+                    }
+                } else if (_usSt === 'PERBAIKAN') {
+                    if (!usVal('usTechnician').trim()) {
+                        _needFail('Teknisi Penanggung Jawab');
+                        _needFocus('usTechnician');
+                        return;
+                    }
+                } else if (_usSt === 'SELESAI') {
+                    const _missing = [];
+                    if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
+                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (_missing.length) {
+                        _needFail(_missing.map(m => m[0]).join(', '));
+                        _needFocus(_missing[0][1]);
+                        return;
+                    }
+                } else if (_usSt === 'GAGAL' || _usSt === 'BATAL') {
+                    if (!_usNote) {
+                        _needFail(_usSt === 'GAGAL' ? 'Alasan kegagalan (catatan)' : 'Alasan pembatalan (catatan)');
+                        _needFocus('usStatusNote');
                         return;
                     }
                 }
@@ -2211,6 +2357,7 @@ function initUpdateServis() {
                     warranty_months: usWarrantyMonths(),
                     technician: usVal('usTechnician'),
                     status: _usSt,
+                    status_note: _usNote || undefined,
                 };
                 // Checklist hanya dikirim bila user mengubahnya eksplisit.
                 // Jika tidak disentuh, field dihilangkan agar data server tidak tertimpa.
@@ -2225,12 +2372,15 @@ function initUpdateServis() {
                         phone: usVal('usPhone').trim(),
                     });
                 }
-                // Segarkan cash_date (dikunci backend saat pertama CASH) + tombol garansi.
+                // Segarkan momen lunas + garansi + unit dari server.
                 try {
                     const _saved = await apiGet('/orders/' + _txEditId);
-                    _usCashDate = (_saved.cash_date || '').slice(0, 10) || _usCashDate;
+                    _usLunasDate = (_saved.lunas_date || '').slice(0, 10) || _usLunasDate;
                     const _wm2 = document.getElementById('usWarrantyMonths');
                     if (_wm2 && _saved.warranty_months !== null && _saved.warranty_months !== undefined) _wm2.value = String(_saved.warranty_months);
+                    usUnitRefresh(_saved.unit_status || 'DI TOKO', _saved.taken_at || null);
+                    try { usPaymentsLoad(_txEditId); } catch (_) {}
+                    try { usHistoryLoad(_txEditId); } catch (_) {}
                 } catch (_) {}
                 usSetStatus(usGetStatus());
                 if (_usCheckChanged) {
@@ -2243,10 +2393,15 @@ function initUpdateServis() {
                     fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Data servis tersimpan di server. Rincian kas di panel kanan masih hitungan lokal (belum masuk KAS).`;
                 }
                 renderTransaksi();
-                // Transisi ke DONE → tawarkan kirim konfirmasi WA ke pelanggan.
-                const _wasDone = (_usStatusInit === 'DONE');
+                // Transisi ke SELESAI → tawarkan kirim konfirmasi WA ke pelanggan.
+                const _wasDone = (_usStatusInit === 'SELESAI');
                 _usStatusInit = _usSt;
-                if (_usSt === 'DONE' && !_wasDone) {
+                if (_usSt === 'SELESAI' && !_wasDone) {
+                    let _sisa = 0;
+                    try {
+                        const _pay = await apiGet('/payments/by-order/' + _txEditId);
+                        _sisa = _pay.sisa || 0;
+                    } catch (_) {}
                     doneWaShow({
                         nama: usVal('usNama').trim(),
                         phone: usVal('usPhone').trim(),
@@ -2256,6 +2411,7 @@ function initUpdateServis() {
                         plan: usVal('usPlan').trim(),
                         final: usNum('usFinFinal'),
                         dp: usNum('usDp'),
+                        sisa: _sisa,
                     });
                 }
             } catch (err) {
@@ -2300,7 +2456,7 @@ let _grClaimOrderId = null;
 // `klaim: null` = belum klaim (status diturunkan dari tanggal).
 // `klaim: {...}` = sedang/dalam klaim (status Klaim).
 // Daftar garansi real dari backend (GET /api/claims/warranty-summary):
-// order CASH bergaransi + klaim berjalan. GR_MOCK dipensiunkan.
+// servis SELESAI + LUNAS bergaransi + klaim berjalan. GR_MOCK dipensiunkan.
 // Bentuk item identik dengan mock lama: no, nama, phone, device,
 // mulai, akhir, damage, plan, price, klaim{tgl,keluhan,tindakan,status}.
 let _grAll = [];
@@ -3229,7 +3385,7 @@ let _kuReq = 0;
 let _kuRiwReq = 0;
 let _profitChart = null;
 // State real dari backend — tidak ada lagi array lokal (KU_* dipensiunkan).
-// Buku Kas = turunan order CASH + expenses + jurnal manual, scope periode kas aktif.
+// Buku Kas = turunan jurnal payments + expenses + jurnal manual, scope periode kas aktif.
 let _kuFin = null;
 let _kuKasRows = [];
 let _kuAllocView = [];
@@ -3349,7 +3505,7 @@ function renderBukuKas() {
     const fin = _kuFin || {};
     if (body) {
         if (!_kuKasRows.length) {
-            body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada arus kas periode ini.<br>Servis CASH, beban, dan entri manual akan tercatat otomatis di sini.</div></td></tr>`;
+            body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada arus kas periode ini.<br>Pembayaran servis, beban, dan entri manual akan tercatat otomatis di sini.</div></td></tr>`;
         } else {
             body.innerHTML = _kuKasRows.map(k => {
                 const masuk = k.jenis === 'Masuk';
@@ -4203,7 +4359,7 @@ async function initReceivePage() {
 let _lastNota = null;
 let _notaMode = 'SERVICE'; // SERVICE | CLAIM | WARRANTY — menentukan template & teks nota
 let _lastClaim = null; // claim garansi terakhir (untuk nota claim & workflow)
-let _lastWarranty = null; // nota garansi terakhir (terbit saat status CASH)
+let _lastWarranty = null; // nota garansi terakhir (terbit saat SELESAI + LUNAS)
 
 // Placeholder pilihan teknisi tidak boleh bocor ke nota customer.
 function notaTechnician(v) {
@@ -4472,9 +4628,11 @@ function notaTglSlash(t) {
 
 function notaStatusClass(s) {
     const v = String(s || '').toUpperCase();
-    if (v === 'DONE' || v === 'CASH' || v === 'SELESAI') return 'nd-green';
-    if (v === 'CANCEL' || v === 'BATAL') return 'nd-red';
-    if (v === 'ANALISA' || v === 'KONFIRMASI' || v === 'WAIT PART') return 'nd-amber';
+    if (v === 'SELESAI' || v === 'DONE' || v === 'COMPLETED') return 'nd-green';
+    if (v === 'BATAL' || v === 'CANCEL' || v === 'GAGAL' || v === 'FAILED') return 'nd-red';
+    if (v === 'DITERIMA' || v === 'ANALISA' || v === 'DIAGNOSA' || v === 'KONFIRMASI'
+        || v === 'MENUNGGU SPAREPART') return 'nd-amber';
+    if (v === 'PERBAIKAN') return 'nd-blue';
     return 'nd-blue';
 }
 
@@ -4497,24 +4655,33 @@ function shopWaDisplay() {
 }
 
 // Snapshot KONDISI SERVIS pada Nota Penerimaan (bukan histori/timeline).
-// Lifecycle resmi: DITERIMA → ANALISA → WAIT PART → REPAIR → DONE.
-// CASH/FAILED/CANCEL bukan bagian lifecycle penerimaan — bila muncul
-// (nota dibuka di luar alur normal), tampil apa adanya secara netral.
+// Lifecycle resmi (FINAL LOCK): DITERIMA → ANALISA → DIAGNOSA → KONFIRMASI
+// → MENUNGGU SPAREPART → PERBAIKAN → SELESAI (+ cabang BATAL/GAGAL).
 function notaSnapshotStatus(status) {
     const s = String(status || '').toUpperCase().replace(/\s+/g, '_');
     const map = {
         DITERIMA:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
         RECEIVED:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
         ANALISA:   { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
-        WAIT_PART: { label: 'WAIT PART', cls: 'nps-amber',   stage: 2, sub: 'Menunggu sparepart datang.' },
-        REPAIR:    { label: 'REPAIR',    cls: 'nps-blue',    stage: 3, sub: 'Unit sedang dikerjakan teknisi.' },
-        DONE:      { label: 'DONE',      cls: 'nps-green',   stage: 4, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        DIAGNOSA:  { label: 'DIAGNOSA',  cls: 'nps-amber',   stage: 2, sub: 'Hasil diagnosa teknisi.' },
+        DIAGNOSIS: { label: 'DIAGNOSA',  cls: 'nps-amber',   stage: 2, sub: 'Hasil diagnosa teknisi.' },
+        KONFIRMASI:{ label: 'KONFIRMASI', cls: 'nps-amber',  stage: 3, sub: 'Menunggu persetujuan pelanggan.' },
+        MENUNGGU_SPAREPART: { label: 'MENUNGGU SPAREPART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
+        WAIT_PART: { label: 'MENUNGGU SPAREPART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
+        PERBAIKAN: { label: 'PERBAIKAN', cls: 'nps-blue',    stage: 5, sub: 'Unit sedang dikerjakan teknisi.' },
+        REPAIR:    { label: 'PERBAIKAN', cls: 'nps-blue',    stage: 5, sub: 'Unit sedang dikerjakan teknisi.' },
+        SELESAI:   { label: 'SELESAI',   cls: 'nps-green',   stage: 6, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        DONE:      { label: 'SELESAI',   cls: 'nps-green',   stage: 6, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        GAGAL:     { label: 'GAGAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan tidak berhasil.' },
+        FAILED:    { label: 'GAGAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan tidak berhasil.' },
+        BATAL:     { label: 'BATAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan dibatalkan.' },
+        CANCEL:    { label: 'BATAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan dibatalkan.' },
     };
     if (map[s]) return map[s];
     return { label: String(status || '-'), cls: 'nps-neutral', stage: -1, sub: 'Kondisi unit saat nota dibuat.' };
 }
 
-const NPS_STAGES = ['DITERIMA', 'ANALISA', 'WAIT PART', 'REPAIR', 'DONE'];
+const NPS_STAGES = ['DITERIMA', 'ANALISA', 'DIAGNOSA', 'KONFIRMASI', 'MENUNGGU SPAREPART', 'PERBAIKAN', 'SELESAI'];
 
 // Label checklist nota (fisik/len) dari master yang sudah ada.
 function notaChecklistText(list, master) {
@@ -4614,7 +4781,7 @@ function renderNotaDigital(d) {
                             const cls = st.stage < 0 ? '' : (i < st.stage ? ' is-past' : (i === st.stage ? ' is-now' : ''));
                             return `<div class="nps-tstep${cls}"><span class="nps-tdot"></span>${s}</div>`;
                         }).join('')}</div>
-                        ${st.stage >= 0 ? `<div class="nps-segbar">${NPS_STAGES.map((s, i) => `<span class="nps-seg${i <= st.stage ? ' on' : ''}"></span>`).join('')}<span class="nps-segnum">${st.stage + 1}/5</span></div>` : ''}
+                        ${st.stage >= 0 ? `<div class="nps-segbar">${NPS_STAGES.map((s, i) => `<span class="nps-seg${i <= st.stage ? ' on' : ''}"></span>`).join('')}<span class="nps-segnum">${st.stage + 1}/${NPS_STAGES.length}</span></div>` : ''}
                         <p class="nps-statussub">${escapeHtml(st.sub)}</p>
                         <p class="nps-received">Diterima pada: <b>${escapeHtml(tgl)}</b> | <b>${escapeHtml(jam)}</b></p>
                     </div>
@@ -5426,7 +5593,7 @@ function claimNotaDigitalText(d) {
         + 'Simpan nota claim ini sebagai bukti pengambilan unit. Terima kasih! - *SUKABUMI FLASHER*';
 }
 
-// ── Nota GARANSI (terbit saat status CASH, masa 30 hari dari cash_date) ──
+// ── Nota GARANSI (terbit saat SELESAI + LUNAS, awal dari lunas_date/diambil) ──
 
 const WARRANTY_DAYS = 30; // fallback data lama (tanpa setting bulan)
 
@@ -5463,7 +5630,7 @@ function usWarrantyUpdate() {
     const m = usWarrantyMonths();
     const pill = document.getElementById('usWarrantyPill');
     const info = document.getElementById('usWarrantyInfo');
-    const cash = _usCashDate || new Date().toISOString().slice(0, 10);
+    const cash = _usLunasDate || new Date().toISOString().slice(0, 10);
     if (Number(m) === 0) {
         if (pill) { pill.className = 'tx-status st-EXPIRED'; pill.innerHTML = '<i class="fa-solid fa-circle"></i>Tanpa garansi'; }
         if (info) info.textContent = 'Servis ini tidak bergaransi toko.';
@@ -5482,11 +5649,24 @@ function warrantyEndOf(cashDate, days) {
     return dt.getFullYear() + '-' + p(dt.getMonth() + 1) + '-' + p(dt.getDate());
 }
 
-function usWarrantyPrint() {
-    if (usGetStatus() !== 'CASH') return;
-    // cash_date dikunci backend saat simpan CASH; bila baru dipilih & belum
+async function usWarrantyPrint() {
+    if (usGetStatus() !== 'SELESAI') return;
+    // Nota garansi syarat SELESAI + LUNAS (FINAL LOCK).
+    if (_txEditId) {
+        try {
+            const _pay = await apiGet('/payments/by-order/' + _txEditId);
+            if (_pay.payment_status !== 'LUNAS') {
+                toast('Nota garansi butuh pembayaran LUNAS (sisa ' + usPayRupiah(_pay.sisa) + ').');
+                return;
+            }
+        } catch (err) {
+            toast(err.message || 'Gagal cek pembayaran.');
+            return;
+        }
+    }
+    // lunas_date dikunci backend saat pelunasan penuh; bila baru lunas & belum
     // disimpan, pakai hari ini sebagai provisional (akan sama saat disimpan).
-    const cash = _usCashDate || new Date().toISOString().slice(0, 10);
+    const cash = _usLunasDate || new Date().toISOString().slice(0, 10);
     const mths = usWarrantyMonths();
     const d = {
         kind: 'WARRANTY',
@@ -5504,7 +5684,7 @@ function usWarrantyPrint() {
         warranty_label: warrantyLabel(mths),
         warranty_days: WARRANTY_DAYS,
         warranty_end: warrantyEndFor(cash, mths),
-        status: 'CASH',
+        status: 'SELESAI',
     };
     _lastWarranty = d;
     _notaMode = 'WARRANTY';
