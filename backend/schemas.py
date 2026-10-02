@@ -72,6 +72,8 @@ class ServiceOrderBase(BaseModel):
     part_cost: Optional[float] = None
     modal_jasa: Optional[float] = None
     modal_lainnya: Optional[float] = None
+    # laba_bersih = derive backend (diisi router, bukan input user).
+    laba_bersih: Optional[float] = 0
     lunas_date: Optional[date] = None
     lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None
@@ -157,6 +159,7 @@ class ServiceOrderList(BaseModel):
     part_cost: Optional[float] = None
     modal_jasa: Optional[float] = None
     modal_lainnya: Optional[float] = None
+    laba_bersih: Optional[float] = None
     lunas_date: Optional[date] = None
     lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None

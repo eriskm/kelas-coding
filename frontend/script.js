@@ -99,16 +99,77 @@ function rcGetPath() {
     } catch (_) { return 'TITIP'; }
 }
 
+// Smart detect posisi servis dari data yang diisi (FINAL: Posisi Servis).
+// SPAREPART tidak pernah terdeteksi otomatis (butuh keputusan eksplisit).
+// Deteksi berhenti begitu user klik card manual (_rcPathManual).
+let _rcPathManual = false;
+
+function rcAutoPath() {
+    try {
+        if (_rcPathManual) return;
+        const filled = id => ((document.getElementById(id) || {}).value || '').trim() !== '';
+        const numFilled = id => (parseFloat((document.getElementById(id) || {}).value) || 0) > 0;
+        let want = 'TITIP';
+        if (filled('rcFinal') && filled('rcPlan') && filled('rcTechnician')) want = 'TUNGGU';
+        else if (filled('rcPlan') && numFilled('rcEstimate') && filled('rcTechnician')) want = 'PERBAIKAN';
+        if (want !== rcGetPath()) {
+            const r = document.querySelector('input[name="rcPath"][value="' + want + '"]');
+            if (r) { r.checked = true; rcApplyPath(); try { rcPosAnimate(want, true); } catch (_) {} }
+        }
+    } catch (_) {}
+}
+
 function rcApplyPath() {
     const path = rcGetPath();
     const hid = document.getElementById('rcStatus');
     if (hid) hid.value = RC_PATH_TARGET[path];
     const fw = document.getElementById('rcFinalWrap');
     if (fw) fw.classList.toggle('hidden', path !== 'TUNGGU');
+    const badge = document.getElementById('rcPathBadge');
+    if (badge) {
+        const manual = !!_rcPathManual;
+        badge.textContent = manual ? 'MANUAL' : 'AUTO';
+        badge.classList.toggle('is-manual', manual);
+        badge.title = manual ? 'Pilihan manual — deteksi otomatis berhenti'
+            : 'Terdeteksi otomatis dari data — klik icon untuk ubah';
+    }
     try { rcMarkReq(); } catch (_) {}
     try { updateReceiveSteps(); } catch (_) {}
     try { scheduleReceiveDraft(); } catch (_) {}
 }
+
+// Micro-animation Posisi Servis (presentasi saja — tidak mengubah workflow/status/payload).
+// - Pop 200ms saat active state berpindah (via CSS .is-live).
+// - Ping sekali saat smart-detection otomatis (via .rc-flash).
+// - Badge fade/slide ringan saat teks AUTO<->MANUAL berubah (via .rc-badge-in).
+function rcPosAnimate(path, isAuto) {
+    try {
+        if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+        const bar = document.querySelector('.rc-posbar');
+        if (bar) {
+            const input = document.querySelector('input[name="rcPath"][value="' + path + '"]');
+            const label = input ? input.closest('.rc-pos') : null;
+            if (label && isAuto) {
+                label.classList.remove('rc-flash');
+                void label.offsetWidth;
+                label.classList.add('rc-flash');
+                setTimeout(() => { try { label.classList.remove('rc-flash'); } catch (_) {} }, 380);
+            }
+            const badge = document.getElementById('rcPathBadge');
+            if (badge) {
+                badge.classList.remove('rc-badge-in');
+                void badge.offsetWidth;
+                badge.classList.add('rc-badge-in');
+                setTimeout(() => { try { badge.classList.remove('rc-badge-in'); } catch (_) {} }, 260);
+            }
+        }
+    } catch (_) {}
+}
+try {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+        try { document.querySelector('.rc-posbar')?.classList.add('is-live'); } catch (_) {}
+    }));
+} catch (_) {}
 
 function collectReceiveDraft() {
     const d = {};
@@ -146,12 +207,16 @@ function scheduleReceiveDraft() {
 function restoreReceiveDraft() {
     let d = null;
     try { d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null'); } catch (_) { d = null; }
-    if (!d) { try { rcMarkReq(); } catch (_) {} return false; }
+    if (!d) { _rcPathManual = false; try { rcMarkReq(); } catch (_) {} return false; }
     RECEIVE_DRAFT_FIELDS.forEach(id => {
         if (id === 'rcPath') {
             if (d.rcPath && RC_PATH_TARGET[d.rcPath]) {
                 const r = document.querySelector('input[name="rcPath"][value="' + d.rcPath + '"]');
                 if (r) r.checked = true;
+                // Draft non-TITIP = pilihan eksplisit → kunci dari auto-detect.
+                _rcPathManual = (d.rcPath !== 'TITIP');
+            } else {
+                _rcPathManual = false;
             }
             return;
         }
@@ -2294,7 +2359,7 @@ function usReprint() {
 }
 
 function initUpdateServis() {
-    renderChecklist('us', 'usCheckGroups', 'Catatan kondisi awal — tidak diubah otomatis saat data servis diperbarui.');
+    renderChecklist('us', 'usCheckGroups', 'Catatan kondisi awal — tidak diubah otomatis saat data servis diperbarui.', { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     const techFill = (selId) => {
         const sel = document.getElementById(selId);
         if (!sel || sel.options.length > 1) return;
@@ -3972,6 +4037,9 @@ async function handleLogin(e) {
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) {
+            if (res.status === 404) {
+                throw new Error('Backend versi lama (tanpa fitur login). Matikan via matikan.bat lalu jalankan ulang jalankan.bat.');
+            }
             throw new Error(data.detail || 'Login gagal, coba lagi.');
         }
         const remember = document.getElementById('rememberMe').checked;
@@ -4239,11 +4307,17 @@ const CHECK_LEN = [
     { key: 'charger', label: 'Charger' }
 ];
 
+// Subset aktif Kondisi & Kelengkapan — dipakai Servis Baru (rc) & Update (us).
+// Master CHECK_* tetap utuh sebagai kamus label histori/nota; Klaim memakai daftar penuh.
+const ACTIVE_FISIK_KEYS = ['frame_bengkok', 'tombol_tidak_ada', 'bekas_air'];
+const ACTIVE_LEN_KEYS = ['unit_saja', 'case', 'sim_card', 'memory_card'];
+
 const _checkStore = {};
 
-function renderChecklist(prefix, containerId, note) {
+function renderChecklist(prefix, containerId, note, only) {
     const box = document.getElementById(containerId);
     if (!box) return;
+    const pick = (list, keys) => (keys ? list.filter(it => keys.includes(it.key)) : list);
     const group = (title, icon, list) => `
         <div class="rc-check-group">
             <p class="rc-check-group-head"><span class="rc-check-group-ico"><i class="fa-solid ${icon}"></i></span>${title}</p>
@@ -4252,8 +4326,8 @@ function renderChecklist(prefix, containerId, note) {
             </div>
         </div>`;
     box.innerHTML =
-            group('Kondisi Fisik Saat Diterima', 'fa-mobile-screen-button', CHECK_FISIK)
-        + group('Kelengkapan Saat Diterima', 'fa-box-open', CHECK_LEN)
+            group('Kondisi Fisik Saat Diterima', 'fa-mobile-screen-button', pick(CHECK_FISIK, only && only.fisik))
+        + group('Kelengkapan Saat Diterima', 'fa-box-open', pick(CHECK_LEN, only && only.len))
         + (note ? `<p class="field-hint">${note}</p>` : '');
 }
 
@@ -4279,7 +4353,7 @@ async function initReceivePage() {
     // Pemanggilan ulang hanya me-restore draft (tanpa dobel POST/history).
     if (window._initReceiveBound) { restoreReceiveDraft(); return; }
     window._initReceiveBound = true;
-    renderChecklist('rc', 'rcCheckGroups');
+    renderChecklist('rc', 'rcCheckGroups', null, { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
     restoreReceiveDraft();
     try {
@@ -4312,13 +4386,13 @@ async function initReceivePage() {
     });
 
     const form = document.getElementById('receiveForm');
-    form.addEventListener('input', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
-    form.addEventListener('change', () => { updateReceiveSteps(); scheduleReceiveDraft(); });
-    // Initial path Servis Baru: radio kondisi operasional (bukan status bebas).
+    form.addEventListener('input', () => { rcAutoPath(); updateReceiveSteps(); scheduleReceiveDraft(); });
+    form.addEventListener('change', () => { rcAutoPath(); updateReceiveSteps(); scheduleReceiveDraft(); });
+    // Initial path Servis Baru: radio Posisi Servis (klik manual = kunci pilihan).
     document.querySelectorAll('input[name="rcPath"]').forEach(r => {
         if (!r.dataset.pathBound) {
             r.dataset.pathBound = '1';
-            r.addEventListener('change', rcApplyPath);
+            r.addEventListener('change', () => { _rcPathManual = true; rcApplyPath(); try { rcPosAnimate(r.value, false); } catch (_) {} });
         }
     });
     rcApplyPath();
@@ -4401,6 +4475,7 @@ async function initReceivePage() {
             if (_nb2) _nb2.classList.remove('hidden');
             this.reset();
             clearReceiveDraft();
+            _rcPathManual = false;
             try { rcApplyPath(); } catch (_) {}
             applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
             document.querySelectorAll('#rcSteps .rc-step').forEach(li => { li.classList.remove('is-active'); li.classList.add('is-done'); });

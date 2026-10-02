@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ref 01 - Thermal 58/80mm - SUKABUMI FLASHER</title>
+<!-- Referensi: parzibyte/print-receipt-thermal-printer (GPL-3.0) - https://github.com/parzibyte/print-receipt-thermal-printer -->
+<!-- Model ini ditulis ulang original untuk SUKABUMI FLASHER, struktur terinspirasi pola thermal: .ticket 300px monospace -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #eee; font-family: monospace; display: flex; gap: 16px; padding: 16px; flex-wrap: wrap; }
+  .ticket { width: 300px; background: #fff; color: #000; padding: 12px 10px; font-size: 12px; line-height: 1.45; }
+  .ticket img { max-width: 120px; display: block; margin: 0 auto 6px; }
+  .centered { text-align: center; }
+  .sep { border-top: 1px dashed #000; margin: 8px 0; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { text-align: left; border-bottom: 1px dashed #000; padding: 2px 0; }
+  td { padding: 2px 0; vertical-align: top; }
+  .r { text-align: right; }
+  .big { font-size: 15px; font-weight: bold; }
+  .btn { font-family: system-ui; height: 40px; padding: 0 18px; }
+  @media print { body { background: #fff; padding: 0; } .noprint { display: none; } .ticket { width: 72mm; } }
+</style>
+</head>
+<body>
+<div class="ticket">
+  <div class="centered big">SUKABUMI FLASHER</div>
+  <div class="centered">SMARTPHONE SERVICE LAB<br>WA: +62 811-1737-030</div>
+  <div class="sep"></div>
+  <div class="centered">NOTA PENERIMAAN SERVICE</div>
+  <div class="centered big">SV-20260913-3057</div>
+  <div class="sep"></div>
+  <table>
+    <tr><td>Tgl</td><td class="r">13-09-2026 / 14:20</td></tr>
+    <tr><td>Nama</td><td class="r">reza</td></tr>
+    <tr><td>WA</td><td class="r">082111401401</td></tr>
+    <tr><td>Device</td><td class="r">Samsung A50</td></tr>
+    <tr><td>IMEI</td><td class="r">-</td></tr>
+    <tr><td>Teknisi</td><td class="r">Budi</td></tr>
+    <tr><td>Status</td><td class="r">ANALISA</td></tr>
+  </table>
+  <div class="sep"></div>
+  <div>Keluhan: Repair konslet</div>
+  <div>Rencana: Diagnosa + ukur jalur</div>
+  <div class="sep"></div>
+  <table>
+    <tr><th>Uraian</th><th class="r">Rp</th></tr>
+    <tr><td>Estimasi</td><td class="r">150.000</td></tr>
+    <tr><td>DP</td><td class="r">50.000</td></tr>
+    <tr><td><b>SISA</b></td><td class="r"><b>100.000</b></td></tr>
+  </table>
+  <div class="sep"></div>
+  <div class="centered">Simpan nota ini sebagai<br>bukti pengambilan unit.<br>Terima kasih!</div>
+  <div class="centered">boss-sf.id/lacak/SV-20260913-3057</div>
+</div>
+<div class="noprint" style="font-family:system-ui;max-width:320px;font-size:14px">
+  <h3>Ref 01 — Thermal minimal</h3>
+  <p>Lebar 300px / 72mm, monospace, siap print thermal 58/80mm. Cocok untuk struk counter.</p>
+  <button class="btn" onclick="window.print()">Print</button>
+</div>
+</body>
+</html>

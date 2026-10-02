@@ -170,11 +170,26 @@ def payments_total(pay_rows) -> float:
     return sum(_num(getattr(p, "amount", 0)) for p in (pay_rows or []))
 
 
+def _dp_total(pay_rows) -> float:
+    """Total baris jurnal ber-kind DP (hold harmless terhadap kolom legacy)."""
+    return sum(_num(getattr(p, "amount", 0)) for p in (pay_rows or [])
+               if (getattr(p, "kind", "") or "").strip().upper() == "DP")
+
+
 def payment_summary(order, pay_rows) -> dict:
-    """Derive status pembayaran (single source: jurnal payments + DP legacy)."""
+    """Derive status pembayaran.
+
+    Sumber: jurnal payments + kolom legacy `service_orders.payment` (arsip DP
+    era sebelum jurnal). Agar DP yang tercatat di KEDUA tempat (kolom legacy
+    + baris jurnal DP dari receive) tidak dihitung ganda, porsi legacy yang
+    sudah tercermin di jurnal DP dikurangkan (tidak pernah negatif).
+    Perilaku untuk data lama (tanpa baris DP) identik seperti sebelumnya.
+    """
     must = kewajiban(order)
     legacy_dp = _num(getattr(order, "payment", 0))
-    paid = legacy_dp + payments_total(pay_rows)
+    dp_journal = _dp_total(pay_rows)
+    effective_legacy = max(0.0, legacy_dp - dp_journal)
+    paid = effective_legacy + payments_total(pay_rows)
     sisa = max(0.0, must - paid)
     lunas = bool(must > 0 and paid >= must)
     return {
@@ -213,7 +228,7 @@ def lunas_moment(order, pay_rows):
     if must > 0:
         rows = sorted([p for p in (pay_rows or []) if getattr(p, "created_at", None)],
                       key=lambda p: p.created_at)
-        acc = _num(getattr(order, "payment", 0))
+        acc = max(0.0, _num(getattr(order, "payment", 0)) - _dp_total(rows))
         for p in rows:
             acc += _num(p.amount)
             if acc >= must:
@@ -227,3 +242,22 @@ def lunas_moment(order, pay_rows):
         if isinstance(ld, date):
             return datetime(ld.year, ld.month, ld.day, 12, 0, 0)
     return getattr(order, "created_at", None)
+
+
+def order_profit(order, pay_rows) -> float:
+    """Laba bersih per-order (alur keuangan konsep).
+
+    Rumus: kewajiban (harga jual) − modal part − modal jasa − biaya lain.
+    Hanya dihitung bila order SELESAI dan LUNAS (setara status Cash di
+    konsep); selain itu 0 dan wajib 0 yang tersimpan.
+    """
+    try:
+        s = payment_summary(order, pay_rows)
+    except Exception:
+        return 0.0
+    if (getattr(order, "status", "") or "") != "SELESAI":
+        return 0.0
+    if s.get("payment_status") != "LUNAS":
+        return 0.0
+    return float(s.get("kewajiban", 0) or 0) - float(getattr(order, "part_cost", 0) or 0) \
+        - float(getattr(order, "modal_jasa", 0) or 0) - float(getattr(order, "modal_lainnya", 0) or 0)

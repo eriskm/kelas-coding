@@ -1,5 +1,10 @@
-"""SQLAlchemy models (database tables)."""
-from datetime import datetime
+"""SQLAlchemy models (database tables).
+
+Basis waktu: waktu server lokal (datetime.now / date.today) di semua default.
+Periode kas, histori, dan jurnal memakai waktu lokal yang sama sehingga
+perbandingan rentang tanggal konsisten (sebelumnya campur UTC & lokal).
+"""
+from datetime import date, datetime
 
 from sqlalchemy import (
     Column,
@@ -28,7 +33,7 @@ class User(Base):
     passcode_salt = Column(String(64), nullable=False)
     active = Column(Integer, default=1)
     last_login = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class AuthToken(Base):
@@ -37,7 +42,7 @@ class AuthToken(Base):
     id = Column(Integer, primary_key=True, index=True)
     token = Column(String(64), unique=True, index=True, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
     expires_at = Column(DateTime, nullable=False)
 
     user = relationship("User")
@@ -51,7 +56,7 @@ class Customer(Base):
     phone = Column(String(30))
     email = Column(String(120))
     address = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     service_orders = relationship("ServiceOrder", back_populates="customer")
 
@@ -80,7 +85,7 @@ class ServiceOrder(Base):
     taken_at = Column(DateTime)
     estimate = Column(Float, default=0)
     payment = Column(Float, default=0)  # DP era legacy; read-only arsip (sumber baru: payments)
-    service_date = Column(Date, default=datetime.utcnow().date)
+    service_date = Column(Date, default=date.today)
     # lunas_date/lunas_at = momen LUNAS pertama (dikunci sekali, rename dari cash_*).
     # warranty_months: 1/3/6 bulan pilihan toko, 0 = tidak garansi, NULL = legacy (30 hari).
     # Modal (part/jasa/lainnya) = atribut transaksi (diisi di Update Data Servis).
@@ -89,10 +94,13 @@ class ServiceOrder(Base):
     part_cost = Column(Float, default=0)
     modal_jasa = Column(Float, default=0)
     modal_lainnya = Column(Float, default=0)
+    # laba_bersih per-order (alur keuangan): kewajiban − modal_* bila
+    # SELESAI+LUNAS, selain itu 0. Dihitung backend, bukan input user.
+    laba_bersih = Column(Float, default=0)
     lunas_date = Column(Date)
     lunas_at = Column(DateTime)
     warranty_months = Column(Integer)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     customer = relationship("Customer", back_populates="service_orders")
     payments = relationship("Payment", back_populates="service_order", cascade="all, delete-orphan")
@@ -113,7 +121,7 @@ class Payment(Base):
     amount = Column(Float, nullable=False)
     method = Column(String(30), default="CASH")
     note = Column(String(200))
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     service_order = relationship("ServiceOrder", back_populates="payments")
 
@@ -130,7 +138,7 @@ class Expense(Base):
     uraian = Column(String(200), nullable=False)
     nilai = Column(Float, nullable=False, default=0)
     tanggal = Column(Date)  # info tanggal beban
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class KasPeriod(Base):
@@ -147,7 +155,7 @@ class KasPeriod(Base):
     snapshot = Column(Text)  # JSON snapshot saat Tutup Kas (tahap Tutup Kas)
     closed_by = Column(String(120))
     closed_at = Column(DateTime)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class WarrantyClaim(Base):
@@ -205,7 +213,7 @@ class WarrantyClaim(Base):
     customer_cost = Column(Float, default=0)
     internal_cost = Column(Float, default=0)
 
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
     service_order = relationship("ServiceOrder", backref="warranty_claims")
     customer = relationship("Customer", backref="warranty_claims")
@@ -225,7 +233,7 @@ class Sparepart(Base):
     harga_beli = Column(Float, default=0)
     harga_jual = Column(Float, default=0)
     tanggal = Column(Date)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class KasEntry(Base):
@@ -241,7 +249,7 @@ class KasEntry(Base):
     keterangan = Column(String(200), nullable=False)
     nominal = Column(Float, nullable=False, default=0)
     tanggal = Column(Date)  # info tanggal kas
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.now)
 
 
 class StatusHistory(Base):
@@ -254,7 +262,7 @@ class StatusHistory(Base):
     dari_status = Column(String(30))  # NULL = awal (saat receive)
     ke_status = Column(String(30), nullable=False)
     oleh = Column(String(60))
-    waktu = Column(DateTime, default=datetime.utcnow, index=True)
+    waktu = Column(DateTime, default=datetime.now, index=True)
     catatan = Column(Text)
 
     service_order = relationship("ServiceOrder", back_populates="status_history")

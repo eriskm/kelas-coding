@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ref 02 - Digital Card WA - SUKABUMI FLASHER</title>
+<!-- Referensi: mimito-6/receipt-engine custom theme (MIT) - https://github.com/mimito-6/receipt-engine -->
+<!-- Model ditulis ulang original: kartu brandable 480px untuk export PNG + share WhatsApp -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #0f172a; font-family: Inter, system-ui, sans-serif; display: flex; gap: 20px; padding: 24px; flex-wrap: wrap; }
+  .card { width: 480px; background: #fff; border-radius: 22px; overflow: hidden; }
+  .head { background: linear-gradient(135deg,#d31111,#7f0d0d); color: #fff; padding: 20px 22px; display: flex; justify-content: space-between; align-items: center; }
+  .head b { font-size: 20px; font-style: italic; }
+  .head span { display: block; font-size: 11px; letter-spacing: 3px; opacity: .85; }
+  .qr { width: 76px; height: 76px; background: #fff; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: #111; font-size: 10px; font-weight: 800; text-align: center; }
+  .body { padding: 18px 20px; }
+  .noid { background: #fef2f2; border: 1px dashed #fca5a5; border-radius: 12px; padding: 10px 14px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+  .noid b { font-family: monospace; font-size: 17px; }
+  .pill { font-size: 11px; font-weight: 800; background: #f59e0b; color: #fff; padding: 4px 10px; border-radius: 999px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .box { background: #f8fafc; border-radius: 12px; padding: 10px 12px; font-size: 13px; }
+  .box small { display: block; font-size: 10px; font-weight: 800; color: #94a3b8; letter-spacing: 1px; }
+  .cost { background: #0f172a; color: #fff; border-radius: 12px; padding: 12px 14px; font-size: 13px; }
+  .cost div { display: flex; justify-content: space-between; padding: 2px 0; }
+  .cost .tot { border-top: 1px solid rgba(255,255,255,.2); margin-top: 6px; padding-top: 6px; font-weight: 800; }
+  .foot { padding: 12px 20px 18px; font-size: 12px; color: #64748b; text-align: center; }
+  .info { font-family: system-ui; color: #e2e8f0; max-width: 320px; font-size: 14px; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <div><b>SUKABUMI FLASHER</b><span>SERVICE LAB</span></div>
+    <div class="qr">QR<br>SV-3057</div>
+  </div>
+  <div class="body">
+    <div class="noid"><b>SV-20260913-3057</b><span class="pill">ANALISA</span></div>
+    <div class="grid">
+      <div class="box"><small>PELANGGAN</small>reza<br>082111401401</div>
+      <div class="box"><small>DEVICE</small>Samsung A50<br>IMEI -</div>
+    </div>
+    <div class="box" style="margin-bottom:10px"><small>KELUHAN</small>Repair konslet</div>
+    <div class="box" style="margin-bottom:12px"><small>RENCANA</small>Diagnosa + ukur jalur konslet</div>
+    <div class="cost">
+      <div><span>Estimasi</span><span>Rp 150.000</span></div>
+      <div><span>DP</span><span>Rp 50.000</span></div>
+      <div class="tot"><span>Sisa</span><span>Rp 100.000</span></div>
+    </div>
+  </div>
+  <div class="foot">Diterima 13-09-2026 • Teknisi Budi • boss-sf.id/lacak/SV-20260913-3057<br>Terima kasih telah mempercayakan perangkat Anda.</div>
+</div>
+<div class="info">
+  <h3>Ref 02 — Digital card WA</h3>
+  <p>Lebar 480px, header gradasi merah, QR + pill status. Ideal untuk export PNG ±1080px lalu share WhatsApp (pengganti nota digital saat ini).</p>
+</div>
+</body>
+</html>

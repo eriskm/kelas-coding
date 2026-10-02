@@ -3,11 +3,12 @@ import random
 from datetime import date, datetime
 
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from dependencies import get_db_session
-from models import Payment, ServiceOrder, Customer, StatusHistory, User
-from routers.auth import get_authenticated_user
+from models import Payment, ServiceOrder, Customer, StatusHistory, User, WarrantyClaim
+from routers.auth import can_edit_finance, get_authenticated_user, require_admin, require_finance
 from statusflow import (
     INITIAL_PATHS,
     SERVICE_STATUSES,
@@ -15,13 +16,26 @@ from statusflow import (
     check_initial_path,
     check_transition,
     lock_lunas_moment,
+    order_profit,
     payment_summary,
 )
 import schemas
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
-TECHNICIANS = ["Budi", "Andi", "Rizky", "Dedi", "Fajar"]
+# Subset aktif checklist (selaras frontend ACTIVE_*): key pensiun
+# (lcd_pecah/lcd_terbuka/frame_gompal/box/charger) difilter saat tulis.
+# Klaim tidak difilter (form klaim masih memakai daftar penuh).
+CHECK_FISIK_KEYS = {"frame_bengkok", "tombol_tidak_ada", "bekas_air"}
+CHECK_LEN_KEYS = {"unit_saja", "case", "sim_card", "memory_card"}
+
+
+def _clean_checklist(values, allowed):
+    """Saring key checklist ke subset aktif (None → list kosong)."""
+    try:
+        return [v for v in (values or []) if v in allowed]
+    except TypeError:
+        return []
 
 
 def _generate_no_servis() -> str:
@@ -51,9 +65,52 @@ def _attach_summary(db: Session, order):
     return s
 
 
+def _refresh_money(db: Session, order):
+    """Hitung ulang laba_bersih per-order dari sumbernya (bukan input user).
+
+    Laba = kewajiban − modal_* bila SELESAI+LUNAS, selain itu 0.
+    Dipanggil setiap ada peristiwa uang (receive/update/payment).
+    """
+    try:
+        pays = db.query(Payment).filter(Payment.service_order_id == order.id).all()
+        order.laba_bersih = order_profit(order, pays)
+        db.commit()
+    except Exception:
+        try:
+            db.rollback()
+        except Exception:
+            pass
+    return order
+
+
 @router.get("/technicians")
-def list_technicians():
-    return TECHNICIANS
+def list_technicians(db: Session = Depends(get_db_session)):
+    """Daftar teknisi dari data nyata: nama unik di service_orders + pengguna
+    aktif ber-role teknisi/admin. Kontrak tetap list[str] agar UI tak berubah."""
+    names = set()
+    try:
+        rows = db.query(ServiceOrder.technician).filter(
+            ServiceOrder.technician.isnot(None),
+            ServiceOrder.technician != "",
+        ).distinct().all()
+        for (t,) in rows:
+            t = (t or "").strip()
+            if t:
+                names.add(t)
+    except Exception:
+        pass
+    try:
+        users = db.query(User).filter(User.active == 1).all()
+        for u in users:
+            if (getattr(u, "role", "") or "").strip().upper() in (
+                "TEKNISI", "ADMIN", "SUPERADMIN",
+            ):
+                disp = (getattr(u, "display_name", "") or "").strip()
+                if disp:
+                    names.add(disp)
+    except Exception:
+        pass
+    return sorted(names)
 
 
 @router.get("/history/{phone}")
@@ -78,7 +135,13 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
 
     FINAL: initial path operasional (TITIP/PERBAIKAN/SPAREPART/TUNGGU),
     bukan dropdown status bebas. Tanpa initial_path → DITERIMA (legacy).
+
+    Alur keuangan: Teknisi tidak boleh menetapkan harga final (closing
+    adalah wewenang Admin).
     """
+    if not can_edit_finance(user) and data.final_price is not None:
+        raise HTTPException(status_code=403,
+                            detail="Hanya Admin yang boleh menetapkan Harga Final")
     path_key = (data.initial_path or "").strip().upper() or None
     if path_key is not None:
         target, chain, err = check_initial_path(path_key, {
@@ -99,54 +162,118 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
         chain = ["DITERIMA"]
-    customer = None
-    if data.customer_phone:
-        customer = (
-            db.query(Customer)
-            .filter(Customer.phone == data.customer_phone)
-            .order_by(Customer.id.desc())
-            .first()
-        )
-    if not customer:
-        customer = Customer(name=data.customer_name, phone=data.customer_phone)
-        db.add(customer)
-        db.commit()
-        db.refresh(customer)
-    elif data.customer_name and data.customer_name.strip() and customer.name != data.customer_name.strip():
-        # Opsi (a): nomor WA sama = identitas sama → koreksi nama terbaru.
-        # Tidak membuat customer baru; No. Servis dan histori order lain tidak berubah.
-        customer.name = data.customer_name.strip()
-        db.commit()
-        db.refresh(customer)
+    dp_amount = 0.0
+    try:
+        dp_amount = float(data.dp or 0)
+    except (TypeError, ValueError):
+        dp_amount = 0.0
+    if dp_amount < 0:
+        raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
+    try:
+        customer = None
+        if data.customer_phone:
+            customer = (
+                db.query(Customer)
+                .filter(Customer.phone == data.customer_phone)
+                .order_by(Customer.id.desc())
+                .first()
+            )
+        if not customer:
+            customer = Customer(name=data.customer_name, phone=data.customer_phone)
+            db.add(customer)
+            db.flush()
+        elif data.customer_name and data.customer_name.strip() and customer.name != data.customer_name.strip():
+            # Opsi (a): nomor WA sama = identitas sama → koreksi nama terbaru.
+            # Tidak membuat customer baru; No. Servis dan histori order lain tidak berubah.
+            customer.name = data.customer_name.strip()
+            db.flush()
 
-    order = ServiceOrder(
-        no_servis=_generate_no_servis(),
-        customer_id=customer.id,
-        device=data.device,
-        damagetype=data.damagetype,
-        device_password=data.device_password,
-        imei=(data.imei or "").strip() or None,
-        check_fisik=list(data.check_fisik or []),
-        check_len=list(data.check_len) if data.check_len is not None else ["unit_saja"],
-        repair_plan=data.repair_plan,
-        technician=data.technician,
-        status=st,
-        unit_status="DI TOKO",
-        estimate=data.estimate or 0,
-        payment=data.dp or 0,
-        final_price=data.final_price,
-        service_date=date.today(),
-        warranty_months=1 if st == "SELESAI" else None,
-    )
-    db.add(order)
-    db.commit()
+        order = ServiceOrder(
+            no_servis=_generate_no_servis(),
+            customer_id=customer.id,
+            device=data.device,
+            damagetype=data.damagetype,
+            device_password=data.device_password,
+            imei=(data.imei or "").strip() or None,
+            check_fisik=_clean_checklist(data.check_fisik, CHECK_FISIK_KEYS),
+            check_len=(_clean_checklist(data.check_len, CHECK_LEN_KEYS)
+                       if data.check_len is not None else ["unit_saja"]),
+            repair_plan=data.repair_plan,
+            technician=data.technician,
+            status=st,
+            unit_status="DI TOKO",
+            estimate=data.estimate or 0,
+            payment=dp_amount,
+            final_price=data.final_price,
+            service_date=date.today(),
+            warranty_months=1 if st == "SELESAI" else None,
+        )
+        db.add(order)
+        db.flush()
+        if dp_amount > 0:
+            # DP receive dicatat di jurnal payments agar masuk omset/kas.
+            # Kolom legacy `payment` tetap diisi sebagai arsip; payment_summary
+            # mengurangkan porsi yang sudah ada di jurnal (anti double-count).
+            db.add(Payment(service_order_id=order.id, kind="DP",
+                           amount=dp_amount, method="CASH",
+                           note="DP awal (pendaftaran unit)",
+                           created_at=order.created_at or datetime.now()))
+            db.flush()
+        _prev = None
+        _note = ("initial path: %s" % INITIAL_PATHS[path_key]["label"]) if path_key else "pendaftaran unit"
+        for _step in chain:
+            _log_transition(db, order.id, _prev, _step, _actor(user), _note)
+            _prev = _step
+        db.commit()
+    except IntegrityError:
+        # Tabrakan no_servis acak (sangat jarang): ulangi sekali dengan nomor baru.
+        db.rollback()
+        try:
+            order = ServiceOrder(
+                no_servis=_generate_no_servis(),
+                customer_id=customer.id,
+                device=data.device,
+                damagetype=data.damagetype,
+                device_password=data.device_password,
+                imei=(data.imei or "").strip() or None,
+                check_fisik=_clean_checklist(data.check_fisik, CHECK_FISIK_KEYS),
+                check_len=(_clean_checklist(data.check_len, CHECK_LEN_KEYS)
+                           if data.check_len is not None else ["unit_saja"]),
+                repair_plan=data.repair_plan,
+                technician=data.technician,
+                status=st,
+                unit_status="DI TOKO",
+                estimate=data.estimate or 0,
+                payment=dp_amount,
+                final_price=data.final_price,
+                service_date=date.today(),
+                warranty_months=1 if st == "SELESAI" else None,
+            )
+            db.add(order)
+            db.flush()
+            if dp_amount > 0:
+                db.add(Payment(service_order_id=order.id, kind="DP",
+                               amount=dp_amount, method="CASH",
+                               note="DP awal (pendaftaran unit)",
+                               created_at=order.created_at or datetime.now()))
+                db.flush()
+            _prev = None
+            _note = ("initial path: %s" % INITIAL_PATHS[path_key]["label"]) if path_key else "pendaftaran unit"
+            for _step in chain:
+                _log_transition(db, order.id, _prev, _step, _actor(user), _note)
+                _prev = _step
+            db.commit()
+        except IntegrityError:
+            db.rollback()
+            raise HTTPException(status_code=409,
+                                detail="Gagal membuat No. Servis unik, coba lagi")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=500, detail="Gagal mendaftarkan servis: %s" % exc)
     db.refresh(order)
-    _prev = None
-    _note = ("initial path: %s" % INITIAL_PATHS[path_key]["label"]) if path_key else "pendaftaran unit"
-    for _step in chain:
-        _log_transition(db, order.id, _prev, _step, _actor(user), _note)
-        _prev = _step
-    db.commit()
+    _refresh_money(db, order)
     db.refresh(order)
     _attach_summary(db, order)
     return order
@@ -191,6 +318,7 @@ def _to_list_schema(o, summ=None):
         part_cost=o.part_cost,
         modal_jasa=o.modal_jasa,
         modal_lainnya=o.modal_lainnya,
+        laba_bersih=getattr(o, "laba_bersih", 0) or 0,
         lunas_date=o.lunas_date,
         lunas_at=o.lunas_at,
         warranty_months=o.warranty_months,
@@ -250,6 +378,7 @@ def list_orders(
 @router.get("/latest", response_model=list[schemas.ServiceOrderList])
 def latest_orders(db: Session = Depends(get_db_session), limit: int = 10,
                   riwayat: bool = False):
+    limit = min(100, max(1, limit))
     qry = db.query(ServiceOrder)
     if not riwayat:
         qry = qry.filter(~((ServiceOrder.status == "SELESAI")
@@ -291,14 +420,38 @@ def create_order(data: schemas.ServiceOrderCreate, db: Session = Depends(get_db_
                             detail="Status tidak valid: %s. Pilihan: %s" % (st, ", ".join(SERVICE_STATUSES)))
     dump["status"] = st
     dump.setdefault("unit_status", "DI TOKO")
+    if isinstance(dump.get("check_fisik"), list):
+        dump["check_fisik"] = _clean_checklist(dump["check_fisik"], CHECK_FISIK_KEYS)
+    if isinstance(dump.get("check_len"), list):
+        dump["check_len"] = _clean_checklist(dump["check_len"], CHECK_LEN_KEYS)
     # Ringkasan derive — bukan kolom DB, jangan teruskan ke ORM.
     dump.pop("payment_status", None)
     dump.pop("total_bayar", None)
     dump.pop("sisa", None)
+    # laba_bersih dihitung backend (bukan input user).
+    dump.pop("laba_bersih", None)
+    try:
+        pay0 = float(dump.get("payment") or 0)
+    except (TypeError, ValueError):
+        pay0 = 0.0
+    if pay0 < 0:
+        raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
     order = ServiceOrder(**dump)
     db.add(order)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(status_code=409,
+                            detail="No. Servis sudah dipakai / gagal simpan, coba lagi")
     db.refresh(order)
+    if pay0 > 0:
+        # Samakan dengan receive: DP awal masuk jurnal agar terbaca omset/kas.
+        db.add(Payment(service_order_id=order.id, kind="DP", amount=pay0,
+                       method="CASH", note="DP awal (dibuat via API)",
+                       created_at=order.created_at or datetime.now()))
+        db.commit()
+        db.refresh(order)
     _log_transition(db, order.id, None, st, _actor(user), "dibuat via API")
     db.commit()
     db.refresh(order)
@@ -316,6 +469,20 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
     old_status = order.status
     payload = data.model_dump(exclude_unset=True)
     note = (payload.pop("status_note", None) or "").strip()
+    # Identitas nota tidak boleh diubah lewat update (jaga relasi & histori):
+    # customer via PUT /api/customers, no_servis tidak bisa diubah sama sekali.
+    if "no_servis" in payload and (payload["no_servis"] or "") != (order.no_servis or ""):
+        raise HTTPException(status_code=400,
+                            detail="No. Servis tidak dapat diubah")
+    payload.pop("no_servis", None)
+    if "customer_id" in payload and payload["customer_id"] not in (None, order.customer_id):
+        raise HTTPException(status_code=400,
+                            detail="Pelanggan tidak dapat dipindah via update servis")
+    payload.pop("customer_id", None)
+    if isinstance(payload.get("check_fisik"), list):
+        payload["check_fisik"] = _clean_checklist(payload["check_fisik"], CHECK_FISIK_KEYS)
+    if isinstance(payload.get("check_len"), list):
+        payload["check_len"] = _clean_checklist(payload["check_len"], CHECK_LEN_KEYS)
     # Masa garansi toko hanya 0 (tidak garansi) / 1 / 3 / 6 bulan.
     if "warranty_months" in payload and payload["warranty_months"] not in (0, 1, 3, 6):
         raise HTTPException(status_code=400,
@@ -374,16 +541,40 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
     if new_status is not None and new_status != old_status:
         _log_transition(db, order.id, old_status, new_status, _actor(user), note)
         db.commit()
+    # Konsistensi momen lunas: kolom `payment` masih bisa ditulis UI (arsip DP),
+    # jadi kunci momen LUNAS bila ringkasan sudah LUNAS (untuk garansi & kas).
+    try:
+        pays = db.query(Payment).filter(Payment.service_order_id == order.id).all()
+        if payment_summary(order, pays)["payment_status"] == "LUNAS":
+            if lock_lunas_moment(order):
+                db.commit()
+    except Exception:
+        pass
     db.refresh(order)
     _attach_summary(db, order)
     return order
 
 
 @router.delete("/{order_id}")
-def delete_order(order_id: int, db: Session = Depends(get_db_session)):
+def delete_order(order_id: int, db: Session = Depends(get_db_session),
+                 admin: User = Depends(require_admin)):
+    """Hapus order — khusus Admin. Diblokir bila sudah ada uang/klaim/status
+    SELESAI (gunakan alur riwayat/arsip, bukan hapus, agar jurnal aman)."""
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
+    n_pay = db.query(Payment).filter(Payment.service_order_id == order.id).count()
+    if n_pay:
+        raise HTTPException(status_code=409,
+                            detail="Order sudah memiliki %d pembayaran tercatat, tidak dapat dihapus" % n_pay)
+    n_claim = db.query(WarrantyClaim).filter(
+        WarrantyClaim.service_order_id == order.id).count()
+    if n_claim:
+        raise HTTPException(status_code=409,
+                            detail="Order memiliki klaim garansi, tidak dapat dihapus")
+    if (order.status or "") == "SELESAI":
+        raise HTTPException(status_code=409,
+                            detail="Order SELESAI tidak dapat dihapus (gunakan riwayat/arsip)")
     db.delete(order)
     db.commit()
     return {"ok": True}
@@ -392,13 +583,20 @@ def delete_order(order_id: int, db: Session = Depends(get_db_session)):
 @router.post("/{order_id}/handover", response_model=schemas.ServiceOrderOut)
 def handover_unit(order_id: int, db: Session = Depends(get_db_session),
                   user: User = Depends(get_authenticated_user)):
-    """Serahkan unit ke konsumen: DI TOKO → DIAMBIL (+ taken_at). Idempoten."""
+    """Serahkan unit ke konsumen: DI TOKO → DIAMBIL (+ taken_at). Idempoten.
+
+    Hanya untuk order terminal (SELESAI/GAGAL/BATAL) — unit yang masih dalam
+    proses tidak dapat diserahkan."""
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
     if (order.unit_status or "DI TOKO") == "DIAMBIL":
         _attach_summary(db, order)
         return order
+    if (order.status or "") not in TERMINAL_STATUSES:
+        raise HTTPException(status_code=400,
+                            detail="Unit hanya dapat diserahkan setelah status %s (kini: %s)"
+                            % ("/".join(TERMINAL_STATUSES), order.status or "-"))
     order.unit_status = "DIAMBIL"
     order.taken_at = datetime.now()
     db.commit()

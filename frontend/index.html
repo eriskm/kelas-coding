@@ -1476,6 +1476,36 @@
                                 <li class="rc-step" data-step="4"><span class="rc-dot">4</span><span class="rc-step-label">Siap Eksekusi</span></li>
                             </ol>
 
+                            <!-- POSISI SERVIS (header selector, bukan status bebas) -->
+                            <div class="rc-posbar" role="radiogroup" aria-label="Posisi Servis">
+                                <div class="rc-posbar-head">
+                                    <span class="rc-posbar-title"><i class="fa-solid fa-route"></i> Posisi Servis</span>
+                                    <span class="rc-posbar-badge" id="rcPathBadge" title="Terdeteksi otomatis dari data">AUTO</span>
+                                </div>
+                                <div class="rc-posbar-opts" id="rcPathGroup">
+                                    <label class="rc-pos">
+                                        <input type="radio" name="rcPath" value="TITIP" checked>
+                                        <span class="rc-pos-ico"><i class="fa-solid fa-inbox"></i></span>
+                                        <span class="rc-pos-txt">Titip Unit</span>
+                                    </label>
+                                    <label class="rc-pos">
+                                        <input type="radio" name="rcPath" value="PERBAIKAN">
+                                        <span class="rc-pos-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                        <span class="rc-pos-txt">Perbaikan</span>
+                                    </label>
+                                    <label class="rc-pos">
+                                        <input type="radio" name="rcPath" value="SPAREPART">
+                                        <span class="rc-pos-ico"><i class="fa-solid fa-hourglass-half"></i></span>
+                                        <span class="rc-pos-txt">Sparepart</span>
+                                    </label>
+                                    <label class="rc-pos">
+                                        <input type="radio" name="rcPath" value="TUNGGU">
+                                        <span class="rc-pos-ico"><i class="fa-solid fa-bolt"></i></span>
+                                        <span class="rc-pos-txt">Tunggu</span>
+                                    </label>
+                                </div>
+                            </div>
+
                             <div class="rc-layout">
                             <div class="rc-main">
 
@@ -1583,35 +1613,6 @@
                                         </select>
                                     </div>
                                     <input type="hidden" id="rcStatus" value="DITERIMA">
-                                </div>
-                            </div>
-
-                            <!-- PANEL: KONDISI AWAL (initial path, bukan status bebas) -->
-                            <div class="panel receive-panel">
-                                <div class="receive-panel-head">
-                                    <span class="receive-head-ico"><i class="fa-solid fa-route"></i></span>
-                                    <div>
-                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Kondisi Awal Unit</h3>
-                                        <span class="text-[10.5px] text-gray-400">Sejauh mana proses sudah terjadi saat nota dibuat</span>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1" id="rcPathGroup" role="radiogroup" aria-label="Kondisi awal unit">
-                                    <label class="rc-path">
-                                        <input type="radio" name="rcPath" value="TITIP" checked>
-                                        <span class="rc-path-body"><b>Titip Unit</b><i>Analisa & diagnosa menyusul, unit ditinggal</i></span>
-                                    </label>
-                                    <label class="rc-path">
-                                        <input type="radio" name="rcPath" value="PERBAIKAN">
-                                        <span class="rc-path-body"><b>Masuk Perbaikan</b><i>Sudah konfirmasi, konsumen setuju, langsung dikerjakan</i></span>
-                                    </label>
-                                    <label class="rc-path">
-                                        <input type="radio" name="rcPath" value="SPAREPART">
-                                        <span class="rc-path-body"><b>Menunggu Sparepart</b><i>Sudah konfirmasi, sparepart dipesan, unit ditinggal</i></span>
-                                    </label>
-                                    <label class="rc-path">
-                                        <input type="radio" name="rcPath" value="TUNGGU">
-                                        <span class="rc-path-body"><b>Servis Tunggu</b><i>Ditunggu konsumen sampai selesai saat itu juga</i></span>
-                                    </label>
                                 </div>
                             </div>
 
@@ -1783,8 +1784,8 @@
                                             <select class="receive-input" id="usTechnician"><option value="">— Pilih Teknisi —</option></select>
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="usStatus">Status Servis</label>
-                                            <select class="receive-input" id="usStatus">
+                                            <label class="field-label" for="usStatus">Status Servis <span class="us-ro-hint">— ubah di Aksi Cepat</span></label>
+                                            <select class="receive-input" id="usStatus" disabled title="Tampilan saja — ubah via panel Status Unit & Aksi Cepat">
                                                 <option value="DITERIMA">Diterima</option>
                                                 <option value="ANALISA">Analisa</option>
                                                 <option value="DIAGNOSA">Diagnosa</option>
@@ -1797,6 +1798,23 @@
                                             </select>
                                         </div>
                                     </div>
+                                </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Riwayat Status</h3><span class="text-[10.5px] text-gray-400">Jejak perubahan tercatat</span></div>
+                                    </div>
+                                    <div id="usHistoryList" class="text-[12px] text-gray-500 dark:text-gray-400">Memuat...</div>
+                                </div>
+                                <div class="panel receive-panel">
+                                    <div class="receive-panel-head">
+                                        <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
+                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Klaim Garansi</h3><span class="text-[10.5px] text-gray-400">Klaim berulang tetap mengacu ke servis ini</span></div>
+                                    </div>
+                                    <div id="usClaimHistory" class="text-[12px] text-gray-500 dark:text-gray-400">Belum ada data klaim.</div>
+                                    <button type="button" onclick="usClaimNew()" class="receive-back-btn w-full justify-center mt-3" title="Buat claim garansi baru dari servis ini">
+                                        <i class="fa-solid fa-file-circle-plus"></i> Buat Klaim dari Servis Ini
+                                    </button>
                                 </div>
                             </div>
                             <div class="us-side">
@@ -1929,13 +1947,6 @@
                                 </div>
                                 <div class="panel receive-panel">
                                     <div class="receive-panel-head">
-                                        <span class="receive-head-ico"><i class="fa-solid fa-clock-rotate-left"></i></span>
-                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Riwayat Status</h3><span class="text-[10.5px] text-gray-400">Jejak perubahan tercatat</span></div>
-                                    </div>
-                                    <div id="usHistoryList" class="text-[12px] text-gray-500 dark:text-gray-400">Memuat...</div>
-                                </div>
-                                <div class="panel receive-panel">
-                                    <div class="receive-panel-head">
                                         <span class="receive-head-ico"><i class="fa-solid fa-bolt"></i></span>
                                         <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Status Unit &amp; Aksi Cepat</h3></div>
                                     </div>
@@ -1973,24 +1984,17 @@
                                     <button type="button" id="usWarrantyBtn" onclick="usWarrantyPrint()" class="hidden receive-back-btn w-full justify-center mt-3" title="Cetak nota garansi (tersedia setelah status SELESAI + LUNAS)">
                                         <i class="fa-solid fa-shield-halved"></i> Cetak Nota Garansi
                                     </button>
-                                    <button type="submit" id="usSaveBtn" class="receive-submit-btn w-full justify-center mt-3">
-                                        <i class="fa-solid fa-check-double"></i>
-                                        <span id="usSaveText">Simpan Perubahan Servis</span>
-                                    </button>
-                                    <p class="us-keys"><span><kbd>F8</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd></span> Simpan Perubahan Servis</p>
-                                    <div id="usFeedback" class="hidden receive-feedback mt-3"></div>
-                                </div>
-                                <div class="panel receive-panel">
-                                    <div class="receive-panel-head">
-                                        <span class="receive-head-ico"><i class="fa-solid fa-shield-halved"></i></span>
-                                        <div><h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Klaim Garansi</h3><span class="text-[10.5px] text-gray-400">Klaim berulang tetap mengacu ke servis ini</span></div>
-                                    </div>
-                                    <div id="usClaimHistory" class="text-[12px] text-gray-500 dark:text-gray-400">Belum ada data klaim.</div>
-                                    <button type="button" onclick="usClaimNew()" class="receive-back-btn w-full justify-center mt-3" title="Buat claim garansi baru dari servis ini">
-                                        <i class="fa-solid fa-file-circle-plus"></i> Buat Klaim dari Servis Ini
-                                    </button>
                                 </div>
                             </div>
+                            </div>
+                            <!-- Sticky savebar: CTA utama selalu terlihat (pindahan dari panel aksi, ID/logic sama) -->
+                            <div class="us-savebar">
+                                <div id="usFeedback" class="hidden receive-feedback"></div>
+                                <button type="submit" id="usSaveBtn" class="receive-submit-btn us-savebar-btn">
+                                    <i class="fa-solid fa-check-double"></i>
+                                    <span id="usSaveText">Simpan Perubahan Servis</span>
+                                </button>
+                                <p class="us-keys us-savebar-keys"><span><kbd>F8</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd></span> Simpan Perubahan Servis</p>
                             </div>
                         </form>
                         </div>

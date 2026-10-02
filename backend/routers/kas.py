@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from dependencies import get_db_session
 from models import Expense, KasEntry, KasPeriod, Payment, ServiceOrder, User
-from routers.auth import get_authenticated_user
+from routers.auth import get_authenticated_user, require_admin
 from routers.dashboard import _period_bounds, compute_finance, get_active_period
 import schemas
 
@@ -53,12 +53,16 @@ def opening_balance(db: Session) -> float:
 
 def period_rows(db: Session, start: datetime, end: datetime):
     """Seluruh baris kas dalam [start, end) terurut menaik + saldo berjalan.
-    Entri 'Saldo Awal' dikecualikan dari baris (sudah tercakup di opening)."""
+    Entri 'Saldo Awal' dikecualikan dari baris (sudah tercakup di opening).
+
+    Saldo dihitung dari AWAL WAKTU (opening + seluruh baris sebelum start +
+    baris periode) sehingga benar untuk periode apa pun, bukan hanya all-time.
+    """
     rows = []
 
     for p in db.query(Payment).options(joinedload(Payment.service_order)).all():
         m = _moment(getattr(p, "created_at", None), None)
-        if m is None or not (start <= m < end):
+        if m is None:
             continue
         o = p.service_order
         kind = (p.kind or "PELUNASAN").strip().upper()
@@ -76,7 +80,7 @@ def period_rows(db: Session, start: datetime, end: datetime):
 
     for e in db.query(Expense).all():
         m = _moment(getattr(e, "created_at", None), getattr(e, "tanggal", None))
-        if m is None or not (start <= m < end):
+        if m is None:
             continue
         rows.append({
             "moment": m,
@@ -92,7 +96,7 @@ def period_rows(db: Session, start: datetime, end: datetime):
 
     for k in db.query(KasEntry).filter(KasEntry.kategori != SALDO_AWAL_KATEGORI).all():
         m = _moment(getattr(k, "created_at", None), getattr(k, "tanggal", None))
-        if m is None or not (start <= m < end):
+        if m is None:
             continue
         j = (k.jenis or "").strip().capitalize()
         if j not in ("Masuk", "Keluar"):
@@ -114,6 +118,8 @@ def period_rows(db: Session, start: datetime, end: datetime):
     for r in rows:
         saldo += r["nominal"] if r["jenis"] == "Masuk" else -r["nominal"]
         r["saldo"] = saldo
+    rows = [r for r in rows if start <= r["moment"] < end]
+    for r in rows:
         del r["moment"]
     return rows
 
@@ -164,6 +170,22 @@ def update_entry(entry_id: int, data: schemas.KasEntryUpdate, db: Session = Depe
     if not row:
         raise HTTPException(status_code=404, detail="Entri kas tidak ditemukan")
     payload = data.model_dump(exclude_unset=True)
+    if (row.kategori or "") == SALDO_AWAL_KATEGORI:
+        # Saldo Awal menentukan opening lintas periode — jangan ubah jenis/
+        # kategorinya via edit (buat entri penyeimbang bila salah input).
+        if "jenis" in payload and (payload["jenis"] or "").strip().capitalize() != (row.jenis or "").strip().capitalize():
+            raise HTTPException(status_code=400,
+                                detail="Jenis entri Saldo Awal tidak dapat diubah")
+        if "kategori" in payload and (payload["kategori"] or "").strip() != SALDO_AWAL_KATEGORI:
+            raise HTTPException(status_code=400,
+                                detail="Kategori Saldo Awal tidak dapat diubah")
+    if "kategori" in payload and (payload["kategori"] or "").strip() == "" :
+        raise HTTPException(status_code=400, detail="Kategori wajib diisi")
+    if "kategori" in payload and (payload["kategori"] or "").strip() == SALDO_AWAL_KATEGORI and (row.kategori or "") != SALDO_AWAL_KATEGORI:
+        raise HTTPException(status_code=400,
+                            detail="Kategori Saldo Awal hanya untuk saldo awal")
+    if "keterangan" in payload and not (payload["keterangan"] or "").strip():
+        raise HTTPException(status_code=400, detail="Keterangan wajib diisi")
     if "jenis" in payload:
         j = (payload["jenis"] or "").strip().capitalize()
         if j not in ("Masuk", "Keluar"):
@@ -179,10 +201,17 @@ def update_entry(entry_id: int, data: schemas.KasEntryUpdate, db: Session = Depe
 
 
 @router.delete("/entries/{entry_id}")
-def delete_entry(entry_id: int, db: Session = Depends(get_db_session)):
+def delete_entry(entry_id: int, db: Session = Depends(get_db_session),
+                 admin: User = Depends(require_admin)):
+    """Hapus entri manual — khusus Admin. Saldo Awal tidak dapat dihapus
+    (buat entri penyeimbang bila salah input) agar opening tidak berubah
+    retroaktif."""
     row = db.query(KasEntry).filter(KasEntry.id == entry_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Entri kas tidak ditemukan")
+    if (row.kategori or "") == SALDO_AWAL_KATEGORI:
+        raise HTTPException(status_code=400,
+                            detail="Entri Saldo Awal tidak dapat dihapus")
     db.delete(row)
     db.commit()
     return {"ok": True}
@@ -225,11 +254,32 @@ def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
 
 
 # ---------- Tutup kas ----------
+def _next_period_end(now: datetime) -> datetime:
+    """16:00 berikutnya setelah `now` (jaga ritme periode 16:00→16:00)."""
+    from routers.dashboard import PERIOD_HOUR
+    end = now.replace(hour=PERIOD_HOUR, minute=0, second=0, microsecond=0)
+    if end <= now:
+        end += timedelta(days=1)
+    return end
+
+
 @router.post("/close")
 def close_period(data: schemas.KasCloseIn, db: Session = Depends(get_db_session),
-                 user: User = Depends(get_authenticated_user)):
-    """Tutup periode aktif: kunci snapshot keuangan, arsipkan, buka periode baru."""
+                 user: User = Depends(get_authenticated_user),
+                 admin: User = Depends(require_admin)):
+    """Tutup periode aktif: kunci snapshot keuangan, arsipkan, buka periode baru.
+
+    Khusus Admin. Periode baru selaras 16:00 berikutnya. Klik ganda (<60 dtk
+    sejak periode dibuka) ditolak agar tidak tercipta periode kosong ganda."""
     period = get_active_period(db)
+    now = datetime.now()
+    try:
+        age = (now - (period.created_at or period.start_at)).total_seconds()
+    except Exception:
+        age = None
+    if age is not None and age < 60:
+        raise HTTPException(status_code=400,
+                            detail="Periode baru saja dibuka, tutup kas belum dapat dilakukan lagi")
     fin = compute_finance(db, period.start_at, period.end_at)
     counted = data.cash_counted
     selisih = (float(counted) - float(fin.get("saldo", 0))) if counted is not None else None
@@ -245,7 +295,7 @@ def close_period(data: schemas.KasCloseIn, db: Session = Depends(get_db_session)
     period.closed_at = now
     period.closed_by = user.display_name or user.username
     period.snapshot = json.dumps(snapshot)
-    new_period = KasPeriod(start_at=now, end_at=now + timedelta(days=1),
+    new_period = KasPeriod(start_at=now, end_at=_next_period_end(now),
                            status="OPEN")
     db.add(new_period)
     db.commit()

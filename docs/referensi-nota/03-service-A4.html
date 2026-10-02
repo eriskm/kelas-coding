@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ref 03 - Service A4 Profesional - SUKABUMI FLASHER</title>
+<!-- Referensi: fatiboams/business-document-templates receipt (MIT) - https://github.com/fatiboams/business-document-templates -->
+<!-- Model ditulis ulang original untuk konteks service HP: kop + meta + rincian + tanda tangan, siap Print/Save PDF A4 -->
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #e2e8f0; font-family: Inter, system-ui, sans-serif; padding: 20px; display: flex; gap: 20px; flex-wrap: wrap; }
+  .sheet { width: 780px; max-width: 100%; background: #fff; padding: 40px; border-radius: 6px; box-shadow: 0 8px 30px rgba(0,0,0,.12); }
+  .kop { display: flex; justify-content: space-between; border-bottom: 3px solid #b91c1c; padding-bottom: 16px; margin-bottom: 20px; }
+  .kop h1 { margin: 0; font-size: 26px; font-style: italic; color: #b91c1c; }
+  .kop small { color: #64748b; }
+  .title { text-align: right; }
+  .title b { font-size: 22px; }
+  .meta { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin: 16px 0; font-size: 13px; }
+  .meta div { background: #f8fafc; padding: 10px 12px; border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+  th { background: #0f172a; color: #fff; text-align: left; padding: 10px; }
+  td { border-bottom: 1px solid #e2e8f0; padding: 10px; }
+  .r { text-align: right; }
+  .total { font-size: 16px; font-weight: 800; }
+  .sign { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 40px; font-size: 13px; text-align: center; color: #475569; }
+  .sign div { border-top: 1px solid #94a3b8; padding-top: 8px; margin-top: 70px; }
+  .amount { background: #fef2f2; border: 1px solid #fecaca; padding: 12px 16px; border-radius: 10px; display: flex; justify-content: space-between; font-weight: 800; margin-top: 16px; }
+  .info { font-family: system-ui; max-width: 300px; font-size: 14px; }
+  @page { size: A4; margin: 14mm; }
+  @media print { body { background: #fff; padding: 0; } .info, .noprint { display: none; } .sheet { box-shadow: none; width: auto; } }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <div class="kop">
+    <div><h1>SUKABUMI FLASHER</h1><small>Smartphone Service Lab • WA +62 811-1737-030<br>Jl. Contoh No. 1, Sukabumi</small></div>
+    <div class="title"><b>NOTA SERVICE</b><br>No: SV-20260913-3057<br>Tgl: 13-09-2026<br>Status: ANALISA</div>
+  </div>
+  <div class="meta">
+    <div><b>Diterima dari</b><br>reza<br>082111401401</div>
+    <div><b>Unit</b><br>Samsung A50<br>IMEI: -</div>
+    <div><b>Teknisi</b><br>Budi<br>Checklist: Unit saja</div>
+  </div>
+  <div style="font-size:13px"><b>Keluhan:</b> Repair konslet<br><b>Rencana tindakan:</b> Diagnosa + ukur jalur konslet</div>
+  <table>
+    <tr><th>Uraian</th><th class="r">Jumlah (Rp)</th></tr>
+    <tr><td>Estimasi biaya perbaikan</td><td class="r">150.000</td></tr>
+    <tr><td>DP masuk</td><td class="r">50.000</td></tr>
+    <tr><td class="total">Sisa pembayaran</td><td class="r total">100.000</td></tr>
+  </table>
+  <div class="amount"><span>Terbilang: Seratus ribu rupiah</span><span>LUNAS / BELUM *)</span></div>
+  <div class="sign"><div>Pelanggan<br>(reza)</div><div>Petugas<br>(Budi)</div></div>
+  <p style="font-size:12px;color:#64748b">Syarat: Nota ini bukti pengambilan unit. Garansi pengerjaan 30 hari untuk part yang sama. Estimasi dapat berubah sesuai hasil diagnosa.</p>
+</div>
+<div class="info">
+  <h3>Ref 03 — A4 profesional</h3>
+  <p>Kop + tabel rincian + terbilang + tanda tangan. Cocok untuk arsip / cetak lampiran garansi.</p>
+  <button class="noprint" onclick="window.print()" style="height:40px;padding:0 18px">Print / Save PDF</button>
+</div>
+</body>
+</html>

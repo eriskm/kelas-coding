@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from dependencies import get_db_session
 from models import Expense
+from routers.auth import require_admin
 import schemas
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
@@ -63,6 +64,10 @@ def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = D
     payload = data.model_dump(exclude_unset=True)
     if "nilai" in payload and (payload["nilai"] or 0) < 0:
         raise HTTPException(status_code=400, detail="Nilai beban tidak boleh negatif")
+    if "kategori" in payload and not (payload["kategori"] or "").strip():
+        raise HTTPException(status_code=400, detail="Kategori beban wajib diisi")
+    if "uraian" in payload and not (payload["uraian"] or "").strip():
+        raise HTTPException(status_code=400, detail="Uraian beban wajib diisi")
     for key, val in payload.items():
         setattr(row, key, val)
     db.commit()
@@ -71,7 +76,9 @@ def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = D
 
 
 @router.delete("/{expense_id}")
-def delete_expense(expense_id: int, db: Session = Depends(get_db_session)):
+def delete_expense(expense_id: int, db: Session = Depends(get_db_session),
+                   admin=Depends(require_admin)):
+    """Hapus beban — khusus Admin (beban masuk hitungan periode berjalan)."""
     row = db.query(Expense).filter(Expense.id == expense_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Beban tidak ditemukan")

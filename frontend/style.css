@@ -2512,20 +2512,58 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .dark .rc-submit { background: linear-gradient(180deg, rgba(20,20,28,0), #14141c 32%); }
 
-/* Initial path Servis Baru — radio cards kondisi operasional */
-.rc-path { display: block; cursor: pointer; }
-.rc-path input { position: absolute; opacity: 0; pointer-events: none; }
-.rc-path-body { display: block; padding: 10px 12px; border: 1.5px solid #e2e8f0; border-radius: 12px; transition: border-color .12s, background .12s; }
-.rc-path-body b { display: block; font-size: 13px; font-weight: 800; color: #0f172a; }
-.rc-path-body i { display: block; font-style: normal; font-size: 11px; color: #64748b; margin-top: 2px; }
-.rc-path input:checked + .rc-path-body { border-color: #dc2626; background: #fef2f2; }
-.rc-path input:checked + .rc-path-body b { color: #b91c1c; }
-.rc-path input:focus-visible + .rc-path-body { outline: 2px solid #dc2626; outline-offset: 2px; }
-.dark .rc-path-body { border-color: rgba(255,255,255,.1); }
-.dark .rc-path-body b { color: #f1f5f9; }
-.dark .rc-path-body i { color: #94a3b8; }
-.dark .rc-path input:checked + .rc-path-body { border-color: #dc2626; background: rgba(220,38,38,.12); }
-.dark .rc-path input:checked + .rc-path-body b { color: #fca5a5; }
+/* Posisi Servis — COMPACT workflow selector / header control (refinement + micro-animation) */
+.rc-posbar { margin: 0 0 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f8fafc; display: flex; align-items: center; gap: 10px; min-height: 52px; }
+.dark .rc-posbar { border-color: rgba(255,255,255,.08); background: rgba(255,255,255,.02); }
+.rc-posbar-head { display: flex; align-items: center; gap: 6px; margin: 0; flex: 0 0 auto; }
+.rc-posbar-title { font-size: 10.5px; font-weight: 800; color: #0f172a; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.dark .rc-posbar-title { color: #f1f5f9; }
+.rc-posbar-title i { color: #dc2626; font-size: 11px; }
+.rc-posbar-badge { font-size: 8.5px; font-weight: 800; letter-spacing: .06em; line-height: 1.6; padding: 1px 7px; border-radius: 999px; background: #e0f2fe; color: #0369a1; white-space: nowrap; transition: background-color .2s ease, color .2s ease, opacity .2s ease, transform .2s ease; }
+.rc-posbar-badge.is-manual { background: #fef3c7; color: #b45309; }
+.dark .rc-posbar-badge { background: rgba(14,165,233,.18); color: #7dd3fc; }
+.dark .rc-posbar-badge.is-manual { background: rgba(217,119,6,.18); color: #fbbf24; }
+.rc-posbar-badge.rc-badge-in { animation: rcBadgeIn .2s ease-out; }
+@keyframes rcBadgeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+.rc-posbar-opts { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
+.rc-pos { flex: 1 1 0; min-width: 0; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 999px; border: 1px solid transparent; transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .15s ease; -webkit-tap-highlight-color: transparent; }
+.rc-pos:hover { background: #fff; border-color: #e2e8f0; }
+.dark .rc-pos:hover { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1); }
+.rc-pos:active { transform: scale(.97); }
+.rc-pos input { position: absolute; opacity: 0; pointer-events: none; }
+.rc-pos-ico { width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #94a3b8; background: #fff; border: 1.5px solid #e2e8f0; transition: transform .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; flex-shrink: 0; }
+.dark .rc-pos-ico { background: #1a1a24; border-color: rgba(255,255,255,.1); }
+.rc-pos-txt { font-size: 11px; font-weight: 700; color: #64748b; text-align: center; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .18s ease; }
+.dark .rc-pos-txt { color: #94a3b8; }
+.rc-pos:has(input:checked) { background: #fff; border-color: #fecaca; box-shadow: 0 0 0 2px rgba(220,38,38,.08); }
+.dark .rc-pos:has(input:checked) { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.45); box-shadow: none; }
+.rc-pos input:checked + .rc-pos-ico { border-color: #dc2626; color: #dc2626; background: #fef2f2; box-shadow: 0 0 0 2px rgba(220,38,38,.12); }
+.rc-posbar.is-live .rc-pos input:checked + .rc-pos-ico { animation: rcPosPop .2s ease-out; }
+@keyframes rcPosPop { 0% { transform: scale(.82); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.rc-pos input:checked ~ .rc-pos-txt { color: #b91c1c; }
+.dark .rc-pos input:checked + .rc-pos-ico { background: rgba(220,38,38,.18); color: #fca5a5; }
+.dark .rc-pos input:checked ~ .rc-pos-txt { color: #fca5a5; }
+.rc-pos input:focus-visible + .rc-pos-ico { outline: 2px solid #dc2626; outline-offset: 2px; }
+/* Smart-detection ping — sekali, dipicu via class .rc-flash dari JS (presentasi saja) */
+.rc-pos.rc-flash .rc-pos-ico { animation: rcPosPing .32s ease-out, rcPosPop .2s ease-out; }
+@keyframes rcPosPing { 0% { box-shadow: 0 0 0 0 rgba(220,38,38,.35); } 100% { box-shadow: 0 0 0 8px rgba(220,38,38,0); } }
+@media (prefers-reduced-motion: reduce) {
+    .rc-pos, .rc-pos-ico, .rc-pos-txt, .rc-posbar-badge { transition: none !important; animation: none !important; }
+    .rc-pos:active { transform: none; }
+}
+@media (max-width: 640px) {
+    .rc-posbar { flex-wrap: wrap; gap: 6px; }
+    .rc-posbar-head { width: 100%; justify-content: space-between; }
+    .rc-posbar-opts { width: 100%; gap: 6px; }
+    .rc-pos { padding: 5px 6px; }
+    .rc-pos-txt { font-size: 10.5px; }
+}
+@media (max-width: 420px) {
+    .rc-posbar-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .rc-pos { min-height: 38px; justify-content: flex-start; padding: 6px 10px; }
+    .rc-pos-ico { width: 20px; height: 20px; font-size: 10px; }
+    .rc-pos-txt { font-size: 10.5px; }
+}
 
 /* Stepper aktif: pulse halus */
 .rc-step.is-active .rc-dot { animation: rcPulse 1.8s ease-out infinite; }
@@ -3343,3 +3381,24 @@ select.range-pill.range-select option { color: #0f172a; }
     background: #f8fafc; font-family: inherit; font-size: 10.5px; font-weight: 700; color: #475569;
 }
 .dark .us-keys kbd { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); color: #cbd5e1; }
+/* Sticky savebar Update Data Servis — CTA utama selalu terlihat */
+.us-savebar {
+    position: sticky; bottom: -16px; z-index: 5;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-top: 12px; padding: 12px 2px 4px;
+    background: linear-gradient(180deg, rgba(255,255,255,0), #ffffff 38%);
+}
+.dark .us-savebar { background: linear-gradient(180deg, rgba(20,20,28,0), #14141c 38%); }
+.us-savebar #usFeedback { flex: 1 1 100%; margin: 0; }
+.us-savebar-btn { flex: 1 1 220px; justify-content: center; }
+.us-savebar-keys { margin: 0; flex: 0 0 auto; }
+/* Status kiri = read-only mirror (satu-satunya editor: usQuickStatus di panel Aksi).
+   Disabled hanya mematikan input user — .value tetap bisa ditulis/dibaca via JS. */
+#usStatus:disabled { opacity: .8; cursor: not-allowed; background: #f1f5f9; }
+.dark #usStatus:disabled { background: rgba(255,255,255,.04); }
+.us-ro-hint { font-weight: 600; color: #94a3b8; font-size: 10px; }
+@media (max-width: 560px) {
+    .us-savebar { gap: 8px; }
+    .us-savebar-btn { flex: 1 1 100%; }
+    .us-savebar-keys { flex: 1 1 100%; text-align: center; }
+}

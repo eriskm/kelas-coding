@@ -86,15 +86,15 @@ Sidebar (`frontend/index.html`, `data-page`) — hanya ini yang ada, jangan tamb
 
 | Menu | Sumber data aktual |
 |---|---|
-| Dashboard | Campuran: star cards + insight dari `GET /api/overview` (sebagian angka finansial masih dummy, lihat bagian 11); grafik tren kerusakan dari `GET /api/statistics/damage` (**angka statis di backend**); grafik status dari **dummy lokal** `STATUS_TX_DUMMY` |
-| Servis Baru | **Realtime** → `POST /api/orders/receive`; histori cerdas → `GET /api/orders/history/{phone}` |
+| Dashboard | Real: star cards + insight dari `GET /api/overview`; grafik status dari agregat real `GET /api/statistics/status` (`by_status`); tren kerusakan dari agregat real `GET /api/statistics/damage` |
+| Servis Baru | **Realtime** → `POST /api/orders/receive`; histori cerdas → `GET /api/orders/history/{phone}` (tanpa fallback dummy) |
 | Transaksi | **Realtime** → `GET /api/orders` (pagination backend) + `GET /api/orders/latest` (filter client-side); hapus → `DELETE /api/orders/{id}` |
-| Pelanggan | **Belum Terintegrasi** — tampil dari `PL_DUMMY` lokal (endpoint `GET /api/customers/summary` ada tapi tidak dipanggil frontend) |
-| Garansi | **Belum Terintegrasi** — tampil dari `GR_MOCK` lokal; klaim tersimpan lokal |
-| Sparepart | **Belum Terintegrasi** — `SP_MOCK` lokal ("hilang setelah refresh") |
-| Keuangan | **Belum Terintegrasi** — `KU_KAS` / `KU_ALLOC` / `KU_RIWAYAT` lokal (detail bagian 11) |
-| Kelola Akun | **Belum Terintegrasi** — `AKUN_DUMMY` in-memory |
-| Login, Nota, popup Histori/Detail | Login/logout/me **realtime**; nota dirender dari data transaksi terakhir |
+| Pelanggan | **Realtime** → `GET /api/customers/summary` + detail/PUT/DELETE by ID |
+| Garansi | **Realtime** → `GET /api/claims/warranty-summary` (order CASH bergaransi + klaim berjalan); klaim baru → `POST /api/claims/receive` |
+| Sparepart | **Realtime** → `GET/POST/PUT/DELETE /api/spareparts` (tersimpan permanen) |
+| Keuangan | **Realtime** — Buku Kas turunan order CASH + expenses + jurnal manual (`GET /api/kas/riwayat` + `GET /api/overview.finance`); Tutup Kas → `POST /api/kas/close` (snapshot + arsip `GET /api/kas/periods`); Beban → CRUD `/api/expenses` |
+| Kelola Akun | **Realtime** → `GET/POST/PUT /api/auth/users` (khusus Admin/Superadmin; hapus = nonaktifkan) |
+| Login, Nota, popup Histori/Detail | Login/logout/me **realtime**; nota dirender dari data transaksi terakhir (placeholder teknisi difilter, tanpa nota dummy) |
 
 ## 5. Alur Servis
 
@@ -189,20 +189,19 @@ hanya dikenal di mapping/chart, bukan opsi form.
 
 ## 11. Keuangan
 
-Kondisi aktual — **seluruhnya lokal/UI, Belum Terintegrasi**:
+Kondisi aktual — **terintegrasi backend**:
 
 | Fitur | Kondisi aktual |
 |---|---|
-| Buku Kas (tambah baris Masuk/Keluar, ringkasan debit/kredit/saldo) | Lokal `KU_KAS` di memori — hilang saat refresh |
-| Tutup Kas & Pindah Arsip (jam 16.00) | Konfirmasi lokal, arsip `KU_RIWAYAT` lokal |
-| Alokasi Profit | `KU_ALLOC` lokal |
-| Riwayat (arsip, filter, pagination) | Lokal, client-side |
-| Rincian Biaya di Update (`usFin*`) | Hitungan lokal; tombol bernama jujur **"Simpan Perubahan Servis"** + subtitle "Hitungan lokal — belum masuk KAS" |
-| Angka finansial Dashboard (`laba_kotor 8.750.000`, `total_beban 3.750.000`, dst.) | **Hardcoded di `backend/routers/dashboard.py`** ("dummy finansial, belum ada tabel expenses") |
-| Omset/insight Dashboard | Real dari orders (`payment`, `estimate`, count status) |
+| Buku Kas (Masuk/Keluar/Saldo) | Real turunan: order CASH + expenses + jurnal manual, scope periode kas aktif (`GET /api/kas/riwayat?period=current`, ringkasan `GET /api/overview.finance`: `total_masuk/total_keluar/saldo`) |
+| Jurnal manual | Tabel `kas_entries` (`Masuk/Keluar`, kategori, keterangan, nominal, tanggal); kategori `Saldo Awal` = saldo awal lintas periode. Rumah untuk pemasukan non-servis & penyesuaian |
+| Tutup Kas & Arsip | Real → `POST /api/kas/close` (snapshot `compute_finance` + hitungan laci + selisih → `kas_periods.snapshot`, status CLOSED, periode baru OPEN); arsip → `GET /api/kas/periods` |
+| Beban (Gaji/Operasional/...) | Real CRUD `/api/expenses` (popup Beban Harian, migrasi-sekali data lokal lama, fallback lokal bila offline) |
+| Alokasi Profit | Real dari `overview.finance.alokasi` (10/30/30/sisa, **terbentuk hanya bila CTO tercapai & laba bersih > 0** — bila belum, UI menampilkan status jujur, bukan angka) |
+| Rincian Biaya di Update (`usFin*`) | Hitungan lokal tersimpan via PUT ke order (`final_price`, `part_cost`, `modal_jasa`, `modal_lainnya`); tombol bernama jujur **"Simpan Perubahan Servis"** |
+| Riwayat | Real gabungan (order CASH + expenses + jurnal manual) + saldo berjalan (`GET /api/kas/riwayat`, filter/jenis/tanggal server-side); baris otomatis digembok, hanya jurnal manual bisa edit/hapus |
 
-Backend **tidak punya** endpoint finance (hanya `auth, orders, customers, dashboard`).
-Aturan: label/UI tidak boleh memberi kesan kas sudah tersimpan di server.
+Aturan: `payments` dorman (hanya seed) — sumber pemasukan servis adalah `service_orders` CASH, bukan tabel payments.
 
 ## 12. API
 
@@ -306,30 +305,29 @@ Berdasarkan source aktual (bukan tebakan):
 
 **Selesai / realtime:**
 
-- Auth (login/logout/sesi), seed superadmin
-- Servis Baru end-to-end (validasi, Histori Cerdas, draft autosave tahan refresh, popup sukses)
+- Auth (login/logout/sesi) + Kelola Akun (CRUD user, guard Admin/Superadmin, nonaktifkan-bukan-hapus)
+- Servis Baru end-to-end (validasi, Histori Cerdas tanpa fallback dummy, draft autosave tahan refresh, popup sukses)
 - Update Data Servis (IMEI + checklist permanen per No. Servis, dirty-guard, urutan panel selaras)
 - Transaksi (list paginasi backend, search/filter tanggal client-side, hapus)
-- Nota thermal + digital (PNG ±1080px, QR, share WA) + header Update compact
-- Dark theme, routing tahan refresh, popup sukses, inline checkbox
+- Pelanggan (summary/detail/edit/hapus real), Garansi (warranty-summary real + klaim via `/claims/receive`), Sparepart (CRUD real)
+- Keuangan real: Buku Kas turunan + jurnal manual + Tutup Kas bersnapshot/arsip + Beban CRUD + Alokasi gated
+- Dashboard real: overview finance, grafik status + tren kerusakan agregat DB
+- Nota thermal + digital (PNG ±1080px, QR, share WA, warna nomor per jenis, tanpa Estimasi Selesai, tanpa nota dummy, placeholder teknisi difilter) + header Update compact
+- Dark theme, routing tahan refresh (tanpa render ganda), popup sukses, inline checkbox, pagination icon panah
 
-**Belum terintegrasi (tampil dummy/lokal):**
-
-- Pelanggan (`PL_DUMMY`), Garansi (`GR_MOCK` + klaim lokal), Sparepart (`SP_MOCK`),
-Keuangan (kas/alokasi/riwayat lokal), Kelola Akun (`AKUN_DUMMY`)
-- Grafik status dashboard (`STATUS_TX_DUMMY`), angka tren kerusakan statis,
-angka finansial overview hardcoded
-- Endpoint yang ada tapi belum dipakai frontend: `POST /api/orders`,
-`GET /api/customers/summary`, `GET /api/statistics/status`
+**Belum terintegrasi / manual:**
+- Grafik tren status mingguan memakai hitungan real per hari (bukan dummy); angka per status real-time
+- Endpoint yang ada tapi belum dipakai frontend: `POST /api/orders`, `GET /api/statistics/status` versi lama (sudah diganti agregat real)
 
 ## 19. Testing
 
 - Tidak ada test suite otomatis di repo (tanpa pytest/CI).
 - Yang terlaksana: **E2E audit backend via skrip sekali-pakai** (dependensi
-di-override ke DB temp, fungsi endpoint dipanggil langsung) — **32/32 lulus**:
-receive IMEI+checklist, GET ulang 13 field identik, edit tanpa checklist
-(tidak tertimpa), edit checklist eksplisit, customer opsi (a) tanpa duplikat,
-No. Servis stabil, fallback data lama. Skrip tidak disimpan di repo.
+di-override ke DB temp, fungsi endpoint dipanggil langsung) — termasuk suite
+29/29 pasca-integrasi kas/sparepart/akun/garansi: jurnal manual + saldo awal,
+riwayat gabungan 3 sumber + saldo berjalan, tutup kas + arsip periode,
+sparepart CRUD + search, user CRUD + guard role, statistik real, warranty-summary.
+Skrip tidak disimpan di repo.
 - Pemeriksaan rutin: `node --check frontend/script.js`, `import main` backend,
 `PRAGMA table_info(service_orders)`, dan review `git diff`.
 

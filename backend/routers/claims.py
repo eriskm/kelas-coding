@@ -15,6 +15,7 @@ from sqlalchemy import or_
 
 from dependencies import get_db_session
 from models import Payment, ServiceOrder, Customer, WarrantyClaim
+from routers.auth import require_admin
 from statusflow import kewajiban, payment_summary
 import schemas
 
@@ -274,13 +275,6 @@ def list_claims(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
                              items=[_claim_to_out(c) for c in rows])
 
 
-def _add_months(d, months: int):
-    import calendar
-    m = (d.month - 1 + months) % 12 + 1
-    y = d.year + (d.month - 1 + months) // 12
-    return d.replace(year=y, month=m, day=min(d.day, calendar.monthrange(y, m)[1]))
-
-
 @router.get("/warranty-summary")
 def warranty_summary(db: Session = Depends(get_db_session)):
     """Daftar garansi aktif: servis SELESAI + LUNAS + bergaransi (bukan status CASH)."""
@@ -300,6 +294,15 @@ def warranty_summary(db: Session = Depends(get_db_session)):
         by_order.setdefault(p.service_order_id, []).append(p)
     orders = [o for o in candidates
               if payment_summary(o, by_order.get(o.id, []))["payment_status"] == "LUNAS"][:200]
+    oids = [o.id for o in orders]
+    # Satu query untuk klaim terbaru tiap order (hindari N+1).
+    latest_by_order = {}
+    if oids:
+        for c in (db.query(WarrantyClaim)
+                    .filter(WarrantyClaim.service_order_id.in_(oids))
+                    .order_by(WarrantyClaim.claim_date.desc(),
+                              WarrantyClaim.id.desc()).all()):
+            latest_by_order.setdefault(c.service_order_id, c)
     cids = [o.customer_id for o in orders]
     names = {}
     if cids:
@@ -308,9 +311,9 @@ def warranty_summary(db: Session = Depends(get_db_session)):
             names[c.id] = (c.name, c.phone)
     items = []
     for o in orders:
-        mulai = (_as_date(getattr(o, "taken_at", None))
-                 or o.lunas_date
-                 or (o.created_at.date() if o.created_at else None))
+        # Fallback awal garansi SAMA dengan receive path:
+        # taken_at → lunas_date → service_date.
+        mulai = _origin_warranty_start(o)
         months = o.warranty_months
         if mulai is None:
             akhir = None
@@ -318,12 +321,7 @@ def warranty_summary(db: Session = Depends(get_db_session)):
             akhir = mulai + _td(days=30)  # legacy: 30 hari
         else:
             akhir = _add_months(mulai, months)
-        latest = (
-            db.query(WarrantyClaim)
-            .filter(WarrantyClaim.service_order_id == o.id)
-            .order_by(WarrantyClaim.claim_date.desc(), WarrantyClaim.id.desc())
-            .first()
-        )
+        latest = latest_by_order.get(o.id)
         nm, ph = names.get(o.customer_id, (None, None))
         items.append({
             "service_order_id": o.id,
@@ -399,10 +397,15 @@ def update_claim(claim_id: int, data: schemas.ClaimUpdate, db: Session = Depends
 
 
 @router.delete("/{claim_id}")
-def delete_claim(claim_id: int, db: Session = Depends(get_db_session)):
+def delete_claim(claim_id: int, db: Session = Depends(get_db_session),
+                 admin=Depends(require_admin)):
+    """Hapus claim — khusus Admin. Claim SELESAI/DITUTUP tidak dapat dihapus."""
     c = db.query(WarrantyClaim).filter(WarrantyClaim.id == claim_id).first()
     if not c:
         raise HTTPException(status_code=404, detail="Claim tidak ditemukan")
+    if (c.claim_status or "") in ("SELESAI", "DITUTUP"):
+        raise HTTPException(status_code=409,
+                            detail="Claim %s tidak dapat dihapus" % c.claim_status)
     db.delete(c)
     db.commit()
     return {"ok": True}
