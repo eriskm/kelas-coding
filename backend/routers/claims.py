@@ -14,7 +14,8 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_
 
 from dependencies import get_db_session
-from models import Payment, ServiceOrder, Customer, WarrantyClaim
+from models import Payment, ServiceOrder, Customer, WarrantyClaim, User, KasPeriod
+from authority import Action, require_authority
 from routers.auth import require_admin
 from statusflow import kewajiban, payment_summary
 import schemas
@@ -25,6 +26,36 @@ DEFAULT_WARRANTY_DAYS = 30
 DEFAULT_PAGE = 1
 DEFAULT_LIMIT = 10
 MAX_LIMIT = 10
+
+
+
+def _origin_payment_status(db: Session, origin: ServiceOrder) -> str:
+    """Status pembayaran unit asal, DITURUNKAN dari jurnal payments (bukan kolom legacy).
+
+    Q3/Q17: settlement SSOT = Payment Ledger. Status legacy tidak pernah jadi sumber.
+    """
+    rows = db.query(Payment).filter(Payment.service_order_id == origin.id).all()
+    return payment_summary(origin, rows)["payment_status"]
+
+
+def _cek_syarat_garansi(db: Session, origin: ServiceOrder):
+    """Syarat pembuatan record warranty/claim (Owner Locks P2-09).
+
+    Return (ok, http_status, pesan, konteks). Menolak bila:
+      - unit belum SETTLED/LUNAS (dari jurnal payments);
+      - `warranty_months == 0` (Tanpa Garansi) -> tidak ada arsip garansi (OD-004).
+    """
+    status_bayar = _origin_payment_status(db, origin)
+    bulan = getattr(origin, "warranty_months", None)
+    if status_bayar != "LUNAS":
+        return (False, 409,
+                "Transaksi belum SETTLED/LUNAS sehingga tidak dapat dibuat record garansi",
+                {"payment_status": status_bayar, "warranty_months": bulan})
+    if bulan == 0:
+        return (False, 409,
+                "Unit tanpa garansi (Tanpa Garansi) tidak membuat arsip garansi",
+                {"payment_status": status_bayar, "warranty_months": bulan})
+    return (True, 200, None, {"payment_status": status_bayar, "warranty_months": bulan})
 
 
 def _generate_claim_no() -> str:
@@ -135,6 +166,9 @@ def _claim_to_out(c: WarrantyClaim) -> schemas.ClaimOut:
         claim_status=c.claim_status,
         customer_cost=c.customer_cost,
         internal_cost=c.internal_cost,
+        resolusi=getattr(c, "resolusi", None),
+        origin_payment_status=getattr(c, "origin_payment_status", None),
+        origin_warranty_months=getattr(c, "origin_warranty_months", None),
         created_at=c.created_at,
         origin_no_servis=o.no_servis if o else None,
         origin_device=o.device if o else None,
@@ -205,7 +239,8 @@ def lookup_origin(
 
 
 @router.post("/receive", response_model=schemas.ClaimOut, status_code=201)
-def receive_claim(data: schemas.ClaimReceiveIn, db: Session = Depends(get_db_session)):
+def receive_claim(data: schemas.ClaimReceiveIn, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.CLAIM_WRITE))):
     """Buat record claim baru dari servis asal. Servis lama TIDAK diubah."""
     origin = (
         db.query(ServiceOrder)
@@ -215,6 +250,10 @@ def receive_claim(data: schemas.ClaimReceiveIn, db: Session = Depends(get_db_ses
     )
     if not origin:
         raise HTTPException(status_code=404, detail="Servis asal tidak ditemukan")
+    # P2-09 / Owner Locks: garansi hanya dari transaksi SETTLED/LUNAS + bergaransi.
+    ok, http_status, pesan, ctx = _cek_syarat_garansi(db, origin)
+    if not ok:
+        raise HTTPException(status_code=http_status, detail=pesan)
     days = data.warranty_days or DEFAULT_WARRANTY_DAYS
     start, end, wstatus, months, cdays = _origin_warranty(origin, days)
 
@@ -244,6 +283,9 @@ def receive_claim(data: schemas.ClaimReceiveIn, db: Session = Depends(get_db_ses
         claim_status="MASUK",
         customer_cost=0,
         internal_cost=0,
+        # P2-09: audit snapshot unit asal (servis lama tetap tidak diubah).
+        origin_payment_status=ctx["payment_status"],
+        origin_warranty_months=ctx["warranty_months"],
     )
     db.add(claim)
     db.commit()
@@ -277,11 +319,18 @@ def list_claims(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
 
 @router.get("/warranty-summary")
 def warranty_summary(db: Session = Depends(get_db_session)):
-    """Daftar garansi aktif: servis SELESAI + LUNAS + bergaransi (bukan status CASH)."""
+    """Daftar garansi aktif: servis CASH + LUNAS + bergaransi **yang periodenya
+    sudah ditutup**.
+
+    Batas arsip adalah TUTUP KAS, bukan status CASH: unit yang baru CASH di
+    periode kas yang masih OPEN belum muncul di sini — menunggu Tutup Kas.
+    Settlement dibaca dari `lunas_at`/`lunas_date`, sama seperti financial core
+    (`finance.settled_orders`), jadi satu order masuk tepat satu periode.
+    """
     from datetime import timedelta as _td
     candidates = (
         db.query(ServiceOrder)
-        .filter(ServiceOrder.status == "SELESAI", ServiceOrder.warranty_months != 0)
+        .filter(ServiceOrder.status == "CASH", ServiceOrder.warranty_months != 0)
         .order_by(ServiceOrder.lunas_date.desc().nullslast(), ServiceOrder.id.desc())
         .limit(400)
         .all()
@@ -292,8 +341,21 @@ def warranty_summary(db: Session = Depends(get_db_session)):
     by_order = {}
     for p in pays:
         by_order.setdefault(p.service_order_id, []).append(p)
-    orders = [o for o in candidates
-              if payment_summary(o, by_order.get(o.id, []))["payment_status"] == "LUNAS"][:200]
+    lunas = [o for o in candidates
+             if payment_summary(o, by_order.get(o.id, []))["payment_status"] == "LUNAS"][:200]
+    # Saring lagi: hanya periode kas yang sudah CLOSED.
+    closed_periods = db.query(KasPeriod).filter(
+        KasPeriod.status == "CLOSED").all()
+    orders = []
+    for o in lunas:
+        m = getattr(o, "lunas_at", None)
+        if m is None:
+            ld = getattr(o, "lunas_date", None)
+            if ld is None:
+                continue
+            m = datetime(ld.year, ld.month, ld.day, 12, 0, 0)
+        if any(p.start_at <= m < p.end_at for p in closed_periods):
+            orders.append(o)
     oids = [o.id for o in orders]
     # Satu query untuk klaim terbaru tiap order (hindari N+1).
     latest_by_order = {}
@@ -344,6 +406,46 @@ def warranty_summary(db: Session = Depends(get_db_session)):
     return {"items": items}
 
 
+@router.get("/warranty/detail/{service_id}")
+def warranty_detail(service_id: int, db: Session = Depends(get_db_session)):
+    """Warranty history satu unit (read-only).
+
+    Menjawab: apakah unit punya garansi, statusnya, masa berlakunya, dan riwayat
+    klaimnya. Siklus garansi TIDAK memakai status service order (Q2).
+    """
+    origin = db.query(ServiceOrder).filter(ServiceOrder.id == service_id).first()
+    if not origin:
+        raise HTTPException(status_code=404, detail="Servis asal tidak ditemukan")
+    status_bayar = _origin_payment_status(db, origin)
+    start, end, wstatus, months, days = _origin_warranty(origin, DEFAULT_WARRANTY_DAYS)
+    rows = (db.query(WarrantyClaim)
+            .filter(WarrantyClaim.service_order_id == service_id)
+            .order_by(WarrantyClaim.claim_date.desc(), WarrantyClaim.id.desc())
+            .all())
+    hari_lagi = None
+    if end is not None:
+        delta = (end - date.today()).days
+        hari_lagi = max(0, delta)
+    return {
+        "service_order_id": origin.id,
+        "no_servis": origin.no_servis,
+        "device": origin.device,
+        "status_order": origin.status,
+        "payment_status": status_bayar,
+        "settled": status_bayar == "LUNAS",
+        "warranty_months": months,
+        "warranty_start": start.isoformat() if start else None,
+        "warranty_end": end.isoformat() if end else None,
+        "warranty_status": wstatus,
+        "sisa_hari": hari_lagi,
+        "tanpa_garansi": (months == 0),
+        "bisa_klaim": bool(status_bayar == "LUNAS" and months != 0),
+        "total_klaim": len(rows),
+        "klaim": [_claim_to_out(c) for c in rows],
+        "catatan": "Siklus garansi terpisah dari status service order (Q2).",
+    }
+
+
 @router.get("/by-service/{service_id}", response_model=list[schemas.ClaimOut])
 def claims_by_service(service_id: int, db: Session = Depends(get_db_session)):
     """Histori claim untuk satu servis asal (claim berulang tetap terlacak)."""
@@ -366,7 +468,8 @@ def get_claim(claim_id: int, db: Session = Depends(get_db_session)):
 
 
 @router.put("/{claim_id}", response_model=schemas.ClaimOut)
-def update_claim(claim_id: int, data: schemas.ClaimUpdate, db: Session = Depends(get_db_session)):
+def update_claim(claim_id: int, data: schemas.ClaimUpdate, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.CLAIM_WRITE))):
     """Update workflow claim: verifikasi, inspeksi teknisi, keputusan, status, biaya.
 
     Validasi: keputusan DITOLAK wajib menyertakan reject_reason.
@@ -383,6 +486,19 @@ def update_claim(claim_id: int, data: schemas.ClaimUpdate, db: Session = Depends
     if "decision" in payload and payload["decision"] not in schemas.CLAIM_DECISIONS:
         raise HTTPException(status_code=400,
                             detail="decision tidak valid. Pilihan: " + ", ".join(schemas.CLAIM_DECISIONS))
+
+    # P2-09: resolusi klaim (repair / replace / refund). Dampak uang REFUND
+    # sengaja TIDAK dihitung di tahap ini (P2-10).
+    if "resolusi" in payload:
+        res = (payload["resolusi"] or "").strip().upper()
+        if res == "":
+            payload["resolusi"] = None
+        elif res not in schemas.CLAIM_RESOLUSI:
+            raise HTTPException(status_code=400,
+                                detail="resolusi tidak valid. Pilihan: "
+                                       + ", ".join(schemas.CLAIM_RESOLUSI))
+        else:
+            payload["resolusi"] = res
 
     new_decision = payload.get("decision", c.decision)
     new_reason = payload.get("reject_reason", c.reject_reason)

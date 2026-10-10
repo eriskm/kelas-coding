@@ -83,12 +83,12 @@ let _rcDraftTimer = null;
 
 // Initial path Servis Baru (FINAL, bukan status bebas).
 // Path → initial status: TITIP→DITERIMA, PERBAIKAN→PERBAIKAN,
-// SPAREPART→MENUNGGU SPAREPART, TUNGGU→SELESAI.
+// SPAREPART→WAIT PART, TUNGGU→DONE.
 const RC_PATH_TARGET = {
     TITIP: 'DITERIMA',
-    PERBAIKAN: 'PERBAIKAN',
-    SPAREPART: 'MENUNGGU SPAREPART',
-    TUNGGU: 'SELESAI',
+    PERBAIKAN: 'REPAIR',
+    SPAREPART: 'WAIT PART',
+    TUNGGU: 'DONE',
 };
 
 function rcGetPath() {
@@ -111,7 +111,7 @@ function rcAutoPath() {
         const numFilled = id => (parseFloat((document.getElementById(id) || {}).value) || 0) > 0;
         let want = 'TITIP';
         if (filled('rcFinal') && filled('rcPlan') && filled('rcTechnician')) want = 'TUNGGU';
-        else if (filled('rcPlan') && numFilled('rcEstimate') && filled('rcTechnician')) want = 'PERBAIKAN';
+        else if (filled('rcPlan') && numFilled('rcEstimate') && filled('rcTechnician')) want = 'REPAIR';
         if (want !== rcGetPath()) {
             const r = document.querySelector('input[name="rcPath"][value="' + want + '"]');
             if (r) { r.checked = true; rcApplyPath(); try { rcPosAnimate(want, true); } catch (_) {} }
@@ -246,7 +246,7 @@ function clearReceiveDraft() {
 function rcMarkReq() {
     try {
         const path = rcGetPath();
-        const need = (fid) => (path === 'PERBAIKAN' || path === 'SPAREPART')
+        const need = (fid) => (path === 'REPAIR' || path === 'WAIT PART')
             ? (fid === 'rcPlan' || fid === 'rcEstimate' || fid === 'rcTechnician')
             : (path === 'TUNGGU'
                 ? (fid === 'rcPlan' || fid === 'rcTechnician' || fid === 'rcFinal')
@@ -540,6 +540,7 @@ function openServisBaru() {
     try { localStorage.setItem(RECEIVE_OPEN_KEY, '1'); } catch (_) {}
     closeReceiveSuccessPopup(false);
     restoreReceiveDraft();
+    loadReceiveTechnicians();
     setReceiveHash();
     const _nb = document.getElementById('receiveNotaBtn');
     if (_nb) _nb.classList.add('hidden');
@@ -763,10 +764,12 @@ async function apiGet(path) {
 
 class AuthError extends Error {}
 
-async function apiPost(path, body) {
+async function apiPost(path, body, opts) {
     const headers = { 'Content-Type': 'application/json' };
     const token = getToken();
     if (token) headers['Authorization'] = 'Bearer ' + token;
+    // P2-14: Idempotency-Key untuk endpoint money/closing (retry aman).
+    if (opts && opts.idempotencyKey) headers['Idempotency-Key'] = opts.idempotencyKey;
     const res = await fetch(API_BASE + path, {
         method: 'POST',
         headers,
@@ -776,9 +779,60 @@ async function apiPost(path, body) {
     if (!res.ok) {
         let detail = 'Gagal menyimpan data (HTTP ' + res.status + ')';
         try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
+        if (res.status === 403) detail = 'Aksi ditolak: ' + detail;
+        if (res.status === 409) detail = detail + ' (sudah ada, tidak digandakan)';
         throw new Error(detail);
     }
     return res.json();
+}
+
+// Key idempotensi sekali per aksi UI: retry memakai key yang sama.
+function newIdemKey() {
+    try {
+        if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID();
+    } catch (_) {}
+    return 'ui-' + Date.now() + '-' + Math.random().toString(16).slice(2);
+}
+
+// ─────────────────────────────────────────────
+// P2-15: CAPABILITY (cermin authority matrix B yang sudah LOCKED)
+// Tampilan hanya menawarkan aksi yang diizinkan role; backend tetap penjaga utama.
+const BSSF_CAPS = {
+    admin: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_STATUS_CLOSING',
+        'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL', 'EXPENSE_WRITE',
+        'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
+        'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE'],
+    kasir: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_STATUS_CLOSING',
+        'ORDER_HANDOVER', 'PAYMENT_CREATE', 'EXPENSE_WRITE', 'REFUND_DP', 'FAILED_CANCEL',
+        'SPAREPART_WRITE', 'CLAIM_WRITE'],
+    teknisi: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'SPAREPART_WRITE', 'CLAIM_WRITE'],
+    pengelola: [], // Q13: read-oriented (monitoring)
+};
+function bssfCaps() {
+    try { return (window._bssfCaps || BSSF_CAPS.admin); } catch (_) { return BSSF_CAPS.admin; }
+}
+function can(action) { return bssfCaps().indexOf(action) !== -1; }
+function applyRoleUI(root) {
+    const scope = root || document;
+    scope.querySelectorAll('[data-cap]').forEach(el => {
+        const ok = can(el.getAttribute('data-cap'));
+        el.classList.toggle('hidden', !ok);
+    });
+}
+// v4 #11: siapa boleh melihat SALDO ASET + MASTER KAS (data visibility).
+// CS/Kasir/Teknisi -> hanya SALDO LACI. Admin/Pengelola -> semuanya.
+function canViewAset() {
+    const k = (function () { try { return window._bssfRoleKey; } catch (_) { return 'admin'; } })();
+    return k === 'admin' || k === 'pengelola';
+}
+
+function setRoleCapabilities(role) {
+    const key = String(role || '').trim().toUpperCase();
+    const map = { SUPERADMIN: 'admin', ADMIN: 'admin', KASIR: 'kasir', TEKNISI: 'teknisi',
+                  PENGELOLA: 'pengelola', PEMILIK: 'pengelola', INVESTOR: 'pengelola' };
+    const k = map[key] || 'admin';
+    try { window._bssfCaps = BSSF_CAPS[k]; window._bssfRoleKey = k; } catch (_) {}
+    applyRoleUI(document);
 }
 
 async function apiPut(path, body) {
@@ -850,12 +904,36 @@ function kpiProgressBar(pct, tercapai) {
 // RENDER: STAR CARDS (dari API overview — key-driven)
 // ─────────────────────────────────────────────
 
+// Pengingat Tutup Kas. Periode kas berjalan sejak dibuka sampai ditutup —
+// jam 16:00 hanya PATOKAN PENGINGAT, bukan batas periode. Kalau periode aktif
+// sudah lewat jam 16:00, tampilkan peringatan (bukan sekadar mengubah angka).
+function renderPeriodeWarning(per) {
+    if (!per) return;
+    let box = document.getElementById('kasPeriodWarning');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'kasPeriodWarning';
+        box.className = 'kas-period-warning';
+        const anchor = document.getElementById('starCards');
+        if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(box, anchor);
+    }
+    if (!per.lewat_jam_16) { box.classList.add('hidden'); return; }
+    const mulai = (per.start_at || '').replace('T', ' ').slice(0, 16);
+    box.classList.remove('hidden');
+    box.innerHTML = '<i class="fa-solid fa-bell"></i>'
+        + '<span>Periode kas dibuka <b>' + escapeHtml(mulai)
+        + '</b> dan belum ditutup — sudah lewat jam 16:00. '
+        + 'Semua transaksi tetap tercatat dalam periode ini. '
+        + 'Segera tutup kas di menu Keuangan.</span>';
+}
+
 async function renderStarCards() {
     const data = await apiGet('/overview');
     const byKey = {};
     (data.star_cards || []).forEach(c => { if (c && c.key) byKey[c.key] = c; });
     // 5 card utama tetap di layout (CTO bukan bagian grid — dirender floating).
     // Sumber data & formula tidak diubah.
+    renderPeriodeWarning(data.period);
     const order = ['omset', 'laba_kotor', 'beban', 'laba_bersih', 'cts'];
     const cards = order.map(key => {
         const c = byKey[key];
@@ -999,15 +1077,15 @@ function getCommonOpts() {
 // STATUS_META = tampilan (warna/icon) per status form yang sah.
 // ─────────────────────────────────────────────
 const STATUS_META = [
-    { name: 'DITERIMA',           color: '#0ea5e9', cls: 'sm-sky',     icon: 'fa-inbox' },
-    { name: 'ANALISA',            color: '#64748b', cls: 'sm-slate',   icon: 'fa-magnifying-glass' },
-    { name: 'DIAGNOSA',           color: '#8b5cf6', cls: 'sm-violet',  icon: 'fa-stethoscope' },
-    { name: 'KONFIRMASI',         color: '#f97316', cls: 'sm-orange',  icon: 'fa-clipboard-check' },
-    { name: 'MENUNGGU SPAREPART', color: '#ca8a04', cls: 'sm-gold',    icon: 'fa-hourglass-half' },
-    { name: 'PERBAIKAN',          color: '#2563eb', cls: 'sm-blue',    icon: 'fa-screwdriver-wrench' },
-    { name: 'SELESAI',            color: '#16a34a', cls: 'sm-green',   icon: 'fa-circle-check' },
-    { name: 'GAGAL',              color: '#ef4444', cls: 'sm-red',     icon: 'fa-triangle-exclamation' },
-    { name: 'BATAL',              color: '#dc2626', cls: 'sm-red',     icon: 'fa-ban' },
+    { name: 'DITERIMA',    color: '#0ea5e9', cls: 'sm-sky',     icon: 'fa-inbox' },
+    { name: 'ANALISA',     color: '#64748b', cls: 'sm-slate',   icon: 'fa-magnifying-glass' },
+    { name: 'KONFIRMASI',  color: '#f97316', cls: 'sm-orange',  icon: 'fa-clipboard-check' },
+    { name: 'WAIT PART',   color: '#ca8a04', cls: 'sm-gold',    icon: 'fa-hourglass-half' },
+    { name: 'REPAIR',      color: '#2563eb', cls: 'sm-blue',    icon: 'fa-screwdriver-wrench' },
+    { name: 'DONE',        color: '#16a34a', cls: 'sm-green',   icon: 'fa-circle-check' },
+    { name: 'CASH',        color: '#059669', cls: 'sm-emerald', icon: 'fa-circle-dollar-sign' },
+    { name: 'CANCEL',      color: '#dc2626', cls: 'sm-red',     icon: 'fa-circle-xmark' },
+    { name: 'FAILED',      color: '#dc2626', cls: 'sm-red',     icon: 'fa-triangle-exclamation' },
 ];
 
 async function statusCounts() {
@@ -1292,6 +1370,8 @@ function setAdminUI(user) {
         el.style.display = isAdmin ? '' : 'none';
     });
     try { window._isAdmin = isAdmin; } catch (_) {}
+    // P2-15: capability per role (cermin authority matrix backend).
+    setRoleCapabilities(user.role);
 }
 
 function showAkun() {
@@ -1312,38 +1392,84 @@ async function loadDashboard() {
 // ─────────────────────────────────────────────
 
 const TX_STATUS_LABEL = {
-    // Kanonis FINAL LOCK (Bahasa Indonesia).
+    // Kanonis FINAL LOCK (P2-15: terminology mengikuti Project A).
     DITERIMA: 'Diterima',
     ANALISA: 'Analisa',
-    DIAGNOSA: 'Diagnosa',
     KONFIRMASI: 'Konfirmasi',
-    MENUNGGU_SPAREPART: 'Menunggu Sparepart',
-    PERBAIKAN: 'Perbaikan',
-    SELESAI: 'Selesai',
-    GAGAL: 'Gagal',
-    BATAL: 'Batal',
+    'WAIT PART': 'Wait Part',
+    REPAIR: 'Repair',
+    DONE: 'Done',
+    CASH: 'Cash',
+    CANCEL: 'Cancel',
+    FAILED: 'Failed',
     // Alias baca legacy / nota (tidak bisa ditulis lagi).
     RECEIVED: 'Diterima',
-    DIAGNOSIS: 'Diagnosa',
-    REPAIR: 'Perbaikan',
-    REPARASI: 'Reparasi',
-    WAIT_PART: 'Tunggu Part',
-    WAITING_PART: 'Tunggu Part',
+    DIAGNOSA: 'Analisa',
+    DIAGNOSIS: 'Analisa',
+    MENUNGGU_SPAREPART: 'Wait Part',
+    WAIT_PART: 'Wait Part',
+    WAITING_PART: 'Wait Part',
+    PERBAIKAN: 'Repair',
+    REPARASI: 'Repair',
+    SELESAI: 'Done',
+    COMPLETED: 'Done',
+    READY: 'Done',
     WAITING_APPROVAL: 'Tunggu Konfirmasi',
-    READY: 'Siap Diambil',
-    COMPLETED: 'Selesai',
-    SELESAI: 'Selesai',
-    CANCELLED: 'Batal',
-    BATAL: 'Batal',
     QC: 'QC',
     REVIEW: 'Review',
-    DONE: 'Selesai',
-    CASH: 'Lunas (legacy)',
+    GAGAL: 'Failed',
+    BATAL: 'Cancel',
+    CANCELLED: 'Cancel',
     FILED: 'Arsip (legacy)',
-    CANCEL: 'Batal',
-    FAILED: 'Gagal',
-    GAGAL: 'Gagal',
 };
+
+//: Opsi dropdown status (Project A): label persis seperti A.
+const STATUS_OPTIONS = [
+    { value: 'DITERIMA', label: 'Diterima' },
+    { value: 'ANALISA', label: 'Analisa' },
+    { value: 'KONFIRMASI', label: 'Konfirmasi' },
+    { value: 'WAIT PART', label: 'Wait Part' },
+    { value: 'REPAIR', label: 'Repair' },
+    { value: 'DONE', label: 'Done' },
+    { value: 'CASH', label: 'Cash' },
+    { value: 'CANCEL', label: 'Cancel' },
+    { value: 'FAILED', label: 'Failed' },
+];
+
+//: Status closing yang hanya boleh diubah oleh role ber-authority closing
+//: (Admin/Kasir) — cerminan CLOSING_STATUSES di backend/authority.py.
+const CLOSING_STATUS_KEYS = ['CASH', 'CANCEL', 'FAILED'];
+//: Cash hanya boleh dari DONE (rule Project A: Kasir hanya Done -> Cash).
+const CASH_ONLY_FROM = 'DONE';
+
+//: Opsi status yang boleh ditampilkan untuk role tertentu (rule Project A).
+function statusOptionsFor(roleKey, currentStatus) {
+    const r = (roleKey || 'admin').toLowerCase();
+    const cur = (currentStatus || '').toUpperCase();
+    const out = [];
+    for (const o of STATUS_OPTIONS) {
+        if (r === 'teknisi') {
+            // Teknisi tidak boleh menutup proses secara finansial.
+            if (CLOSING_STATUS_KEYS.indexOf(o.value) !== -1) continue;
+        }
+        if (r === 'kasir') {
+            // Kasir hanya boleh menutup Cash dari status DONE.
+            if (o.value === 'CASH' && cur !== 'DONE' && cur !== 'CASH') continue;
+        }
+        out.push(o);
+    }
+    return out;
+}
+
+function renderStatusOptions(el, roleKey, currentStatus) {
+    if (!el) return;
+    const opts = statusOptionsFor(roleKey, currentStatus);
+    el.innerHTML = opts
+        .map(o => '<option value="' + escapeHtml(o.value) + '"'
+            + (o.value === currentStatus ? ' selected' : '') + '>'
+            + escapeHtml(o.label) + '</option>')
+        .join('');
+}
 
 function txStatusBadge(status) {
     const s = (status || '').toUpperCase().replace(/\s+/g, '_');
@@ -1365,7 +1491,6 @@ let _txTotalPages = 1;
 let _txReq = 0;
 let _txQuery = '';
 let _txDate = '';
-let _txRiwayat = false;
 
 function txLaba(o) {
     const val = Number(o.estimate) || 0;
@@ -1382,7 +1507,6 @@ async function renderTransaksi() {
 function initTxToolbar() {
     const s = document.getElementById('txSearch');
     const d = document.getElementById('txDateFilter');
-    const r = document.getElementById('txRiwayat');
     if (!s || !d || s.dataset.bound) return;
     s.dataset.bound = '1';
     let t = null;
@@ -1391,10 +1515,6 @@ function initTxToolbar() {
         t = setTimeout(() => { _txQuery = s.value; renderTransaksi(); }, 300);
     });
     d.addEventListener('change', () => { _txDate = d.value; renderTransaksi(); });
-    if (r && !r.dataset.bound) {
-        r.dataset.bound = '1';
-        r.addEventListener('change', () => { _txRiwayat = r.checked; renderTransaksi(); });
-    }
 }
 
 function txRowHtml(o, num) {
@@ -1434,7 +1554,7 @@ async function loadTxFiltered() {
 
     try {
         const q = _txQuery.trim().toLowerCase();
-        const rows = await apiGet('/orders/latest?limit=500' + (_txRiwayat ? '&riwayat=true' : ''));
+        const rows = await apiGet('/orders/latest?limit=500');
         if (myReq !== _txReq) return;
         const hit = (rows || []).filter(o => {
             if (_txDate) {
@@ -1484,7 +1604,7 @@ async function loadTxPage(page) {
     loading.classList.remove('hidden');
 
     try {
-        const res = await apiGet('/orders?page=' + _txPage + '&limit=' + TX_PER_PAGE + (_txRiwayat ? '&riwayat=true' : ''));
+        const res = await apiGet('/orders?page=' + _txPage + '&limit=' + TX_PER_PAGE);
         if (myReq !== _txReq) return;
         _txTotal = res.total || 0;
         _txTotalPages = res.total_pages || 1;
@@ -1587,21 +1707,26 @@ async function txDetail(id) {
         row('Harga Final', rupiah(final)) + row('Modal Part', rupiah(o.part_cost)) +
         row('Sisa (Final − DP)', rupiah((Number(final) || 0) - (Number(o.payment) || 0)));
     const wbox = document.getElementById('txdWarranty');
-    if (o.status === 'SELESAI' && o.lunas_date) {
+    if (o.status === 'CASH' && o.taken_at) {
         const _txdm = (o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : null;
         const end = warrantyEndFor((o.lunas_date || '').slice(0, 10), _txdm);
         wbox.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge(_txdm === 0 ? 'EXPIRED' : 'VALID')
             + '<span class="text-[12px] text-gray-500 dark:text-gray-400">' + escapeHtml(warrantyLabel(_txdm) + (end ? ' s/d ' + notaTgl(end) : '')) + '</span>';
-    } else if (o.status === 'SELESAI') {
+    } else if (o.status === 'CASH') {
         wbox.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge('VALID')
             + '<span class="text-[12px] text-gray-500 dark:text-gray-400">30 hari (awal masa menunggu sinkronisasi)</span>';
     } else {
-        wbox.innerHTML = '<span class="text-[12px] text-gray-400">Garansi dibuat saat servis SELESAI dan LUNAS.</span>';
+        wbox.innerHTML = '<span class="text-[12px] text-gray-400">Garansi aktif saat status Cash (transaksi terealisasi).</span>';
     }
     const wb = document.getElementById('txdWarrantyBtn');
-    if (wb) wb.classList.toggle('hidden', o.status !== 'SELESAI');
+    if (wb) wb.classList.toggle('hidden', o.status !== 'CASH');
     const cbox = document.getElementById('txdClaims');
     cbox.innerHTML = '<span class="text-[12px] text-gray-400"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat histori klaim...</span>';
+    // P2-15: panel pemakaian part + tombol refund (authority-gated).
+    const pbox = document.getElementById('txdParts');
+    if (pbox) pbox.innerHTML = '<span class="text-[12px] text-gray-400"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat pemakaian part...</span>';
+    applyRoleUI(document.getElementById('pageTxDetail') || document);
+    try { await loadUnitParts(o.id); } catch (_) {}
     document.getElementById('pageTxDetail').classList.add('open');
     try {
         const rows = await apiGet('/claims/by-service/' + o.id);
@@ -1657,7 +1782,7 @@ function txdPrintNota() {
 
 function txdPrintWarranty() {
     const o = _txdOrder;
-    if (!o || o.status !== 'SELESAI') return;
+    if (!o || o.status !== 'CASH') return;
     const cust = o.customer || {};
     const cash = ((o.lunas_date || '').slice(0, 10)) || new Date().toISOString().slice(0, 10);
     const final = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : (Number(o.estimate) || 0);
@@ -1678,7 +1803,7 @@ function txdPrintWarranty() {
         warranty_label: warrantyLabel(mths),
         warranty_days: WARRANTY_DAYS,
         warranty_end: warrantyEndFor(cash, mths),
-        status: 'SELESAI',
+        status: 'CASH',
     };
     _notaMode = 'WARRANTY';
     renderWarrantyNotaPreview(_lastWarranty);
@@ -1988,6 +2113,7 @@ let _usNo = '';
 let _usTgl = '';
 let _usLunasDate = ''; // awal masa garansi (dikunci backend saat pelunasan penuh)
 let _usStatusInit = ''; // status saat form dibuka — untuk deteksi transisi ke SELESAI
+let _usTechnicianInit = ''; // teknisi dari server — dipasang lagi setelah option teknisi terisi
 // Baseline checklist dari server per No. Servis — untuk dirty-guard:
 // checklist hanya dikirim saat user benar-benar mengubahnya.
 let _usCheckBaseline = '';
@@ -2001,6 +2127,7 @@ function _usServerChecklist(o) {
 function openUpdateServis(o) {
     _txEditId = o.id;
     _usNo = o.no_servis || '';
+    _usTechnicianInit = o.technician || '';
     _usTgl = (o.service_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10);
     _usLunasDate = (o.cash_date || '').slice(0, 10) || '';
     _txEditCustomerId = o.customer_id || (o.customer || {}).id || null;
@@ -2050,6 +2177,7 @@ function openUpdateServis(o) {
     const txt = document.getElementById('usSaveText');
     if (txt) txt.textContent = 'Simpan Perubahan Servis';
     document.getElementById('pageUpdateServis').classList.add('open');
+    loadUpdateTechnicians();
     try { usLoadClaimHistory(o.id); } catch (_) {}
 }
 
@@ -2141,7 +2269,11 @@ async function usPaymentsSave() {
         return;
     }
     try {
-        const d = await apiPost('/payments', { service_order_id: _txEditId, kind, amount, method });
+        // P2-14: Idempotency-Key agar retry pembayaran tidak menggandakan efek.
+        const d = await apiPost('/payments',
+            { service_order_id: _txEditId, kind, amount, method },
+            { idempotencyKey: _usPayIdemKey || (_usPayIdemKey = newIdemKey()) });
+        _usPayIdemKey = null;
         const amt = document.getElementById('usPayAmount');
         if (amt) amt.value = '';
         await usPaymentsLoad(_txEditId);
@@ -2267,23 +2399,23 @@ function usSetStatus(s) {
     // Tombol Cetak Nota Penerimaan hanya relevan di awal
     // (DITERIMA/ANALISA/DIAGNOSA/KONFIRMASI). Lewat dari itu pakai nota garansi / klaim.
     const rp = document.getElementById('usReprintBtn');
-    if (rp) rp.classList.toggle('hidden', !(['DITERIMA', 'ANALISA', 'DIAGNOSA', 'KONFIRMASI'].includes(s)));
+    if (rp) rp.classList.toggle('hidden', !(['DITERIMA', 'ANALISA', 'KONFIRMASI'].includes(s)));
     // Panel Masa Garansi + tombol nota garansi tampil saat SELESAI.
     const wb = document.getElementById('usWarrantyBtn');
-    if (wb) wb.classList.toggle('hidden', s !== 'SELESAI');
+    if (wb) wb.classList.toggle('hidden', s !== 'CASH');
     const wp = document.getElementById('usWarrantyPanel');
-    if (wp) wp.classList.toggle('hidden', s !== 'SELESAI');
-    if (s === 'SELESAI') { try { usWarrantyUpdate(); } catch (_) {} }
+    if (wp) wp.classList.toggle('hidden', s !== 'CASH');
+    if (s === 'CASH') { try { usWarrantyUpdate(); } catch (_) {} }
     // SELESAI = pekerjaan sudah dilakukan: label berubah dari Rencana -> realisasi.
     // Tanda * merah mengikuti syarat wajib tiap status:
     // KONFIRMASI = Rencana + Estimasi; PERBAIKAN = Teknisi;
     // SELESAI = Tindakan + Teknisi; GAGAL/BATAL = Catatan.
     try {
-        const planBase = (s === 'SELESAI') ? 'Perbaikan / Tindakan Perbaikan' : 'Rencana Perbaikan';
+        const planBase = (s === 'DONE' || s === 'CASH') ? 'Perbaikan / Tindakan Perbaikan' : 'Rencana Perbaikan';
         const need = (fid) => (s === 'KONFIRMASI' && (fid === 'usPlan' || fid === 'usEstimate'))
-            || (s === 'PERBAIKAN' && fid === 'usTechnician')
-            || (s === 'SELESAI' && (fid === 'usPlan' || fid === 'usTechnician'))
-            || ((s === 'GAGAL' || s === 'BATAL') && fid === 'usStatusNote');
+            || (s === 'REPAIR' && fid === 'usTechnician')
+            || ((s === 'DONE' || s === 'CASH') && (fid === 'usPlan' || fid === 'usTechnician'))
+            || ((s === 'FAILED' || s === 'CANCEL') && fid === 'usStatusNote');
         const mark = (labelId, base, fid) => {
             const el = document.getElementById(labelId);
             if (!el) return;
@@ -2311,14 +2443,17 @@ function usRupiah(v) {
 function usFinUpdate() {
     const est = usNum('usEstimate');
     const dp = usNum('usDp');
-    let final = usNum('usFinFinal');
+    const final = usNum('usFinFinal');
     const mode = usVal('usFinJasaMode');
     const jasaEl = document.getElementById('usFinJasa');
+    const part = usNum('usFinPart');
+    // Modal Jasa persentase dihitung dari laba kotor SETELAH Modal Part:
+    // jasa = (Harga Final - Modal Part) x persen
+    const brutoJasa = Math.max(0, final - part);
     if (mode === '40' || mode === '50') {
-        const auto = Math.round(final * Number(mode) / 100);
+        const auto = Math.round(brutoJasa * Number(mode) / 100);
         if (jasaEl) jasaEl.value = auto;
     }
-    const part = usNum('usFinPart');
     const jasa = usNum('usFinJasa');
     const lain = usNum('usFinLain');
     const set = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = usRupiah(v); };
@@ -2328,7 +2463,7 @@ function usFinUpdate() {
     set('usSumPart', part);
     set('usSumJasa', jasa);
     set('usSumLain', lain);
-    set('usSumSisa', final - dp);
+    set('usSumSisa', final - part - jasa - lain);
     const wrap = document.getElementById('usFinLainKeWrap');
     if (wrap) wrap.classList.toggle('hidden', !(lain > 0));
 }
@@ -2358,6 +2493,33 @@ function usReprint() {
     openNota();
 }
 
+// Dropdown teknisi di Update Data Servis (unit + penanggung jawab modal jasa).
+// Sumber sama dengan Servis Baru; dipanggil ulang tiap overlay dibuka karena
+// token belum tersedia saat DOMContentLoaded.
+async function loadUpdateTechnicians(fallbackFill) {
+    let techs = null;
+    try { techs = await apiGet('/orders/technicians'); } catch (_) {
+        if (fallbackFill) { fallbackFill('usTechnician'); fallbackFill('usFinJasaKe'); }
+        return;
+    }
+    if (!Array.isArray(techs) || !techs.length) return;
+    ['usTechnician', 'usFinJasaKe'].forEach(id => {
+        const sel = document.getElementById(id);
+        if (!sel || sel.options.length > 1) return;
+        const keep = id === 'usTechnician' ? '— Pilih Teknisi —' : '— Nama Teknisi —';
+        sel.innerHTML = `<option value="">${keep}</option>` + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+    });
+    // Option baru saja terisi async: pasang lagi teknisi dari order, kalau ada.
+    if (_usTechnicianInit) {
+        ['usTechnician', 'usFinJasaKe'].forEach(id => {
+            const sel = document.getElementById(id);
+            if (sel && Array.from(sel.options).some(o => o.value === _usTechnicianInit)) {
+                sel.value = _usTechnicianInit;
+            }
+        });
+    }
+}
+
 function initUpdateServis() {
     renderChecklist('us', 'usCheckGroups', 'Catatan kondisi awal — tidak diubah otomatis saat data servis diperbarui.', { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     const techFill = (selId) => {
@@ -2366,18 +2528,7 @@ function initUpdateServis() {
         const src = document.getElementById('rcTechnician');
         if (src) sel.innerHTML = src.innerHTML;
     };
-    const syncTech = async () => {
-        try {
-            const techs = await apiGet('/orders/technicians');
-            ['usTechnician', 'usFinJasaKe'].forEach(id => {
-                const sel = document.getElementById(id);
-                if (!sel || sel.options.length > 1) return;
-                const keep = id === 'usTechnician' ? '— Pilih Teknisi —' : '— Nama Teknisi —';
-                sel.innerHTML = `<option value="">${keep}</option>` + techs.map(t => `<option value="${t}">${t}</option>`).join('');
-            });
-        } catch (_) { techFill('usTechnician'); techFill('usFinJasaKe'); }
-    };
-    syncTech();
+    loadUpdateTechnicians(techFill);
     ['usEstimate', 'usDp', 'usFinFinal', 'usFinPart', 'usFinJasa', 'usFinLain'].forEach(id => {
         const el = document.getElementById(id);
         if (el && !el.dataset.usBound) {
@@ -2389,10 +2540,14 @@ function initUpdateServis() {
     if (jm && !jm.dataset.usBound) { jm.dataset.usBound = '1'; jm.addEventListener('change', usFinUpdate); }
     const wm = document.getElementById('usWarrantyMonths');
     if (wm && !wm.dataset.usBound) { wm.dataset.usBound = '1'; wm.addEventListener('change', usWarrantyUpdate); }
-    const sa = document.getElementById('usStatus');
-    if (sa && !sa.dataset.usBound) { sa.dataset.usBound = '1'; sa.addEventListener('change', () => usSetStatus(sa.value)); }
-    const sb = document.getElementById('usQuickStatus');
-    if (sb && !sb.dataset.usBound) { sb.dataset.usBound = '1'; sb.addEventListener('change', () => usSetStatus(sb.value)); }
+    // P2-15: opsi dropdown dibangun dari STATUS_OPTIONS + gate role (Project A).
+    const _rk = (function () { try { return window._bssfRoleKey; } catch (_) { return 'admin'; } })();
+    const _sa = document.getElementById('usStatus');
+    renderStatusOptions(_sa, _rk, _usStatusInit);
+    if (_sa && !_sa.dataset.usBound) { _sa.dataset.usBound = '1'; _sa.addEventListener('change', () => usSetStatus(_sa.value)); }
+    const _sb = document.getElementById('usQuickStatus');
+    renderStatusOptions(_sb, _rk, _usStatusInit);
+    if (_sb && !_sb.dataset.usBound) { _sb.dataset.usBound = '1'; _sb.addEventListener('change', () => usSetStatus(_sb.value)); }
     const form = document.getElementById('updateForm');
     if (form && !form.dataset.usBound) {
         form.dataset.usBound = '1';
@@ -2435,24 +2590,28 @@ function initUpdateServis() {
                         _needFocus(_missing[0][1]);
                         return;
                     }
-                } else if (_usSt === 'PERBAIKAN') {
+                } else if (_usSt === 'REPAIR') {
                     if (!usVal('usTechnician').trim()) {
                         _needFail('Teknisi Penanggung Jawab');
                         _needFocus('usTechnician');
                         return;
                     }
-                } else if (_usSt === 'SELESAI') {
+                } else if (_usSt === 'CASH') {
+                    // CASH = event realisasi (Owner Cash Model P2-15): wajib Tindakan,
+                    // Teknisi, Modal Part & Modal Jasa (sama seperti guard backend).
                     const _missing = [];
                     if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
                     if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (!(usNum('usFinPart') > 0)) _missing.push(['Modal Part', 'usFinPart']);
+                    if (!(usNum('usFinJasa') > 0)) _missing.push(['Modal Jasa', 'usFinJasa']);
                     if (_missing.length) {
                         _needFail(_missing.map(m => m[0]).join(', '));
                         _needFocus(_missing[0][1]);
                         return;
                     }
-                } else if (_usSt === 'GAGAL' || _usSt === 'BATAL') {
+                } else if (_usSt === 'FAILED' || _usSt === 'CANCEL') {
                     if (!_usNote) {
-                        _needFail(_usSt === 'GAGAL' ? 'Alasan kegagalan (catatan)' : 'Alasan pembatalan (catatan)');
+                        _needFail(_usSt === 'FAILED' ? 'Alasan kegagalan (catatan)' : 'Alasan pembatalan (catatan)');
                         _needFocus('usStatusNote');
                         return;
                     }
@@ -2509,9 +2668,9 @@ function initUpdateServis() {
                 }
                 renderTransaksi();
                 // Transisi ke SELESAI → tawarkan kirim konfirmasi WA ke pelanggan.
-                const _wasDone = (_usStatusInit === 'SELESAI');
+                const _wasDone = (_usStatusInit === 'CASH');
                 _usStatusInit = _usSt;
-                if (_usSt === 'SELESAI' && !_wasDone) {
+                if (_usSt === 'CASH' && !_wasDone) {
                     let _sisa = 0;
                     try {
                         const _pay = await apiGet('/payments/by-order/' + _txEditId);
@@ -3277,6 +3436,150 @@ async function spDel(id) {
     }
 }
 
+// ── P2-12: pergerakan stok (barang masuk + riwayat) ──
+async function loadSparepartMoves() {
+    const body = document.getElementById('spMoveBody');
+    const sel = document.getElementById('spMovePart');
+    if (!body && !sel) return;
+    let moves = [];
+    try { const r = await apiGet('/inventory/moves?limit=25'); moves = (r && r.items) || []; } catch (_) {}
+    if (sel && !sel.options.length && _sparepartsCache && _sparepartsCache.length) {
+        sel.innerHTML = _sparepartsCache.map(p => `<option value="${p.id}">${escapeHtml((p.merek || '') + ' ' + (p.jenis || ''))}</option>`).join('');
+    }
+    if (body) {
+        body.innerHTML = moves.length ? moves.map(m => `<tr>
+            <td>${escapeHtml(String(m.waktu || '').replace('T', ' ').slice(0, 16))}</td>
+            <td class="tx-ellipsis" title="${escapeHtml(m.sparepart_label || '-')}">${escapeHtml(m.sparepart_label || '-')}</td>
+            <td>${escapeHtml(m.aksi || '-')}</td>
+            <td class="numeric-r">${m.qty}</td>
+            <td class="numeric-r">${m.qty_sesudah}</td></tr>`).join('')
+            : `<tr><td colspan="5"><div class="text-center text-sm text-gray-400 py-6">Belum ada pergerakan stok.</div></td></tr>`;
+    }
+    applyRoleUI(document.getElementById('pageSparepart') || document);
+}
+
+async function spMoveSubmit() {
+    if (!can('SPAREPART_WRITE')) { toast('Aksi ditolak: role Anda tidak berwenang mengubah stok.'); return; }
+    const id = document.getElementById('spMovePart').value;
+    const qty = Number(document.getElementById('spMoveQty').value || 0);
+    const ket = (document.getElementById('spMoveNote').value || '').trim();
+    if (!id || !qty) { _kuFb('spMoveFeedback', 'Part dan qty wajib diisi.', 'error'); return; }
+    try {
+        const r = await apiPost('/inventory/masuk?sparepart_id=' + id + '&qty=' + qty
+            + '&keterangan=' + encodeURIComponent(ket || 'Barang masuk'),
+            {}, { idempotencyKey: newIdemKey() });
+        _kuFb('spMoveFeedback', 'Barang masuk tercatat. Saldo ' + (r.qty_sesudah) + '.', 'success');
+        document.getElementById('spMoveQty').value = '1';
+        document.getElementById('spMoveNote').value = '';
+        toast('Stok bertambah.', 'success');
+        await renderSparepart();
+    } catch (err) {
+        _kuFb('spMoveFeedback', err.message || 'Gagal mencatat barang masuk.', 'error');
+    }
+}
+
+// ── P2-12: pemakaian part untuk satu unit (pakai & batal) ──
+async function loadUnitParts(orderId) {
+    const host = document.getElementById('txdParts');
+    if (!host) return;
+    let items = [];
+    try { const r = await apiGet('/inventory/pemakaian/' + orderId); items = (r && r.items) || []; } catch (_) {}
+    let spar = [];
+    try { spar = (await apiGet('/spareparts?limit=100')).items || []; } catch (_) { spar = []; }
+    const opts = spar.map(p => `<option value="${p.id}">${escapeHtml((p.merek || '') + ' ' + (p.jenis || ''))} (sisa ${p.qty})</option>`).join('');
+    host.innerHTML = `
+        <div class="flex flex-col sm:flex-row sm:items-end gap-2.5" data-cap="SPAREPART_WRITE">
+            <div class="flex-1">
+                <label class="field-label" for="txdPartSel">Part</label>
+                <select class="receive-input" id="txdPartSel">${opts || '<option value="">Stok kosong</option>'}</select>
+            </div>
+            <div class="w-full sm:w-28">
+                <label class="field-label" for="txdPartQty">Qty</label>
+                <input class="receive-input" type="number" id="txdPartQty" min="1" value="1">
+            </div>
+            <button type="button" onclick="txdPakaiPart(${orderId})" class="receive-submit-btn">
+                <i class="fa-solid fa-screwdriver-wrench"></i> Pakai Part
+            </button>
+        </div>
+        <div id="txdPartFeedback" class="hidden receive-feedback mt-2"></div>
+        <div class="overflow-x-auto mt-2">
+            <table class="tx-table w-full text-sm">
+                <thead><tr><th>Part</th><th class="numeric-r">Qty</th><th>Status</th><th class="text-right">Aksi</th></tr></thead>
+                <tbody>${items.length ? items.map(u => `<tr>
+                    <td class="tx-ellipsis">${escapeHtml(u.label || '-')}</td>
+                    <td class="numeric-r">${u.qty}</td>
+                    <td>${escapeHtml(u.status || '-')}</td>
+                    <td class="text-right">${(u.status === 'DIPAKAI' && can('SPAREPART_WRITE'))
+                        ? `<button type="button" onclick="txdBatalPart(${u.id}, ${orderId})" class="receive-back-btn">Batal</button>` : ''}</td>
+                </tr>`).join('') : `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-4">Belum ada pemakaian part.</div></td></tr>`}</tbody>
+            </table>
+        </div>`;
+    applyRoleUI(host);
+}
+
+async function txdPakaiPart(orderId) {
+    if (!can('SPAREPART_WRITE')) { toast('Aksi ditolak: role Anda tidak berwenang memakai stok.'); return; }
+    const pid = document.getElementById('txdPartSel').value;
+    const qty = Number(document.getElementById('txdPartQty').value || 0);
+    if (!pid || !qty) { _kuFb('txdPartFeedback', 'Part dan qty wajib diisi.', 'error'); return; }
+    try {
+        await apiPost('/inventory/pakai?sparepart_id=' + pid + '&qty=' + qty + '&service_order_id=' + orderId,
+            {}, { idempotencyKey: newIdemKey() });
+        _kuFb('txdPartFeedback', 'Pemakaian part tercatat.', 'success');
+        toast('Stok dipotong.', 'success');
+        await loadUnitParts(orderId);
+    } catch (err) {
+        _kuFb('txdPartFeedback', err.message || 'Gagal memakai part (stok kurang?).', 'error');
+    }
+}
+
+async function txdBatalPart(usageId, orderId) {
+    if (!can('SPAREPART_WRITE')) { toast('Aksi ditolak: role Anda tidak berwenang.'); return; }
+    if (!confirm('Batalkan pemakaian part ini? Stok akan dikembalikan.')) return;
+    try {
+        const r = await apiPost('/inventory/pakai/' + usageId + '/batal', {},
+                                { idempotencyKey: newIdemKey() });
+        _kuFb('txdPartFeedback', r.idempotent
+            ? 'Pemakaian sudah dibatalkan sebelumnya (tidak digandakan).'
+            : 'Pemakaian dibatalkan; stok dikembalikan ' + (r.pengembalian || 0) + '.', 'success');
+        await loadUnitParts(orderId);
+    } catch (err) {
+        _kuFb('txdPartFeedback', err.message || 'Gagal membatalkan pemakaian.', 'error');
+    }
+}
+
+// ── P2-10: refund DP & Failed → Cancel (dana Laci) ──
+async function txdRefundDP(orderId) {
+    if (!can('REFUND_DP')) { toast('Aksi ditolak: hanya Admin/Kasir.'); return; }
+    let pre = null;
+    try { pre = await apiGet('/refunds/precheck/dp/' + orderId); } catch (_) {}
+    if (!pre || !pre.bisa_refund) {
+        toast('Tidak ada DP yang belum direfund pada unit ini.');
+        return;
+    }
+    const v = prompt('Nominal refund DP (maks ' + Number(pre.sisa).toLocaleString('id-ID') + ')', String(pre.sisa));
+    if (v === null) return;
+    const nominal = Number(v);
+    if (!nominal || nominal <= 0) { toast('Nominal tidak valid.'); return; }
+    try {
+        const r = await apiPost('/refunds/dp', { service_order_id: orderId, nominal },
+                                { idempotencyKey: newIdemKey() });
+        toast('Refund DP ' + kuRupiah(nominal) + ' dari Kas Perputaran. Saldo Laci ' + kuRupiah(r.saldo_setelah) + '.', 'success');
+        if (typeof openTxDetail === 'function') await openTxDetail(orderId);
+    } catch (err) { toast(err.message || 'Gagal refund DP.'); }
+}
+
+async function txdFailedCancel(orderId) {
+    if (!can('FAILED_CANCEL')) { toast('Aksi ditolak: hanya Admin/Kasir.'); return; }
+    if (!confirm('Failed → Cancel: kembalikan dana ke Kas Perputaran (bukan refund garansi)?')) return;
+    try {
+        const r = await apiPost('/refunds/failed-cancel', { service_order_id: orderId },
+                                { idempotencyKey: newIdemKey() });
+        toast('Dana dikembalikan ' + kuRupiah(r.refund.nominal) + ' dari Kas Perputaran.', 'success');
+        if (typeof openTxDetail === 'function') await openTxDetail(orderId);
+    } catch (err) { toast(err.message || 'Gagal proses Failed → Cancel.'); }
+}
+
 function spAdd() {
     _spEditId = -1;
     document.getElementById('spfTitle').textContent = 'Tambah Sparepart';
@@ -3316,6 +3619,8 @@ function renderSpKpi(src) {
 
 function spFiltered() {
     const q = _spQuery.trim().toLowerCase();
+    // P2-15: cache untuk form pergerakan stok (barang masuk / pemakaian part).
+    try { _sparepartsCache = (_spView || []).slice(); } catch (_) {}
     if (!q) return (_spView || []).slice();
     return (_spView || []).filter(s => [s.jenis, s.merek, s.device, s.kategori]
         .some(f => (f || '').toLowerCase().includes(q)));
@@ -3502,7 +3807,9 @@ let _profitChart = null;
 // State real dari backend — tidak ada lagi array lokal (KU_* dipensiunkan).
 // Buku Kas = turunan jurnal payments + expenses + jurnal manual, scope periode kas aktif.
 let _kuFin = null;
+let _kuSaldoLapisan = null; // P2-06 / SSOT-7: saldo Laci & Kas Aset terpisah
 let _kuKasRows = [];
+let _kuKasAwal = 0; // v4 #10: opening SALDO LACI periode (KAS ASET AWAL)
 let _kuAllocView = [];
 let _kuSelAlloc = -1;
 
@@ -3522,19 +3829,275 @@ async function loadKuFinance() {
     const my = ++_kuReq;
     const body = document.getElementById('kuKasBody');
     try {
-        const [ov, rj] = await Promise.all([
+        const [ov, rj, sl] = await Promise.all([
             apiGet('/overview'),
             apiGet('/kas/riwayat?period=current&limit=100'),
+            apiGet('/kas/saldo').catch(() => null), // P2-06: saldo Kas Aset (opsional)
         ]);
         if (my !== _kuReq) return; // respons basi — ada request lebih baru
         _kuFin = (ov && ov.finance) || null;
+        _kuSaldoLapisan = sl || null;
+        _kuKasAwal = Number((_kuFin && _kuFin.kas_aset_awal) || 0);
+        // P2-15: panel turunan lain (tidak kritis bila gagal).
+        loadKuAset().catch(() => {});
+        loadKuDistribusi().catch(() => {});
+        loadKuDebt().catch(() => {});
+        loadKuNotif().catch(() => {});
         _kuKasRows = ((rj && rj.items) || []).slice().reverse(); // menaik utk saldo berjalan
-        renderBukuKas();
-        renderAlloc();
+renderBukuKas();
+renderKondisiKas();
+renderKuTitipan();
+renderAlloc();
     } catch (err) {
         if (my !== _kuReq) return;
         if (body) body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Gagal memuat kas: ${escapeHtml(err.message || '')}</div></td></tr>`;
     }
+}
+
+// ─────────────────────────────────────────────────────────────
+// P2-15: PANEL TURUNAN KEUANGAN (semua angka dari backend SSOT)
+// ─────────────────────────────────────────────────────────────
+function _kuMoney(v) { return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID'); }
+
+// Kas Aset: saldo terpisah + riwayat mutasi (P2-06).
+async function loadKuAset() {
+    const summary = document.getElementById('kuAsetSummary');
+    const body = document.getElementById('kuAsetBody');
+    if (!summary && !body) return;
+    let saldo = null, items = [];
+    try { saldo = await apiGet('/kas/saldo'); } catch (_) {}
+    try { const r = await apiGet('/kas/aset/riwayat?period=all&limit=50'); items = (r && r.items) || []; } catch (_) {}
+    const laci = _kuSaldoLapisan || {};
+    const lihatAset = canViewAset();
+    // v4 #11: untuk role tanpa authority, panel Kas Aset ditampilkan mulai dari
+    // Kas Kecil/Laci saja. Judul & deskripsi Kas Besar disembunyikan — bukan
+    // sekadar angkanya, tapi juga penjelasan posisi yang tidak boleh terlihat.
+    const _t = document.getElementById('kuMasterTitle');
+    if (_t) {
+        _t.innerHTML = lihatAset
+            ? '<i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)'
+            : '<i class="fa-solid fa-wallet"></i> Kas Kecil (Laci)';
+    }
+    const _d = document.getElementById('kuMasterDesc');
+    if (_d) {
+        _d.classList.toggle('hidden', !lihatAset);
+        if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci \\u2194 Aset tidak mengubah Master Kas.';
+    }
+    if (summary) {
+        const cards = [
+            { label: 'Kas Aset Kecil (Laci)', value: kuRupiah(laci.laci || 0), icon: 'fa-wallet', cls: 'sm-blue' },
+        ];
+        if (lihatAset) {
+            cards.push({ label: 'Kas Aset Besar (Pengelola)', value: kuRupiah(laci.aset || 0), icon: 'fa-vault', cls: 'sm-blue' });
+            cards.push({ label: 'Master Kas', value: kuRupiah(laci.master_kas || 0), icon: 'fa-layer-group', cls: 'sm-green' });
+        }
+        summary.innerHTML = cards.map(c => `
+            <div class="sm-card ${c.cls}">
+                <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
+                <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+            </div>`).join('');
+    }
+    // Aset detail hanya diambil bila role berhak (v4 #11).
+    if (!lihatAset) items = [];
+    if (body) {
+        body.innerHTML = items.length ? items.slice().reverse().map(it => {
+            const masuk = (it.jenis || '') === 'Masuk';
+            const sub = [it.kategori || '', it.tgl || ''].filter(Boolean).join(' • ');
+            return `<tr>
+                <td><span class="tx-device tx-ellipsis" title="${escapeHtml(it.ket || '-')}">${escapeHtml(it.ket || '-')}</span>${sub ? `<br><span class="text-[10.5px] text-gray-400">${escapeHtml(sub)}</span>` : ''}</td>
+                <td class="tx-debit numeric-c">${masuk ? kuRupiah(it.nominal) : '<span class="text-green-500">-</span>'}</td>
+                <td class="tx-kredit numeric-c">${masuk ? '<span class="text-red-500">-</span>' : kuRupiah(it.nominal)}</td>
+                <td class="tx-saldo numeric-r">${kuRupiah(it.saldo)}</td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada mutasi Kas Aset.</div></td></tr>`;
+    }
+    applyRoleUI(document.getElementById('kuAsetForm') || document);
+}
+
+function _kuFb(id, msg, kind) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('hidden', 'success', 'error');
+    el.textContent = msg;
+    if (kind) el.classList.add(kind);
+}
+
+async function kuAsetMasuk() {
+    if (!can('KAS_ASET_INJEKSI')) { toast('Aksi ditolak: hanya Admin.'); return; }
+    const nominal = Number(document.getElementById('kuAsetNominal').value || 0);
+    const keterangan = (document.getElementById('kuAsetKeterangan').value || '').trim();
+    const posisi = (document.getElementById('kuAsetPosisi') || {}).value || 'LACI';
+    if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan wajib diisi.', 'error'); return; }
+    const btnKey = newIdemKey();
+    try {
+        const res = await apiPost('/kas/aset/masuk', { nominal, keterangan, posisi }, { idempotencyKey: btnKey });
+        _kuFb('kuAsetFeedback', 'Dana masuk ke ' + (res.label || posisi)
+            + '. Saldo ' + _kuMoney(res.saldo_setelah) + ' · Master Kas ' + _kuMoney(res.master_kas_setelah) + '.', 'success');
+        document.getElementById('kuAsetNominal').value = '';
+        document.getElementById('kuAsetKeterangan').value = '';
+        toast('Kas Aset bertambah ' + _kuMoney(nominal) + '.', 'success');
+        await loadKuFinance();
+    } catch (err) {
+        _kuFb('kuAsetFeedback', err.message || 'Gagal menambah Kas Aset.', 'error');
+    }
+}
+
+async function kuAsetKeluar() {
+    if (!can('KAS_ASET_INJEKSI')) { toast('Aksi ditolak: hanya Admin.'); return; }
+    const nominal = Number(document.getElementById('kuAsetNominal').value || 0);
+    const keterangan = (document.getElementById('kuAsetKeterangan').value || '').trim();
+    if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan wajib diisi.', 'error'); return; }
+    try {
+        const cek = await apiGet('/kas/aset/cukup?nominal=' + nominal);
+        if (cek && cek.cukup === false) {
+            _kuFb('kuAsetFeedback', 'Saldo Kas Aset tidak cukup (kurang ' + _kuMoney(cek.kurang) + ').', 'error');
+            return;
+        }
+    } catch (_) { /* lanjut: backend tetap memvalidasi */ }
+    try {
+        const res = await apiPost('/kas/aset/keluar', { nominal, keterangan }, { idempotencyKey: newIdemKey() });
+        _kuFb('kuAsetFeedback', 'Dana keluar. Saldo Kas Aset ' + _kuMoney(res.saldo_setelah) + '.', 'success');
+        document.getElementById('kuAsetNominal').value = '';
+        document.getElementById('kuAsetKeterangan').value = '';
+        toast('Kas Aset berkurang ' + _kuMoney(nominal) + '.', 'success');
+        await loadKuFinance();
+    } catch (err) {
+        _kuFb('kuAsetFeedback', err.message || 'Gagal menarik Kas Aset.', 'error');
+    }
+}
+
+// v4 #5: transfer fisik Laci <-> Aset (Master Kas tetap).
+async function kuAsetTransfer() {
+    if (!can('KAS_ASET_INJEKSI')) { toast('Aksi ditolak: hanya Admin.'); return; }
+    if (!canViewAset()) { toast('Transfer Kas Aset tidak tersedia untuk role Anda.'); return; }
+    const nominal = Number(document.getElementById('kuAsetNominal').value || 0);
+    const keterangan = (document.getElementById('kuAsetKeterangan').value || '').trim();
+    const arah = ((document.getElementById('kuTransferArah') || {}).value || 'LACI->KAS_ASET').split('->');
+    if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan wajib diisi.', 'error'); return; }
+    const masterSebelum = (_kuSaldoLapisan && _kuSaldoLapisan.master_kas) || 0;
+    try {
+        const res = await apiPost('/kas/aset/transfer',
+            { dari: arah[0], ke: arah[1], nominal, keterangan }, { idempotencyKey: newIdemKey() });
+        _kuFb('kuAsetFeedback', 'Transfer selesai. ' + res.label_dari + ' → ' + res.label_ke
+            + '. Master Kas ' + _kuMoney(res.master_kas_setelah) + '.', 'success');
+        document.getElementById('kuAsetNominal').value = '';
+        document.getElementById('kuAsetKeterangan').value = '';
+        toast('Transfer Kas Aset tercatat.', 'success');
+        await loadKuFinance();
+    } catch (err) {
+        _kuFb('kuAsetFeedback', err.message || 'Gagal transfer Kas Aset.', 'error');
+    }
+}
+
+// Distribusi 10/30/30/30 (P2-07): data & rasio dari backend.
+async function loadKuDistribusi() {
+    const body = document.getElementById('kuDistBody');
+    const note = document.getElementById('kuDistNote');
+    const total = document.getElementById('kuDistTotal');
+    if (!body) return;
+    let d = null;
+    try { d = await apiGet('/kas/distribusi?period=current'); } catch (_) {}
+    const al = (d && d.alokasi) || {};
+    const rows = [
+        ['Bonus Karyawan', '10%', al.karyawan],
+        ['Pengelola', '30%', al.pengelola],
+        ['Investor', '30%', al.investor],
+        ['Hak Kas Aset', '30%', al.kas_aset],
+    ];
+    body.innerHTML = rows.map(([nama, pct, v]) => `<tr>
+        <td>${nama}</td><td class="numeric-r">${pct}</td>
+        <td class="numeric-r">${Number(v || 0) ? kuRupiah(v) : '-'}</td></tr>`).join('');
+    if (total) total.textContent = kuRupiah(al.total || 0);
+    if (note) {
+        note.textContent = d && d.terbentuk
+            ? 'Terbentuk saat Tutup Kas periode ' + (d.periode || '-')
+            : 'Belum terbentuk — terbentuk saat Tutup Kas';
+    }
+}
+
+// Hutang Beban (P2-11): status, ledger, proses defisit, pelunasan.
+async function loadKuDebt() {
+    const sum = document.getElementById('kuDebtSummary');
+    const body = document.getElementById('kuDebtBody');
+    if (!sum && !body) return;
+    let d = null;
+    try { d = await apiGet('/beban-hutang'); } catch (_) {}
+    const hutang = (d && d.saldo_hutang) || 0;
+    if (sum) {
+        const cards = [
+            { label: 'Sisa Hutang Beban', value: kuRupiah(hutang), icon: 'fa-file-circle-exclamation', cls: 'sm-red' },
+            { label: 'Saldo Kas Aset', value: kuRupiah((d && d.saldo_kas_aset) || 0), icon: 'fa-vault', cls: 'sm-blue' },
+        ];
+        sum.innerHTML = cards.map(c => `
+            <div class="sm-card ${c.cls}">
+                <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
+                <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+            </div>`).join('');
+    }
+    if (body) {
+        const per = (d && d.periode) || [];
+        body.innerHTML = per.length ? per.map(p => `<tr>
+            <td>${escapeHtml(p.periode || '-')}</td>
+            <td class="numeric-r">${kuRupiah(p.defisit || 0)}</td>
+            <td class="numeric-r">${kuRupiah(p.cover_kas_aset || 0)}</td>
+            <td class="numeric-r">${kuRupiah(p.hutang_baru || 0)}</td></tr>`).join('')
+            : `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada proses defisit Beban.</div></td></tr>`;
+    }
+    applyRoleUI(document.body);
+}
+
+async function kuDebtProses() {
+    if (!can('EXPENSE_DEBT_WRITE')) { toast('Aksi ditolak: hanya Admin.'); return; }
+    try {
+        const res = await apiPost('/beban-hutang/proses', {}, { idempotencyKey: newIdemKey() });
+        _kuFb('kuDebtFeedback', 'Defisit diproses. Cover Kas Aset ' + _kuMoney(res.cover_kas_aset)
+            + ', hutang baru ' + _kuMoney(res.hutang_baru) + '.', 'success');
+        toast('Proses defisit selesai.', 'success');
+        await loadKuDebt();
+    } catch (err) {
+        _kuFb('kuDebtFeedback', err.message || 'Gagal memproses defisit.', 'error');
+    }
+}
+
+async function kuDebtLunas() {
+    if (!can('EXPENSE_DEBT_WRITE')) { toast('Aksi ditolak: hanya Admin.'); return; }
+    try {
+        const pre = await apiGet('/beban-hutang/precheck');
+        if (!pre || !pre.bisa_lunas) {
+            _kuFb('kuDebtFeedback', pre && pre.saldo_hutang === 0
+                ? 'Tidak ada Hutang Beban outstanding.'
+                : 'Saldo Kas Aset tidak cukup untuk melunasi.', 'error');
+            return;
+        }
+        if (!confirm('Lunasi Hutang Beban ' + _kuMoney(pre.saldo_hutang) + ' dari Kas Aset?')) return;
+        const res = await apiPost('/beban-hutang/lunas', {}, { idempotencyKey: newIdemKey() });
+        _kuFb('kuDebtFeedback', 'Pelunasan ' + _kuMoney(res.nominal) + '. Sisa hutang '
+            + _kuMoney(res.saldo_hutang) + '.', 'success');
+        toast('Hutang Beban dilunasi.', 'success');
+        await loadKuDebt();
+    } catch (err) {
+        _kuFb('kuDebtFeedback', err.message || 'Gagal melunasi Hutang Beban.', 'error');
+    }
+}
+
+// Notifikasi (P2-13): log read-only + status provider.
+async function loadKuNotif() {
+    const body = document.getElementById('kuNotifBody');
+    const prov = document.getElementById('kuNotifProvider');
+    if (!body) return;
+    let d = null;
+    try { d = await apiGet('/notifications?limit=25'); } catch (_) {}
+    const items = (d && d.items) || [];
+    if (prov) {
+        prov.innerHTML = d && d.provider_aktif
+            ? 'Provider eksternal: <b>aktif</b>'
+            : 'Provider eksternal: nonaktif (notifikasi hanya tercatat di log).';
+    }
+    body.innerHTML = items.length ? items.map(n => `<tr>
+        <td>${escapeHtml(String(n.created_at || '').replace('T', ' ').slice(0, 16))}</td>
+        <td>${escapeHtml(n.event || '-')}</td>
+        <td>${escapeHtml(n.status || '-')}</td></tr>`).join('')
+        : `<tr><td colspan="3"><div class="text-center text-sm text-gray-400 py-6">Belum ada notifikasi.</div></td></tr>`;
 }
 
 // ── Keuangan: pusat kontrol (main) vs arsip (riwayat) ──
@@ -3573,7 +4136,8 @@ async function kuTutupKas() {
         : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.';
     if (!confirm(msg)) return;
     try {
-        const res = await apiPost('/kas/close', { cash_counted: counted });
+        const res = await apiPost('/kas/close', { cash_counted: counted },
+                                 { idempotencyKey: newIdemKey() });
         try { localStorage.removeItem('bsf_audit_kas'); } catch (_) {}
         const s = (res && res.snapshot) || {};
         const f = s.finance || {};
@@ -3615,14 +4179,116 @@ async function renderKuArsip() {
     }
 }
 
+// Panel TITIPAN DP PELANGGAN — terpisah dari Kondisi Kas / Arus Kas.
+// 4 ringkasan + daftar mutasi (Tanggal, No Servis, Pelanggan/Unit, Jenis,
+// Masuk, Keluar, Saldo). Semuanya dari backend yang menurunkannya dari
+// `payments` + `refunds`; tidak ada ledger titipan sendiri, jadi mustahil
+// terjadi mutasi ganda walau request diulang atau halaman di-refresh.
+function renderKuTitipan() {
+    const grid = document.getElementById('kuTitipanGrid');
+    const body = document.getElementById('kuTitipanBody');
+    if (!grid && !body) return;
+    const t = ((_kuFin || {}).titipan_dp) || {};
+
+    if (grid) {
+        const cells = [
+            { k: 'Total DP Diterima', v: t.diterima, c: 'v-in' },
+            { k: 'Total DP Digunakan untuk Pelunasan', v: t.dipakai, c: '' },
+            { k: 'Total DP Dikembalikan', v: t.dikembalikan, c: 'v-out' },
+            { k: 'Saldo Titipan Berjalan', v: t.saldo, c: 'v-saldo' },
+        ];
+        grid.innerHTML = cells.map(c => `
+            <div class="ku-tp-cell">
+                <span class="ku-tp-label">${escapeHtml(c.k)}</span>
+                <span class="ku-tp-val ${c.c}">${kuRupiah(c.v)}</span>
+            </div>`).join('');
+    }
+
+    if (!body) return;
+    const rows = Array.isArray(t.mutasi) ? t.mutasi : [];
+    if (!rows.length) {
+        body.innerHTML = '<tr><td colspan="7"><div class="text-center text-xs text-gray-400 py-5">'
+            + 'Belum ada mutasi titipan DP.</div></td></tr>';
+        return;
+    }
+    const cls = { 'DP Masuk': 'v-in', 'Dipakai untuk Pelunasan': '', 'Pengembalian DP': 'v-out' };
+    body.innerHTML = rows.map(it => `
+        <tr>
+            <td class="tx-cell-muted tx-nowrap">${escapeHtml(it.tgl || '-')}</td>
+            <td class="tx-cell-muted tx-nowrap">${escapeHtml(it.no_servis || '-')}</td>
+            <td><span class="tx-ellipsis" title="${escapeHtml(it.pelanggan || '-')} — ${escapeHtml(it.unit || '-')}">${escapeHtml(it.pelanggan || '-')}</span><br><span class="text-[10.5px] text-gray-400">${escapeHtml(it.unit || '-')}</span></td>
+            <td class="tx-nowrap"><span class="tx-titipan-tag">${escapeHtml(it.label || it.jenis || '-')}</span></td>
+            <td class="numeric-r">${to_decimal(it.masuk) ? kuRupiah(it.masuk) : '<span class="text-green-500">-</span>'}</td>
+            <td class="numeric-r">${to_decimal(it.keluar) ? kuRupiah(it.keluar) : '<span class="text-red-500">-</span>'}</td>
+            <td class="tx-saldo numeric-r">${kuRupiah(it.saldo)}</td>
+        </tr>`).join('');
+}
+
+// Kondisi Kas — posisi kas + arus periode OPERASIONAL, URUTAN TETAP:
+//   1. Kas Besar        (hanya Admin/Pengelola)
+//   2. Kas Kecil/Laci   (Kas Aset Awal periode, DIKURANGI titipan DP berjalan)
+//   3. Total Penjualan  (Omzet — sudah CASH + LUNAS)
+//   4. Total Modal     (Part + Jasa + Lain — keluar saat status CASH)
+//   5. Total Beban     (Gaji & Operasional)
+// Kolom: Uraian / Debit / Kredit / Saldo. Kasir & CS mulai dari baris
+// Kas Kecil/Laci — posisi Kas Besar tidak dikirim maupun dirender untuk mereka.
+// DP TIDAK pernah jadi baris di sini: seluruh nominalnya dilacak terpisah di
+// panel "Titipan DP Pelanggan" dan tidak memengaruhi Arus Kas operasional.
+function renderKondisiKas() {
+    const body = document.getElementById('kuKondisiBody');
+    if (!body) return;
+    const fin = _kuFin || {};
+    const lihatAset = canViewAset();
+
+    let saldo = 0;
+    const rows = [];
+    const row = (nama, tag, debit, kredit, cls) => {
+        const d = Number(debit) || 0;
+        const k = Number(kredit) || 0;
+        saldo += d - k;
+        rows.push(
+            `<tr class="${cls || ''}">`
+            + `<td><span class="tx-device">${escapeHtml(nama)}</span>`
+            + (tag ? `<span class="ku-kd-tag${cls === 'is-laci' ? ' is-laci' : ''}">${escapeHtml(tag)}</span>` : '')
+            + `</td>`
+            + `<td class="tx-debit numeric-c">${d ? kuRupiah(d) : '<span class="text-green-500">-</span>'}</td>`
+            + `<td class="tx-kredit numeric-c">${k ? kuRupiah(k) : '<span class="text-red-500">-</span>'}</td>`
+            + `<td class="tx-saldo numeric-r">${kuRupiah(saldo)}</td>`
+            + `</tr>`);
+    };
+
+    // 1. Kas Besar — hanya role ber-authority (backend juga tidak mengirimnya).
+    if (lihatAset && fin.saldo_aset !== undefined) {
+        row('Kas Besar (Pengelola)', 'ADMIN/PENGELOLA', Number(fin.saldo_aset) || 0, 0, 'is-besar');
+    }
+    // 2. Kas Kecil / Laci — saldo operasional (titipan DP dikurangi).
+    row('Kas Kecil / Laci', 'KAS ASET AWAL',
+        Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
+    // 3. Total Penjualan Service (Omzet periode).
+    row('Total Penjualan Service', 'OMZET', Number(fin.omset) || 0, 0);
+    // 4. Total Modal (Part + Jasa + Lain).
+    row('Total Modal (Part+Jasa+Lain)', 'MODAL', 0, Number(fin.total_modal) || 0);
+    // 5. Total Beban (Gaji + Operasional).
+    row('Total Beban (Gaji & OPS)', 'BEBAN', 0, Number(fin.total_beban) || 0, 'is-total');
+
+    body.innerHTML = rows.join('');
+}
+
 function renderBukuKas() {
     const body = document.getElementById('kuKasBody');
     const fin = _kuFin || {};
     if (body) {
+        // v4 #10: baris pertama Buku Kas = KAS ASET AWAL (opening SALDO LACI periode).
+        const _awal = `<tr class="ku-row-awal">
+                <td><span class="tx-device">KAS ASET AWAL</span><br><span class="text-[10.5px] text-gray-400">Saldo Laci / Kas Aset Kecil &mdash; awal periode</span></td>
+                <td class="tx-debit numeric-c">${kuRupiah(_kuKasAwal)}</td>
+                <td class="tx-kredit numeric-c"><span class="text-red-500">-</span></td>
+                <td class="tx-saldo numeric-r">${kuRupiah(_kuKasAwal)}</td>
+            </tr>`;
         if (!_kuKasRows.length) {
-            body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada arus kas periode ini.<br>Pembayaran servis, beban, dan entri manual akan tercatat otomatis di sini.</div></td></tr>`;
+            body.innerHTML = _awal + `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada arus kas periode ini.<br>Pembayaran servis, beban, dan entri manual akan tercatat otomatis di sini.</div></td></tr>`;
         } else {
-            body.innerHTML = _kuKasRows.map(k => {
+            body.innerHTML = _awal + _kuKasRows.map(k => {
                 const masuk = k.jenis === 'Masuk';
                 const _sub = [k.kategori || '', k.tgl || ''].filter(Boolean).join(' • ');
                 return `
@@ -3637,10 +4303,15 @@ function renderBukuKas() {
     }
     const sum = document.getElementById('kuKasSummary');
     if (sum) {
+        const laci = (_kuSaldoLapisan && _kuSaldoLapisan.LACI) || null;
+        const aset = (_kuSaldoLapisan && _kuSaldoLapisan.KAS_ASET) || null;
         const cards = [
             { label: 'Total Masuk', value: kuRupiah(fin.total_masuk), icon: 'fa-arrow-trend-up', cls: 'sm-green' },
             { label: 'Total Keluar', value: kuRupiah(fin.total_keluar), icon: 'fa-arrow-trend-down', cls: 'sm-red' },
-            { label: 'Saldo Kas', value: kuRupiah(fin.saldo), icon: 'fa-wallet', cls: 'sm-blue' },
+            // SSOT-7: Buku Kas ini = Kas Perputaran (Laci). Kas Aset ditampilkan
+            // terpisah dan TIDAK dijumlahkan dengan Laci.
+            { label: 'Saldo Kas (Laci)', value: kuRupiah(laci ? laci.saldo : fin.saldo), icon: 'fa-wallet', cls: 'sm-blue' },
+            { label: 'Kas Aset', value: aset ? kuRupiah(aset.saldo) : '-', icon: 'fa-vault', cls: 'sm-blue' },
         ];
         sum.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
@@ -3657,18 +4328,37 @@ function renderAlloc() {
     const fin = _kuFin || {};
     const total = Number(fin.laba_bersih) || 0;
     const al = fin.alokasi || {};
+    // Distribusi hanya tampil ketika target operasional (CTO) tercapai.
+    // Sumber angkanya: alokasi yang sudah TERBENTUK (Tutup Kas) kalau ada,
+    // kalau belum → pratinjau. Badge menjelaskan yang sedang ditampilkan.
+    const cto = !!fin.cto_tercapai;
     const formed = !!fin.alokasi_terbentuk && total > 0;
+    const src = formed ? al : (fin.alokasi_preview || {});
+    const badge = document.getElementById('kuAllocBadge');
+    const note = document.getElementById('kuAllocNote');
+    if (badge) {
+        badge.classList.toggle('is-ok', cto);
+        badge.textContent = !cto ? 'MENUNGGU CTO'
+            : (formed ? 'TERBENTUK' : 'PRATINJAU');
+    }
+    if (note) {
+        note.textContent = !cto
+            ? 'Target Operasional belum tercapai — distribusi belum ditampilkan.'
+            : (formed
+                ? 'Angka final, sudah dikunci saat Tutup Kas.'
+                : 'Angka perkiraan — akan dikunci saat Tutup Kas.');
+    }
     if (totalEl) totalEl.textContent = kuRupiah(total);
-    _kuAllocView = formed ? [
-        { nama: 'Bonus Karyawan', val: al.karyawan || 0, color: '#f59e0b' },
-        { nama: 'Pengelola', val: al.pengelola || 0, color: '#dc2626' },
-        { nama: 'Investor', val: al.investor || 0, color: '#2563eb' },
-        { nama: 'Kas Aset', val: al.kas_aset || 0, color: '#16a34a' },
+    _kuAllocView = cto ? [
+        { nama: 'Bonus Karyawan', val: src.karyawan || 0, color: '#f59e0b' },
+        { nama: 'Pengelola', val: src.pengelola || 0, color: '#dc2626' },
+        { nama: 'Investor', val: src.investor || 0, color: '#2563eb' },
+        { nama: 'Kas Aset', val: src.kas_aset || 0, color: '#16a34a' },
     ] : [];
-    updateProfitChart(_kuAllocView.map(a => (total > 0 ? a.val / total * 100 : 0)), formed);
+    updateProfitChart(_kuAllocView.map(a => (total > 0 ? a.val / total * 100 : 0)), cto);
     if (!list) return;
-    if (!formed) {
-        list.innerHTML = `<div class="text-center text-xs text-gray-400 py-4">Alokasi belum terbentuk — target operasional (CTO) belum tercapai atau laba bersih ≤ 0.<br>Nominal dihitung otomatis dari server setelah target tercapai.</div>`;
+    if (!cto) {
+        list.innerHTML = '';
         return;
     }
     list.innerHTML = _kuAllocView.map((a, i) => {
@@ -4348,28 +5038,37 @@ function applyChecklist(prefix, data) {
     set(CHECK_LEN, data.len);
 }
 
+// Daftar teknisi dari server: nama unik di service_orders + user aktif
+// ber-role TEKNISI/ADMIN/SUPERADMIN (backend/routers/orders.py).
+// WAJIB dipanggil ulang tiap overlay dibuka: pada DOMContentLoaded token belum
+// ada, sehingga fetch pertama 401 dan dropdown tetap kosong sampai page reload.
+async function loadReceiveTechnicians() {
+    const sel = document.getElementById('rcTechnician');
+    if (!sel) return [];
+    let techs = null;
+    try { techs = await apiGet('/orders/technicians'); } catch (_) { return []; }
+    if (!Array.isArray(techs) || !techs.length) return [];
+    const cur = sel.value || '';
+    sel.innerHTML = '<option value="">— Pilih Teknisi —</option>'
+        + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+    // Kembalikan pilihan teknisi dari draft setelah option async tersedia.
+    try {
+        const d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null');
+        const want = (d && d.rcTechnician) || cur;
+        if (want && Array.from(sel.options).some(o => o.value === want)) sel.value = want;
+    } catch (_) { if (cur) sel.value = cur; }
+    return techs;
+}
+
 async function initReceivePage() {
     // Guard anti double-binding: listener submit/input dipasang sekali saja.
     // Pemanggilan ulang hanya me-restore draft (tanpa dobel POST/history).
-    if (window._initReceiveBound) { restoreReceiveDraft(); return; }
+    if (window._initReceiveBound) { restoreReceiveDraft(); loadReceiveTechnicians(); return; }
     window._initReceiveBound = true;
     renderChecklist('rc', 'rcCheckGroups', null, { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
     restoreReceiveDraft();
-    try {
-        const techs = await apiGet('/orders/technicians');
-        const sel = document.getElementById('rcTechnician');
-        if (sel && techs && techs.length) {
-            const cur = (document.getElementById('rcTechnician') || {}).value || '';
-            sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
-            // Kembalikan pilihan teknisi dari draft setelah option async tersedia.
-            try {
-                const d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null');
-                const want = (d && d.rcTechnician) || cur;
-                if (want && Array.from(sel.options).some(o => o.value === want)) sel.value = want;
-            } catch (_) { if (cur) sel.value = cur; }
-        }
-    } catch (_) {}
+    await loadReceiveTechnicians();
 
     const phoneEl = document.getElementById('rcPhone');
     phoneEl.addEventListener('change', loadSmartHistory);
@@ -4413,7 +5112,7 @@ async function initReceivePage() {
             const _rcTarget = RC_PATH_TARGET[_rcPath];
             const _rcVal = id => ((document.getElementById(id) || {}).value || '').trim();
             const _rcMissing = [];
-            if (_rcPath === 'PERBAIKAN' || _rcPath === 'SPAREPART') {
+            if (_rcPath === 'REPAIR' || _rcPath === 'WAIT PART') {
                 if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana Perbaikan', 'rcPlan']);
                 if (!((parseFloat((document.getElementById('rcEstimate') || {}).value) || 0) > 0)) _rcMissing.push(['Estimasi Biaya', 'rcEstimate']);
                 if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi Penanggung Jawab', 'rcTechnician']);
@@ -4768,11 +5467,12 @@ function notaTglSlash(t) {
 
 function notaStatusClass(s) {
     const v = String(s || '').toUpperCase();
+    if (v === 'CASH') return 'nd-green';
     if (v === 'SELESAI' || v === 'DONE' || v === 'COMPLETED') return 'nd-green';
     if (v === 'BATAL' || v === 'CANCEL' || v === 'GAGAL' || v === 'FAILED') return 'nd-red';
-    if (v === 'DITERIMA' || v === 'ANALISA' || v === 'DIAGNOSA' || v === 'KONFIRMASI'
-        || v === 'MENUNGGU SPAREPART') return 'nd-amber';
-    if (v === 'PERBAIKAN') return 'nd-blue';
+    if (v === 'DITERIMA' || v === 'ANALISA' || v === 'KONFIRMASI'
+        || v === 'WAIT PART') return 'nd-amber';
+    if (v === 'REPAIR') return 'nd-blue';
     return 'nd-blue';
 }
 
@@ -4795,33 +5495,30 @@ function shopWaDisplay() {
 }
 
 // Snapshot KONDISI SERVIS pada Nota Penerimaan (bukan histori/timeline).
-// Lifecycle resmi (FINAL LOCK): DITERIMA → ANALISA → DIAGNOSA → KONFIRMASI
-// → MENUNGGU SPAREPART → PERBAIKAN → SELESAI (+ cabang BATAL/GAGAL).
+// Lifecycle resmi (P2-15 / FINAL LOCK): DITERIMA → ANALISA → KONFIRMASI → WAIT PART
+// → REPAIR → DONE → CASH (+ cabang CANCEL/FAILED).
 function notaSnapshotStatus(status) {
     const s = String(status || '').toUpperCase().replace(/\s+/g, '_');
     const map = {
         DITERIMA:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
         RECEIVED:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
         ANALISA:   { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
-        DIAGNOSA:  { label: 'DIAGNOSA',  cls: 'nps-amber',   stage: 2, sub: 'Hasil diagnosa teknisi.' },
-        DIAGNOSIS: { label: 'DIAGNOSA',  cls: 'nps-amber',   stage: 2, sub: 'Hasil diagnosa teknisi.' },
+        DIAGNOSA:  { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
+        DIAGNOSIS: { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
         KONFIRMASI:{ label: 'KONFIRMASI', cls: 'nps-amber',  stage: 3, sub: 'Menunggu persetujuan pelanggan.' },
-        MENUNGGU_SPAREPART: { label: 'MENUNGGU SPAREPART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
-        WAIT_PART: { label: 'MENUNGGU SPAREPART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
-        PERBAIKAN: { label: 'PERBAIKAN', cls: 'nps-blue',    stage: 5, sub: 'Unit sedang dikerjakan teknisi.' },
-        REPAIR:    { label: 'PERBAIKAN', cls: 'nps-blue',    stage: 5, sub: 'Unit sedang dikerjakan teknisi.' },
-        SELESAI:   { label: 'SELESAI',   cls: 'nps-green',   stage: 6, sub: 'Pekerjaan selesai — unit dapat diambil.' },
-        DONE:      { label: 'SELESAI',   cls: 'nps-green',   stage: 6, sub: 'Pekerjaan selesai — unit dapat diambil.' },
-        GAGAL:     { label: 'GAGAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan tidak berhasil.' },
-        FAILED:    { label: 'GAGAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan tidak berhasil.' },
-        BATAL:     { label: 'BATAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan dibatalkan.' },
-        CANCEL:    { label: 'BATAL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan dibatalkan.' },
+        'WAIT PART':   { label: 'WAIT PART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
+        WAIT_PART:     { label: 'WAIT PART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
+        REPAIR:        { label: 'REPAIR',     cls: 'nps-blue',  stage: 5, sub: 'Unit sedang dikerjakan teknisi.' },
+        DONE:          { label: 'DONE',       cls: 'nps-green', stage: 6, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        CASH:          { label: 'CASH',       cls: 'nps-emerald', stage: 7, sub: 'Transaksi terealisasi — unit sudah diambil & dibayar.' },
+        FAILED:        { label: 'FAILED',     cls: 'nps-red',   stage: -1, sub: 'Perbaikan tidak berhasil.' },
+        CANCEL:        { label: 'CANCEL',     cls: 'nps-red',   stage: -1, sub: 'Perbaikan dibatalkan.' },
     };
     if (map[s]) return map[s];
     return { label: String(status || '-'), cls: 'nps-neutral', stage: -1, sub: 'Kondisi unit saat nota dibuat.' };
 }
 
-const NPS_STAGES = ['DITERIMA', 'ANALISA', 'DIAGNOSA', 'KONFIRMASI', 'MENUNGGU SPAREPART', 'PERBAIKAN', 'SELESAI'];
+const NPS_STAGES = ['DITERIMA', 'ANALISA', 'KONFIRMASI', 'WAIT PART', 'REPAIR', 'DONE', 'CASH'];
 
 // Label checklist nota (fisik/len) dari master yang sudah ada.
 function notaChecklistText(list, master) {
@@ -5176,6 +5873,7 @@ function openClaimReceive() {
     const dt = document.getElementById('clrDate');
     if (dt && !dt.value) dt.value = new Date().toISOString().slice(0, 10);
     document.getElementById('pageClaimReceive').classList.add('open');
+    loadClaimTechnicians();
     try { renderChecklist('clr', 'clrCheckGroups', 'Kondisi unit saat klaim diterima.'); } catch (_) {}
     const s = document.getElementById('clrSearch');
     if (s) setTimeout(() => s.focus({ preventScroll: true }), 80);
@@ -5346,6 +6044,7 @@ async function claimRSubmit(e) {
 }
 
 function claimRRenderResult(c) {
+    try { claimRRefreshResolusi(c); } catch (_) {}
     const card = document.getElementById('clrResultCard');
     if (card) {
         card.innerHTML = `
@@ -5387,6 +6086,46 @@ function claimRWorkflowFeedback(msg, isErr) {
     fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
 }
 
+// P2-10: Refund Klaim Garansi (Admin, dana Kas Aset + pre-check).
+async function clrRefundGaransi() {
+    if (!can('REFUND_GARANSI')) { toast('Aksi ditolak: Refund Garansi adalah keputusan Admin.'); return; }
+    if (!_clrClaim) { claimRWorkflowFeedback('Belum ada claim aktif.', true); return; }
+    let nominal = Number((_clrClaim.customer_cost || 0));
+    const v = prompt('Nominal refund garansi (dana dari Kas Aset), default biaya pelanggan:',
+                     nominal ? String(nominal) : '');
+    if (v === null) return;
+    nominal = Number(v);
+    if (!nominal || nominal <= 0) { claimRWorkflowFeedback('Nominal tidak valid.', true); return; }
+    try {
+        const pre = await apiGet('/refunds/precheck/garansi/' + _clrClaim.id + '&nominal=' + nominal);
+        if (pre && pre.cukup === false) {
+            claimRWorkflowFeedback('Saldo Kas Aset tidak cukup untuk refund ini.', true);
+            return;
+        }
+        if (!confirm('Refund ' + kuRupiah(nominal) + ' dari Kas Aset untuk klaim ' + _clrClaim.claim_no + '?')) return;
+        const r = await apiPost('/refunds/garansi',
+            { warranty_claim_id: _clrClaim.id, nominal },
+            { idempotencyKey: newIdemKey() });
+        claimRWorkflowFeedback('Refund garansi ' + kuRupiah(r.refund.nominal)
+            + ' diproses. Saldo Kas Aset ' + kuRupiah(r.saldo_setelah) + '.', false);
+        toast('Refund garansi diproses.', 'success');
+        try { await loadKuFinance(); } catch (_) {}
+    } catch (err) {
+        claimRWorkflowFeedback(err.message, true);
+    }
+}
+
+// Sinkronkan UI resolusi + tombol refund dari data klaim terbaru.
+function claimRRefreshResolusi(c) {
+    const sel = document.getElementById('clrResolusi');
+    if (sel) sel.value = (c && c.resolusi) ? c.resolusi : '';
+    const btn = document.getElementById('clrRefundBtn');
+    if (btn) {
+        btn.classList.toggle('hidden', !can('REFUND_GARANSI'));
+        if (c && c.resolusi === 'REFUND' && can('REFUND_GARANSI')) btn.classList.remove('hidden');
+    }
+}
+
 async function claimRSave() {
     if (!_clrClaim) { claimRWorkflowFeedback('Belum ada claim aktif.', true); return; }
     const decision = (document.getElementById('clrDecision') || {}).value || 'BELUM_DIPUTUSKAN';
@@ -5416,10 +6155,13 @@ async function claimRSave() {
             third_party_work: document.getElementById('clrThirdParty') && document.getElementById('clrThirdParty').checked ? 1 : 0,
             customer_cost: parseFloat((document.getElementById('clrCustomerCost') || {}).value) || 0,
             internal_cost: parseFloat((document.getElementById('clrInternalCost') || {}).value) || 0,
+            // P2-09: resolusi repair/replace/refund (dana refund = tahap Refund).
+            resolusi: ((document.getElementById('clrResolusi') || {}).value || '') || null,
         };
         const c = await apiPut('/claims/' + _clrClaim.id, payload);
         _clrClaim = c;
         claimRRenderResult(c);
+        try { claimRRefreshResolusi(c); } catch (_) {}
         claimRWorkflowFeedback('Workflow claim ' + c.claim_no + ' tersimpan.', false);
         if (_clrOrigin) { try { claimRSelectRefresh(c); } catch (_) {} }
     } catch (err) {
@@ -5790,7 +6532,7 @@ function warrantyEndOf(cashDate, days) {
 }
 
 async function usWarrantyPrint() {
-    if (usGetStatus() !== 'SELESAI') return;
+    if (usGetStatus() !== 'CASH') return;
     // Nota garansi syarat SELESAI + LUNAS (FINAL LOCK).
     if (_txEditId) {
         try {
@@ -5824,7 +6566,7 @@ async function usWarrantyPrint() {
         warranty_label: warrantyLabel(mths),
         warranty_days: WARRANTY_DAYS,
         warranty_end: warrantyEndFor(cash, mths),
-        status: 'SELESAI',
+        status: 'CASH',
     };
     _lastWarranty = d;
     _notaMode = 'WARRANTY';
@@ -6020,17 +6762,21 @@ function warrantyNotaDigitalText(d) {
         + 'Garansi pekerjaan yang sama. Simpan sebagai bukti garansi. Terima kasih! - *SUKABUMI FLASHER*';
 }
 
+// Dropdown teknisi di Penerimaan Klaim Garansi. Sumber sama dengan Servis Baru;
+// dipanggil ulang tiap overlay dibuka karena token belum ada saat DOMContentLoaded.
+async function loadClaimTechnicians() {
+    const sel = document.getElementById('clrTechnician');
+    if (!sel || sel.options.length > 1) return;
+    try {
+        const techs = await apiGet('/orders/technicians');
+        if (!Array.isArray(techs) || !techs.length) return;
+        sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+    } catch (_) {}
+}
+
 function initClaimReceive() {
     try { renderChecklist('clr', 'clrCheckGroups', 'Kondisi unit saat klaim diterima.'); } catch (_) {}
-    const techFill = async () => {
-        const sel = document.getElementById('clrTechnician');
-        if (!sel || sel.options.length > 1) return;
-        try {
-            const techs = await apiGet('/orders/technicians');
-            sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
-        } catch (_) {}
-    };
-    techFill();
+    loadClaimTechnicians();
     const s = document.getElementById('clrSearch');
     if (s && !s.dataset.clrBound) {
         s.dataset.clrBound = '1';

@@ -7,7 +7,11 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from dependencies import get_db_session
-from models import Expense, KasEntry, KasPeriod, Payment, ServiceOrder
+from finance import compute_finance_core
+import cash
+from money import HUNDRED, PCT_10, PCT_30, ZERO, to_decimal
+from models import Expense, KasEntry, KasPeriod, Payment, Refund, ServiceOrder, User
+from routers.auth import get_authenticated_user
 from statusflow import kewajiban, lunas_moment, payment_summary
 import schemas
 
@@ -24,6 +28,200 @@ def _period_bounds(now: datetime):
     if now < start:
         start -= timedelta(days=1)
     return start, start + timedelta(days=1)
+
+
+def boleh_lihat_kas_besar(user) -> bool:
+    """v4 #11: Kas BESAR (Saldo Aset + Master Kas) hanya Admin & Pengelola.
+
+    Satu-satunya definisi visibilitas posisi kas besar. Dipakai oleh
+    `compute_finance` (dan endpoint lain) supaya tidak ada celah baca lewat
+    endpoint yang berbeda.
+    """
+    try:
+        from authority import ROLE_ADMIN, ROLE_PENGELOLA, canonical_role
+        return canonical_role(user) in (ROLE_ADMIN, ROLE_PENGELOLA)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = None) -> dict:
+    """Ringkasan **Titipan DP** — pisah dari Omzet, Laba, dan Distribusi.
+
+    DP bukan pendapatan: uang customer yang belum menjadi pembayaran transaksi.
+    Empat angka, semuanya TURUNAN dari data yang sudah ada (tanpa kolom baru,
+    tanpa ledger baru):
+
+        Diterima     = Σ Payment(kind='DP')
+        Dipakai      = DP milik unit yang transaksinya sudah SETTLED (LUNAS)
+        Dikembalikan = Σ Refund(jenis='DP')
+        Saldo        = Diterima − Dipakai − Dikembalikan
+
+    "Dipakai" dihitung dari Payment Ledger, bukan dari kolom baru: begitu unit
+    LUNAS, DP-nya sudah jadi bagian dari pembayaran penuh (event CASH menulis
+    pelunasan sebesar SISA, bukan sebesar total — jadi tidak ada double count).
+    Saldo titipan bersifat **lintas periode**: Tutup Kas tidak menghapus
+    apa pun, dan angka ini tidak dibatasi periode kas, jadi DP yang belum
+    selesai otomatis terbawa ke periode berikutnya.
+
+    `berjalan` = DP **yang masuk kas pada periode [start, end) tapi unitnya
+    belum SETTLED**. DP milik unit yang sudah LUNAS TIDAK boleh ditambah lagi —
+    nilainya sudah tercakup di Omzet (Omzet = kewajiban = total pembayaran).
+    """
+    from statusflow import payment_summary
+
+    pays_by_order = {}
+    for p in db.query(Payment).all():
+        pays_by_order.setdefault(p.service_order_id, []).append(p)
+
+    diterima = ZERO
+    dipakai = ZERO
+    berjalan = ZERO
+    for o in db.query(ServiceOrder).all():
+        rows = pays_by_order.get(o.id) or []
+        dp_order = ZERO
+        dp_periode = ZERO
+        for p in rows:
+            if (getattr(p, "kind", "") or "").strip().upper() == "DP":
+                nilai = to_decimal(p.amount)
+                dp_order += nilai
+                if start is not None and end is not None:
+                    ca = getattr(p, "created_at", None)
+                    if ca is not None and start <= ca < end:
+                        dp_periode += nilai
+        if dp_order <= ZERO:
+            continue
+        diterima += dp_order
+        s = payment_summary(o, rows)
+        if s["payment_status"] == "LUNAS":
+            dipakai += dp_order
+        else:
+            # Masih titipan: uangnya sudah di Laci tapi belum jadi Omzet.
+            berjalan += dp_periode
+
+    dikembalikan = ZERO
+    for r in db.query(Refund).all():
+        if (getattr(r, "jenis", "") or "").strip().upper() == "DP":
+            dikembalikan += to_decimal(r.nominal)
+
+    return {
+        "diterima": diterima,
+        "dipakai": dipakai,
+        "dikembalikan": dikembalikan,
+        # TIDAK di-clamp ke 0: saldo harus PERSIS sama dengan penjumlahan
+        # seluruh mutasi (UAT #7). Saldo negatif berarti ada refund DP yang
+        # melebihi DP yang masih tertahan — itu informasi yang harus terlihat,
+        # bukan ditutup diam-diam.
+        "saldo": diterima - dipakai - dikembalikan,
+        "berjalan": berjalan,
+        "mutasi": mutasi_titipan_dp(db, pays_by_order),
+    }
+
+
+def mutasi_titipan_dp(db: Session, pays_by_order: dict = None) -> list:
+    """Daftar mutasi Titipan DP + saldo berjalan, untuk panel "Titipan DP".
+
+    SEMUA diturunkan dari `payments` + `refunds` — tidak ada tabel/kolom/ledger
+    baru, jadi tidak mungkin terjadi mutasi ganda: daftar ini dihitung ulang
+    setiap request dari data yang sama, sehingga reload halaman atau request
+    berulang menghasilkan angka yang identik.
+
+    Tiga jenis mutasi:
+      MASUK  — setiap Payment(kind='DP'): uang customer masuk sebagai titipan.
+      KELUAR — setiap Refund(jenis='DP'): DP dikembalikan ke customer.
+      DIPAKAI — saat unitnya SETTLED (LUNAS), DP-nya diselesaikan jadi
+                pembayaran transaksi. Satu baris per unit, dihitung dari
+                Payment Ledger (bukan dari status CASH), jadi tidak mungkin
+                terhitung dua kali walau status diperbarui berkali-kali.
+    """
+    from statusflow import lunas_moment, payment_summary
+
+    if pays_by_order is None:
+        pays_by_order = {}
+        for p in db.query(Payment).all():
+            pays_by_order.setdefault(p.service_order_id, []).append(p)
+
+    items = []
+    for o in db.query(ServiceOrder).all():
+        rows = pays_by_order.get(o.id) or []
+        dp_rows = [p for p in rows
+                   if (getattr(p, "kind", "") or "").strip().upper() == "DP"]
+        if not dp_rows:
+            continue
+        cust = getattr(o, "customer", None)
+        for p in dp_rows:
+            ca = getattr(p, "created_at", None) or datetime.min
+            items.append({
+                "tgl": ca.date().isoformat() if hasattr(ca, "date") else None,
+                "waktu": ca.isoformat() if hasattr(ca, "isoformat") else None,
+                "no_servis": o.no_servis,
+                "pelanggan": (getattr(cust, "name", None) or "-"),
+                "unit": o.device or "-",
+                "jenis": "MASUK",
+                "label": "DP Masuk",
+                "masuk": to_decimal(p.amount),
+                "keluar": ZERO,
+            })
+        if payment_summary(o, rows)["payment_status"] != "LUNAS":
+            continue
+        dipakai = sum(to_decimal(p.amount) for p in dp_rows)
+        mm = lunas_moment(o, rows) or datetime.min
+        items.append({
+            "tgl": mm.date().isoformat() if hasattr(mm, "date") else None,
+            "waktu": mm.isoformat() if hasattr(mm, "isoformat") else None,
+            "no_servis": o.no_servis,
+            "pelanggan": (getattr(cust, "name", None) or "-"),
+            "unit": o.device or "-",
+            "jenis": "DIPAKAI",
+            "label": "Dipakai untuk Pelunasan",
+            "masuk": ZERO,
+            "keluar": dipakai,
+        })
+
+    for r in db.query(Refund).all():
+        if (getattr(r, "jenis", "") or "").strip().upper() != "DP":
+            continue
+        o = getattr(r, "service_order", None)
+        cust = getattr(o, "customer", None) if o is not None else None
+        ca = getattr(r, "created_at", None) or datetime.min
+        items.append({
+            "tgl": ca.date().isoformat() if hasattr(ca, "date") else None,
+            "waktu": ca.isoformat() if hasattr(ca, "isoformat") else None,
+            "no_servis": (getattr(o, "no_servis", None) or getattr(r, "refund_no", None) or "-"),
+            "pelanggan": (getattr(cust, "name", None) or "-"),
+            "unit": (getattr(o, "device", None) or "-"),
+            "jenis": "KEMBALI",
+            "label": "Pengembalian DP",
+            "masuk": ZERO,
+            "keluar": to_decimal(r.nominal),
+        })
+
+    urut = {"MASUK": 0, "DIPAKAI": 1, "KEMBALI": 2}
+    items.sort(key=lambda it: (str(it["waktu"] or ""), urut.get(it["jenis"], 9)))
+    saldo = ZERO
+    for it in items:
+        saldo += to_decimal(it["masuk"]) - to_decimal(it["keluar"])
+        it["saldo"] = saldo
+    items.reverse()          # terbaru di atas
+    return items[:200]
+
+
+def batas_periode(p) -> tuple:
+    """Batas efektif satu periode kas.
+
+    ATURAN BISNIS: periode berjalan DARI SAAT DIBUKA sampai DITUTUP. `end_at`
+    bukan batas pemotongan data — selama periode masih OPEN, semua transaksi
+    sejak `start_at` termasuk, berapa lama pun telat ditutup. Jam 16:00 hanya
+    PATOKAN PENGINGAT untuk segera menutup kas, bukan pemotong periode.
+
+    Hanya periode CLOSED yang punya batas atas yang jelas; nilainya diisi
+    `closing.tutup_periode()` dengan waktu penutupan yang sebenarnya.
+    """
+    if p is None:
+        return None, None
+    start = getattr(p, "start_at", None)
+    if (getattr(p, "status", "") or "").strip().upper() == "CLOSED":
+        return start, getattr(p, "end_at", None)
+    return start, datetime.max
 
 
 def get_active_period(db: Session) -> KasPeriod:
@@ -53,63 +251,65 @@ def _expense_moment(e) -> Optional[datetime]:
     return None
 
 
-def compute_finance(db: Session, start: datetime, end: datetime) -> dict:
+def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar: bool = True) -> dict:
     """Satu-satunya sumber hitungan keuangan (dipakai overview & Tutup Kas).
 
-    Pemasukan servis = jurnal payments (DP/PELUNASAN) dalam periode.
-    Modal diatribusikan ke order yang menerima pembayaran dalam periode.
+    P2-05 / Financial SSOT:
+      - OMZET = penjualan SETTLED/LUNAS dalam periode (DP bukan Omzet, bukan Laba);
+      - MODAL = Part + Jasa + Lain-lain (3 komponen terpisah, cohort Omzet);
+      - BEBAN = Gaji + Operasional (beku sekali per periode / OD-001);
+      - LABA BERSIH = OMZET - MODAL PART - MODAL JASA - MODAL LAIN - BEBAN.
+    Statistik kas manual (opening/masuk/keluar) tetap dipertahankan.
     """
 
     def num(v):
-        try:
-            return float(v or 0)
-        except (TypeError, ValueError):
-            return 0.0
+        """P2-02 / Q10: nilai uang selalu Decimal (tanpa jalur float)."""
+        return to_decimal(v)
 
+    # ---- Financial SSOT (P2-05) ----
+    core = compute_finance_core(db, start, end)
+    omset = core["omset"]
+    modal_part = core["modal_part"]
+    modal_jasa = core["modal_jasa"]
+    modal_lain = core["modal_lainnya"]
+    total_modal = core["total_modal"]
+    laba_kotor = omset - total_modal
+    beban_gaji = core["beban_gaji"]
+    beban_ops = core["beban_operasional"]
+    beban_lain = ZERO  # SSOT-4: kategori lain bukan Beban
+    total_beban = core["total_beban"]
+    in_orders = []
     pays = db.query(Payment).all()
     in_pays = [p for p in pays
                if p.created_at is not None and start <= p.created_at < end]
-    omset = sum(num(p.amount) for p in in_pays)
-    paid_order_ids = {p.service_order_id for p in in_pays}
-    in_orders = []
-    if paid_order_ids:
-        in_orders = db.query(ServiceOrder).filter(ServiceOrder.id.in_(paid_order_ids)).all()
-    modal_part = sum(num(o.part_cost) for o in in_orders)
-    modal_jasa = sum(num(getattr(o, "modal_jasa", 0)) for o in in_orders)
-    modal_lain = sum(num(getattr(o, "modal_lainnya", 0)) for o in in_orders)
-    total_modal = modal_part + modal_jasa + modal_lain
-    laba_kotor = omset - total_modal
-
-    expenses = db.query(Expense).all()
-    in_exp = []
-    for e in expenses:
-        m = _expense_moment(e)
-        if m is not None and start <= m < end:
-            in_exp.append(e)
-    beban_gaji = sum(num(e.nilai) for e in in_exp if (e.kategori or "").strip().lower() == "gaji")
-    beban_ops = sum(num(e.nilai) for e in in_exp if (e.kategori or "").strip().lower() == "operasional")
-    beban_lain = sum(num(e.nilai) for e in in_exp if (e.kategori or "").strip().lower() not in ("gaji", "operasional"))
-    total_beban = beban_gaji + beban_ops + beban_lain
 
     cts_target = beban_gaji
-    cts_progress = (laba_kotor / cts_target * 100) if cts_target > 0 else (100.0 if laba_kotor > 0 else 0.0)
+    cts_progress = (laba_kotor / cts_target * HUNDRED) if cts_target > 0 else (HUNDRED if laba_kotor > 0 else ZERO)
     cts_ok = bool(laba_kotor >= cts_target) if cts_target > 0 else True
 
     cto_target = beban_gaji + beban_ops
-    cto_progress = (laba_kotor / cto_target * 100) if cto_target > 0 else (100.0 if laba_kotor > 0 else 0.0)
+    cto_progress = (laba_kotor / cto_target * HUNDRED) if cto_target > 0 else (HUNDRED if laba_kotor > 0 else ZERO)
     cto_ok = bool(laba_kotor >= cto_target) if cto_target > 0 else True
 
-    laba_bersih = laba_kotor - total_beban
+    # SSOT-5: 4 pengurang, bukan (omzet - modal) - beban yang dikurangi modal dua kali.
+    laba_bersih = omset - modal_part - modal_jasa - modal_lain - total_beban
 
-    # Trigger §8: alokasi TERBENTUK hanya saat CTO tercapai & laba bersih > 0.
-    alokasi_ok = bool(cto_ok and laba_bersih > 0)
-    if alokasi_ok:
-        karyawan = round(laba_bersih * 0.10)
-        pengelola = round(laba_bersih * 0.30)
-        investor = round(laba_bersih * 0.30)
-        kas_aset = round(laba_bersih - karyawan - pengelola - investor)  # sisa pembulatan
+    # P2-07 / SSOT-6: TIDAK lagi digate CTO. Alokasi HANYA terbentuk saat
+    # Tutup Kas (Distribution tersimpan). Gate CTO tetap dilaporkan sebagai
+    # indikator legacy (cto_tercapai) tanpa mengatur distribusi.
+    import distribution as _dist
+    _periode_key = core["periode"]
+    _row_dist = _dist.sudah_ada(db, _periode_key)
+    _preview = _dist.preview(laba_bersih)
+    alokasi_ok = _row_dist is not None
+    if _row_dist is not None:
+        _al = _dist.alokasi_dari(_row_dist)
+        karyawan = _al["karyawan"]
+        pengelola = _al["pengelola"]
+        investor = _al["investor"]
+        kas_aset = _al["kas_aset"]
     else:
-        karyawan = pengelola = investor = kas_aset = 0
+        karyawan = pengelola = investor = kas_aset = ZERO
 
     # Jurnal kas manual periode aktif (di luar servis & beban).
     # 'Saldo Awal' dikecualikan dari baris (dihitung lintas periode sebagai opening).
@@ -120,10 +320,18 @@ def compute_finance(db: Session, start: datetime, end: datetime) -> dict:
             return datetime(k.tanggal.year, k.tanggal.month, k.tanggal.day, 12, 0, 0)
         return None
 
-    kas_masuk = 0.0
-    kas_keluar = 0.0
-    opening = 0.0
-    for k in db.query(KasEntry).all():
+    kas_masuk = ZERO
+    kas_keluar = ZERO
+    opening = ZERO
+    # v4 #9: Buku Kas hanya menghitung mutasi yang memang arus periode:
+    # - layer LACI (bukan posisi Kas Aset Besar), dan
+    # - sumber yang diizinkan (MANUAL / CASH_OUT / REFUND_DP / FAILED_CANCEL).
+    # Mutasi turunan (PAYMENT/MODAL/BEBAN/TRANSFER/INJEKSI/REKONSILIASI) hanya
+    # memengaruhi posisi Master Kas supaya tidak double count.
+    for k in db.query(KasEntry).filter(KasEntry.layer == cash.LAYER_LACI).all():
+        sumber = (getattr(k, "sumber", None) or cash.SUMBER_MANUAL)
+        if sumber not in cash.SUMBER_BUKU_KAS:
+            continue
         is_opening = (k.kategori or "") == "Saldo Awal"
         val = num(k.nominal)
         signed = val if (k.jenis or "").strip().lower() == "masuk" else -val
@@ -141,9 +349,15 @@ def compute_finance(db: Session, start: datetime, end: datetime) -> dict:
     total_keluar = total_modal + total_beban + kas_keluar
     saldo = opening + total_masuk - total_keluar
 
-    return {
+    # Titipan DP dihitung lebih dulu: dipakai untuk (a) saldo berjalan di panel
+    # Titipan DP dan (b) Kas Aset Awal versi OPERASIONAL (dikurangi titipan).
+    _titipan = ringkasan_titipan_dp(db, start, end)
+
+    out = {
+        "periode": core["periode"],
+        "n_settled": core["n_settled"],
         "n_bayar": len(in_pays),
-        "n_order_bayar": len(in_orders),
+        "n_order_bayar": core["n_settled"],
         "omset": omset,
         "modal_part": modal_part,
         "modal_jasa": modal_jasa,
@@ -167,6 +381,25 @@ def compute_finance(db: Session, start: datetime, end: datetime) -> dict:
         "total_masuk": total_masuk,
         "total_keluar": total_keluar,
         "saldo": saldo,
+        # Owner Cash Model v4: posisi aset kas (terpisah dari Buku Kas).
+        "kas_aset_awal": cash.saldo_laci_sampai(db, start),
+        # Saldo Laci untuk TAMPILAN Arus Kas OPERASIONAL: dikurangi titipan DP
+        # yang masih berjalan (uang customer, bukan kas toko). Angka fisiknya
+        # di kas_entries tidak berubah — hanya laporan yang dipisah.
+        "kas_aset_awal_operasional": max(
+            ZERO, cash.saldo_laci_sampai(db, start) - _titipan["saldo"]),
+        "saldo_laci": cash.saldo_laci(db),
+        "label_laci": cash.LABEL[cash.LAYER_LACI],
+        # SSOT-7 / v4 #11: posisi Kas BESAR hanya untuk Admin & Pengelola.
+        # Role lain TIDAK menerima key-nya sama sekali (bukan diisi 0), supaya
+        # tidak bisa dibaca lewat response mana pun.
+        "titipan_dp": _titipan,
+        # P2-07: pratinjau (belum terbentuk) — hanya untuk display, bukan pembukuan.
+        "alokasi_preview": {
+            "karyawan": _preview["karyawan"], "pengelola": _preview["pengelola"],
+            "investor": _preview["investor"], "kas_aset": _preview["kas_aset"],
+            "cash_out": _preview["cash_out"], "eligible": _preview["eligible"],
+        },
         "alokasi_terbentuk": alokasi_ok,
         "alokasi": {
             "karyawan": karyawan,
@@ -175,6 +408,16 @@ def compute_finance(db: Session, start: datetime, end: datetime) -> dict:
             "kas_aset": kas_aset,
         },
     }
+    # SSOT-7 / v4 #11: posisi Kas BESAR hanya untuk Admin & Pengelola. Role lain
+    # TIDAK menerima key-nya sama sekali (bukan diisi 0), supaya tidak bisa dibaca
+    # lewat endpoint mana pun.
+    if lihat_kas_besar:
+        out.update({
+            "saldo_aset": cash.saldo_kas_aset(db),
+            "master_kas": cash.master_kas(db),
+            "label_aset": cash.LABEL[cash.LAYER_ASET],
+        })
+    return out
 
 
 @router.get("/period", response_model=schemas.KasPeriodOut)
@@ -184,17 +427,20 @@ def get_period(db: Session = Depends(get_db_session)):
 
 
 @router.get("/overview")
-def get_overview(db: Session = Depends(get_db_session)):
+def get_overview(db: Session = Depends(get_db_session),
+                 user: User = Depends(get_authenticated_user)):
     """Data untuk star cards + insight. Finansial = agregat periode kas aktif."""
     period = get_active_period(db)
-    fin = compute_finance(db, period.start_at, period.end_at)
+    fin = compute_finance(db, *batas_periode(period),
+                          lihat_kas_besar=boleh_lihat_kas_besar(user))
 
     orders = db.query(ServiceOrder).all()
     total = len(orders)
-    selesai = sum(1 for o in orders if o.status == "SELESAI")
-    aktif = sum(1 for o in orders if o.status in ("DITERIMA", "ANALISA", "DIAGNOSA",
-                                                 "KONFIRMASI", "MENUNGGU SPAREPART", "PERBAIKAN"))
-    gagal_batal = sum(1 for o in orders if o.status in ("GAGAL", "BATAL"))
+    selesai = sum(1 for o in orders if o.status == "DONE")
+    # P2-15: status kanonis baru (DIAGNOSAlegacy == ANALISA, tidak aktif lagi).
+    aktif = sum(1 for o in orders if o.status in ("DITERIMA", "ANALISA", "KONFIRMASI",
+                                                 "WAIT PART", "REPAIR"))
+    gagal_batal = sum(1 for o in orders if o.status in ("FAILED", "CANCEL"))
     _all_pays = db.query(Payment).all()
     _by_order = {}
     for _p in _all_pays:
@@ -205,16 +451,26 @@ def get_overview(db: Session = Depends(get_db_session)):
     def pct_txt(p, ok):
         return "TERCAPAI" if ok else (str(p).replace(".", ",") + "%")
 
+    _awal = getattr(period, "start_at", None)
+    _batas = getattr(period, "end_at", None)
+    # Periode berjalan sampai DITUTUP. Kalau end_at sudah terlewat (belum
+    # ditutup), periode ini tetap berlaku & perlu segera ditutup.
+    _lewat = bool(_batas is not None and _batas < datetime.now())
+    _sub_periode = "dibuka %s" % (_awal.strftime("%d/%m %H:%M") if _awal else "-")
+    _sub_periode += " • belum ditutup (segera tutup kas)" if _lewat else ""
+
     return {
         "period": {
             "id": period.id,
-            "start_at": period.start_at.isoformat(),
-            "end_at": period.end_at.isoformat(),
+            "start_at": _awal.isoformat() if _awal else None,
+            "end_at": _batas.isoformat() if _batas else None,
+            "berlaku_sampai": ("ditutup" if _lewat or _batas is None else _batas.isoformat()),
+            "lewat_jam_16": _lewat,
         },
         "finance": fin,
         "star_cards": [
-            {"key": "omset", "label": "Omset Hari Ini", "value": fin["omset"],
-             "sub": str(fin["n_bayar"]) + " pembayaran • periode 16:00–16:00"},
+            {"key": "omset", "label": "Omset Periode", "value": fin["omset"],
+             "sub": str(fin["n_bayar"]) + " pembayaran • " + _sub_periode},
             {"key": "laba_kotor", "label": "Laba Kotor", "value": fin["laba_kotor"],
              "sub": "Omset − modal (Part+Jasa+Lain)"},
             {"key": "beban", "label": "Total Beban", "value": fin["total_beban"],
@@ -257,8 +513,7 @@ def get_status_stats(db: Session = Depends(get_db_session)):
         if s["payment_status"] == "LUNAS" and m is not None:
             lunas_days.append(m.date())
     masuk, selesai, pending = [], [], []
-    pending_set = {"DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI",
-                   "MENUNGGU SPAREPART", "PERBAIKAN"}
+    pending_set = {"DITERIMA", "ANALISA", "KONFIRMASI", "WAIT PART", "REPAIR"}
     for d in days:
         created = [o for o in orders
                    if o.created_at is not None and o.created_at.date() == d]
@@ -266,8 +521,8 @@ def get_status_stats(db: Session = Depends(get_db_session)):
         selesai.append(sum(1 for cd in lunas_days if cd == d))
         pending.append(sum(1 for o in created if (o.status or "") in pending_set))
     by_status = []
-    for name in ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "MENUNGGU SPAREPART",
-                 "PERBAIKAN", "SELESAI", "GAGAL", "BATAL"]:
+    for name in ["DITERIMA", "ANALISA", "KONFIRMASI", "WAIT PART",
+                 "REPAIR", "DONE", "CASH", "CANCEL", "FAILED"]:
         by_status.append({"name": name,
                           "value": db.query(ServiceOrder).filter(ServiceOrder.status == name).count()})
     return {

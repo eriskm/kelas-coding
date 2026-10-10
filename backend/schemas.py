@@ -1,5 +1,6 @@
 """Pydantic schemas (request/response models)."""
 from datetime import datetime, date
+from money import MoneyOut
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
 
@@ -35,7 +36,7 @@ class CustomerSummary(BaseModel):
     phone: Optional[str] = None
     last_device: Optional[str] = None
     last_action: Optional[str] = None
-    last_price: Optional[float] = None
+    last_price: Optional[MoneyOut] = None
     total_servis: int
     last_at: Optional[datetime] = None
 
@@ -65,22 +66,22 @@ class ServiceOrderBase(BaseModel):
     status: Optional[str] = "DITERIMA"
     unit_status: Optional[str] = "DI TOKO"
     taken_at: Optional[datetime] = None
-    estimate: Optional[float] = 0
-    payment: Optional[float] = 0
+    estimate: Optional[MoneyOut]
+    payment: Optional[MoneyOut]
     service_date: Optional[date] = None
-    final_price: Optional[float] = None
-    part_cost: Optional[float] = None
-    modal_jasa: Optional[float] = None
-    modal_lainnya: Optional[float] = None
+    final_price: Optional[MoneyOut] = None
+    part_cost: Optional[MoneyOut] = None
+    modal_jasa: Optional[MoneyOut] = None
+    modal_lainnya: Optional[MoneyOut] = None
     # laba_bersih = derive backend (diisi router, bukan input user).
-    laba_bersih: Optional[float] = 0
+    laba_bersih: Optional[MoneyOut]
     lunas_date: Optional[date] = None
     lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None
     # Ringkasan pembayaran (derive, diisi router — bukan kolom DB).
     payment_status: Optional[str] = None
-    total_bayar: Optional[float] = None
-    sisa: Optional[float] = None
+    total_bayar: Optional[MoneyOut] = None
+    sisa: Optional[MoneyOut] = None
 
 
 class ServiceReceiveIn(BaseModel):
@@ -94,11 +95,11 @@ class ServiceReceiveIn(BaseModel):
     check_len: Optional[List[str]] = None
     damagetype: Optional[str] = None
     repair_plan: Optional[str] = None
-    estimate: Optional[float] = 0
-    dp: Optional[float] = 0
+    estimate: Optional[MoneyOut]
+    dp: Optional[MoneyOut]
     technician: Optional[str] = None
     status: Optional[str] = "DITERIMA"
-    final_price: Optional[float] = None  # wajib terdefinisi (boleh 0) untuk path TUNGGU
+    final_price: Optional[MoneyOut] = None  # wajib terdefinisi (boleh 0) untuk path TUNGGU
     initial_path: Optional[str] = None  # TITIP | PERBAIKAN | SPAREPART | TUNGGU
 
 
@@ -120,12 +121,12 @@ class ServiceOrderUpdate(BaseModel):
     technician: Optional[str] = None
     status: Optional[str] = None
     status_note: Optional[str] = None  # catatan wajib untuk GAGAL/BATAL/lompat-mundur/koreksi
-    estimate: Optional[float] = None
-    payment: Optional[float] = None
-    final_price: Optional[float] = None
-    part_cost: Optional[float] = None
-    modal_jasa: Optional[float] = None
-    modal_lainnya: Optional[float] = None
+    estimate: Optional[MoneyOut] = None
+    payment: Optional[MoneyOut] = None
+    final_price: Optional[MoneyOut] = None
+    part_cost: Optional[MoneyOut] = None
+    modal_jasa: Optional[MoneyOut] = None
+    modal_lainnya: Optional[MoneyOut] = None
     warranty_months: Optional[int] = None
 
 
@@ -152,22 +153,22 @@ class ServiceOrderList(BaseModel):
     repair_plan: Optional[str] = None
     technician: Optional[str] = None
     status: str
-    estimate: float
-    payment: float
+    estimate: MoneyOut
+    payment: MoneyOut
     service_date: Optional[date] = None
-    final_price: Optional[float] = None
-    part_cost: Optional[float] = None
-    modal_jasa: Optional[float] = None
-    modal_lainnya: Optional[float] = None
-    laba_bersih: Optional[float] = None
+    final_price: Optional[MoneyOut] = None
+    part_cost: Optional[MoneyOut] = None
+    modal_jasa: Optional[MoneyOut] = None
+    modal_lainnya: Optional[MoneyOut] = None
+    laba_bersih: Optional[MoneyOut] = None
     lunas_date: Optional[date] = None
     lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None
     unit_status: Optional[str] = None
     taken_at: Optional[datetime] = None
     payment_status: Optional[str] = None
-    total_bayar: Optional[float] = None
-    sisa: Optional[float] = None
+    total_bayar: Optional[MoneyOut] = None
+    sisa: Optional[MoneyOut] = None
     created_at: datetime
     customer_name: Optional[str] = None
     customer_phone: Optional[str] = None
@@ -185,7 +186,7 @@ class ServiceOrderPage(BaseModel):
 class PaymentBase(BaseModel):
     service_order_id: int
     kind: Optional[str] = "PELUNASAN"  # DP | PELUNASAN
-    amount: float
+    amount: MoneyOut
     method: Optional[str] = "CASH"
     note: Optional[str] = None
 
@@ -201,9 +202,9 @@ class PaymentOut(PaymentBase):
 
 
 class PaymentHistoryOut(BaseModel):
-    kewajiban: float
-    total_bayar: float
-    sisa: float
+    kewajiban: MoneyOut
+    total_bayar: MoneyOut
+    sisa: MoneyOut
     payment_status: str
     items: List[PaymentOut]
 
@@ -224,14 +225,14 @@ class StatusHistoryOut(BaseModel):
 class ExpenseCreate(BaseModel):
     kategori: str  # Gaji | Operasional | ...
     uraian: str
-    nilai: Optional[float] = 0
+    nilai: Optional[MoneyOut]
     tanggal: Optional[date] = None
 
 
 class ExpenseUpdate(BaseModel):
     kategori: Optional[str] = None
     uraian: Optional[str] = None
-    nilai: Optional[float] = None
+    nilai: Optional[MoneyOut] = None
     tanggal: Optional[date] = None
 
 
@@ -240,7 +241,7 @@ class ExpenseOut(BaseModel):
     id: int
     kategori: str
     uraian: str
-    nilai: float
+    nilai: MoneyOut
     tanggal: Optional[date] = None
     created_at: datetime
 
@@ -272,6 +273,8 @@ class KasPeriodOut(BaseModel):
 CLAIM_STATUSES = ["MASUK", "VERIFIKASI", "CEK", "DITERIMA", "DITOLAK", "PROSES", "SELESAI", "DITUTUP"]
 WARRANTY_STATUSES = ["VALID", "EXPIRED"]
 CLAIM_DECISIONS = ["BELUM_DIPUTUSKAN", "DITERIMA", "DITOLAK"]
+# P2-09: resolusi klaim. Uang untuk REFUND = tahap P2-10.
+CLAIM_RESOLUSI = ["REPAIR", "REPLACE", "REFUND"]
 
 
 class ClaimReceiveIn(BaseModel):
@@ -308,8 +311,10 @@ class ClaimUpdate(BaseModel):
     decision: Optional[str] = None
     reject_reason: Optional[str] = None
     claim_status: Optional[str] = None
-    customer_cost: Optional[float] = None
-    internal_cost: Optional[float] = None
+    customer_cost: Optional[MoneyOut] = None
+    internal_cost: Optional[MoneyOut] = None
+    # P2-09
+    resolusi: Optional[str] = None
 
 
 class ClaimOut(BaseModel):
@@ -343,8 +348,12 @@ class ClaimOut(BaseModel):
     decision: Optional[str] = None
     reject_reason: Optional[str] = None
     claim_status: Optional[str] = None
-    customer_cost: Optional[float] = None
-    internal_cost: Optional[float] = None
+    customer_cost: Optional[MoneyOut] = None
+    internal_cost: Optional[MoneyOut] = None
+    # P2-09
+    resolusi: Optional[str] = None
+    origin_payment_status: Optional[str] = None
+    origin_warranty_months: Optional[int] = None
     created_at: datetime
     # Info servis asal (read-only, untuk tampilan tanpa join tambahan)
     origin_no_servis: Optional[str] = None
@@ -391,15 +400,15 @@ class ClaimLookupItem(BaseModel):
 # ---------- Dashboard Overview ----------
 class OverviewItem(BaseModel):
     label: str
-    value: float
+    value: MoneyOut
 
 
 class DashboardOverview(BaseModel):
-    omset: float
-    laba_kotor: float
-    total_beban: float
-    laba_bersih: float
-    target_gaji: float
+    omset: MoneyOut
+    laba_kotor: MoneyOut
+    total_beban: MoneyOut
+    laba_bersih: MoneyOut
+    target_gaji: MoneyOut
     insight: List[dict]
     star_cards: List[dict]
 
@@ -410,7 +419,10 @@ class KasPeriodDetailOut(KasPeriodOut):
 
 
 class KasCloseIn(BaseModel):
-    cash_counted: Optional[float] = None  # hasil hitung uang laci (audit kas)
+    cash_counted: Optional[MoneyOut] = None  # hasil hitung uang laci (audit kas)
+    # P2-08: target periode tertentu (default periode OPEN aktif). Memungkinkan
+    # eksekusi kedua pada periode sama dijawab 409, bukan menutup periode baru.
+    kas_period_id: Optional[int] = None
 
 
 # ---------- KasEntry (jurnal kas manual) ----------
@@ -418,15 +430,17 @@ class KasEntryCreate(BaseModel):
     jenis: str  # Masuk | Keluar
     kategori: str
     keterangan: str
-    nominal: Optional[float] = 0
+    nominal: Optional[MoneyOut]
     tanggal: Optional[date] = None
+    # P2-06 / SSOT-7: opsional; kosong = Kas Perputaran (Laci).
+    layer: Optional[str] = None
 
 
 class KasEntryUpdate(BaseModel):
     jenis: Optional[str] = None
     kategori: Optional[str] = None
     keterangan: Optional[str] = None
-    nominal: Optional[float] = None
+    nominal: Optional[MoneyOut] = None
     tanggal: Optional[date] = None
 
 
@@ -436,9 +450,12 @@ class KasEntryOut(BaseModel):
     jenis: str
     kategori: str
     keterangan: str
-    nominal: float
+    nominal: MoneyOut
     tanggal: Optional[date] = None
     created_at: datetime
+    # P2-06 / SSOT-7
+    layer: str = "LACI"
+    saldo_setelah: Optional[MoneyOut] = None
 
 
 class KasEntryPage(BaseModel):
@@ -449,13 +466,36 @@ class KasEntryPage(BaseModel):
     items: List[KasEntryOut]
 
 
+class KasAsetMutasiIn(BaseModel):
+    """Input mutasi Kas Aset (injection / pengeluaran aktual).
+
+    v4 #6: `posisi` wajib untuk injection — LACI (Kas Aset Kecil) atau
+    KAS_ASET (Kas Aset Besar / Pengelola).
+    """
+    kategori: Optional[str] = None
+    keterangan: str
+    nominal: MoneyOut
+    tanggal: Optional[date] = None
+    posisi: Optional[str] = None  # LACI | KAS_ASET
+
+
+class KasAsetTransferIn(BaseModel):
+    """v4 #5: transfer fisik Laci <-> Aset (Master Kas tetap)."""
+    dari: str
+    ke: str
+    nominal: MoneyOut
+    keterangan: str
+    ref_type: Optional[str] = None
+    ref_id: Optional[str] = None
+
+
 class KasRiwayatItem(BaseModel):
     tgl: Optional[str] = None
     jenis: str
     kategori: Optional[str] = None
     ket: Optional[str] = None
-    nominal: float = 0
-    saldo: float = 0
+    nominal: MoneyOut
+    saldo: MoneyOut
     source: str  # order | expense | manual
     ref_id: Optional[int] = None
 
@@ -465,7 +505,7 @@ class KasRiwayatPage(BaseModel):
     page: int
     limit: int
     total_pages: int
-    opening: float = 0
+    opening: MoneyOut
     items: List[KasRiwayatItem]
 
 
@@ -476,8 +516,8 @@ class SparepartCreate(BaseModel):
     jenis: str
     device: Optional[str] = None
     qty: Optional[int] = 0
-    harga_beli: Optional[float] = 0
-    harga_jual: Optional[float] = 0
+    harga_beli: Optional[MoneyOut]
+    harga_jual: Optional[MoneyOut]
     tanggal: Optional[date] = None
 
 
@@ -487,8 +527,8 @@ class SparepartUpdate(BaseModel):
     jenis: Optional[str] = None
     device: Optional[str] = None
     qty: Optional[int] = None
-    harga_beli: Optional[float] = None
-    harga_jual: Optional[float] = None
+    harga_beli: Optional[MoneyOut] = None
+    harga_jual: Optional[MoneyOut] = None
     tanggal: Optional[date] = None
 
 
@@ -500,8 +540,8 @@ class SparepartOut(BaseModel):
     jenis: str
     device: Optional[str] = None
     qty: int
-    harga_beli: float
-    harga_jual: float
+    harga_beli: MoneyOut
+    harga_jual: MoneyOut
     tanggal: Optional[date] = None
     created_at: datetime
 
@@ -512,3 +552,51 @@ class SparepartPage(BaseModel):
     limit: int
     total_pages: int
     items: List[SparepartOut]
+
+
+# ---------- Refund (P2-10) ----------
+REFUND_JENIS = ["DP", "GARANSI", "FAILED_CANCEL"]
+
+
+class RefundDPIn(BaseModel):
+    """Refund DP: nominal berbasis DP diterima (default = seluruh DP)."""
+    service_order_id: int
+    nominal: Optional[MoneyOut] = None
+    alasan: Optional[str] = None
+
+
+class RefundGaransiIn(BaseModel):
+    """Refund Klaim Garansi: nominal kesepakatan; default = biaya pelanggan klaim."""
+    warranty_claim_id: int
+    nominal: Optional[MoneyOut] = None
+    alasan: Optional[str] = None
+
+
+class RefundFailedCancelIn(BaseModel):
+    """Failed -> Cancel: dana dari Laci, bukan refund garansi (Q9 titik 3)."""
+    service_order_id: int
+    nominal: Optional[MoneyOut] = None  # default = DP diterima
+    alasan: Optional[str] = None
+
+
+class RefundOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    refund_no: str
+    jenis: str
+    service_order_id: Optional[int] = None
+    warranty_claim_id: Optional[int] = None
+    nominal: MoneyOut
+    sumber_dana: str
+    alasan: Optional[str] = None
+    kas_entry_id: Optional[int] = None
+    oleh: Optional[str] = None
+    created_at: datetime
+
+
+class RefundPage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: List[RefundOut]

@@ -72,18 +72,18 @@ def seed():
 
     orders_data = [
         # (no, cid, device, brand, model, damage, status, est, pay)
-        ("SV-20260901-001", 0, "Samsung Galaxy A54", "Samsung", "A54", "Layar Pecah", "PERBAIKAN", 450000, 0),
-        ("SV-20260901-002", 1, "iPhone 14 Pro", "Apple", "14 Pro", "Baterai", "MENUNGGU SPAREPART", 1200000, 0),
-        ("SV-20260901-003", 2, "Xiaomi Redmi Note 12", "Xiaomi", "Note 12", "Charging", "PERBAIKAN", 350000, 0),
-        ("SV-20260901-004", 3, "OPPO Reno 8", "OPPO", "Reno 8", "Speaker", "SELESAI", 500000, 500000),
-        ("SV-20260901-005", 4, "Samsung Galaxy S23", "Samsung", "S23", "Layar Pecah", "SELESAI", 800000, 800000),
+        ("SV-20260901-001", 0, "Samsung Galaxy A54", "Samsung", "A54", "Layar Pecah", "REPAIR", 450000, 0),
+        ("SV-20260901-002", 1, "iPhone 14 Pro", "Apple", "14 Pro", "Baterai", "WAIT PART", 1200000, 0),
+        ("SV-20260901-003", 2, "Xiaomi Redmi Note 12", "Xiaomi", "Note 12", "Charging", "REPAIR", 350000, 0),
+        ("SV-20260901-004", 3, "OPPO Reno 8", "OPPO", "Reno 8", "Speaker", "DONE", 500000, 500000),
+        ("SV-20260901-005", 4, "Samsung Galaxy S23", "Samsung", "S23", "Layar Pecah", "CASH", 800000, 800000),
         ("SV-20260901-006", 5, "Vivo V27", "Vivo", "V27", "Kamera", "DITERIMA", 0, 0),
-        ("SV-20260901-007", 6, "iPhone 13", "Apple", "13", "Baterai", "DIAGNOSA", 0, 0),
+        ("SV-20260901-007", 6, "iPhone 13", "Apple", "13", "Baterai", "ANALISA", 0, 0),
         ("SV-20260901-008", 7, "Realme C55", "Realme", "C55", "Charging", "KONFIRMASI", 280000, 0),
-        ("SV-20260901-009", 8, "Samsung Galaxy A34", "Samsung", "A34", "Layar Pecah", "PERBAIKAN", 400000, 0),
-        ("SV-20260901-010", 9, "Xiaomi Poco X5", "Xiaomi", "Poco X5", "Baterai", "SELESAI", 320000, 320000),
-        ("SV-20260901-011", 0, "OPPO A78", "OPPO", "A78", "Speaker", "PERBAIKAN", 300000, 0),
-        ("SV-20260901-012", 3, "iPhone 15", "Apple", "15", "Layar Pecah", "SELESAI", 1500000, 1500000),
+        ("SV-20260901-009", 8, "Samsung Galaxy A34", "Samsung", "A34", "Layar Pecah", "REPAIR", 400000, 0),
+        ("SV-20260901-010", 9, "Xiaomi Poco X5", "Xiaomi", "Poco X5", "Baterai", "DONE", 320000, 320000),
+        ("SV-20260901-011", 0, "OPPO A78", "OPPO", "A78", "Speaker", "REPAIR", 300000, 0),
+        ("SV-20260901-012", 3, "iPhone 15", "Apple", "15", "Layar Pecah", "DONE", 1500000, 1500000),
     ]
 
     orders = []
@@ -109,12 +109,17 @@ def seed():
     for o in orders:
         db.refresh(o)
 
-    # payment untuk yang sudah lunas (SELESAI + ada nominal)
-    paid = [(no, amt) for no, _, _, _, _, _, status, _, amt in orders_data if status == "SELESAI" and amt > 0]
-    for no, amt in paid:
+    # Payment Ledger untuk order DONE (belum terealisasi) dan CASH (sudah lunas).
+    paid = [(no, amt, status) for no, _, _, _, _, _, status, _, amt in orders_data
+            if status in ("DONE", "CASH") and amt > 0]
+    for no, amt, status in paid:
         order = next(o for o in orders if o.no_servis == no)
         db.add(Payment(service_order_id=order.id, kind="PELUNASAN", amount=amt, method="CASH",
                        note="Pelunasan (seed demo)"))
+        if status == "CASH":
+            # CASH = transaksi terealisasi: unit sudah diambil.
+            order.unit_status = "DIAMBIL"
+            order.taken_at = datetime.now()
     db.commit()
 
     db.close()

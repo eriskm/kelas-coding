@@ -16,7 +16,13 @@ from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
 from database import Base, engine
-from routers import dashboard, orders, customers, auth, claims, expenses, kas, spareparts, payments
+from migrations_cash_layers import migrate_cash_layers
+from migrations_money import migrate_money_precision
+from migrations_warranty_claims import migrate_warranty_claims
+from money import ZERO, to_decimal
+from routers import (dashboard, orders, customers, auth, claims, expenses,
+                     kas, spareparts, payments, refunds, expense_debt,
+                     inventory, notifications)
 from routers.auth import get_authenticated_user
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -24,7 +30,7 @@ FRONTEND_DIR = os.path.join(os.path.dirname(BASE_DIR), "frontend")
 
 # Versi backend — naikkan tiap ada perbaikan agar mudah verifikasi
 # (cek via browser: http://127.0.0.1:8000/api/health).
-APP_VERSION = "1.0.1"
+APP_VERSION = "1.0.10"
 
 
 class NoCacheStaticFiles(StaticFiles):
@@ -61,17 +67,35 @@ def on_startup():
     _backup_ok = _backup_database()
     Base.metadata.create_all(bind=engine)
     _migrate_schema()
+    # P2-02 / Q10: rapikan presisi nilai uang (idempotent, non-destruktif).
+    try:
+        _rep = migrate_money_precision(engine)
+        _log("[P2-02] migrasi presisi uang: %s" % _rep["rounded_rows"])
+    except Exception as _e:
+        _log("[P2-02] migrasi presisi uang dilewati: %s" % _e)
+    # P2-09: kolom lifecycle klaim (resolusi & snapshot unit asal) — idempotent.
+    try:
+        _wc = migrate_warranty_claims(engine)
+        _log("[P2-09] migrasi klaim: %s" % _wc["changed"])
+    except Exception as _e:
+        _log("[P2-09] migrasi klaim dilewati: %s" % _e)
+    # P2-06 / SSOT-7: pisahkan layer Laci & Kas Aset (non-destruktif, idempotent).
+    try:
+        _lr = migrate_cash_layers(engine)
+        _log("[P2-06] migrasi layer kas: %s" % _lr["changed"])
+    except Exception as _e:
+        _log("[P2-06] migrasi layer kas dilewati: %s" % _e)
     if _backup_ok:
         _migrate_status_data()
         _migrate_checklist_subset()
     else:
-        print("[migrasi] dilewati karena backup gagal (data tidak disentuh)")
+        _log("[migrasi] dilewati karena backup gagal (data tidak disentuh)")
     _login_ok = any(
         getattr(r, "path", "") == "/api/auth/login"
         and "POST" in (getattr(r, "methods", None) or set())
         for r in app.routes
     )
-    print("[boot] BOSS SF backend v%s — POST /api/auth/login %s"
+    _log("[boot] BOSS SF backend v%s — POST /api/auth/login %s"
           % (APP_VERSION, "TERDAFTAR" if _login_ok else "HILANG! matikan proses lama & restart"))
     from seed import ensure_admin
     ensure_admin()
@@ -89,11 +113,11 @@ def _backup_database():
             dst = os.path.join(os.path.dirname(DB_PATH), "backup-servisku-%s.db" % ts)
             if not os.path.isfile(dst):
                 shutil.copy2(DB_PATH, dst)
-                print("[backup] database disalin ke %s" % os.path.basename(dst))
+                _log("[backup] database disalin ke %s" % os.path.basename(dst))
             return True
         return _backup_postgres(SQLALCHEMY_DATABASE_URL)
     except Exception as exc:
-        print("[backup] GAGAL: %s (migrasi data dilewati, aplikasi tetap jalan)" % exc)
+        _log("[backup] GAGAL: %s (migrasi data dilewati, aplikasi tetap jalan)" % exc)
         return False
 
 
@@ -122,11 +146,11 @@ def _backup_postgres(url):
     ]
     proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=300)
     if proc.returncode != 0:
-        print("[backup] pg_dump GAGAL: %s" % (proc.stderr or "").strip())
+        _log("[backup] pg_dump GAGAL: %s" % (proc.stderr or "").strip())
         if os.path.isfile(dst):
             os.remove(dst)
         return False
-    print("[backup] pg_dump -> %s" % os.path.basename(dst))
+    _log("[backup] pg_dump -> %s" % os.path.basename(dst))
     return True
 
 
@@ -202,6 +226,24 @@ def _migrate_schema():
         conn.execute(text("UPDATE payments SET kind = 'PELUNASAN' WHERE kind IS NULL"))
 
 
+def _log(msg):
+    """Cetak log tanpa pernah menggagalkan pemanggil.
+
+    Console Windows sering cp1252/Gbk: `print()` dengan karakter seperti "→"
+    melempar UnicodeEncodeError. Kalau itu terjadi DI DALAM blok try yang juga
+    menangani commit, satu-satunya "handling" jadi `rollback()` — sehingga
+    seluruh migrasi data batal tanpa jejak yang jelas. Log tidak boleh punya
+   -power sebesar itu.
+    """
+    try:
+        print(msg)
+    except Exception:
+        try:
+            print(msg.encode("ascii", "replace").decode("ascii"))
+        except Exception:
+            pass
+
+
 def _migrate_status_data():
     """Migrasi data legacy → FINAL LOCK (§3 blueprint). Idempoten:
     hanya menyentuh baris berstatus legacy; nol baris = nol aksi."""
@@ -223,22 +265,34 @@ def _migrate_status_data():
             )
             if n:
                 mapped["%s→%s" % (old, new)] = n
-        # CASH → SELESAI + backfill payments (tanpa mengarang).
+        # CASH (legacy Project A): tetap CASH — di A status ini memang event
+        # realisasi. Yang dilakukan hanya BACKFILL payment ledger + kunci
+        # momen LUNAS (tanpa mengarang), supaya LUNAS tetap derive dari
+        # Payment Ledger (Q17) dan unit ini tetap masuk kohorot Omzet.
+        # P2-15: TIDAK lagi diturunkan ke SELESAI.
         cash_orders = db.query(ServiceOrder).filter(ServiceOrder.status == "CASH").all()
         overpay, unpaid = [], []
         for o in cash_orders:
-            dp = 0.0
+            # GUARD IDEMPOTENSI: kalau order sudah punya baris di Payment Ledger,
+            # ledger itu yang otoritatif — migrasi tidak boleh menambah apa pun.
+            # Tanpa guard ini, tiap startup menambah satu baris PELUNASAN lagi
+            # untuk order CASH yang sama (duplikat yang terhitung sungguhan di
+            # Buku Kas karena payment_summary menjumlahkan semua baris).
+            if db.query(Payment).filter(Payment.service_order_id == o.id).count():
+                continue
+            # P2-02 / Q10: jalur migrasi status juga memakai Decimal.
+            dp = ZERO
             try:
-                dp = float(o.payment or 0)
+                dp = to_decimal(o.payment)
             except (TypeError, ValueError):
-                dp = 0.0
+                dp = ZERO
             fp = getattr(o, "final_price", None)
-            must = float(fp) if fp is not None else float(o.estimate or 0)
+            must = to_decimal(fp) if fp is not None else to_decimal(o.estimate)
             if dp > 0:
                 db.add(Payment(service_order_id=o.id, kind="DP", amount=dp,
                                method="CASH", note="DP awal (migrasi non-destruktif)",
                                created_at=o.created_at))
-            rest = max(0.0, must - dp)
+            rest = max(ZERO, must - dp)
             moment = (getattr(o, "lunas_at", None)
                       or getattr(o, "lunas_date", None)
                       or getattr(o, "created_at", None))
@@ -253,7 +307,7 @@ def _migrate_status_data():
                     overpay.append(o.no_servis)
             if not (must > 0 and (dp + rest) >= must):
                 unpaid.append(o.no_servis)
-            o.status = "SELESAI"
+            # Status dibiarkan CASH (lihat komentar di atas).
         # History awal untuk order tanpa jejak.
         with_hist = {r[0] for r in db.query(StatusHistory.service_order_id).distinct().all()}
         seeded = 0
@@ -267,15 +321,15 @@ def _migrate_status_data():
             seeded += 1
         db.commit()
         total_after = db.query(ServiceOrder).count()
-        print("[migrasi] orders %s→%s, mapping=%s, CASH→SELESAI=%d, history_seed=%d"
-              % (total_before, total_after, mapped, len(cash_orders), seeded))
+        _log("[migrasi] orders %s -> %s, mapping=%s, cash=%d, history_seed=%d"
+             % (total_before, total_after, mapped, len(cash_orders), seeded))
         if overpay:
-            print("[migrasi] OVERPAY_REVIEW (DP>kewajiban): %s" % ", ".join(overpay))
+            _log("[migrasi] OVERPAY_REVIEW (DP>kewajiban): %s" % ", ".join(overpay))
         if unpaid:
-            print("[migrasi] CASH_UNPAID_REVIEW (tetap BELUM LUNAS): %s" % ", ".join(unpaid))
+            _log("[migrasi] CASH_UNPAID_REVIEW (tetap BELUM LUNAS): %s" % ", ".join(unpaid))
     except Exception as exc:
         db.rollback()
-        print("[migrasi] GAGAL, rollback: %s" % exc)
+        _log("[migrasi] GAGAL, rollback: %s" % exc)
     finally:
         db.close()
 
@@ -320,10 +374,10 @@ def _migrate_checklist_subset():
             except Exception:
                 continue
         db.commit()
-        print("[migrasi] checklist subset: %d order diselaraskan" % touched)
+        _log("[migrasi] checklist subset: %d order diselaraskan" % touched)
     except Exception as exc:
         db.rollback()
-        print("[migrasi] checklist GAGAL, rollback: %s" % exc)
+        _log("[migrasi] checklist GAGAL, rollback: %s" % exc)
     finally:
         db.close()
 
@@ -338,6 +392,10 @@ app.include_router(expenses.router, dependencies=[Depends(get_authenticated_user
 app.include_router(kas.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(spareparts.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(payments.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(refunds.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(expense_debt.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(inventory.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(notifications.router, dependencies=[Depends(get_authenticated_user)])
 
 
 # ---------- Mount frontend (static) ----------

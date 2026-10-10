@@ -9,7 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from dependencies import get_db_session
-from models import Expense
+import cash
+from models import Expense, User
+from authority import Action, require_authority
 from routers.auth import require_admin
 import schemas
 
@@ -39,7 +41,8 @@ def list_expenses(
 
 
 @router.post("", response_model=schemas.ExpenseOut, status_code=201)
-def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db_session)):
+def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.EXPENSE_WRITE))):
     kat = (data.kategori or "").strip()
     uraian = (data.uraian or "").strip()
     if not kat:
@@ -51,13 +54,17 @@ def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db_ses
         raise HTTPException(status_code=400, detail="Nilai beban tidak boleh negatif")
     row = Expense(kategori=kat, uraian=uraian, nilai=nilai, tanggal=data.tanggal or date.today())
     db.add(row)
+    db.flush()
+    # Owner Cash Model v4 #3: beban dibayar dari kas toko -> SALDO LACI berkurang.
+    cash.catat_beban(db, row, actor=(user.display_name or user.username))
     db.commit()
     db.refresh(row)
     return row
 
 
 @router.put("/{expense_id}", response_model=schemas.ExpenseOut)
-def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = Depends(get_db_session)):
+def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.EXPENSE_WRITE))):
     row = db.query(Expense).filter(Expense.id == expense_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Beban tidak ditemukan")

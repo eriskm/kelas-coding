@@ -8,6 +8,13 @@ venv/
 # Database
 *.db
 *.sqlite3
+# Sisa file SQLite saat proses sedang membuka DB (-shm / -wal)
+*.db-shm
+*.db-wal
+# Dump/backup database: berisi data pelanggan (nama + nomor HP).
+# Backup resmi tetap ada di server & di luar repo.
+backup-*.sql
+*.sql.gz
 
 # Env
 .env

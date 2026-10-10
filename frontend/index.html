@@ -233,7 +233,8 @@
 
                     <!-- Star Cards -->
                     <div class="px-3 sm:px-5 pt-4 sm:pt-5 pb-3 sm:pb-4">
-                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="starCards"></div>
+                        <div class="kas-period-warning hidden" id="kasPeriodWarning"></div>
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="starCards"></div>
                         <!-- Floating CTO: non-blocking, draggable, muncul hanya saat CTS tercapai & CTO belum -->
                         <div id="ctoFloat" class="cto-float" role="status" aria-label="Target Operasional">
                             <div class="cto-float-head" id="ctoFloatHead">
@@ -306,9 +307,6 @@
                                 </div>
                                 <label class="tx-filter-label" for="txDateFilter">Tgl Terima</label>
                                 <input type="date" id="txDateFilter" class="receive-input" aria-label="Filter tanggal terima" title="Filter tanggal terima">
-                                <label class="tx-filter-label inline-flex items-center gap-1.5 cursor-pointer" title="Tampilkan SELESAI + DIAMBIL (riwayat)">
-                                    <input type="checkbox" id="txRiwayat"> Riwayat
-                                </label>
                                 <button type="button" onclick="showServisBaru()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
                                     <i class="fa-solid fa-plus"></i> Servis Baru
                                 </button>
@@ -888,6 +886,18 @@
                                         <i class="fa-solid fa-floppy-disk"></i>
                                         <span id="clrSaveText">Simpan Workflow</span>
                                     </button>
+                                    <div class="field flex-1">
+                                        <label class="field-label" for="clrResolusi">Resolusi Klaim</label>
+                                        <select class="receive-input" id="clrResolusi">
+                                            <option value="">Belum ditentukan</option>
+                                            <option value="REPAIR">Repair</option>
+                                            <option value="REPLACE">Replace</option>
+                                            <option value="REFUND">Refund (proses dana di tahap Refund)</option>
+                                        </select>
+                                    </div>
+                                    <button type="button" onclick="clrRefundGaransi()" id="clrRefundBtn" class="receive-back-btn hidden" data-cap="REFUND_GARANSI">
+                                        <i class="fa-solid fa-vault"></i> Refund Garansi (Kas Aset)
+                                    </button>
                                     <button type="button" onclick="claimRPrint()" class="receive-back-btn">
                                         <i class="fa-solid fa-receipt"></i> Cetak Nota Claim
                                     </button>
@@ -1014,6 +1024,40 @@
                             <div id="spLoading" class="text-center py-10 text-sm text-gray-400">
                                 <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
                             </div>
+                            <div class="px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div class="flex flex-col sm:flex-row sm:items-end gap-2.5" data-cap="SPAREPART_WRITE">
+                                    <div class="flex-1">
+                                        <label class="field-label" for="spMovePart">Part</label>
+                                        <select class="receive-input" id="spMovePart"></select>
+                                    </div>
+                                    <div class="w-full sm:w-32">
+                                        <label class="field-label" for="spMoveQty">Qty Masuk</label>
+                                        <input class="receive-input" type="number" id="spMoveQty" min="1" value="1">
+                                    </div>
+                                    <div class="flex-1">
+                                        <label class="field-label" for="spMoveNote">Keterangan</label>
+                                        <input class="receive-input" type="text" id="spMoveNote" placeholder="mis. pembelian / retur">
+                                    </div>
+                                    <button type="button" onclick="spMoveSubmit()" class="receive-submit-btn">
+                                        <i class="fa-solid fa-box-open"></i> Catat Barang Masuk
+                                    </button>
+                                </div>
+                                <div id="spMoveFeedback" class="hidden receive-feedback mt-2"></div>
+                                <div class="overflow-x-auto mt-3">
+                                    <table class="tx-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Waktu</th>
+                                                <th>Part</th>
+                                                <th>Aksi</th>
+                                                <th class="numeric-r">Qty</th>
+                                                <th class="numeric-r">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="spMoveBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
                             <div id="spPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
                                 <div id="spInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
                                 <div id="spPageBtns" class="flex items-center gap-1.5"></div>
@@ -1098,8 +1142,22 @@
                         <div class="grid grid-cols-1 lg:grid-cols-5 gap-2.5 sm:gap-3">
                             <div class="panel lg:col-span-3 ku-kas-panel">
                                 <h3 class="panel-title">Buku Kas</h3>
-                                <p class="ku-sub">Ringkasan arus kas berdasarkan transaksi keuangan.</p>
+                                <p class="ku-sub">Ringkasan arus kas operasional (tanpa titipan DP).</p>
                                 <div class="ku-summary" id="kuKasSummary"></div>
+                                <!-- Kondisi Kas: posisi + ringkas periode, urutan tetap -->
+                                <div class="overflow-x-auto">
+                                    <table class="tx-table cash-table w-full text-sm ku-kondisi">
+                                        <thead>
+                                            <tr>
+                                                <th>Kondisi Kas</th>
+                                                <th class="numeric-c cash-num">Debit</th>
+                                                <th class="numeric-c cash-num">Kredit</th>
+                                                <th class="numeric-r cash-num">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuKondisiBody"></tbody>
+                                    </table>
+                                </div>
                                 <div class="overflow-x-auto">
                                     <table class="tx-table cash-table w-full text-sm">
                                         <thead>
@@ -1144,9 +1202,159 @@
                             </div>
                             <div class="panel lg:col-span-2">
                                 <h3 class="panel-title">Alokasi Profit</h3>
+                                <div class="ku-bh-badge-wrap" id="kuAllocGate">
+                                    <span class="ku-bh-badge" id="kuAllocBadge">MENUNGGU CTO</span>
+                                    <span class="ku-bh-note" id="kuAllocNote">Target Operasional belum tercapai.</span>
+                                </div>
                                 <div id="kuDonut"></div>
                                 <div class="al-list" id="kuAllocList"></div>
                                 <div class="al-total"><span>Total Profit</span><b id="kuTotalProfit"></b></div>
+                            </div>
+                        </div>
+
+                        <!-- TITIPAN DP PELANGGAN — panel terpisah dari Kondisi Kas / Arus Kas.
+                             Pencatatan & pelacakan saja: tidak memengaruhi omzet, laba,
+                             distribusi profit, maupun saldo Kas Laci pada Kondisi Kas. -->
+                        <div class="panel ku-titipan-panel" id="kuTitipanPanel">
+                            <div class="ku-titipan">
+                                <div class="ku-tp-head">
+                                    <span><i class="fa-solid fa-hand-holding-dollar"></i> Titipan DP Pelanggan</span>
+                                    <span class="ku-tp-note">pencatatan terpisah &middot; bukan Omzet</span>
+                                </div>
+                                <div class="ku-tp-grid" id="kuTitipanGrid"></div>
+                            </div>
+                            <div class="overflow-x-auto mt-2">
+                                <table class="tx-table cash-table w-full text-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Tanggal</th>
+                                            <th>No. Servis</th>
+                                            <th>Pelanggan / Unit</th>
+                                            <th>Jenis Mutasi</th>
+                                            <th class="numeric-r cash-num">Masuk</th>
+                                            <th class="numeric-r cash-num">Keluar</th>
+                                            <th class="numeric-r cash-num">Saldo Titipan</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="kuTitipanBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+
+                        <!-- P2-15: Kas Aset · Distribusi · Hutang Beban · Notifikasi -->
+                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
+                            <div class="panel ku-kas-panel" id="kuMasterPanel">
+                                <h3 class="panel-title" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
+                                <p class="ku-sub" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas.</p>
+                                <div class="ku-summary" id="kuAsetSummary"></div>
+                                <div class="overflow-x-auto mt-2">
+                                    <table class="tx-table cash-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Mutasi Saldo Laci (Kas Aset Kecil)</th>
+                                                <th class="numeric-c cash-num">Masuk</th>
+                                                <th class="numeric-c cash-num">Keluar</th>
+                                                <th class="numeric-r cash-num">Saldo</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuAsetBody"></tbody>
+                                    </table>
+                                </div>
+                                <form id="kuAsetForm" autocomplete="off" class="ku-kas-form" data-cap="KAS_ASET_INJEKSI">
+                                    <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-2.5 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
+                                        <div class="relative">
+                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                            <input class="receive-input pl-9" type="number" id="kuAsetNominal" min="1" placeholder="Nominal" required>
+                                        </div>
+                                        <input class="receive-input" type="text" id="kuAsetKeterangan" placeholder="Keterangan (mis. tambahan modal)" required>
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" onclick="kuAsetMasuk()" class="receive-submit-btn">
+                                                <i class="fa-solid fa-arrow-down"></i> Masuk
+                                            </button>
+                                            <button type="button" onclick="kuAsetKeluar()" class="receive-back-btn">
+                                                <i class="fa-solid fa-arrow-up"></i> Tarik
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_auto] gap-2.5 mt-2.5">
+                                        <select class="receive-input" id="kuAsetPosisi" aria-label="Posisi Kas Aset">
+                                            <option value="LACI">Ke Saldo Laci (Kas Aset Kecil)</option>
+                                            <option value="KAS_ASET">Ke Saldo Aset (Kas Aset Besar/Pengelola)</option>
+                                        </select>
+                                        <select class="receive-input" id="kuTransferArah" aria-label="Arah transfer">
+                                            <option value="LACI-&gt;KAS_ASET">Transfer Laci &rarr; Aset</option>
+                                            <option value="KAS_ASET-&gt;LACI">Transfer Aset &rarr; Laci</option>
+                                        </select>
+                                        <button type="button" onclick="kuAsetTransfer()" class="receive-back-btn">
+                                            <i class="fa-solid fa-right-left"></i> Transfer
+                                        </button>
+                                    </div>
+                                    <div id="kuAsetFeedback" class="hidden receive-feedback mt-2"></div>
+                                </form>
+                            </div>
+
+                            <div class="panel">
+                                <h3 class="panel-title"><i class="fa-solid fa-chart-pie"></i> Distribusi Laba</h3>
+                                <p class="ku-sub">10% Karyawan &middot; 30% Pengelola &middot; 30% Investor &middot; 30% Hak Kas Aset &mdash; terbentuk saat <b>Tutup Kas</b>.</p>
+                                <div class="overflow-x-auto mt-2">
+                                    <table class="tx-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Penerima</th>
+                                                <th class="numeric-r">Porsi</th>
+                                                <th class="numeric-r">Nilai</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuDistBody"></tbody>
+                                    </table>
+                                </div>
+                                <div class="al-total"><span id="kuDistNote">Belum ada distribusi</span><b id="kuDistTotal">Rp 0</b></div>
+                            </div>
+
+                            <div class="panel">
+                                <h3 class="panel-title"><i class="fa-solid fa-file-circle-exclamation"></i> Hutang Beban</h3>
+                                <p class="ku-sub">Terpisah dari Buku Kas &mdash; defisit ditutup Kas Aset, sisanya menjadi hutang (carry forward).</p>
+                                <div class="ku-summary mt-2" id="kuDebtSummary"></div>
+                                <div class="overflow-x-auto mt-2">
+                                    <table class="tx-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Periode</th>
+                                                <th class="numeric-r">Defisit</th>
+                                                <th class="numeric-r">Cover Aset</th>
+                                                <th class="numeric-r">Hutang</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuDebtBody"></tbody>
+                                    </table>
+                                </div>
+                                <div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-white/5" data-cap="EXPENSE_DEBT_WRITE">
+                                    <button type="button" onclick="kuDebtProses()" class="receive-back-btn">
+                                        <i class="fa-solid fa-calculator"></i> Proses Defisit Periode
+                                    </button>
+                                    <button type="button" onclick="kuDebtLunas()" class="receive-submit-btn">
+                                        <i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan dari Kas Aset
+                                    </button>
+                                    <div id="kuDebtFeedback" class="hidden receive-feedback"></div>
+                                </div>
+                            </div>
+
+                            <div class="panel">
+                                <h3 class="panel-title"><i class="fa-solid fa-bell"></i> Notifikasi</h3>
+                                <p class="ku-sub">Log notifikasi (unit baru, kas masuk, tutup/buka kas, WA selesai) &mdash; anti-duplikat.</p>
+                                <div id="kuNotifProvider" class="text-[11px] text-gray-500 dark:text-gray-400 mb-2"></div>
+                                <div class="overflow-x-auto">
+                                    <table class="tx-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Waktu</th>
+                                                <th>Event</th>
+                                                <th>Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuNotifBody"></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
 
@@ -1788,13 +1996,13 @@
                                             <select class="receive-input" id="usStatus" disabled title="Tampilan saja — ubah via panel Status Unit & Aksi Cepat">
                                                 <option value="DITERIMA">Diterima</option>
                                                 <option value="ANALISA">Analisa</option>
-                                                <option value="DIAGNOSA">Diagnosa</option>
                                                 <option value="KONFIRMASI">Konfirmasi</option>
-                                                <option value="MENUNGGU SPAREPART">Menunggu Sparepart</option>
-                                                <option value="PERBAIKAN">Perbaikan</option>
-                                                <option value="SELESAI">Selesai</option>
-                                                <option value="GAGAL">Gagal</option>
-                                                <option value="BATAL">Batal</option>
+                                                <option value="WAIT PART">Wait Part</option>
+                                                <option value="REPAIR">Repair</option>
+                                                <option value="DONE">DONE</option>
+                                                <option value="CASH">Cash</option>
+                                                <option value="CANCEL">Cancel</option>
+                                                <option value="FAILED">Failed</option>
                                             </select>
                                         </div>
                                     </div>
@@ -1890,7 +2098,7 @@
                                             <div class="us-row"><span>Modal Part</span><b id="usSumPart">Rp 0</b></div>
                                             <div class="us-row"><span>Modal Jasa</span><b id="usSumJasa">Rp 0</b></div>
                                             <div class="us-row"><span>Lain-Lain</span><b id="usSumLain">Rp 0</b></div>
-                                            <div class="us-row is-total"><span>Sisa (Final − DP)</span><b id="usSumSisa">Rp 0</b></div>
+                                            <div class="us-row is-total"><span>Sisa (Final − Part − Jasa − Lain-Lain)</span><b id="usSumSisa">Rp 0</b></div>
                                         </div>
                                     </div>
                                 </div>
@@ -1955,13 +2163,13 @@
                                             <select class="receive-input" id="usQuickStatus">
                                                 <option value="DITERIMA">Diterima</option>
                                                 <option value="ANALISA">Analisa</option>
-                                                <option value="DIAGNOSA">Diagnosa</option>
                                                 <option value="KONFIRMASI">Konfirmasi</option>
-                                                <option value="MENUNGGU SPAREPART">Menunggu Sparepart</option>
-                                                <option value="PERBAIKAN">Perbaikan</option>
-                                                <option value="SELESAI">Selesai</option>
-                                                <option value="GAGAL">Gagal</option>
-                                                <option value="BATAL">Batal</option>
+                                                <option value="WAIT PART">Wait Part</option>
+                                                <option value="REPAIR">Repair</option>
+                                                <option value="DONE">DONE</option>
+                                                <option value="CASH">Cash</option>
+                                                <option value="CANCEL">Cancel</option>
+                                                <option value="FAILED">Failed</option>
                                             </select>
                                     </div>
                                     <div class="field">

@@ -8,7 +8,14 @@ from sqlalchemy.orm import Session, joinedload
 
 from dependencies import get_db_session
 from models import Payment, ServiceOrder, Customer, StatusHistory, User, WarrantyClaim
-from routers.auth import can_edit_finance, get_authenticated_user, require_admin, require_finance
+import cash
+import journal
+import notifications as notif_mod
+from routers import payments as payments_mod
+from money import ZERO, to_decimal
+from authority import (Action, check, is_closing_status, require_authority,
+                      sanitize_finance_payload)
+from routers.auth import can_edit_finance, get_authenticated_user, require_admin
 from statusflow import (
     INITIAL_PATHS,
     SERVICE_STATUSES,
@@ -68,7 +75,7 @@ def _attach_summary(db: Session, order):
 def _refresh_money(db: Session, order):
     """Hitung ulang laba_bersih per-order dari sumbernya (bukan input user).
 
-    Laba = kewajiban − modal_* bila SELESAI+LUNAS, selain itu 0.
+    Laba = Omzet − modal_* bila CASH+LUNAS (event realisasi), selain itu 0.
     Dipanggil setiap ada peristiwa uang (receive/update/payment).
     """
     try:
@@ -130,7 +137,7 @@ def order_history(phone: str, db: Session = Depends(get_db_session)):
 
 @router.post("/receive", response_model=schemas.ServiceOrderOut, status_code=201)
 def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_session),
-                 user: User = Depends(get_authenticated_user)):
+                 user: User = Depends(require_authority(Action.ORDER_CREATE))):
     """Daftarkan unit servis baru (buat customer + service order sekaligus).
 
     FINAL: initial path operasional (TITIP/PERBAIKAN/SPAREPART/TUNGGU),
@@ -162,11 +169,11 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
         chain = ["DITERIMA"]
-    dp_amount = 0.0
+    dp_amount = ZERO
     try:
-        dp_amount = float(data.dp or 0)
+        dp_amount = to_decimal(data.dp)
     except (TypeError, ValueError):
-        dp_amount = 0.0
+        dp_amount = ZERO
     if dp_amount < 0:
         raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
     try:
@@ -206,7 +213,7 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
             payment=dp_amount,
             final_price=data.final_price,
             service_date=date.today(),
-            warranty_months=1 if st == "SELESAI" else None,
+            warranty_months=1 if st == "DONE" else None,
         )
         db.add(order)
         db.flush()
@@ -214,16 +221,28 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
             # DP receive dicatat di jurnal payments agar masuk omset/kas.
             # Kolom legacy `payment` tetap diisi sebagai arsip; payment_summary
             # mengurangkan porsi yang sudah ada di jurnal (anti double-count).
-            db.add(Payment(service_order_id=order.id, kind="DP",
-                           amount=dp_amount, method="CASH",
-                           note="DP awal (pendaftaran unit)",
-                           created_at=order.created_at or datetime.now()))
+            _dp_row = Payment(service_order_id=order.id, kind="DP",
+                              amount=dp_amount, method="CASH",
+                              note="DP awal (pendaftaran unit)",
+                              created_at=order.created_at or datetime.now())
+            db.add(_dp_row)
             db.flush()
+            # v4 #1: DP diterima di toko -> SALDO LACI bertambah.
+            cash.catat_penerimaan(db, _dp_row, actor=_actor(user))
         _prev = None
         _note = ("initial path: %s" % INITIAL_PATHS[path_key]["label"]) if path_key else "pendaftaran unit"
         for _step in chain:
             _log_transition(db, order.id, _prev, _step, _actor(user), _note)
             _prev = _step
+        # P2-13: notifikasi unit baru dicatat dalam transaksi yang sama (outbox +
+        # journal); anti-duplikat dijamin notifications.kirim (FIX-30).
+        notif_mod.kirim(db, notif_mod.EVENT_UNIT_BARU, ref_type="service_order",
+                        ref_code=order.id,
+                        data={"no_servis": order.no_servis, "device": order.device,
+                              "customer": getattr(customer, "name", None),
+                              "analisa": getattr(order, "analisa", None),
+                              "tindakan": getattr(order, "tindakan", None)},
+                        actor=_actor(user))
         db.commit()
     except IntegrityError:
         # Tabrakan no_servis acak (sangat jarang): ulangi sekali dengan nomor baru.
@@ -247,7 +266,7 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
                 payment=dp_amount,
                 final_price=data.final_price,
                 service_date=date.today(),
-                warranty_months=1 if st == "SELESAI" else None,
+                warranty_months=1 if st == "DONE" else None,
             )
             db.add(order)
             db.flush()
@@ -346,15 +365,12 @@ def list_orders(
 ):
     """Daftar servis order dengan pagination (backend-side).
 
-    Default (FINAL LOCK A): sembunyikan SELESAI + DIAMBIL (riwayat).
-    riwayat=true → tampilkan kembali semuanya. Data tidak dihapus/diubah.
+    Semua order tampil apa adanya (termasuk CASH + DIAMBIL). Tidak ada lagi
+    penyembunyian "riwayat": batas arsip adalah Tutup Kas, bukan status CASH.
+    Param `riwayat` diterima untuk kompatibilitas klien lama tapi diabaikan.
     """
     page, limit = _page_clamp(page, limit)
     qry = db.query(ServiceOrder)
-    if not riwayat:
-        # NULL unit_status (legacy) dianggap DI TOKO → tetap tampil.
-        qry = qry.filter(~((ServiceOrder.status == "SELESAI")
-                           & (ServiceOrder.unit_status == "DIAMBIL")))
     total = qry.count()
     rows = (
         qry.options(joinedload(ServiceOrder.customer))
@@ -378,11 +394,9 @@ def list_orders(
 @router.get("/latest", response_model=list[schemas.ServiceOrderList])
 def latest_orders(db: Session = Depends(get_db_session), limit: int = 10,
                   riwayat: bool = False):
+    """Daftar order terbaru. Semua status tampil, termasuk CASH + DIAMBIL."""
     limit = min(100, max(1, limit))
     qry = db.query(ServiceOrder)
-    if not riwayat:
-        qry = qry.filter(~((ServiceOrder.status == "SELESAI")
-                           & (ServiceOrder.unit_status == "DIAMBIL")))
     rows = (
         qry.options(joinedload(ServiceOrder.customer))
         .order_by(ServiceOrder.created_at.desc())
@@ -407,7 +421,7 @@ def get_order(order_id: int, db: Session = Depends(get_db_session)):
 
 @router.post("", response_model=schemas.ServiceOrderOut, status_code=201)
 def create_order(data: schemas.ServiceOrderCreate, db: Session = Depends(get_db_session),
-                 user: User = Depends(get_authenticated_user)):
+                 user: User = Depends(require_authority(Action.ORDER_CREATE))):
     customer = db.query(Customer).filter(Customer.id == data.customer_id).first()
     if not customer:
         raise HTTPException(status_code=400, detail="Customer tidak ditemukan")
@@ -431,9 +445,9 @@ def create_order(data: schemas.ServiceOrderCreate, db: Session = Depends(get_db_
     # laba_bersih dihitung backend (bukan input user).
     dump.pop("laba_bersih", None)
     try:
-        pay0 = float(dump.get("payment") or 0)
+        pay0 = to_decimal(dump.get("payment"))
     except (TypeError, ValueError):
-        pay0 = 0.0
+        pay0 = ZERO
     if pay0 < 0:
         raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
     order = ServiceOrder(**dump)
@@ -462,7 +476,7 @@ def create_order(data: schemas.ServiceOrderCreate, db: Session = Depends(get_db_
 @router.put("/{order_id}", response_model=schemas.ServiceOrderOut)
 def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                  db: Session = Depends(get_db_session),
-                 user: User = Depends(get_authenticated_user)):
+                 user: User = Depends(require_authority(Action.ORDER_UPDATE))):
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
@@ -495,6 +509,9 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
         ok, msg = check_transition(order.status, new_status, note)
         if not ok:
             raise HTTPException(status_code=400, detail=msg)
+        # P2-01 / OD-014: role tanpa authority closing tidak boleh mengubah status closing.
+        if new_status != old_status and is_closing_status(new_status):
+            check(user, Action.ORDER_STATUS_CLOSING)
         # Guard per status (nama label Indonesia).
         if new_status == "KONFIRMASI":
             missing = []
@@ -507,12 +524,12 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             if missing:
                 raise HTTPException(status_code=400,
                                     detail="Status KONFIRMASI wajib melengkapi: " + ", ".join(missing))
-        elif new_status == "PERBAIKAN":
+        elif new_status == "REPAIR":
             tech = payload.get("technician", order.technician)
             if not (tech or "").strip():
                 raise HTTPException(status_code=400,
-                                    detail="Status PERBAIKAN wajib melengkapi: Teknisi Penanggung Jawab")
-        elif new_status == "SELESAI":
+                                    detail="Status REPAIR wajib melengkapi: Teknisi Penanggung Jawab")
+        elif new_status == "DONE":
             missing = []
             plan = payload.get("repair_plan", order.repair_plan)
             if not (plan or "").strip():
@@ -522,27 +539,161 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                 missing.append("Teknisi Penanggung Jawab")
             if missing:
                 raise HTTPException(status_code=400,
-                                    detail="Status SELESAI wajib melengkapi: " + ", ".join(missing))
+                                    detail="Status DONE wajib melengkapi: " + ", ".join(missing))
             if payload.get("part_cost") is None and order.part_cost is None:
                 payload["part_cost"] = 0
-        elif new_status in ("GAGAL", "BATAL"):
+        elif new_status == "CASH":
+            # Owner Cash Model (P2-15): CASH = event realisasi transaksi +
+            # serah-terima unit, mengikuti Project A.
+            #   - WAJIB hanya dari DONE (transisi sudah dijaga SERVICE_TRANSITIONS)
+            #   - WAJIB ada Tindakan (meniru Project A)
+            #   - WAJIB Modal Part & Modal Jasa terisi (meniru Project A)
+            missing = []
+            plan = payload.get("repair_plan", order.repair_plan)
+            if not (plan or "").strip():
+                missing.append("Tindakan Perbaikan")
+            if not (payload.get("part_cost", order.part_cost) or 0) > 0:
+                missing.append("Modal Part")
+            if not (payload.get("modal_jasa", order.modal_jasa) or 0) > 0:
+                missing.append("Modal Jasa")
+            if missing:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Status CASH wajib melengkapi: " + ", ".join(missing))
+        elif new_status in ("FAILED", "CANCEL"):
             if not note:
-                label = ("Alasan kegagalan" if new_status == "GAGAL"
+                label = ("Alasan kegagalan" if new_status == "FAILED"
                          else "Alasan pembatalan")
                 raise HTTPException(status_code=400,
                                     detail="Status %s wajib menyertakan %s (catatan)" % (new_status, label))
         payload["status"] = new_status
+    # P2-01 / ADAPT app.py:2079-2084: role tanpa authority finance mempertahankan
+    # nilai lama. Dijalankan SELALU (di luar blok status) agar request tanpa
+    # status tidak bisa melewati proteksi FINANCE_FIELDS.
+    payload, _ignored_finance = sanitize_finance_payload(user, payload, order)
+    # P2-04 / Q3+Q17 (Owner: opsi B): kenaikan DP dari form unit dicerminkan ke
+    # Payment Ledger. Kolom legacy `payment` tetap diisi untuk tampilan UI,
+    # tetapi settlement hanya boleh berasal dari ledger yang tercatat.
+    _dp_mirror = None
+    if "payment" in payload:
+        try:
+            _dp_legacy_baru = to_decimal(payload.get("payment"))
+        except (TypeError, ValueError):
+            _dp_legacy_baru = ZERO
+        if _dp_legacy_baru < 0:
+            raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
+        _dp_legacy_lama = to_decimal(getattr(order, "payment", 0))
+        # Delta = kenaikan yang diminta vs nilai legacy saat ini.
+        # BUKAN vs total ledger: data legacy bisa sudah punya DP tanpa baris ledger,
+        # dan menghitung dari ledger akan membuat entri DP palsu.
+        _delta_dp = _dp_legacy_baru - _dp_legacy_lama
+        if _delta_dp > 0:
+            try:
+                _pay_dp = Payment(service_order_id=order.id, kind="DP",
+                                  amount=_delta_dp, method="CASH",
+                                  note="DP dari form unit (dicerminkan ke ledger)")
+                db.add(_pay_dp)
+                db.flush()
+                # v4 #1: kenaikan DP dari form unit juga masuk SALDO LACI.
+                cash.catat_penerimaan(db, _pay_dp, actor=_actor(user))
+                journal.record(
+                    db, journal.DOMAIN_PAYMENT, journal.PAYMENT_CREATED,
+                    entity_type="PAYMENT", entity_id=_pay_dp.id, amount=_delta_dp,
+                    actor=_actor(user), source=journal.SOURCE_API,
+                    ref_type="NO_SERVIS", ref_code=(order.no_servis or None),
+                    details={"kind": "DP", "sumber": "form unit",
+                             "dp_legacy_sebelum": str(_dp_legacy_lama)})
+                _dp_mirror = {"delta": str(_delta_dp),
+                              "legacy_sebelum": str(_dp_legacy_lama),
+                              "legacy_setelah": str(_dp_legacy_baru)}
+            except Exception as _exc:  # noqa: BLE001
+                db.rollback()
+                raise HTTPException(status_code=500,
+                                    detail="Gagal mencatat DP ke ledger: %s" % _exc)
+        # tidak ada kenaikan: kolom legacy dibiarkan apa adanya (tidak diubah),
     for key, val in payload.items():
         setattr(order, key, val)
-    # Garansi months default 1 bila SELESAI tanpa pilihan.
-    if order.status == "SELESAI" and order.warranty_months is None:
+    # P2-15 (Owner 1A): `warranty_months` = KONFIGURASI/input, boleh terisi
+    # sebelum CASH. Yang "aktif" (window garansi) baru pada CASH karena
+    # `taken_at` diisi saat event CASH (lihat `_origin_warranty_start`).
+    if order.status == "DONE" and order.warranty_months is None:
         order.warranty_months = 1
-    db.commit()
+    # P2-15 (Owner Cash Model): SATU transaksi untuk seluruh event status.
+    # Semua efek (WA, Modal, Payment Ledger, serah-terima, laba, notifikasi)
+    # baru dipersistkan SATU KALI di akhir. Kegagalan salah satu langkah
+    # membatalkan semuanya — tidak ada state setengah / CASH tanpa pelunasan.
+    db.flush()
     if new_status is not None and new_status != old_status:
         _log_transition(db, order.id, old_status, new_status, _actor(user), note)
-        db.commit()
+        _cust = getattr(order, "customer", None)
+        if new_status == "DONE":
+            # P2-13 + OD-019: WA "Selesai" saat pekerjaan selesai — konfirmasi
+            # ke konsumen unit siap diambil (meniru Project A: WA di DONE).
+            notif_mod.catat_wa_selesai(db, order, actor=_actor(user))
+            # Modal TIDAK lagi keluar di DONE. Sesuai keputusan Owner: Modal
+            # Part/Jasa/Lain dikeluarkan dari hitungan kas saat status CASH
+            # (uangnya benar-benar keluar saat transaksi terealisasi), bukan
+            # saat pekerjaan selesai. Barisnya dipindah ke cabang CASH di bawah.
+            # Catat_modal sendiri idempoten per komponen, jadi replay aman.
+        elif new_status == "CASH":
+            # ── Owner Cash Model: CASH = event realisasi (dari DONE) ──
+            # Semua langkah berikut dalam SATU transaksi: kegagalan di salah
+            # satu langkah membatalkan semuanya (tidak ada state setengah).
+            _cash_when = datetime.now()
+            _now_cash = _cash_when
+            # (1) Payment Ledger Pelunasan Tunai untuk sisa tagihan.
+            #     Memakai helper SSOT yang sama dengan POST /api/payments ->
+            #     tidak ada jalur tulis payment kedua (FIX-27), dan mutasi
+            #     Saldo Laci (`cash.catat_penerimaan`) tepat satu kali.
+            _pays_pre = db.query(Payment).filter(
+                Payment.service_order_id == order.id).all()
+            _sisa = to_decimal(payment_summary(order, _pays_pre).get("sisa") or 0)
+            if _sisa > 0:
+                payments_mod.catat_payment(
+                    db, order, "PELUNASAN", _sisa, method="CASH",
+                    note="Pelunasan otomatis saat status Cash", actor=_actor(user),
+                    when=_cash_when, allow_settled=True)
+            else:
+                # Sudah ada pelunasan di ledger (replay CASH / koreksi): JANGAN
+                # tulis baris baru. `statusflow.payment_summary` menjumlahkan
+                # semua baris, jadi satu barisdobel = uang fiktif di Buku Kas.
+                journal.record(
+                    db, journal.DOMAIN_PAYMENT, journal.PAYMENT_SETTLED,
+                    entity_type="SERVICE_ORDER", entity_id=order.id,
+                    amount=to_decimal(payment_summary(order, _pays_pre).get("total_bayar") or 0),
+                    actor=_actor(user), source=journal.SOURCE_API,
+                    ref_type="NO_SERVIS", ref_code=(order.no_servis or None),
+                    details={"catatan": "replay CASH: tidak ada pelunasan baru"})
+            # (2) LUNAS + lunas_at = waktu event CASH (dibaca dari ledger).
+            _pays = db.query(Payment).filter(
+                Payment.service_order_id == order.id).all()
+            if payment_summary(order, _pays)["payment_status"] == "LUNAS":
+                lock_lunas_moment(order, when=_cash_when)
+            # (2b) Modal Part/Jasa/Lain keluar dari SALDO LACI di CASH.
+            # Keputusan Owner: kas hanya berkurang saat transaksi terealisasi,
+            # bukan saat pekerjaan selesai (DONE). Idempoten per komponen lewat
+            # ref_type+ref_id di cash.catat_modal, jadi replay tidak dobel.
+            cash.catat_modal(db, order, actor=_actor(user))
+            # (3) Serah-terima unit (CASH otomatis berarti customer mengambil).
+            order.unit_status = "DIAMBIL"
+            order.taken_at = _now_cash
+            # (4) Realisasi Laba transaksi = Omzet - Modal3 (gate: CASH + LUNAS).
+            order.laba_bersih = order_profit(order, _pays)
+            # (5) Notifikasi Kas Masuk (event financial; WA Selesai sudah di DONE).
+            notif_mod.kirim(db, notif_mod.EVENT_KAS_MASUK, ref_type="service_order",
+                            ref_code=order.id,
+                            data={"no_servis": order.no_servis, "device": order.device,
+                                  "customer": getattr(_cust, "name", None),
+                                  "technician": order.technician,
+                                  "harga_jual": order.final_price,
+                                  "laba": str(order.laba_bersih),
+                                  "sisa_dilunasi": str(_sisa)},
+                            actor=_actor(user))
+    db.commit()
     # Konsistensi momen lunas: kolom `payment` masih bisa ditulis UI (arsip DP),
     # jadi kunci momen LUNAS bila ringkasan sudah LUNAS (untuk garansi & kas).
+    # CATATAN: untuk status CASH, `lunas_at` SUDAH dikunci dengan waktu event
+    # CASH di atas — blok berikut tidak mengubahnya (lock_lunas_moment idempotent).
     try:
         pays = db.query(Payment).filter(Payment.service_order_id == order.id).all()
         if payment_summary(order, pays)["payment_status"] == "LUNAS":
@@ -559,7 +710,7 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
 def delete_order(order_id: int, db: Session = Depends(get_db_session),
                  admin: User = Depends(require_admin)):
     """Hapus order — khusus Admin. Diblokir bila sudah ada uang/klaim/status
-    SELESAI (gunakan alur riwayat/arsip, bukan hapus, agar jurnal aman)."""
+    status terminal (DONE/CASH/FAILED/CANCEL) — gunakan alur riwayat/arsip, bukan hapus, agar jurnal aman)."""
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
@@ -572,9 +723,9 @@ def delete_order(order_id: int, db: Session = Depends(get_db_session),
     if n_claim:
         raise HTTPException(status_code=409,
                             detail="Order memiliki klaim garansi, tidak dapat dihapus")
-    if (order.status or "") == "SELESAI":
+    if (order.status or "") in TERMINAL_STATUSES or (order.status or "") == "DONE":
         raise HTTPException(status_code=409,
-                            detail="Order SELESAI tidak dapat dihapus (gunakan riwayat/arsip)")
+                            detail="Order %s tidak dapat dihapus (gunakan riwayat/arsip)" % order.status)
     db.delete(order)
     db.commit()
     return {"ok": True}
@@ -582,10 +733,10 @@ def delete_order(order_id: int, db: Session = Depends(get_db_session),
 
 @router.post("/{order_id}/handover", response_model=schemas.ServiceOrderOut)
 def handover_unit(order_id: int, db: Session = Depends(get_db_session),
-                  user: User = Depends(get_authenticated_user)):
+                  user: User = Depends(require_authority(Action.ORDER_HANDOVER))):
     """Serahkan unit ke konsumen: DI TOKO → DIAMBIL (+ taken_at). Idempoten.
 
-    Hanya untuk order terminal (SELESAI/GAGAL/BATAL) — unit yang masih dalam
+    Hanya untuk order terminal (DONE/CASH/FAILED/CANCEL) — unit yang masih dalam
     proses tidak dapat diserahkan."""
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:

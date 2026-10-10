@@ -6,7 +6,8 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from dependencies import get_db_session
-from models import Sparepart
+from models import Sparepart, User
+from authority import Action, require_authority
 from routers.auth import require_admin
 import schemas
 
@@ -35,7 +36,8 @@ def list_spareparts(db: Session = Depends(get_db_session), page: int = DEFAULT_P
 
 
 @router.post("", response_model=schemas.SparepartOut, status_code=201)
-def create_sparepart(data: schemas.SparepartCreate, db: Session = Depends(get_db_session)):
+def create_sparepart(data: schemas.SparepartCreate, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.SPAREPART_WRITE))):
     if not (data.jenis or "").strip():
         raise HTTPException(status_code=400, detail="Jenis sparepart wajib diisi")
     qty = data.qty or 0
@@ -59,7 +61,8 @@ def create_sparepart(data: schemas.SparepartCreate, db: Session = Depends(get_db
 
 @router.put("/{sparepart_id}", response_model=schemas.SparepartOut)
 def update_sparepart(sparepart_id: int, data: schemas.SparepartUpdate,
-                     db: Session = Depends(get_db_session)):
+                     db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.SPAREPART_WRITE))):
     row = db.query(Sparepart).filter(Sparepart.id == sparepart_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Sparepart tidak ditemukan")

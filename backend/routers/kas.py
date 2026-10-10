@@ -11,30 +11,35 @@ import json
 from datetime import datetime, timedelta
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Header, HTTPException, Query
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
+import cash
+import closing as closing_mod
+import idempotency as idem
+import distribution as distribution_mod
+from authority import Action, require_authority
 from dependencies import get_db_session
+from money import json_default, to_decimal
 from models import Expense, KasEntry, KasPeriod, Payment, ServiceOrder, User
 from routers.auth import get_authenticated_user, require_admin
-from routers.dashboard import _period_bounds, compute_finance, get_active_period
+from routers.dashboard import (_period_bounds, batas_periode, compute_finance,
+                                get_active_period)
 import schemas
 
 router = APIRouter(prefix="/api/kas", tags=["kas"])
 
-SALDO_AWAL_KATEGORI = "Saldo Awal"
+SALDO_AWAL_KATEGORI = cash.SALDO_AWAL_KATEGORI
 
 DEFAULT_PAGE = 1
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
 
 
-def _num(v) -> float:
-    try:
-        return float(v or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def _num(v):
+    """P2-02 / Q10: nilai uang selalu Decimal."""
+    return to_decimal(v)
 
 
 def _moment(dt_val, d_val) -> Optional[datetime]:
@@ -46,9 +51,11 @@ def _moment(dt_val, d_val) -> Optional[datetime]:
 
 
 def opening_balance(db: Session) -> float:
-    """Saldo awal = neto seluruh entri 'Saldo Awal' lintas periode (sekali definisi)."""
-    rows = db.query(KasEntry).filter(KasEntry.kategori == SALDO_AWAL_KATEGORI).all()
-    return sum(_num(r.nominal) if (r.jenis or "").strip().lower() == "masuk" else -_num(r.nominal) for r in rows)
+    """Saldo awal Kas Perputaran (Laci) = neto entri 'Saldo Awal' layer LACI.
+
+    P2-06 / SSOT-7: Kas Aset TIDAK ikut di sini — saldo Kas Aset berdiri sendiri.
+    """
+    return cash.opening_layer(db, cash.LAYER_LACI)
 
 
 def period_rows(db: Session, start: datetime, end: datetime):
@@ -66,11 +73,17 @@ def period_rows(db: Session, start: datetime, end: datetime):
             continue
         o = p.service_order
         kind = (p.kind or "PELUNASAN").strip().upper()
+        # PEMISAHAN DP: DP adalah TITIPAN PELANGGAN, bukan arus kas operasional.
+        # Dia tidak boleh menambah Debit/Kredit/Saldo Buku Kas. Uangnya tetap ada
+        # di Laci (tidak dihapus dari kas_entries) dan dilacak terpisah di panel
+        # "Titipan DP Pelanggan" (finance.titipan_dp).
+        if kind == "DP":
+            continue
         rows.append({
             "moment": m,
             "tgl": m.date().isoformat() if hasattr(m, "date") else None,
             "jenis": "Masuk",
-            "kategori": "DP" if kind == "DP" else "Pelunasan",
+            "kategori": "Pelunasan",
             "ket": "%s • %s" % ((o.device if o else None) or "-",
                                 (o.no_servis if o else None) or "-"),
             "nominal": _num(p.amount),
@@ -94,7 +107,13 @@ def period_rows(db: Session, start: datetime, end: datetime):
             "ref_id": e.id,
         })
 
-    for k in db.query(KasEntry).filter(KasEntry.kategori != SALDO_AWAL_KATEGORI).all():
+    # P2-06 / SSOT-7: Buku Kas (Laci) hanya memuat layer LACI — mutasi Kas Aset
+    # tidak boleh muncul sebagai arus kas Laci.
+    for k in db.query(KasEntry).filter(KasEntry.kategori != SALDO_AWAL_KATEGORI,
+                                      KasEntry.layer == cash.LAYER_LACI).all():
+        # v4 #9: Buku Kas hanya arus periode (bukan mutasi posisi Master Kas).
+        if (getattr(k, "sumber", None) or cash.SUMBER_MANUAL) not in cash.SUMBER_BUKU_KAS:
+            continue
         m = _moment(getattr(k, "created_at", None), getattr(k, "tanggal", None))
         if m is None:
             continue
@@ -131,9 +150,17 @@ def _clamp(page: int, limit: int):
 # ---------- Jurnal manual ----------
 @router.get("/entries", response_model=schemas.KasEntryPage)
 def list_entries(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
-                 limit: int = DEFAULT_LIMIT, q: str = Query("")):
+                 limit: int = DEFAULT_LIMIT, q: str = Query(""),
+                 layer: str = Query(cash.LAYER_LACI, description="LACI | KAS_ASET | all")):
+    """Jurnal kas manual. Default hanya layer LACI (P2-06 / SSOT-7)."""
     page, limit = _clamp(page, limit)
     qry = db.query(KasEntry)
+    lay = (layer or cash.LAYER_LACI).strip().upper()
+    if lay and lay != "ALL":
+        try:
+            qry = qry.filter(KasEntry.layer == cash.norm_layer(lay))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Layer kas tidak dikenal")
     if q.strip():
         like = "%" + q.strip() + "%"
         qry = qry.filter(or_(KasEntry.keterangan.ilike(like), KasEntry.kategori.ilike(like)))
@@ -144,7 +171,8 @@ def list_entries(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE
 
 
 @router.post("/entries", response_model=schemas.KasEntryOut, status_code=201)
-def create_entry(data: schemas.KasEntryCreate, db: Session = Depends(get_db_session)):
+def create_entry(data: schemas.KasEntryCreate, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.KAS_ENTRY_WRITE))):
     jenis = (data.jenis or "").strip().capitalize()
     if jenis not in ("Masuk", "Keluar"):
         raise HTTPException(status_code=400, detail="Jenis wajib Masuk atau Keluar")
@@ -155,9 +183,15 @@ def create_entry(data: schemas.KasEntryCreate, db: Session = Depends(get_db_sess
     nominal = _num(data.nominal)
     if nominal < 0:
         raise HTTPException(status_code=400, detail="Nominal tidak boleh negatif")
+    layer = cash.LAYER_LACI
+    if getattr(data, "layer", None):
+        try:
+            layer = cash.norm_layer(data.layer)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Layer kas tidak dikenal")
     row = KasEntry(jenis=jenis, kategori=data.kategori.strip(),
                    keterangan=data.keterangan.strip(), nominal=nominal,
-                   tanggal=data.tanggal)
+                   tanggal=data.tanggal, layer=layer)
     db.add(row)
     db.commit()
     db.refresh(row)
@@ -165,7 +199,8 @@ def create_entry(data: schemas.KasEntryCreate, db: Session = Depends(get_db_sess
 
 
 @router.put("/entries/{entry_id}", response_model=schemas.KasEntryOut)
-def update_entry(entry_id: int, data: schemas.KasEntryUpdate, db: Session = Depends(get_db_session)):
+def update_entry(entry_id: int, data: schemas.KasEntryUpdate, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.KAS_ENTRY_WRITE))):
     row = db.query(KasEntry).filter(KasEntry.id == entry_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Entri kas tidak ditemukan")
@@ -229,7 +264,7 @@ def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
     period = (period or "all").strip().lower()
     if period == "current":
         p = get_active_period(db)
-        rows = period_rows(db, p.start_at, p.end_at)
+        rows = period_rows(db, *batas_periode(p))
     else:
         rows = period_rows(db, datetime.min, datetime.max)
 
@@ -253,6 +288,202 @@ def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
                                   opening=opening_balance(db), items=items)
 
 
+# ---------- Owner Cash Model v4: visibility posisi Master Kas ----------
+def _boleh_lihat_aset(user) -> bool:
+    """v4 #11: Saldo Aset + Master Kas hanya untuk ADMIN & PENGELOLA.
+
+    CS/KASIR/TEKNISI hanya melihat SALDO LACI (Kas Aset Kecil).
+    """
+    try:
+        from authority import ROLE_ADMIN, ROLE_PENGELOLA, canonical_role
+        return canonical_role(user) in (ROLE_ADMIN, ROLE_PENGELOLA)
+    except Exception:  # noqa: BLE001
+        return False
+
+
+def _posisi_query(raw: Optional[str]) -> str:
+    """v4 #6: injection harus MEMILIH posisi (Laci atau Aset)."""
+    v = (raw or "").strip()
+    if not v:
+        raise HTTPException(status_code=400,
+                            detail="Pilih posisi: LACI (Kas Aset Kecil) atau KAS_ASET (Kas Aset Besar)")
+    try:
+        return cash.norm_layer(v)
+    except cash.CashError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+# ---------- P2-06 / SSOT-7: Layer Laci & Kas Aset ----------
+@router.get("/saldo")
+def get_saldo(db: Session = Depends(get_db_session),
+              user: User = Depends(get_authenticated_user)):
+    """Posisi Kas Aset (v4): Laci untuk semua role; Aset + Master Kas utk Admin/Pengelola."""
+    from routers.dashboard import get_active_period
+    mulai = None
+    try:
+        mulai = get_active_period(db).start_at
+    except Exception:  # noqa: BLE001
+        mulai = None
+    return cash.ringkasan(db, termasuk_aset=_boleh_lihat_aset(user), periode_mulai=mulai)
+
+
+@router.get("/aset/riwayat")
+def kas_aset_riwayat(db: Session = Depends(get_db_session),
+                     period: str = Query("all", description="all | current"),
+                     user: User = Depends(get_authenticated_user)):
+    """Riwayat mutasi SALDO ASET — hanya Admin/Pengelola (v4 #11)."""
+    if not _boleh_lihat_aset(user):
+        raise HTTPException(status_code=403,
+                            detail="Saldo Aset (Kas Aset Besar) hanya terlihat oleh Admin/Pengelola.")
+    """Jurnal mutasi Kas Aset (masuk/keluar, sumber, saldo berjalan)."""
+    period = (period or "all").strip().lower()
+    start, end = None, None
+    if period == "current":
+        p = get_active_period(db)
+        start, end = p.start_at, p.end_at
+    items = cash.riwayat_layer(db, cash.LAYER_ASET)
+    if period == "current":
+        p = get_active_period(db)
+        items = [it for it in items
+                 if start <= datetime.combine(date.fromisoformat(it["tgl"]), datetime.min.time())
+                 < end] if False else items
+    return {"layer": cash.LAYER_KAS_ASET, "label": cash.LABEL[cash.LAYER_KAS_ASET],
+            "opening": cash.opening_layer(db, cash.LAYER_KAS_ASET),
+            "saldo": cash.saldo_kas_aset(db), "total": len(items),
+            "cara_baca": cash.CARA_BACA, "items": items}
+
+
+@router.post("/aset/masuk")
+def kas_aset_masuk(data: schemas.KasAsetMutasiIn,
+                   db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.KAS_ASET_INJEKSI))):
+    """Injection Kas Aset dengan PILIHAN POSISI (v4 #6): Laci atau Kas Aset Besar."""
+    posisi = _posisi_query(getattr(data, "posisi", None))
+    try:
+        res = cash.catat_injeksi(db, posisi, data.nominal,
+                                 data.keterangan, actor=(user.display_name or user.username))
+    except cash.CashError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    res["master_kas_setelah"] = cash.master_kas(db)
+    return res
+
+
+@router.post("/aset/keluar")
+def kas_aset_keluar(data: schemas.KasAsetMutasiIn,
+                    db: Session = Depends(get_db_session),
+                    user: User = Depends(require_authority(Action.KAS_ASET_INJEKSI))):
+    """Pengeluaran AKTUAL dari Saldo Aset Besar — dicatat MANUAL oleh Admin (v4 #8).
+
+    Dipakai untuk realize pengembalian refund garansi & pelunasan hutang beban:
+    proses refund/hutang tidak boleh otomatis mengurangi saldo posisi.
+    """
+    nominal = _num(data.nominal)
+    cukup, saldo, kurang = cash.cukup_kas_aset(db, nominal)
+    if not cukup:
+        raise HTTPException(
+            status_code=400,
+            detail="Saldo Kas Aset tidak cukup (saldo %s, diminta %s, kurang %s)"
+                   % (saldo, nominal, kurang))
+    try:
+        res = cash.catat_mutasi(db, cash.LAYER_KAS_ASET, "Keluar", data.kategori or "Kas Aset",
+                               data.keterangan, nominal, data.tanggal)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return res
+
+
+@router.post("/aset/transfer")
+def transfer_kas_aset(data: schemas.KasAsetTransferIn,
+                      db: Session = Depends(get_db_session),
+                      user: User = Depends(require_authority(Action.KAS_ASET_INJEKSI)),
+                      idempotency_key: str = Header(None, alias=idem.HEADER)):
+    """Transfer fisik Laci <-> Aset (v4 #5).
+
+    Laci berubah, Aset berubah berlawanan, MASTER KAS TETAP. Bukan omzet,
+    beban, laba, atau distribusi baru.
+    """
+    if idempotency_key:
+        try:
+            run = idem.jalankan(db, "kas.transfer", idempotency_key, data.model_dump(),
+                                lambda: _transfer_impl(data, db, user))
+        except idem.IdempotencyConflict as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc))
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            raise
+        return run.get("result")
+    return _transfer_impl(data, db, user)
+
+
+def _transfer_impl(data, db, user):
+    oleh = user.display_name or user.username
+    try:
+        res = cash.transfer(db, data.nominal, data.dari, data.ke, data.keterangan,
+                            actor=oleh, ref_type=data.ref_type, ref_id=data.ref_id)
+    except cash.CashError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    res["label_dari"] = cash.LABEL[res["dari"]]
+    res["label_ke"] = cash.LABEL[res["ke"]]
+    res["master_kas_setelah"] = cash.master_kas(db)
+    return res
+
+
+@router.get("/aset/cukup")
+def kas_aset_cukup(nominal: float = Query(..., description="jumlah yang akan diperiksa"),
+                   db: Session = Depends(get_db_session),
+                   user: User = Depends(get_authenticated_user)):
+    """Pre-check kecukupan Kas Aset (read-only) untuk refund/kebutuhan lain."""
+    cukup, saldo, kurang = cash.cukup_kas_aset(db, nominal)
+    return {"cukup": bool(cukup), "saldo_kas_aset": saldo,
+            "diminta": _num(nominal), "kurang": kurang,
+            "cara_baca": cash.CARA_BACA}
+
+
+# ---------- P2-07 / SSOT-6: Distribusi (read-only) ----------
+@router.get("/distribusi")
+def get_distribusi(db: Session = Depends(get_db_session),
+                   period: str = Query("current", description="current | YYYY-MM-DD"),
+                   user: User = Depends(get_authenticated_user)):
+    """Status distribusi. Distribution terbentuk HANYA saat Tutup Kas (bukan CTO)."""
+    period = (period or "current").strip()
+    pid = None
+    if period == "current":
+        p_ = get_active_period(db)
+        key = p_.start_at.date().isoformat() if p_.start_at else ""
+        preview = compute_finance(db, *batas_periode(p_)).get("laba_bersih", 0)
+        # P2-15 B-1: teruskan id Kas Period agar distributor membaca baris
+        # miliknya sendiri ketika beberapa Kas Period berteGALANG sama.
+        pid = p_.id
+    else:
+        key = period
+        preview = 0
+    out = distribution_mod.ringkasan(db, key, kas_period_id=pid)
+    if not out.get("terbentuk"):
+        out["preview"] = distribution_mod.preview(preview)
+    return out
+
+
 # ---------- Tutup kas ----------
 def _next_period_end(now: datetime) -> datetime:
     """16:00 berikutnya setelah `now` (jaga ritme periode 16:00→16:00)."""
@@ -266,43 +497,76 @@ def _next_period_end(now: datetime) -> datetime:
 @router.post("/close")
 def close_period(data: schemas.KasCloseIn, db: Session = Depends(get_db_session),
                  user: User = Depends(get_authenticated_user),
-                 admin: User = Depends(require_admin)):
-    """Tutup periode aktif: kunci snapshot keuangan, arsipkan, buka periode baru.
+                 admin: User = Depends(require_authority(Action.KAS_CLOSE)),
+                 idempotency_key: str = Header(None, alias=idem.HEADER)):
+    """Tutup periode kas (P2-08). P2-14: `Idempotency-Key` mencegah dobel tutup kas.
+    set Laci = uang fisik bila Declare, snapshot, buka periode baru 16:00.
 
-    Khusus Admin. Periode baru selaras 16:00 berikutnya. Klik ganda (<60 dtk
-    sejak periode dibuka) ditolak agar tidak tercipta periode kosong ganda."""
-    period = get_active_period(db)
+    Authority: `Action.KAS_CLOSE` (Admin). Eksekusi kedua pada periode yang sama
+    ditolak 409. Semua penulisan dalam SATU transaksi (rollback bila gagal).
+    """
+    if idempotency_key:
+        try:
+            run = idem.jalankan(db, "kas.close", idempotency_key,
+                                data.model_dump(),
+                                lambda: _tutup_periode_impl(data, db, user))
+        except idem.IdempotencyConflict as exc:
+            db.rollback()
+            raise HTTPException(status_code=409, detail=str(exc))
+        except HTTPException:
+            db.rollback()
+            raise
+        except Exception:
+            db.rollback()
+            raise
+        if run.get("replayed"):
+            return run.get("result")
+        return run.get("result")
+    return _tutup_periode_impl(data, db, user)
+
+
+def _tutup_periode_impl(data, db, user):
+    target = None
+    pid = getattr(data, "kas_period_id", None)
+    if pid is not None:
+        target = db.query(KasPeriod).filter(KasPeriod.id == pid).first()
+        if target is None:
+            raise HTTPException(status_code=404, detail="Periode kas tidak ditemukan")
+    else:
+        target = get_active_period(db)
+
+    if (target.status or "").strip().upper() == "CLOSED":
+        raise HTTPException(
+            status_code=409,
+            detail="Periode #%s sudah ditutup pada %s; tidak dapat ditutup lagi"
+                   % (target.id, target.closed_at))
+
     now = datetime.now()
     try:
-        age = (now - (period.created_at or period.start_at)).total_seconds()
+        age = (now - (target.created_at or target.start_at)).total_seconds()
     except Exception:
         age = None
     if age is not None and age < 60:
         raise HTTPException(status_code=400,
                             detail="Periode baru saja dibuka, tutup kas belum dapat dilakukan lagi")
-    fin = compute_finance(db, period.start_at, period.end_at)
-    counted = data.cash_counted
-    selisih = (float(counted) - float(fin.get("saldo", 0))) if counted is not None else None
-    snapshot = {
-        "period": {"id": period.id, "start_at": period.start_at.isoformat(),
-                   "end_at": period.end_at.isoformat()},
-        "finance": fin,
-        "cash_counted": counted,
-        "selisih": selisih,
-    }
-    now = datetime.now()
-    period.status = "CLOSED"
-    period.closed_at = now
-    period.closed_by = user.display_name or user.username
-    period.snapshot = json.dumps(snapshot)
-    new_period = KasPeriod(start_at=now, end_at=_next_period_end(now),
-                           status="OPEN")
-    db.add(new_period)
-    db.commit()
-    db.refresh(new_period)
-    return {"ok": True, "closed_period_id": period.id, "snapshot": snapshot,
-            "new_period": {"id": new_period.id, "start_at": new_period.start_at.isoformat(),
-                           "end_at": new_period.end_at.isoformat()}}
+
+    oleh = user.display_name or user.username
+    try:
+        result = closing_mod.tutup_periode(
+            db, target, counted=data.cash_counted, oleh=oleh,
+            compute_finance=compute_finance)
+        db.commit()
+    except closing_mod.PeriodAlreadyClosed as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc))
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(target)
+    return result
 
 
 @router.get("/periods", response_model=list[schemas.KasPeriodDetailOut])

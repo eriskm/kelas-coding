@@ -1,38 +1,66 @@
 """Aturan status BOSS SF (FINAL DECISION LOCK) — satu sumber kebenaran.
 
+Owner Cash Model (P2-15): terminology & alur mengikuti Project A.
+
 Tiga dimensi terpisah:
-- Status Servis  : DITERIMA ANALISA DIAGNOSA KONFIRMASI MENUNGGU SPAREPART
-                   PERBAIKAN SELESAI GAGAL BATAL (Bahasa Indonesia)
+- Status Servis  : DITERIMA ANALISA KONFIRMASI WAIT PART REPAIR DONE CASH
+                   CANCEL FAILED
+                   (label UI mengikuti Project A; CASH = event realisasi
+                   transaksi + serah-terima unit)
 - Status Bayar   : BELUM LUNAS / LUNAS (DERIVE dari payments, tidak disimpan)
 - Status Unit    : DI TOKO / DIAMBIL (+ taken_at)
 """
+from money import ZERO, to_decimal
 from datetime import datetime, date
 
+#: Status servis kanonis. `CASH` = event realisasi (transaction realization),
+#: bukan bypass LUNAS: LUNAS tetap diturunkan dari Payment Ledger.
 SERVICE_STATUSES = [
     "DITERIMA",
     "ANALISA",
-    "DIAGNOSA",
     "KONFIRMASI",
-    "MENUNGGU SPAREPART",
-    "PERBAIKAN",
-    "SELESAI",
-    "GAGAL",
-    "BATAL",
+    "WAIT PART",
+    "REPAIR",
+    "DONE",
+    "CASH",
+    "CANCEL",
+    "FAILED",
 ]
 
-TERMINAL_STATUSES = ["SELESAI", "GAGAL", "BATAL"]
+#: Status yang menutup unit. DONE = pekerjaan selesai; CASH = transaksi terealisasi.
+TERMINAL_STATUSES = ["CASH", "FAILED", "CANCEL"]
+
+#: Status yang menutup pekerjaan tapi BELUM merealisasikan transaksi (bukan Cash).
+WORK_DONE_STATUSES = ["DONE"]
 
 SERVICE_TRANSITIONS = {
     "DITERIMA": ["ANALISA"],
-    "ANALISA": ["DIAGNOSA"],
-    "DIAGNOSA": ["KONFIRMASI"],
-    "KONFIRMASI": ["MENUNGGU SPAREPART", "PERBAIKAN", "BATAL"],
-    "MENUNGGU SPAREPART": ["PERBAIKAN", "GAGAL"],
-    "PERBAIKAN": ["SELESAI", "GAGAL"],
-    "SELESAI": [],
-    "GAGAL": [],
-    "BATAL": [],
+    "ANALISA": ["KONFIRMASI"],
+    "KONFIRMASI": ["WAIT PART", "REPAIR", "CANCEL"],
+    "WAIT PART": ["REPAIR", "FAILED"],
+    "REPAIR": ["DONE", "FAILED"],
+    "DONE": ["CASH"],
+    "CASH": [],
+    "FAILED": [],
+    "CANCEL": [],
 }
+
+#: Label status untuk UI (mengikuti Project A).
+STATUS_LABELS = {
+    "DITERIMA": "Diterima",
+    "ANALISA": "Analisa",
+    "KONFIRMASI": "Konfirmasi",
+    "WAIT PART": "Wait Part",
+    "REPAIR": "Repair",
+    "DONE": "Done",
+    "CASH": "Cash",
+    "CANCEL": "Cancel",
+    "FAILED": "Failed",
+}
+
+#: Opsi closing yang hanya boleh diubah oleh role ber-authority closing
+#: (Admin/Kasir). Cash punya aturan tambahan: hanya dari DONE.
+CLOSING_ONLY_STATUSES = ["CASH", "CANCEL"]
 
 UNIT_STATUSES = ["DI TOKO", "DIAMBIL"]
 
@@ -40,6 +68,7 @@ PAYMENT_KINDS = ["DP", "PELUNASAN"]
 
 # Initial path Servis Baru (kondisi operasional, bukan status bebas).
 # target = initial status; chain = histori yang benar-benar terjadi.
+# P2-15: target/chain adalah status PEKERJAAN -> selesai di DONE (bukan Cash).
 INITIAL_PATHS = {
     "TITIP": {
         "target": "DITERIMA",
@@ -47,19 +76,19 @@ INITIAL_PATHS = {
         "chain": ["DITERIMA"],
     },
     "PERBAIKAN": {
-        "target": "PERBAIKAN",
+        "target": "REPAIR",
         "label": "masuk perbaikan",
-        "chain": ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "PERBAIKAN"],
+        "chain": ["DITERIMA", "ANALISA", "KONFIRMASI", "REPAIR"],
     },
     "SPAREPART": {
-        "target": "MENUNGGU SPAREPART",
+        "target": "WAIT PART",
         "label": "menunggu sparepart",
-        "chain": ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "MENUNGGU SPAREPART"],
+        "chain": ["DITERIMA", "ANALISA", "KONFIRMASI", "WAIT PART"],
     },
     "TUNGGU": {
-        "target": "SELESAI",
+        "target": "DONE",
         "label": "servis tunggu",
-        "chain": ["DITERIMA", "ANALISA", "DIAGNOSA", "KONFIRMASI", "PERBAIKAN", "SELESAI"],
+        "chain": ["DITERIMA", "ANALISA", "KONFIRMASI", "REPAIR", "DONE"],
     },
 }
 
@@ -101,32 +130,39 @@ def check_initial_path(path, fields: dict):
             return None, None, ("Path TUNGGU wajib melengkapi: %s" % ", ".join(missing))
     return spec["target"], spec["chain"], ""
 
-# Status legacy → final (FINAL LOCK §12). CASH ditangani khusus (§3.1).
+# Status legacy → final (FINAL LOCK §12). P2-15: DIAGNOSA dianggap kondisi
+# yang sama dengan ANALISA (Owner: "Analisa dan Diagnosa adalah status yang
+# dianggap kondisi yg sama"); data legacy tidak dihapus, hanya dipetakan.
 LEGACY_STATUS_MAP = {
     "RECEIVED": "DITERIMA",
     "ANALISA": "ANALISA",
-    "DIAGNOSIS": "DIAGNOSA",
+    "DIAGNOSIS": "ANALISA",
+    "DIAGNOSA": "ANALISA",
     "KONFIRMASI": "KONFIRMASI",
-    "WAIT PART": "MENUNGGU SPAREPART",
-    "WAITING_PART": "MENUNGGU SPAREPART",
-    "REPAIR": "PERBAIKAN",
-    "DONE": "SELESAI",
-    "COMPLETED": "SELESAI",
-    "READY": "SELESAI",
-    "QC": "PERBAIKAN",
+    "WAIT PART": "WAIT PART",
+    "WAITING_PART": "WAIT PART",
+    "MENUNGGU SPAREPART": "WAIT PART",
+    "REPAIR": "REPAIR",
+    "PERBAIKAN": "REPAIR",
+    "QC": "REPAIR",
     "WAITING_APPROVAL": "KONFIRMASI",
-    "FAILED": "GAGAL",
-    "FILED": "GAGAL",
-    "CANCEL": "BATAL",
-    "CANCELLED": "BATAL",
+    "DONE": "DONE",
+    "COMPLETED": "DONE",
+    "READY": "DONE",
+    "SELESAI": "DONE",
+    "CASH": "CASH",
+    "FAILED": "FAILED",
+    "GAGAL": "FAILED",
+    "FILED": "FAILED",
+    "CANCEL": "CANCEL",
+    "CANCELLED": "CANCEL",
+    "BATAL": "CANCEL",
 }
 
 
-def _num(v) -> float:
-    try:
-        return float(v or 0)
-    except (TypeError, ValueError):
-        return 0.0
+def _num(v):
+    """P2-02 / Q10: nilai uang selalu Decimal."""
+    return to_decimal(v)
 
 
 def check_transition(dari, ke, catatan=""):
@@ -158,7 +194,7 @@ def check_transition(dari, ke, catatan=""):
     return False, "Transisi %s → %s tidak diizinkan tanpa catatan" % (dari, ke)
 
 
-def kewajiban(order) -> float:
+def kewajiban(order):
     """Total kewajiban pelanggan: final_price ?? estimate."""
     fp = getattr(order, "final_price", None)
     if fp is not None:
@@ -166,11 +202,11 @@ def kewajiban(order) -> float:
     return _num(getattr(order, "estimate", 0))
 
 
-def payments_total(pay_rows) -> float:
+def payments_total(pay_rows):
     return sum(_num(getattr(p, "amount", 0)) for p in (pay_rows or []))
 
 
-def _dp_total(pay_rows) -> float:
+def _dp_total(pay_rows):
     """Total baris jurnal ber-kind DP (hold harmless terhadap kolom legacy)."""
     return sum(_num(getattr(p, "amount", 0)) for p in (pay_rows or [])
                if (getattr(p, "kind", "") or "").strip().upper() == "DP")
@@ -188,9 +224,9 @@ def payment_summary(order, pay_rows) -> dict:
     must = kewajiban(order)
     legacy_dp = _num(getattr(order, "payment", 0))
     dp_journal = _dp_total(pay_rows)
-    effective_legacy = max(0.0, legacy_dp - dp_journal)
+    effective_legacy = max(ZERO, legacy_dp - dp_journal)
     paid = effective_legacy + payments_total(pay_rows)
-    sisa = max(0.0, must - paid)
+    sisa = max(ZERO, must - paid)
     lunas = bool(must > 0 and paid >= must)
     return {
         "kewajiban": must,
@@ -228,7 +264,7 @@ def lunas_moment(order, pay_rows):
     if must > 0:
         rows = sorted([p for p in (pay_rows or []) if getattr(p, "created_at", None)],
                       key=lambda p: p.created_at)
-        acc = max(0.0, _num(getattr(order, "payment", 0)) - _dp_total(rows))
+        acc = max(ZERO, _num(getattr(order, "payment", 0)) - _dp_total(rows))
         for p in rows:
             acc += _num(p.amount)
             if acc >= must:
@@ -244,20 +280,30 @@ def lunas_moment(order, pay_rows):
     return getattr(order, "created_at", None)
 
 
-def order_profit(order, pay_rows) -> float:
-    """Laba bersih per-order (alur keuangan konsep).
+def order_profit(order, pay_rows):
+    """Laba transaksi per-order (Owner Cash Model P2-15).
 
-    Rumus: kewajiban (harga jual) − modal part − modal jasa − biaya lain.
-    Hanya dihitung bila order SELESAI dan LUNAS (setara status Cash di
-    konsep); selain itu 0 dan wajib 0 yang tersimpan.
+    Rumus (FINAL LOCK): Omzet − Modal Part − Modal Jasa − Modal Lain-lain
+
+    Sumber field:
+      - Omzet           : `final_price` → fallback `estimate` (lewat `kewObligation`/payment_summary)
+      - Modal Part      : `service_orders.part_cost`
+      - Modal Jasa      : `service_orders.modal_jasa`
+      - Modal Lain-lain : `service_orders.modal_lainnya`
+
+    Gate: hanya bila order **CASH** (event realisasi transaksi) DAN LUNAS
+    (diturunkan dari Payment Ledger). Selain itu 0 — termasuk unit yang sudah
+    LUNAS tapi belum CASH (Owner: Omzet direalisasikan saat CASH).
     """
     try:
         s = payment_summary(order, pay_rows)
     except Exception:
-        return 0.0
-    if (getattr(order, "status", "") or "") != "SELESAI":
-        return 0.0
+        return ZERO
+    if (getattr(order, "status", "") or "") != "CASH":
+        return ZERO
     if s.get("payment_status") != "LUNAS":
-        return 0.0
-    return float(s.get("kewajiban", 0) or 0) - float(getattr(order, "part_cost", 0) or 0) \
-        - float(getattr(order, "modal_jasa", 0) or 0) - float(getattr(order, "modal_lainnya", 0) or 0)
+        return ZERO
+    return (to_decimal(s.get("kewajiban", 0))
+            - to_decimal(getattr(order, "part_cost", 0))
+            - to_decimal(getattr(order, "modal_jasa", 0))
+            - to_decimal(getattr(order, "modal_lainnya", 0)))
