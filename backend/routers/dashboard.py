@@ -63,9 +63,10 @@ def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = No
     apa pun, dan angka ini tidak dibatasi periode kas, jadi DP yang belum
     selesai otomatis terbawa ke periode berikutnya.
 
-    `berjalan` = DP **yang masuk kas pada periode [start, end) tapi unitnya
-    belum SETTLED**. DP milik unit yang sudah LUNAS TIDAK boleh ditambah lagi —
-    nilainya sudah tercakup di Omzet (Omzet = kewajiban = total pembayaran).
+    `berjalan` = DP yang **DITERIMA pada periode [start, end) tapi unitnya belum
+    SETTLED**. DP milik unit yang sudah LUNAS TIDAK boleh ditambah lagi — saat
+    pelunasan, nilainya sudah dilepas ke Kas Laci (`cash.catat_pelepasan_dp`)
+    dan ikut tercakup di Omzet (Omzet = kewajiban = total pembayaran).
     """
     from statusflow import payment_summary
 
@@ -95,7 +96,8 @@ def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = No
         if s["payment_status"] == "LUNAS":
             dipakai += dp_order
         else:
-            # Masih titipan: uangnya sudah di Laci tapi belum jadi Omzet.
+            # Masih titipan murni: tercatat di `payments` + panel ini, TIDAK pernah
+            # menjadi entri kas (lihat `cash.catat_penerimaan`).
             berjalan += dp_periode
 
     dikembalikan = ZERO
@@ -278,6 +280,15 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     beban_ops = core["beban_operasional"]
     beban_lain = ZERO  # SSOT-4: kategori lain bukan Beban
     total_beban = core["total_beban"]
+
+    # FIN-MIRROR-4 (rumus A-1, `app.py:376`): ambang CTS/CTO di Proyek A
+    # dibandingkan terhadap `laba_kotor = laba_servis + laba_tambahan`, yaitu
+    # laba kotor PLUS transaksi kas manual. Versi sebelumnya memakai laba
+    # kotor tanpa `tambahan`, sehingga ambang milestone bisaachievement lebih
+    # tinggi daripada yang dihitung Project A.
+    _tambahan = to_decimal(core.get("tambahan", 0))
+    laba_kotor = laba_kotor + _tambahan
+
     in_orders = []
     pays = db.query(Payment).all()
     in_pays = [p for p in pays
@@ -291,7 +302,8 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     cto_progress = (laba_kotor / cto_target * HUNDRED) if cto_target > 0 else (HUNDRED if laba_kotor > 0 else ZERO)
     cto_ok = bool(laba_kotor >= cto_target) if cto_target > 0 else True
 
-    # SSOT-5: 4 pengurang, bukan (omzet - modal) - beban yang dikurangi modal dua kali.
+    # FIN-MIRROR-4: `tambahan` sudah masuk lewat `compute_finance_core`, sehingga
+    # SSOT-5 tetap berlaku tanpa pengurangan ganda.
     laba_bersih = omset - modal_part - modal_jasa - modal_lain - total_beban
 
     # P2-07 / SSOT-6: TIDAK lagi digate CTO. Alokasi HANYA terbentuk saat
@@ -349,9 +361,11 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     total_keluar = total_modal + total_beban + kas_keluar
     saldo = opening + total_masuk - total_keluar
 
-    # Titipan DP dihitung lebih dulu: dipakai untuk (a) saldo berjalan di panel
-    # Titipan DP dan (b) Kas Aset Awal versi OPERASIONAL (dikurangi titipan).
+    # Titipan DP dihitung lebih dulu: dipakai untuk panel Titipan DP. Saldo Laci
+    # sendiri SUDAH bebas dari DP (DP tidak pernah jadi entri kas), jadi tidak
+    # ada lagi pengurangan titipan dari angka posisi kas.
     _titipan = ringkasan_titipan_dp(db, start, end)
+    _kas_awal = cash.saldo_laci_sampai(db, start)
 
     out = {
         "periode": core["periode"],
@@ -382,12 +396,12 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         "total_keluar": total_keluar,
         "saldo": saldo,
         # Owner Cash Model v4: posisi aset kas (terpisah dari Buku Kas).
-        "kas_aset_awal": cash.saldo_laci_sampai(db, start),
-        # Saldo Laci untuk TAMPILAN Arus Kas OPERASIONAL: dikurangi titipan DP
-        # yang masih berjalan (uang customer, bukan kas toko). Angka fisiknya
-        # di kas_entries tidak berubah — hanya laporan yang dipisah.
-        "kas_aset_awal_operasional": max(
-            ZERO, cash.saldo_laci_sampai(db, start) - _titipan["saldo"]),
+        "kas_aset_awal": _kas_awal,
+        # Saldo Laci untuk TAMPILAN Arus Kas OPERASIONAL.
+        #.dp_ TIDAK lagi dikurangi di sini: sejak aturan "DP = titipan", DP tidak
+        # pernah masuk `kas_entries`, jadi `saldo_laci` sudah bersih dari DP dan
+        # pengurangan kedua hanya akan membuat angka meleset sebesar saldo titipan.
+        "kas_aset_awal_operasional": _kas_awal,
         "saldo_laci": cash.saldo_laci(db),
         "label_laci": cash.LABEL[cash.LAYER_LACI],
         # SSOT-7 / v4 #11: posisi Kas BESAR hanya untuk Admin & Pengelola.

@@ -52,7 +52,11 @@ def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db_ses
     nilai = data.nilai or 0
     if nilai < 0:
         raise HTTPException(status_code=400, detail="Nilai beban tidak boleh negatif")
-    row = Expense(kategori=kat, uraian=uraian, nilai=nilai, tanggal=data.tanggal or date.today())
+    # FIN-MIRROR: default True = beban permanen, sama dengan Proyek A `beban`
+    # (dipotong dari setiap siklus). Admin bisa opting out per baris.
+    row = Expense(kategori=kat, uraian=uraian, nilai=nilai,
+                  tanggal=data.tanggal or date.today(),
+                  recurring=True if data.recurring is None else bool(data.recurring))
     db.add(row)
     db.flush()
     # Owner Cash Model v4 #3: beban dibayar dari kas toko -> SALDO LACI berkurang.
@@ -75,6 +79,9 @@ def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = D
         raise HTTPException(status_code=400, detail="Kategori beban wajib diisi")
     if "uraian" in payload and not (payload["uraian"] or "").strip():
         raise HTTPException(status_code=400, detail="Uraian beban wajib diisi")
+    # FIN-MIRROR: `recurring` tidak boleh di-set NULL (kolom NOT NULL).
+    if payload.get("recurring") is None:
+        payload.pop("recurring", None)
     for key, val in payload.items():
         setattr(row, key, val)
     db.commit()

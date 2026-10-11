@@ -5,10 +5,15 @@ Prinsip single source of truth (FINAL LOCK):
 - Beban = expenses (popup Beban Harian).
 - kas_entries HANYA untuk arus kas di luar keduanya (pemasukan non-servis,
   saldo awal, penyesuaian). Bukan duplikat order/expense.
+- Rincian Arus Kas memakai allow-list `cash.SUMBER_BARIS_KAS` yang LEBIH LEBAR
+  dari `cash.SUMBER_BUKU_KAS` milik `compute_finance`: modal & pelepasan titipan
+  DP wajib tampil sebagai baris, kalau tidak tabelnya tidak akan cocok dengan
+  Conditions Kas (kartu) di atasnya.
 - Tutup Kas TIDAK mengubah status apa pun (hanya tutup periode + snapshot).
 """
 import json
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
@@ -64,8 +69,13 @@ def period_rows(db: Session, start: datetime, end: datetime):
 
     Saldo dihitung dari AWAL WAKTU (opening + seluruh baris sebelum start +
     baris periode) sehingga benar untuk periode apa pun, bukan hanya all-time.
+
+    Syarat yang harus selalu berlaku agar tabel ini cocok dengan Conditions Kas:
+      - setiap arus kas punya tepat satu baris (modal ikut, titipan DP tidak), dan
+      - kolom Saldo hanya bergerak sebesar nominal baris itu (±), tidak melompat.
     """
     rows = []
+    _seq = 0
 
     for p in db.query(Payment).options(joinedload(Payment.service_order)).all():
         m = _moment(getattr(p, "created_at", None), None)
@@ -74,9 +84,10 @@ def period_rows(db: Session, start: datetime, end: datetime):
         o = p.service_order
         kind = (p.kind or "PELUNASAN").strip().upper()
         # PEMISAHAN DP: DP adalah TITIPAN PELANGGAN, bukan arus kas operasional.
-        # Dia tidak boleh menambah Debit/Kredit/Saldo Buku Kas. Uangnya tetap ada
-        # di Laci (tidak dihapus dari kas_entries) dan dilacak terpisah di panel
-        # "Titipan DP Pelanggan" (finance.titipan_dp).
+        # Karena itu DP TIDAK pernah jadi baris Debit/Kredit/Saldo di tabel ini —
+        # catatannya hanya di `payments` + panel "Laporan Titipan DP". Saat unitnya
+        # LUNAS, nilainya masuk lewat baris "Pelepasan Titipan DP" (sumber
+        # DP_RELEASE) supaya total masuk tabel tetap sama dengan Omzet.
         if kind == "DP":
             continue
         rows.append({
@@ -107,12 +118,16 @@ def period_rows(db: Session, start: datetime, end: datetime):
             "ref_id": e.id,
         })
 
-    # P2-06 / SSOT-7: Buku Kas (Laci) hanya memuat layer LACI — mutasi Kas Aset
+    # Buku Kas (Laci) hanya memuat layer LACI — mutasi Kas Aset
     # tidak boleh muncul sebagai arus kas Laci.
+    # Allow-list TERSENDIRI (`SUMBER_BARIS_KAS`, bukan `SUMBER_BUKU_KAS`): tabel
+    # harus menampilkan modal & pelepasan titipan DP juga, supaya Total Masuk/Keluar
+    # tabel sama dengan kartu ringkasan Conditions Kas. `PAYMENT` dan `BEBAN`
+    # tetap dikecualikan karena loop di atas sudah mengambilnya langsung.
     for k in db.query(KasEntry).filter(KasEntry.kategori != SALDO_AWAL_KATEGORI,
                                       KasEntry.layer == cash.LAYER_LACI).all():
         # v4 #9: Buku Kas hanya arus periode (bukan mutasi posisi Master Kas).
-        if (getattr(k, "sumber", None) or cash.SUMBER_MANUAL) not in cash.SUMBER_BUKU_KAS:
+        if (getattr(k, "sumber", None) or cash.SUMBER_MANUAL) not in cash.SUMBER_BARIS_KAS:
             continue
         m = _moment(getattr(k, "created_at", None), getattr(k, "tanggal", None))
         if m is None:
@@ -132,7 +147,16 @@ def period_rows(db: Session, start: datetime, end: datetime):
             "ref_id": k.id,
         })
 
-    rows.sort(key=lambda r: (r["moment"], r["source"], r["ref_id"] or 0))
+    # Urut WAKTU. `created_at` bawaan SQLite/MySQL hanya presisi detik, jadi
+    # beberapa entri bisa berbagi detik yang sama. Tie-break memakai `_seq`
+    # (urutan penulisan di dalam satu request) supaya saldo tetap mengikuti
+    # kronologi.
+    # CATATAN UAT: tie-break lama memakai `source` ("manual" < "order"), sehingga
+    # baris bisa terbalik dan kolom Saldo terlihat melompat acak.
+    for r in rows:
+        _seq += 1
+        r["_seq"] = _seq
+    rows.sort(key=lambda r: (r["moment"], r["_seq"]))
     saldo = opening_balance(db)
     for r in rows:
         saldo += r["nominal"] if r["jenis"] == "Masuk" else -r["nominal"]
@@ -140,6 +164,7 @@ def period_rows(db: Session, start: datetime, end: datetime):
     rows = [r for r in rows if start <= r["moment"] < end]
     for r in rows:
         del r["moment"]
+        del r["_seq"]
     return rows
 
 
@@ -283,9 +308,15 @@ def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
     page = min(max(DEFAULT_PAGE, page), total_pages)
     shown = rows[::-1]
     items = shown[(page - 1) * limit:page * limit]
+    # Total seluruh hasil filter — jadi footer tabel bisa dibandingkan dengan
+    # kartu "Total Masuk" / "Total Keluar" di Conditions Kas.
+    tot_masuk = sum((_num(r["nominal"]) for r in rows if r["jenis"] == "Masuk"), Decimal("0"))
+    tot_keluar = sum((_num(r["nominal"]) for r in rows if r["jenis"] == "Keluar"), Decimal("0"))
     return schemas.KasRiwayatPage(total=total, page=page, limit=limit,
                                   total_pages=total_pages,
-                                  opening=opening_balance(db), items=items)
+                                  opening=opening_balance(db),
+                                  total_masuk=tot_masuk, total_keluar=tot_keluar,
+                                  items=items)
 
 
 # ---------- Owner Cash Model v4: visibility posisi Master Kas ----------

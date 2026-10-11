@@ -50,11 +50,14 @@ def client(app_env):
     Base.metadata.create_all(bind=engine)
 
     from migrations_cash_layers import migrate_cash_layers
+    from migrations_expense_recurring import migrate_expense_recurring
     from migrations_money import migrate_money_precision
     from migrations_warranty_claims import migrate_warranty_claims
     migrate_money_precision(engine=engine)
     migrate_cash_layers(engine=engine)
     migrate_warranty_claims(engine=engine)
+    # FIN-MIRROR: kolom `expenses.recurring` (beban permanen) ikut boot produksi.
+    migrate_expense_recurring(engine=engine)
 
     from fastapi.testclient import TestClient
     import main

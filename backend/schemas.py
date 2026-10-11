@@ -1,5 +1,6 @@
 """Pydantic schemas (request/response models)."""
 from datetime import datetime, date
+from decimal import Decimal
 from money import MoneyOut
 from pydantic import BaseModel, ConfigDict
 from typing import Optional, List
@@ -227,6 +228,9 @@ class ExpenseCreate(BaseModel):
     uraian: str
     nilai: Optional[MoneyOut]
     tanggal: Optional[date] = None
+    # FIN-MIRROR: beban permanen (default True = sama dengan Proyek A `beban`).
+    # False = beban satu-off, hanya periode di mana moment-nya jatuh.
+    recurring: Optional[bool] = None
 
 
 class ExpenseUpdate(BaseModel):
@@ -234,6 +238,8 @@ class ExpenseUpdate(BaseModel):
     uraian: Optional[str] = None
     nilai: Optional[MoneyOut] = None
     tanggal: Optional[date] = None
+    # FIN-MIRROR: lihat ExpenseCreate.recurring.
+    recurring: Optional[bool] = None
 
 
 class ExpenseOut(BaseModel):
@@ -244,6 +250,8 @@ class ExpenseOut(BaseModel):
     nilai: MoneyOut
     tanggal: Optional[date] = None
     created_at: datetime
+    # FIN-MIRROR: true = dipotong setiap periode (perilaku Proyek A).
+    recurring: bool = True
 
 
 class ExpensePage(BaseModel):
@@ -506,6 +514,12 @@ class KasRiwayatPage(BaseModel):
     limit: int
     total_pages: int
     opening: MoneyOut
+    #: Total SELURUH baris yang lolos filter (bukan hanya halaman ini) supaya
+    #: footer tabel bisa mencocokkan angkanya dengan kartu ringkasanConditions
+    #: Kas. Tanpa ini user hanya melihat total satu halaman dan mengira rumusnya
+    #: salah saat halaman > 1.
+    total_masuk: MoneyOut = Decimal("0")
+    total_keluar: MoneyOut = Decimal("0")
     items: List[KasRiwayatItem]
 
 

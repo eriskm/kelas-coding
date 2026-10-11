@@ -167,9 +167,20 @@ def test_event_cash_lengkap(client, db, auth):
     assert o.lunas_at is not None
     # Laba = Omzet - Modal3 (800rb - 300rb - 100rb - 20rb = 380rb)
     assert to_decimal(o.laba_bersih) == to_decimal(380000)
-    # Saldo LACI pada event CASH = pelunasan sisa (500rb) - Modal3 (420rb).
+    # Saldo LACI pada event CASH = pelunasan sisa (500rb) + pelepasan DP (300rb)
+    # - Modal3 (420rb) = 380rb.
     # Keputusan Owner: Modal keluar dari kas saat CASH, bukan saat DONE.
-    assert _saldo_laci(db) - before_laci == to_decimal(500000 - 420000)
+    # DP = TITIPAN: tidak pernah masuk ledger kas sebelum unit LUNAS; saat LUNAS
+    # nominalnya dilepas satu kali supaya total masuk kas = kewajiban penuh.
+    assert _saldo_laci(db) - before_laci == to_decimal(500000 + 300000 - 420000)
+    # Pelepasan DP tercatat tepat satu kali, dan hanya setelah LUNAS.
+    import cash as cash_mod
+    lepas = db.query(models.KasEntry).filter(
+        models.KasEntry.sumber == cash_mod.SUMBER_DP_RELEASE,
+        models.KasEntry.ref_type == "dp_release",
+        models.KasEntry.ref_id == o.id).all()
+    assert len(lepas) == 1, "Pelepasan titipan DP harus tercatat tepat satu kali"
+    assert to_decimal(lepas[0].nominal) == to_decimal(300000)
     # NOTIFIKASI Kas Masuk terbit (WA Selesai sudah di DONE)
     ev = db.query(models.Notification).filter(
         models.Notification.event == notif_mod.EVENT_KAS_MASUK,

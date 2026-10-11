@@ -239,7 +239,8 @@
                         <div id="ctoFloat" class="cto-float" role="status" aria-label="Target Operasional">
                             <div class="cto-float-head" id="ctoFloatHead">
                                 <span class="cto-grip"><i class="fa-solid fa-grip-vertical"></i></span>
-                                <div class="cto-head-txt"><b>🏭 Target Operasional</b><span>CTS + CTO</span></div>
+                                <span class="cto-ico"><i class="fa-solid fa-bullseye"></i></span>
+                                <div class="cto-head-txt"><b>Target Operasional</b><span>CTS + CTO</span></div>
                             </div>
                             <div id="ctoFloatBody"></div>
                         </div>
@@ -1141,36 +1142,31 @@
                         <div id="kuMainView" class="space-y-4">
                         <div class="grid grid-cols-1 lg:grid-cols-5 gap-2.5 sm:gap-3">
                             <div class="panel lg:col-span-3 ku-kas-panel">
-                                <h3 class="panel-title">Buku Kas</h3>
-                                <p class="ku-sub">Ringkasan arus kas operasional (tanpa titipan DP).</p>
+                                <h3 class="panel-title">Kas Operasional</h3>
+                                <p class="ku-sub">Tanpa Titipan DP Pelanggan &mdash; lihat <b>Laporan Titipan DP</b> di bawah.</p>
                                 <div class="ku-summary" id="kuKasSummary"></div>
-                                <!-- Kondisi Kas: posisi + ringkas periode, urutan tetap -->
-                                <div class="overflow-x-auto">
-                                    <table class="tx-table cash-table w-full text-sm ku-kondisi">
-                                        <thead>
-                                            <tr>
-                                                <th>Kondisi Kas</th>
-                                                <th class="numeric-c cash-num">Debit</th>
-                                                <th class="numeric-c cash-num">Kredit</th>
-                                                <th class="numeric-r cash-num">Saldo</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="kuKondisiBody"></tbody>
-                                    </table>
-                                </div>
-                                <div class="overflow-x-auto">
-                                    <table class="tx-table cash-table w-full text-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Uraian</th>
-                                                <th class="numeric-c cash-num">Debit</th>
-                                                <th class="numeric-c cash-num">Kredit</th>
-                                                <th class="numeric-r cash-num">Saldo</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="kuKasBody"></tbody>
-                                    </table>
-                                </div>
+
+                                <!-- (1) RINGKASAN: satu angka per pos -->
+                                <section class="ku-block">
+                                    <header class="ku-block-head">
+                                        <h4 class="ku-block-title"><i class="fa-solid fa-chart-pie"></i> Kondisi Kas Operasional</h4>
+                                        <p class="ku-block-sub">Ringkasan pos kas periode berjalan: kas besar, kas kecil/laci, penjualan, modal, dan beban. Rincian per transaksi ada di <b>Riwayat Transaksi</b> (tombol paling bawah halaman).</p>
+                                    </header>
+                                    <div class="overflow-x-auto">
+                                        <table class="tx-table cash-table w-full text-sm ku-kondisi">
+                                            <thead>
+                                                <tr>
+                                                    <th>Uraian</th>
+                                                    <th class="numeric-c cash-num">Debit</th>
+                                                    <th class="numeric-c cash-num">Kredit</th>
+                                                    <th class="numeric-r cash-num">Saldo</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="kuKondisiBody"></tbody>
+                                        </table>
+                                    </div>
+                                </section>
+
                                 <form id="kuKasForm" autocomplete="off" class="ku-kas-form">
                                     <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] gap-2.5 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
                                         <select class="receive-input" id="kuKasJenis">
@@ -1218,7 +1214,7 @@
                         <div class="panel ku-titipan-panel" id="kuTitipanPanel">
                             <div class="ku-titipan">
                                 <div class="ku-tp-head">
-                                    <span><i class="fa-solid fa-hand-holding-dollar"></i> Titipan DP Pelanggan</span>
+                                    <span><i class="fa-solid fa-hand-holding-dollar"></i> Laporan Titipan DP</span>
                                     <span class="ku-tp-note">pencatatan terpisah &middot; bukan Omzet</span>
                                 </div>
                                 <div class="ku-tp-grid" id="kuTitipanGrid"></div>
@@ -1358,65 +1354,80 @@
                             </div>
                         </div>
 
-                        <!-- Arsip riwayat: hanya tombol, tabel disembunyikan dari tampilan utama -->
-                        <div class="ku-riwayat-toggle-wrap">
+                        <!-- PEMBUKA RIWAYAT: Rincian Arus Kas sengaja tidak lagi tampil
+                             di halaman utama. Buka lewat tombol paling bawah ini supaya
+                             Conditions Kas Operasional tetap jadi fokus. -->
+                        <div class="ku-riwayat-toggle-wrap" id="kuRiwayatToggleWrap">
                             <button type="button" id="kuRiwayatBtn" onclick="kuShowRiwayat()" class="ku-riwayat-btn">
-                                <i class="fa-solid fa-clipboard-list"></i> Lihat Riwayat Transaksi
+                                <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Transaksi
                             </button>
                         </div>
+
+                        <!-- RIWAYAT TRANSAKSI: Rincian Arus Kas periode berjalan + arsip
+                             periode tertutup. Hanya dirender saat tombol di atas ditekan. -->
+                        <div id="kuRiwayatView" class="hidden">
+                            <div class="panel">
+                                <div class="flex items-start justify-between gap-3 flex-wrap">
+                                    <div>
+                                        <h3 class="panel-title"><i class="fa-solid fa-list-ul"></i> Riwayat Transaksi &mdash; Rincian Arus Kas</h3>
+                                        <p class="ku-sub">Detail dari Kondisi Kas Operasional: satu baris = satu peristiwa kas. Titipan DP tidak ditampilkan di sini.</p>
+                                    </div>
+                                    <button type="button" onclick="kuShowMain()" class="receive-back-btn">
+                                        <i class="fa-solid fa-arrow-left"></i> Kembali
+                                    </button>
+                                </div>
+
+                                <section class="ku-block">
+                                    <header class="ku-block-head ku-riwayat-head">
+                                        <div>
+                                            <h4 class="ku-block-title"><i class="fa-solid fa-list-ul"></i> Rincian Arus Kas</h4>
+                                            <p class="ku-block-sub">Periode berjalan &mdash; satu baris = satu peristiwa kas.</p>
+                                        </div>
+                                        <div class="tx-toolbar ku-tools">
+                                            <div class="tx-search-wrap">
+                                                <i class="fa-solid fa-magnifying-glass"></i>
+                                                <input type="text" id="kuSearch" class="receive-input" placeholder="Cari keterangan, kategori..." autocomplete="off">
+                                            </div>
+                                            <select id="kuJenisFilter" class="receive-input" aria-label="Filter jenis">
+                                                <option value="">Semua</option>
+                                                <option value="Masuk">Masuk</option>
+                                                <option value="Keluar">Keluar</option>
+                                            </select>
+                                            <input type="date" id="kuDateFilter" class="receive-input" aria-label="Filter tanggal" title="Filter tanggal">
+                                        </div>
+                                    </header>
+                                    <div class="overflow-x-auto">
+                                        <table class="tx-table cash-table w-full text-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Tanggal</th>
+                                                    <th>Uraian Transaksi</th>
+                                                    <th class="numeric-c cash-num">Debit</th>
+                                                    <th class="numeric-c cash-num">Kredit</th>
+                                                    <th class="numeric-r cash-num">Saldo</th>
+                                                    <th class="text-center">Aksi</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="kuKasBody"></tbody>
+                                        </table>
+                                    </div>
+                                    <div id="kuEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                                        <i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>
+                                        Belum ada riwayat transaksi.
+                                    </div>
+                                    <div id="kuPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                        <div id="kuInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                                        <div id="kuPageBtns" class="flex items-center gap-1.5"></div>
+                                    </div>
+
+                                    <!-- Arsip periode yang sudah ditutup (bukan transaksi periode berjalan) -->
+                                    <div id="kuArsip" class="hidden space-y-3 mt-4 pt-4 border-t border-gray-100 dark:border-white/5"></div>
+                                </section>
+                            </div>
                         </div>
 
-                        <!-- Riwayat (arsip): dibuka hanya saat diperlukan -->
-                        <div id="kuRiwayatView" class="hidden">
-                        <button type="button" onclick="kuShowMain()" class="receive-back-btn ku-back-btn">
-                            <i class="fa-solid fa-arrow-left"></i> Kembali ke Keuangan
-                        </button>
-                        <div id="kuArsip" class="hidden space-y-3"></div>
-                        <div class="panel overflow-hidden">
-                            <div class="ku-riwayat-head">
-                                <h3 class="panel-title">Riwayat Transaksi</h3>
-                                <div class="tx-toolbar ku-tools">
-                                    <div class="tx-search-wrap">
-                                        <i class="fa-solid fa-magnifying-glass"></i>
-                                        <input type="text" id="kuSearch" class="receive-input" placeholder="Cari keterangan, kategori..." autocomplete="off">
-                                    </div>
-                                    <select id="kuJenisFilter" class="receive-input" aria-label="Filter jenis">
-                                        <option value="">Semua</option>
-                                        <option value="Masuk">Masuk</option>
-                                        <option value="Keluar">Keluar</option>
-                                    </select>
-                                    <input type="date" id="kuDateFilter" class="receive-input" aria-label="Filter tanggal" title="Filter tanggal">
-                                </div>
-                            </div>
-                            <div class="overflow-x-auto">
-                                <table class="tx-table w-full text-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>No</th>
-                                            <th>Tanggal</th>
-                                            <th>Jenis</th>
-                                            <th>Kategori</th>
-                                            <th>Keterangan</th>
-                                            <th class="text-right">Nominal</th>
-                                            <th class="text-center">Aksi</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="kuBody"></tbody>
-                                </table>
-                            </div>
-                            <div id="kuEmpty" class="hidden text-center py-10 text-sm text-gray-400">
-                                <i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>
-                                Belum ada riwayat transaksi.
-                            </div>
-                            <div id="kuLoading" class="text-center py-10 text-sm text-gray-400">
-                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
-                            </div>
-                            <div id="kuPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
-                                <div id="kuInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
-                                <div id="kuPageBtns" class="flex items-center gap-1.5"></div>
-                            </div>
                         </div>
-                        </div>
+
                     </section>
 
                     <!-- ===== FLOATING WINDOW: FORM KEUANGAN ===== -->

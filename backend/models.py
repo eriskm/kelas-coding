@@ -18,6 +18,7 @@ from sqlalchemy import (
     Text,
     Date,
     JSON,
+    Boolean,
 )
 from sqlalchemy.orm import relationship
 
@@ -131,8 +132,19 @@ class Payment(Base):
 
 
 class Expense(Base):
-    """Beban toko (Gaji/Operasional/lainnya). Dicatat per periode kas.
+    """Beban toko (Gaji/Operasional/lainnya).
     Sumber: popup Beban Harian (dulu localStorage) dan/atau input Keuangan.
+
+    FIN-MIRROR (mirror Project A `tabel beban`):
+    - `recurring=True` (default) = beban PERMANEN. Mirip Proyek A yang tabel
+      `beban` tidak punya dimensi tanggal: nilai yang sama dipotong dari setiap
+      siklus, setiap hari, selamanya (mis. gaji 400rb + operasional 205rb).
+    - `recurring=False` = beban SATU-OFF bertanggal, hanya dibebankan ke periode
+      di mana `created_at`/`tanggal`-nya jatuh (kapabilitas lama Project B).
+
+    Nichta: A memakai `INSERT OR REPLACE` dengan `nama_beban` UNIQUE, jadi
+    memperbarui nilai = menimpa entri yang sama (bukan menambah). Flag ini
+    menjaga makna itu tanpa menghapus histori.
     """
 
     __tablename__ = "expenses"
@@ -143,6 +155,8 @@ class Expense(Base):
     nilai = Column(MONEY, nullable=False, default=Decimal("0"))
     tanggal = Column(Date)  # info tanggal beban
     created_at = Column(DateTime, default=datetime.now)
+    # FIN-MIRROR: beban permanen (default True = sama dengan Proyek A).
+    recurring = Column(Boolean, nullable=False, default=True, server_default="1")
 
 
 class KasPeriod(Base):

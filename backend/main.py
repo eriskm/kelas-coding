@@ -17,6 +17,7 @@ from starlette.responses import FileResponse
 
 from database import Base, engine
 from migrations_cash_layers import migrate_cash_layers
+from migrations_expense_recurring import migrate_expense_recurring
 from migrations_money import migrate_money_precision
 from migrations_warranty_claims import migrate_warranty_claims
 from money import ZERO, to_decimal
@@ -85,6 +86,12 @@ def on_startup():
         _log("[P2-06] migrasi layer kas: %s" % _lr["changed"])
     except Exception as _e:
         _log("[P2-06] migrasi layer kas dilewati: %s" % _e)
+    # FIN-MIRROR: flag `recurring` (beban permanen) — mirror tabel `beban` Proyek A.
+    try:
+        _er = migrate_expense_recurring(engine)
+        _log("[FIN-MIRROR] migrasi beban recurring: %s" % _er["changed"])
+    except Exception as _e:
+        _log("[FIN-MIRROR] migrasi beban recurring dilewati: %s" % _e)
     if _backup_ok:
         _migrate_status_data()
         _migrate_checklist_subset()

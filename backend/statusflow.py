@@ -257,6 +257,40 @@ def paid_moment(pay_row):
     return None
 
 
+def _as_datetime(value):
+    """Normalisasi nilai date/datetime menjadi datetime (tanggal -> 12:00).
+
+    Konvensi yang sudah dipakai di seluruh B: tanggal tanpa jam dianggap
+    sebagai pukul 12:00, supaya tidak bergeser ke periode sebelumnya.
+    """
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    if isinstance(value, date):
+        return datetime(value.year, value.month, value.day, 12, 0, 0)
+    return None
+
+
+def cash_moment(order):
+    """Momen unit di-CASH (event realisasi transaksi).
+
+    FIN-MIRROR-2 (Proyek A): Proyek A hanya mengenal `Status == 'Cash'` sebagai
+    titik pengakuan laba (`app.py:1715`) dan tidak punya konsep LUNAS. Order CASH
+    yang belum LUNAS tidak punya `lunas_at`, jadi `taken_at` (diisi saat event
+    CASH) harus jadi sumber utama supaya order seperti itu tetap bisa
+    diatribusikan ke periode kasnya.
+
+    Urutan: taken_at -> lunas_at -> lunas_date@12:00 -> service_date@12:00
+            -> created_at.
+    """
+    for attr in ("taken_at", "lunas_at", "lunas_date", "service_date", "created_at"):
+        m = _as_datetime(getattr(order, attr, None))
+        if m is not None:
+            return m
+    return None
+
+
 def lunas_moment(order, pay_rows):
     """Momen order mencapai LUNAS: created_at pembayaran yang melewati ambang.
     Fallback: lunas_at / lunas_date@12:00 / created_at (legacy)."""
@@ -281,27 +315,32 @@ def lunas_moment(order, pay_rows):
 
 
 def order_profit(order, pay_rows):
-    """Laba transaksi per-order (Owner Cash Model P2-15).
+    """Laba transaksi per-order.
 
-    Rumus (FINAL LOCK): Omzet − Modal Part − Modal Jasa − Modal Lain-lain
+    Rumus (FIN-MIRROR-2): Omzet - Modal Part - Modal Jasa - Modal Lain-lain
 
     Sumber field:
-      - Omzet           : `final_price` → fallback `estimate` (lewat `kewObligation`/payment_summary)
+      - Omzet           : `final_price` -> fallback `estimate` (lewat `kewObligation`/payment_summary)
       - Modal Part      : `service_orders.part_cost`
       - Modal Jasa      : `service_orders.modal_jasa`
       - Modal Lain-lain : `service_orders.modal_lainnya`
 
-    Gate: hanya bila order **CASH** (event realisasi transaksi) DAN LUNAS
-    (diturunkan dari Payment Ledger). Selain itu 0 — termasuk unit yang sudah
-    LUNAS tapi belum CASH (Owner: Omzet direalisasikan saat CASH).
+    Gate: hanya bila order **CASH**.
+
+    FIN-MIRROR-2 (Proyek A `app.py:1715`):
+        laba_final = h_jual - m_part - m_jasa - m_lain if stat == 'Cash' else 0
+    A murni bergantung pada status Cash - tidak ada syarat pelunasan penuh,
+    dan unit yang dibatalkan/refund (bukan CASH) otomatis bernilai 0. Gate LUNAS
+    yang sebelumnya ada di sini dihapus agar sama dengan A.
+
+    `payment_summary` tetap dipanggil agar kewajiban memakai sumber yang sama
+    dengan `compute_finance_core` (FIN-MIRROR-3: satu sumber kebenaran).
     """
     try:
         s = payment_summary(order, pay_rows)
     except Exception:
         return ZERO
     if (getattr(order, "status", "") or "") != "CASH":
-        return ZERO
-    if s.get("payment_status") != "LUNAS":
         return ZERO
     return (to_decimal(s.get("kewajiban", 0))
             - to_decimal(getattr(order, "part_cost", 0))

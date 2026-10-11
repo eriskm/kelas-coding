@@ -7,7 +7,11 @@
     MASTER KAS = SALDO LACI + SALDO ASET
 
 Aturan v4 yang ditegakkan modul ini:
-1. Payment diterima  -> Laci Masuk   (`catat_penerimaan`)
+1. Payment non-DP   -> Laci Masuk   (`catat_penerimaan`)
+1b. **DP = TITIPAN.** DP masuk TIDAK membuat entri kas sama sekali; dicatat di
+    `payments` + Laporan Titipan DP. Saat unitnya LUNAS, DP dilepas ke Laci
+    tepat satu kali (`catat_pelepasan_dp`) supaya total kas unit = kewajiban
+    penuh tanpa dobel hitung. Refund DP juga tidak menyentuh ledger kas.
 2. Modal dibayar     -> Laci Keluar  (`catat_modal`)
 3. Beban dibayar     -> Laci Keluar  (`catat_beban`)
 4. Distribusi 70%    -> Laci Keluar  (`catat_cash_out`); 30% = ALOKASI, bukan uang
@@ -63,12 +67,31 @@ SUMBER_INJEKSI = "INJEKSI"
 SUMBER_REKONSILIASI = "REKONSILIASI"
 SUMBER_PENYESUAIAN = "PENYESUAIAN"
 SUMBER_HUTANG_BEBAN = "HUTANG_BEBAN"
+#: Pelepasan titipan DP ke Kas Laci ketika unitnya jadi LUNAS. DP masuk dicatat
+#: sebagai TITIPAN (tidak masuk ledger kas); nominalnya baru ikut di Kas Laci saat
+#: dilepas di sini, supaya satu baris pelunasan tetap mewakili SELURUH pembayaran
+#: unit tersebut (DP + sisa) tanpa uang fiktif.
+SUMBER_DP_RELEASE = "DP_RELEASE"
 
-#: Sumber yang **ber partake** di Buku Kas accrual (layer LACI). Mutasi lainnya
-#: hanya posisi Master Kas — tidak boleh dihitung dua kali (v4 #9).
+#: Sumber yang boleh masuk ARUS KAS AKRUAL (`compute_finance` -> total_masuk /
+#: total_keluar). Harus SEMPIT: apa pun yang sudah tercakup di `omset`,
+#: `total_modal`, atau `total_beban` akan terhitung dua kali kalau ikut di sini.
+#: `DP_RELEASE` sengaja TIDAK ada — nilainya sudah termasuk di dalam Omzet.
 SUMBER_BUKU_KAS = frozenset({
     SUMBER_MANUAL, SUMBER_CASH_OUT, SUMBER_REFUND_DP, SUMBER_FAILED_CANCEL,
 })
+
+#: Sumber entri kas yang ditampilkan sebagai BARIS di Rincian Arus Kas
+#: (`routers.kas.period_rows`). Lebih luas dari `SUMBER_BUKU_KAS` karena tabel
+#: harus menampilkan SETIAP peristiwa kas, termasuk yang nilainya sudah tercakup
+#: di Omzet/total_modal:
+#:   - `MODAL`       : wajib tampil, kalau tidak baris "Total Modal" di Kondisi
+#:                     Kas tidak punya penurunan di tabel dan saldo baris meleset.
+#:   - `DP_RELEASE`  : tampil sebagai bukti pelepasan titipan, supaya Total Masuk
+#:                     tabel = Omzet + kas manual = kartu "Total Masuk".
+#: Yang tetap TIDAK ikut: mutasi posisi Kas Aset (TRANSFER / INJEKSI),
+#: penyesuaian rekonsiliasi, dan refund garansi (v4 #8).
+SUMBER_BARIS_KAS = frozenset(SUMBER_BUKU_KAS | {SUMBER_MODAL, SUMBER_DP_RELEASE})
 
 KATEGORI = {
     SUMBER_PAYMENT: "Penerimaan Pembayaran",
@@ -83,6 +106,7 @@ KATEGORI = {
     SUMBER_REKONSILIASI: "Penyesuaian Rekonsiliasi",
     SUMBER_PENYESUAIAN: "Penyesuaian Laci",
     SUMBER_HUTANG_BEBAN: "Hutang Beban",
+    SUMBER_DP_RELEASE: "Pelepasan Titipan DP",
 }
 
 EVENT_TRANSFER = "KAS_ASET_DITRANSFER"
@@ -252,7 +276,18 @@ def _journal(db: Session, event: str, mutasi: dict, actor=None, details=None, am
 
 # ---------------------------------------------------------------- 1) PAYMENT (v4 #1)
 def catat_penerimaan(db: Session, payment, actor: str = None):
-    """Payment diterima di toko -> SALDO LACI bertambah (v4 #1). Idempotent per payment."""
+    """Pembayaran non-DP diterima di toko -> SALDO LACI bertambah (v4 #1).
+
+    TITIPAN DP TIDAK pernah menyentuh ledger kas. DP adalah uang(customer yang
+    disimpan, bukan kas toko: tercatat di `payments` + Laporan Titipan DP saja.
+    Saat unitnya jadi LUNAS, nominal DP dilepas ke Kas Laci tepat satu kali lewat
+    `catat_pelepasan_dp`, sehingga total masuk kas untuk unit itu tetap sama
+    dengan kewajiban penuh — tanpa pernah ada uang fiktif maupun dobel.
+
+    Idempotent per payment.
+    """
+    if _is_dp(payment):
+        return None
     if mutasi_tersimpan(db, LAYER_LACI, SUMBER_PAYMENT, "payment", payment.id):
         return None
     mut = catat_mutasi(db, LAYER_LACI, "Masuk", KATEGORI[SUMBER_PAYMENT],
@@ -263,6 +298,49 @@ def catat_penerimaan(db: Session, payment, actor: str = None):
                        ref_type="payment", ref_id=payment.id, oleh=actor)
     _journal(db, EVENT_OPERASIONAL, mut, actor=actor,
              details={"event": "PAYMENT", "service_order_id": payment.service_order_id})
+    return mut
+
+
+def _is_dp(payment) -> bool:
+    return (getattr(payment, "kind", "") or "").strip().upper() == "DP"
+
+
+def dp_diterima(db: Session, order_id: int):
+    """Total DP yang benar-benar diterima untuk satu unit."""
+    from models import Payment
+    total = ZERO
+    for p in (db.query(Payment)
+              .filter(Payment.service_order_id == order_id).all()):
+        if _is_dp(p):
+            total += _num(p.amount)
+    return quantize(total)
+
+
+def catat_pelepasan_dp(db: Session, order, actor: str = None):
+    """Lepas titipan DP ke Kas Laci saat unitnya LUNAS. TEPAT SATU KALI per unit.
+
+    Dipanggil dari satu-satunya jalur tulis payment (`routers.payments.catat_payment`)
+    tepat ketika `payment_summary` sudah berstatus LUNAS. Nominal yang dilepas
+    adalah SELURUH DP unit tersebut — karena DP tidak pernah masuk ledger kas
+    sejak awal, Baris Arus Kas untuk unit itu akhirnya =
+    (sisa pelunasan) + (DP) = kewajiban penuh.
+
+    Idempotent lewat `ref_type='dp_release', ref_id=order.id`.
+    """
+    dp = dp_diterima(db, order.id)
+    if dp <= ZERO:
+        return None
+    if mutasi_tersimpan(db, LAYER_LACI, SUMBER_DP_RELEASE, "dp_release", order.id):
+        return None
+    mut = catat_mutasi(db, LAYER_LACI, "Masuk", KATEGORI[SUMBER_DP_RELEASE],
+                       "Pelepasan titipan DP unit %s (menjadi bagian pelunasan)" % (
+                           getattr(order, "no_servis", None) or order.id),
+                       dp, sumber=SUMBER_DP_RELEASE,
+                       ref_type="dp_release", ref_id=order.id, oleh=actor,
+                       check_saldo=False)
+    _journal(db, EVENT_OPERASIONAL, mut, actor=actor,
+             details={"event": "DP_RELEASE", "service_order_id": order.id,
+                      "dp": str(dp)})
     return mut
 
 

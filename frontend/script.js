@@ -637,6 +637,13 @@ function makeFloatDraggable(winId, barId, closeFunc) {
         const ox = r.left, oy = r.top;
         win.style.left = ox + 'px';
         win.style.top = oy + 'px';
+        // WAJIB: lepaskan anchor sisi yang berlawanan dengan yang kita tulis.
+        // Kalau `right`/`bottom` masih aktif dari CSS sementara `left`/`top`
+        // mulai diisi, elemen `position:fixed` jadi terkunci di antara keduanya
+        // dan browser meregangkan `height` (auto) — card CTO tumbuh jadi
+        // beberapa kali lipat begitu digeser ke atas.
+        win.style.right = 'auto';
+        win.style.bottom = 'auto';
         win.style.transform = 'none';
         win.classList.add('dragging');
         return (mx, my) => {
@@ -685,6 +692,8 @@ function makeFloatDraggable(winId, barId, closeFunc) {
         const p = clampPos(r.left, r.top);
         win.style.left = p.x + 'px';
         win.style.top = p.y + 'px';
+        win.style.right = 'auto';
+        win.style.bottom = 'auto';
         win.style.transform = 'none';
     });
 }
@@ -897,7 +906,7 @@ function kpiProgressBar(pct, tercapai) {
     const cls = tercapai ? 'is-done' : 'is-run';
     const txt = tercapai ? 'TERCAPAI' : String(Number(pct) || 0).replace('.', ',') + '%';
     return `<div class="kpi-progress"><i class="${cls}" style="width:${w}%"></i></div>`
-        + `<div class="kpi-caption">${tercapai ? '✅ ' : ''}${escapeHtml(txt)}</div>`;
+        + `<div class="kpi-caption">${tercapai ? '<i class="fa-solid fa-circle-check"></i> ' : ''}${escapeHtml(txt)}</div>`;
 }
 
 // ─────────────────────────────────────────────
@@ -983,11 +992,21 @@ function renderCtoFloat(byKey) {
         return;
     }
     const c = byKey['cto'];
+    const pct = Math.max(0, Math.min(100, Number(c.progress) || 0));
+    const pctTxt = String(Number(c.progress) || 0).replace('.', ',') + '%';
     const cvalue = typeof c.value === 'number' ? kpiRupiah(c.value) : c.value;
+    // Card ini sengaja TIDAK memakai `kpiProgressBar` + `c.sub`: keduanya
+    // menampilkan persentase yang sama, jadi tampilannya jadi dobel dan
+    // card tumbuh ke bawah. Cukup: angka target, badge persen, bar, 1 catatan.
     body.innerHTML = `
-        <div class="cto-float-val">${cvalue}</div>
-        ${kpiProgressBar(c.progress, c.tercapai)}
-        ${c.sub ? `<div class="kpi-caption">${escapeHtml(c.sub)}</div>` : ''}`;
+        <div class="cto-float-row">
+            <div class="cto-float-val">${escapeHtml(cvalue)}</div>
+            <span class="cto-pct">${escapeHtml(pctTxt)}</span>
+        </div>
+        <div class="kpi-progress cto-bar"><i class="is-run" style="width:${pct}%"></i></div>
+        <div class="cto-float-note">
+            <i class="fa-solid fa-scale-balanced"></i> dari beban gaji + operasional
+        </div>`;
     el.classList.add('open');
 }
 
@@ -3829,9 +3848,8 @@ async function loadKuFinance() {
     const my = ++_kuReq;
     const body = document.getElementById('kuKasBody');
     try {
-        const [ov, rj, sl] = await Promise.all([
+        const [ov, sl] = await Promise.all([
             apiGet('/overview'),
-            apiGet('/kas/riwayat?period=current&limit=100'),
             apiGet('/kas/saldo').catch(() => null), // P2-06: saldo Kas Aset (opsional)
         ]);
         if (my !== _kuReq) return; // respons basi — ada request lebih baru
@@ -3843,14 +3861,19 @@ async function loadKuFinance() {
         loadKuDistribusi().catch(() => {});
         loadKuDebt().catch(() => {});
         loadKuNotif().catch(() => {});
-        _kuKasRows = ((rj && rj.items) || []).slice().reverse(); // menaik utk saldo berjalan
-renderBukuKas();
-renderKondisiKas();
-renderKuTitipan();
-renderAlloc();
+        renderBukuKas();
+        renderKondisiKas();
+        renderKuTitipan();
+        renderAlloc();
+        // Tabel Rincian Arus Kas = detail Kondisi Kas. Karena panelnya disembunyikan
+        // di balik tombol "Riwayat Transaksi", jangan render diam-diam: cukup muat
+        // ulang saat tombolnya ditekan (kuShowRiwayat).
+        _kuPage = 1;
+        if (_kuRiwayatVisible()) renderRiwayat();
+        renderKuArsip();
     } catch (err) {
         if (my !== _kuReq) return;
-        if (body) body.innerHTML = `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Gagal memuat kas: ${escapeHtml(err.message || '')}</div></td></tr>`;
+        if (body) body.innerHTML = `<tr><td colspan="6"><div class="text-center text-sm text-gray-400 py-6">Gagal memuat kas: ${escapeHtml(err.message || '')}</div></td></tr>`;
     }
 }
 
@@ -4100,28 +4123,34 @@ async function loadKuNotif() {
         : `<tr><td colspan="3"><div class="text-center text-sm text-gray-400 py-6">Belum ada notifikasi.</div></td></tr>`;
 }
 
-// ── Keuangan: pusat kontrol (main) vs arsip (riwayat) ──
-// Riwayat tetap dirender (data/fitur utuh), hanya disembunyikan dari tampilan utama.
-function kuShowMain(silent) {
-    const main = document.getElementById('kuMainView');
-    const riw = document.getElementById('kuRiwayatView');
-    if (main) main.classList.remove('hidden');
-    if (riw) riw.classList.add('hidden');
-    if (!silent && riw) {
-        const page = document.getElementById('pageKeuangan');
-        if (page) page.scrollIntoView({ block: 'start' });
-    }
+// ── Keuangan: Rincian Arus Kas dipindah ke "Riwayat Transaksi" ──
+// Halaman utama (kuMainView) fokus ke Kondisi Kas Operasional, Alokasi Profit,
+// Titipan DP, dan panel turunan. Tabel Rincian Arus Kas beserta arsip periode
+// tertutup disembunyikan di balik tombol "Riwayat Transaksi" paling bawah.
+function _kuRiwayatVisible() {
+    const v = document.getElementById('kuRiwayatView');
+    return !!v && !v.classList.contains('hidden');
 }
 
+// Buka Riwayat Transaksi: tampilkan panelnya, sembunyikan pembuka, muat ulang
+// tabel (penting: dipanggil ulang tiap dibuka supaya data periode segar).
 function kuShowRiwayat() {
-    const main = document.getElementById('kuMainView');
-    const riw = document.getElementById('kuRiwayatView');
-    if (main) main.classList.add('hidden');
-    if (riw) {
-        riw.classList.remove('hidden');
-        riw.scrollIntoView({ block: 'start' });
-    }
+    const view = document.getElementById('kuRiwayatView');
+    const toggle = document.getElementById('kuRiwayatToggleWrap');
+    if (view) view.classList.remove('hidden');
+    if (toggle) toggle.classList.add('hidden');
     renderRiwayat();
+    if (view) view.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+// Kembali ke halaman utama: sembunyikan Riwayat, tampilkan kembali pembuka.
+function kuShowMain() {
+    const view = document.getElementById('kuRiwayatView');
+    const toggle = document.getElementById('kuRiwayatToggleWrap');
+    if (view) view.classList.add('hidden');
+    if (toggle) toggle.classList.remove('hidden');
+    const page = document.getElementById('pageKeuangan');
+    if (page) page.scrollIntoView({ block: 'start' });
 }
 
 // Tutup Kas real: kunci snapshot periode aktif ke server, buka periode baru.
@@ -4218,22 +4247,23 @@ function renderKuTitipan() {
             <td class="tx-cell-muted tx-nowrap">${escapeHtml(it.no_servis || '-')}</td>
             <td><span class="tx-ellipsis" title="${escapeHtml(it.pelanggan || '-')} — ${escapeHtml(it.unit || '-')}">${escapeHtml(it.pelanggan || '-')}</span><br><span class="text-[10.5px] text-gray-400">${escapeHtml(it.unit || '-')}</span></td>
             <td class="tx-nowrap"><span class="tx-titipan-tag">${escapeHtml(it.label || it.jenis || '-')}</span></td>
-            <td class="numeric-r">${to_decimal(it.masuk) ? kuRupiah(it.masuk) : '<span class="text-green-500">-</span>'}</td>
-            <td class="numeric-r">${to_decimal(it.keluar) ? kuRupiah(it.keluar) : '<span class="text-red-500">-</span>'}</td>
+            <td class="numeric-r">${Number(it.masuk) ? kuRupiah(it.masuk) : '<span class="text-green-500">-</span>'}</td>
+            <td class="numeric-r">${Number(it.keluar) ? kuRupiah(it.keluar) : '<span class="text-red-500">-</span>'}</td>
             <td class="tx-saldo numeric-r">${kuRupiah(it.saldo)}</td>
         </tr>`).join('');
 }
 
 // Kondisi Kas — posisi kas + arus periode OPERASIONAL, URUTAN TETAP:
 //   1. Kas Besar        (hanya Admin/Pengelola)
-//   2. Kas Kecil/Laci   (Kas Aset Awal periode, DIKURANGI titipan DP berjalan)
+//   2. Kas Kecil/Laci   (Kas Aset Awal periode — SUDAH bebas dari Titipan DP)
 //   3. Total Penjualan  (Omzet — sudah CASH + LUNAS)
 //   4. Total Modal     (Part + Jasa + Lain — keluar saat status CASH)
 //   5. Total Beban     (Gaji & Operasional)
 // Kolom: Uraian / Debit / Kredit / Saldo. Kasir & CS mulai dari baris
 // Kas Kecil/Laci — posisi Kas Besar tidak dikirim maupun dirender untuk mereka.
-// DP TIDAK pernah jadi baris di sini: seluruh nominalnya dilacak terpisah di
-// panel "Titipan DP Pelanggan" dan tidak memengaruhi Arus Kas operasional.
+// DP = TITIPAN: tidak pernah jadi entri kas maupun baris di sini. Saat unit
+// LUNAS, DP dilepas ke Kas Laci sebagai bagian pelunasan, jadi Arus Kas
+// mencerminkan kewajiban penuh. Lacanya dilacak di "Laporan Titipan DP".
 function renderKondisiKas() {
     const body = document.getElementById('kuKondisiBody');
     if (!body) return;
@@ -4242,15 +4272,15 @@ function renderKondisiKas() {
 
     let saldo = 0;
     const rows = [];
-    const row = (nama, tag, debit, kredit, cls) => {
+    // Tanpa tag di bawah nama: kategori (Kas Aset Awal / Omzet / Modal / Beban)
+    // sudah terbaca dari uraian dan kartu ringkasan di atas tabel.
+    const row = (nama, debit, kredit, cls) => {
         const d = Number(debit) || 0;
         const k = Number(kredit) || 0;
         saldo += d - k;
         rows.push(
             `<tr class="${cls || ''}">`
-            + `<td><span class="tx-device">${escapeHtml(nama)}</span>`
-            + (tag ? `<span class="ku-kd-tag${cls === 'is-laci' ? ' is-laci' : ''}">${escapeHtml(tag)}</span>` : '')
-            + `</td>`
+            + `<td><span class="tx-device">${escapeHtml(nama)}</span></td>`
             + `<td class="tx-debit numeric-c">${d ? kuRupiah(d) : '<span class="text-green-500">-</span>'}</td>`
             + `<td class="tx-kredit numeric-c">${k ? kuRupiah(k) : '<span class="text-red-500">-</span>'}</td>`
             + `<td class="tx-saldo numeric-r">${kuRupiah(saldo)}</td>`
@@ -4259,48 +4289,26 @@ function renderKondisiKas() {
 
     // 1. Kas Besar — hanya role ber-authority (backend juga tidak mengirimnya).
     if (lihatAset && fin.saldo_aset !== undefined) {
-        row('Kas Besar (Pengelola)', 'ADMIN/PENGELOLA', Number(fin.saldo_aset) || 0, 0, 'is-besar');
+        row('Kas Besar (Pengelola)', Number(fin.saldo_aset) || 0, 0, 'is-besar');
     }
     // 2. Kas Kecil / Laci — saldo operasional (titipan DP dikurangi).
-    row('Kas Kecil / Laci', 'KAS ASET AWAL',
-        Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
+    row('Kas Kecil / Laci', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
     // 3. Total Penjualan Service (Omzet periode).
-    row('Total Penjualan Service', 'OMZET', Number(fin.omset) || 0, 0);
+    row('Total Penjualan Service', Number(fin.omset) || 0, 0);
     // 4. Total Modal (Part + Jasa + Lain).
-    row('Total Modal (Part+Jasa+Lain)', 'MODAL', 0, Number(fin.total_modal) || 0);
+    row('Total Modal (Part+Jasa+Lain)', 0, Number(fin.total_modal) || 0);
     // 5. Total Beban (Gaji + Operasional).
-    row('Total Beban (Gaji & OPS)', 'BEBAN', 0, Number(fin.total_beban) || 0, 'is-total');
+    row('Total Beban (Gaji & OPS)', 0, Number(fin.total_beban) || 0, 'is-total');
 
     body.innerHTML = rows.join('');
 }
 
+// Kartu ringkasan (Total Masuk / Keluar / Saldo Laci / Kas Aset).
+// Isi tabel "Rincian Arus Kas" TIDAK digambar di sini — tabel itu punya
+// pencarian + filter + pagination sendiri (lihat renderRiwayat), dan
+// pemanggilannya selalu berpasangan denganConditions Kas di atasnya.
 function renderBukuKas() {
-    const body = document.getElementById('kuKasBody');
     const fin = _kuFin || {};
-    if (body) {
-        // v4 #10: baris pertama Buku Kas = KAS ASET AWAL (opening SALDO LACI periode).
-        const _awal = `<tr class="ku-row-awal">
-                <td><span class="tx-device">KAS ASET AWAL</span><br><span class="text-[10.5px] text-gray-400">Saldo Laci / Kas Aset Kecil &mdash; awal periode</span></td>
-                <td class="tx-debit numeric-c">${kuRupiah(_kuKasAwal)}</td>
-                <td class="tx-kredit numeric-c"><span class="text-red-500">-</span></td>
-                <td class="tx-saldo numeric-r">${kuRupiah(_kuKasAwal)}</td>
-            </tr>`;
-        if (!_kuKasRows.length) {
-            body.innerHTML = _awal + `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada arus kas periode ini.<br>Pembayaran servis, beban, dan entri manual akan tercatat otomatis di sini.</div></td></tr>`;
-        } else {
-            body.innerHTML = _awal + _kuKasRows.map(k => {
-                const masuk = k.jenis === 'Masuk';
-                const _sub = [k.kategori || '', k.tgl || ''].filter(Boolean).join(' • ');
-                return `
-                <tr>
-                    <td><span class="tx-device tx-ellipsis" title="${escapeHtml(k.ket || '-')}">${escapeHtml(k.ket || '-')}</span>${_sub ? `<br><span class="text-[10.5px] text-gray-400 tx-ellipsis" title="${escapeHtml(_sub)}">${escapeHtml(_sub)}</span>` : ''}</td>
-                    <td class="tx-debit numeric-c">${masuk ? kuRupiah(k.nominal) : '<span class="text-green-500">-</span>'}</td>
-                    <td class="tx-kredit numeric-c">${masuk ? '<span class="text-red-500">-</span>' : kuRupiah(k.nominal)}</td>
-                    <td class="tx-saldo numeric-r">${kuRupiah(k.saldo)}</td>
-                </tr>`;
-            }).join('');
-        }
-    }
     const sum = document.getElementById('kuKasSummary');
     if (sum) {
         const laci = (_kuSaldoLapisan && _kuSaldoLapisan.LACI) || null;
@@ -4567,12 +4575,27 @@ async function renderRiwayat() {
     initKeuForm();
     renderKuArsip();
     const my = ++_kuRiwReq;
-    const body = document.getElementById('kuBody');
+    const body = document.getElementById('kuKasBody');
     const empty = document.getElementById('kuEmpty');
     const pagination = document.getElementById('kuPagination');
     const info = document.getElementById('kuInfo');
     const pageBtns = document.getElementById('kuPageBtns');
     if (!body) return;
+
+    // Tabel ini adalah DETAIL dari Kondisi Kas Operasional, bukan arsip terpisah.
+    // Opening KAS ASET AWAL hanya relevan di halaman pertama tanpa filter,
+    // kalau tidak saldo berjalan akan terlihat melompat.
+    const tanpaFilter = !_kuQuery.trim() && !_kuJenis && !_kuDate && _kuPage === 1;
+    const awalRow = tanpaFilter
+        ? `<tr class="ku-row-awal">
+                <td class="tx-cell-muted tx-nowrap">&mdash;</td>
+                <td><span class="tx-device">KAS ASET AWAL</span><br><span class="text-[10.5px] text-gray-400">Saldo Laci / Kas Aset Kecil &mdash; awal periode</span></td>
+                <td class="tx-debit numeric-c">${kuRupiah(_kuKasAwal)}</td>
+                <td class="tx-kredit numeric-c"><span class="text-red-500">-</span></td>
+                <td class="tx-saldo numeric-r">${kuRupiah(_kuKasAwal)}</td>
+                <td class="tx-aksi"></td>
+            </tr>`
+        : '';
 
     const loading = document.getElementById('kuLoading');
     body.innerHTML = '';
@@ -4581,7 +4604,11 @@ async function renderRiwayat() {
     if (loading) loading.classList.remove('hidden');
 
     try {
-        const params = new URLSearchParams({ page: String(_kuPage), limit: String(KU_PER_PAGE) });
+        // PENTING: period=current. Tanpa itu backend memakai default "all" dan
+        // tabelnya menarik SELURUH riwayat, padahal Conditions Kas di atasnya
+        // hanya merepresentasikan periode berjalan — saldo barisnya jadi tidak
+        // cocok. Periode lama sudah ditangani oleh Arsip Periode Tertutup.
+        const params = new URLSearchParams({ period: 'current', page: String(_kuPage), limit: String(KU_PER_PAGE) });
         if (_kuQuery.trim()) params.set('q', _kuQuery.trim());
         if (_kuJenis) params.set('jenis', _kuJenis);
         if (_kuDate) params.set('date', _kuDate);
@@ -4596,26 +4623,28 @@ async function renderRiwayat() {
         if (!items.length) {
             empty.innerHTML = (_kuQuery.trim() || _kuJenis || _kuDate)
                 ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Tidak ada transaksi yang cocok dengan filter.'
-                : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada riwayat transaksi.';
+                : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada arus kas periode ini.<br>Pembayaran servis, beban, dan entri manual akan tercatat otomatis di sini.';
             empty.classList.remove('hidden');
             pagination.classList.add('hidden');
             if (info) info.textContent = '';
             if (pageBtns) pageBtns.innerHTML = '';
+            body.innerHTML = awalRow;
             return;
         }
 
         const start = (_kuPage - 1) * KU_PER_PAGE;
+        body.insertAdjacentHTML('beforeend', awalRow);
         items.forEach((r, i) => {
             const masuk = r.jenis === 'Masuk';
             const manual = r.source === 'manual';
+            const sub = [r.kategori || '', r.tgl || ''].filter(Boolean).join(' • ');
             const tr = document.createElement('tr');
             tr.innerHTML = `
-                <td class="tx-num">${start + i + 1}</td>
                 <td class="tx-cell-muted tx-nowrap">${txDate(r.tgl)}</td>
-                <td><span class="tx-status ${masuk ? 'ku-masuk' : 'ku-keluar'}"><i class="fa-solid fa-circle"></i>${r.jenis}</span></td>
-                <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(r.kategori || '-')}">${escapeHtml(r.kategori || '-')}</span></td>
-                <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(r.ket || '-')}">${escapeHtml(r.ket || '-')}</span></td>
-                <td class="${masuk ? 'tx-debit' : 'tx-kredit'} tx-nowrap">${kuRupiah(r.nominal)}</td>
+                <td><span class="tx-device tx-ellipsis" title="${escapeHtml(r.ket || '-')}">${escapeHtml(r.ket || '-')}</span>${sub ? `<br><span class="text-[10.5px] text-gray-400 tx-ellipsis" title="${escapeHtml(sub)}">${escapeHtml(sub)}</span>` : ''}</td>
+                <td class="tx-debit numeric-c">${masuk ? kuRupiah(r.nominal) : '<span class="text-green-500">-</span>'}</td>
+                <td class="tx-kredit numeric-c">${masuk ? '<span class="text-red-500">-</span>' : kuRupiah(r.nominal)}</td>
+                <td class="tx-saldo numeric-r">${kuRupiah(r.saldo)}</td>
                 <td class="tx-aksi">${manual ? `
                     <button type="button" class="tx-view-btn" data-kumenu-btn title="Menu" onclick="kuMenuToggle('${r.source}', ${r.ref_id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
                 ` : `<span class="text-gray-300 dark:text-white/20" title="${r.source === 'order' ? 'Otomatis dari transaksi servis' : 'Otomatis dari beban'}"><i class="fa-solid fa-lock"></i></span>`}
@@ -4627,7 +4656,15 @@ async function renderRiwayat() {
         const end = start + items.length;
         if (total > KU_PER_PAGE) pagination.classList.remove('hidden');
         else pagination.classList.add('hidden');
-        if (info) info.textContent = 'Halaman ' + _kuPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + total + ' transaksi)';
+        // Total dihitung server dari SELURUH hasil filter, bukan dari baris di
+        // halaman ini — jadi angkanya bisa langsung dicocokkan dengan kartu
+        // "Total Masuk" / "Total Keluar" di Conditions Kas.
+        if (info) {
+            info.innerHTML = 'Halaman ' + _kuPage + '  ' + (start + 1) + ' - ' + end
+                + '  (dari ' + total + ' transaksi)  &middot;  '
+                + '<b>Masuk ' + kuRupiah(data.total_masuk || 0) + '</b>  &middot;  '
+                + '<b>Keluar ' + kuRupiah(data.total_keluar || 0) + '</b>';
+        }
 
 
     if (pageBtns) {

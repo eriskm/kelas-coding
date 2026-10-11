@@ -39,6 +39,8 @@ def catat_payment(db: Session, order, kind: str, amount, method: str = "CASH",
                (pada CASH = waktu event CASH).
     - `allow_settled` : izinkan saat unit sudah LUNAS (dipakai CASH agar replay
                tidak 400, tanpa membuat entry ganda karena `sisa` = 0).
+    Saat baris ini membuat unit LUNAS, DP yang tertahan dilepas ke Kas Laci
+    (`cash.catat_pelepasan_dp`) sehingga kas mencerminkan kewajiban penuh.
     Tidak commit — pemanggil yang mengatur transaksi.
     """
     kind = (kind or "PELUNASAN").strip().upper()
@@ -92,7 +94,13 @@ def catat_payment(db: Session, order, kind: str, amount, method: str = "CASH",
             ref_type="NO_SERVIS", ref_code=(order.no_servis or None),
             details={"kewajiban": str(after["kewajiban"]), "sisa": str(after["sisa"])})
         lock_lunas_moment(order, when=when)
-    # Owner Cash Model v4 #1: payment diterima di toko -> SALDO LACI bertambah.
+        # Owner Cash Model — DP adalah TITIPAN: tidak pernah masuk ledger kas
+        # sejak awal; nominalnya baru dilepas ke Laci SEKALI di sini, saat unit
+        # sudah LUNAS. Setelah ini total masuk kas untuk unit =
+        # sisa pelunasan + DP = kewajiban penuh.
+        cash.catat_pelepasan_dp(db, order, actor=actor)
+    # Owner Cash Model v4 #1: payment non-DP diterima di toko -> SALDO LACI bertambah.
+    # (`catat_penerimaan` otomatis melewati DP.)
     cash.catat_penerimaan(db, row, actor=actor)
     return row
 

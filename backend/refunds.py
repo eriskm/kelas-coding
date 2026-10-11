@@ -75,16 +75,12 @@ def _no_refund(jenis: str) -> str:
 
 
 def dp_diterima(db: Session, order_id: int):
-    """Total DP yang benar-benar diterima (dari jurnal payments — Q3/Q17)."""
-    from models import Payment
-    rows = (db.query(Payment)
-            .filter(Payment.service_order_id == order_id)
-            .all())
-    total = ZERO
-    for r in rows:
-        if (r.kind or "").strip().upper() == "DP":
-            total += to_decimal(r.amount)
-    return quantize(total)
+    """Total DP yang benar-benar diterima (dari jurnal payments — Q3/Q17).
+
+    Delegasi ke `cash.dp_diterima` menjadi satu-satunya definisi DP diterima,
+    supaya logika "DP = titipan" tidak punya dua versi.
+    """
+    return cash.dp_diterima(db, order_id)
 
 
 def total_diterima(db: Session, order_id: int):
@@ -107,12 +103,16 @@ def sudah_refund(db: Session, jenis: str, order_id=None, claim_id=None):
 
 def _catat(db: Session, jenis: str, nominal, layer: str, keterangan: str,
            alasan=None, order_id=None, claim_id=None, oleh: str = None,
-           otomatis: bool = True):
+           otomatis: bool = True, efek_kas: bool = True):
     """Tulis SATU refund + (opsional) SATU efek saldo + SATU journal (tanpa commit).
+
+    `efek_kas=False` dipakai refund DP: DP adalah TITIPAN yang tidak pernah masuk
+    ledger kas, jadi pengembaliannya cukup mengurangi **Saldo Titipan DP** —
+    tidak boleh menyentuh Saldo Laci (akan jadi Minus dua kali).
 
     v4 #8: untuk refund GARANSI (`otomatis=False`) proses tidak boleh otomatis
     mengurangi saldo posisi — pengeluaran aktual dicatat manual oleh Admin
-    (`POST /api/kas/aset/keluar`). Pre-check tetap memverifikasi Saldo Aset.
+    (`POST /api/kas/aset/keliar`). Pre-check tetap memverifikasi Saldo Aset.
     """
     from models import Refund
 
@@ -120,16 +120,18 @@ def _catat(db: Session, jenis: str, nominal, layer: str, keterangan: str,
     if n <= ZERO:
         raise RefundError("Nominal refund harus lebih besar dari nol")
 
-    if layer == cash.LAYER_KAS_ASET:
-        cukup, saldo, kurang = cash.cukup_kas_aset(db, n)
-        if not cukup:
-            raise RefundKurangKas(saldo, n)
-    else:
-        # Laci: cukup dengan saldo Laci (tanpa menggabungkannya dengan Kas Aset).
-        saldo_laci = cash.saldo_laci(db)
-        if saldo_laci < n:
-            raise RefundError("Saldo Kas Perputaran (Laci) tidak cukup untuk refund %s "
-                              "(saldo %s, diminta %s)" % (n, saldo_laci, n))
+    # Pre-check sumber dana hanya relevan kalau refund ini memang menyentuh kas.
+    if efek_kas:
+        if layer == cash.LAYER_KAS_ASET:
+            cukup, saldo, kurang = cash.cukup_kas_aset(db, n)
+            if not cukup:
+                raise RefundKurangKas(saldo, n)
+        else:
+            # Laci: cukup dengan saldo Laci (tanpa menggabungkannya dengan Kas Aset).
+            saldo_laci = cash.saldo_laci(db)
+            if saldo_laci < n:
+                raise RefundError("Saldo Kas Perputaran (Laci) tidak cukup untuk refund %s "
+                                  "(saldo %s, diminta %s)" % (n, saldo_laci, n))
 
     row = Refund(refund_no=_no_refund(jenis), jenis=jenis,
                  service_order_id=order_id, warranty_claim_id=claim_id,
@@ -137,14 +139,15 @@ def _catat(db: Session, jenis: str, nominal, layer: str, keterangan: str,
     db.add(row)
     db.flush()
 
-    # SATU-SATUNYA efek saldo untuk refund ini (kecuali v4 #8 non-otomatis).
+    # SATU-SATUNYA efek saldo untuk refund ini (kecuali v4 #8 non-otomatis
+    # dan refund DP yang memang hanya menyentuh Saldo Titipan DP).
     mutasi = None
-    if otomatis:
+    if otomatis and efek_kas:
         mutasi = cash.catat_mutasi(db, layer, "Keluar", KATEGORI[jenis], keterangan, n,
                                    sumber=SUMBER_BY_JENIS.get(jenis, cash.SUMBER_MANUAL),
                                    ref_type="refund", ref_id=row.id, check_saldo=False)
         row.kas_entry_id = mutasi["id"]
-    else:
+    elif not otomatis:
         journal.record(db, journal.DOMAIN_FINANCE, EVENT_REFUND,
                        entity_type="refund", entity_id=row.id, amount=n, actor=oleh,
                        ref_type="kas_aset", ref_code=str(layer),
@@ -152,16 +155,21 @@ def _catat(db: Session, jenis: str, nominal, layer: str, keterangan: str,
                                 "nominal": str(n),
                                 "pengeluaran_aktual": "MANUAL oleh Admin (POST /api/kas/aset/keluar)"})
 
+    catatan_efek = ("otomatis" if mutasi else
+                    ("TITIPAN DP (Saldo Titipan DP turun, Saldo Laci tidak berubah)"
+                     if jenis == JENIS_DP else
+                     "manual oleh Admin (v4 #8)"))
     journal.record(db, journal.DOMAIN_FINANCE, EVENT_REFUND,
                    entity_type="refund", entity_id=row.id, amount=n,
                    actor=oleh,
-                   ref_type=("kas_entry" if mutasi else layer),
-                   ref_code=str((mutasi or {}).get("id") or layer),
+                   ref_type=("kas_entry" if mutasi else
+                             ("titipan_dp" if jenis == JENIS_DP else layer)),
+                   ref_code=str((mutasi or {}).get("id") or
+                                (("dp/%s" % order_id) if jenis == JENIS_DP else layer)),
                    details={"jenis": jenis, "sumber_dana": layer, "nominal": str(n),
                             "service_order_id": order_id,
                             "warranty_claim_id": claim_id,
-                            "efek_saldo": ("otomatis" if mutasi
-                                           else "manual oleh Admin (v4 #8)")})
+                            "efek_saldo": catatan_efek})
     db.flush()
     db.refresh(row)
     return row, mutasi
@@ -191,8 +199,11 @@ def refund_dp(db: Session, service_order_id: int, nominal=None, alasan=None,
                           % (sisa, n))
 
     keterangan = "Refund DP unit %s (%s)" % (order.no_servis, order.device or "-")
+    # `efek_kas=False`: DP adalah TITIPAN — refund-nya hanya mengurangi Saldo
+    # Titipan DP. Menyetuh Saldo Laci akan mengurangi kas dua kali.
     return _catat(db, JENIS_DP, n, cash.LAYER_LACI, keterangan, alasan=alasan,
-                  order_id=service_order_id, oleh=oleh, otomatis=True)
+                  order_id=service_order_id, oleh=oleh, otomatis=True,
+                  efek_kas=False)
 
 
 # ---------------- 2. Refund Garansi (Admin, dana KAS_ASET) ----------------

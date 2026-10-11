@@ -16,6 +16,8 @@ Yang diuji:
 from datetime import datetime, timedelta
 from decimal import Decimal
 
+from sqlalchemy import and_, or_
+
 from money import to_decimal
 
 
@@ -176,10 +178,105 @@ def test_titipan_terbawa_setelah_tutup_kas(client, db):
     assert t["saldo"] - base["saldo"] == to_decimal(250000), \
         "DP periode lama harus terbawa ke periode berikutnya"
 
-    # Baris payment-nya tidak dihapus, dan uangnya masih di Saldo Laci.
+    # Baris payment-nya tidak dihapus, dan DP-nya tetap tercatat penuh di Laporan
+    # Titipan DP — TAPI tidak boleh masuk ledger kas.
     assert db.query(models.Payment).filter(models.Payment.id == dbaris.id).count() == 1
     import cash as cash_mod
-    assert to_decimal(cash_mod.saldo_laci(db)) > 0
+    assert to_decimal(cash_mod.dp_diterima(db, a.id)) == to_decimal(250000)
+
+
+# ───────────────── 3b. DP = TITIPAN: tidak pernah masuk ledger kas ─────────────────
+def test_dp_masuk_tidak_menjumlah_saldo_laci(client, db):
+    """Menerima DP tidak boleh menambah Saldo Laci / Master Kas sama sekali.
+
+    Dilakukan lewat DELTA karena sandbox disalin dari DB produksi.
+    """
+    import models
+    import cash as cash_mod
+    a = _order(db, "PY-DP-TERPISAH", "REPAIR", harga=400000)
+    laci_awal = cash_mod.saldo_laci(db)
+
+    adm = _token(db, "pytest_admin", "ADMIN")
+    r = client.post("/api/payments", headers=adm,
+                    json={"service_order_id": a.id, "kind": "DP",
+                          "amount": 250000, "method": "CASH"})
+    assert r.status_code in (200, 201), r.text
+    db.expire_all()
+
+    assert to_decimal(cash_mod.saldo_laci(db)) == laci_awal, \
+        "DP adalah titipan — tidak boleh masuk Saldo Laci"
+    pay_id = db.query(models.Payment).filter(
+        models.Payment.service_order_id == a.id).first().id
+    entri = db.query(models.KasEntry).filter(
+        models.KasEntry.ref_type == "payment",
+        models.KasEntry.ref_id == pay_id).all()
+    assert not entri, "DP tidak boleh punya entri kas 'Penerimaan Pembayaran'"
+    # Tapi tetap tercatat penuh sebagai titipan.
+    assert to_decimal(cash_mod.dp_diterima(db, a.id)) == to_decimal(250000)
+
+
+def test_dp_dilepas_saat_lunas_menjadi_kewajiban(client, db):
+    """Saat unit LUNAS, DP dilepas ke Kas Laci sehingga masuk = kewajiban penuh.
+
+    DP 200rb + pelunasan sisa 300rb = kewajiban 500rb. Karena DP tidak pernah
+    masuk kas sejak awal, total masuk kas hanya benar kalau DP dilepas.
+    """
+    import models
+    import cash as cash_mod
+    from money import ZERO
+    o = _order(db, "PY-DP-LEPAS", "DONE", harga=500000, modal=(150000, 50000, 0))
+    _pay_row(db, o, "DP", 200000)
+    db.commit()
+    laci_awal = cash_mod.saldo_laci(db)
+
+    adm = _token(db, "pytest_admin", "ADMIN")
+    r = client.put("/api/orders/%d" % o.id, headers=adm, json={"status": "CASH"})
+    assert r.status_code == 200, r.text
+    db.expire_all()
+
+    pay_ids = [p.id for p in db.query(models.Payment).filter(
+        models.Payment.service_order_id == o.id).all()]
+    # Hanya entri milik unit ini: `dp_release` di-ref dengan order.id, sedangkan
+    # `payment` di-ref dengan id baris payment-nya.
+    masuk = sum((to_decimal(e.nominal) for e in db.query(models.KasEntry).filter(
+        models.KasEntry.jenis == "Masuk",
+        or_(and_(models.KasEntry.ref_type == "dp_release",
+                 models.KasEntry.ref_id == o.id),
+            and_(models.KasEntry.ref_type == "payment",
+                 models.KasEntry.ref_id.in_(pay_ids)))).all()), ZERO)
+    assert to_decimal(masuk) == to_decimal(500000), \
+        "Total masuk kas untuk unit harus sama dengan kewajiban penuh"
+
+    # Pelepasan DP tepat satu kali — replay CASH tidak boleh menggandakan.
+    client.put("/api/orders/%d" % o.id, headers=adm,
+               json={"status": "CASH", "status_note": "replay"})
+    db.expire_all()
+    lepas = db.query(models.KasEntry).filter(
+        models.KasEntry.sumber == cash_mod.SUMBER_DP_RELEASE,
+        models.KasEntry.ref_id == o.id).all()
+    assert len(lepas) == 1, "Pelepasan titipan DP harus tercatat tepat satu kali"
+    assert to_decimal(lepas[0].nominal) == to_decimal(200000)
+
+
+def test_refund_dp_tidak_mengubah_saldo_laci(client, db):
+    """Refund DP mengurangi Saldo Titipan DP, TIDAK menyentuh Saldo Laci."""
+    import models
+    import cash as cash_mod
+    o = _order(db, "PY-DP-REFUND-LACI", "REPAIR")
+    _pay(db, o, "DP", 300000)
+    laci_awal = cash_mod.saldo_laci(db)
+
+    adm = _token(db, "pytest_admin", "ADMIN")
+    r = client.post("/api/refunds/dp", headers=adm,
+                    json={"service_order_id": o.id, "nominal": 100000,
+                          "alasan": "batal sebagian"})
+    assert r.status_code in (200, 201), r.text
+    db.expire_all()
+
+    assert to_decimal(cash_mod.saldo_laci(db)) == laci_awal, \
+        "Refund DP tidak boleh mengurangi Saldo Laci (DP tidak pernah masuk kas)"
+    ref = db.query(models.Refund).filter(models.Refund.service_order_id == o.id).first()
+    assert ref.kas_entry_id is None, "Refund DP tidak boleh punya entri kas"
 
 
 # ───────────────── 4. DP dikembalikan ─────────────────
@@ -277,11 +374,15 @@ def test_mutasi_titipan_dp_terderivasi_dan_stabil(client, db):
 
 # ───────────────── 6. Kondisi Kas rekonsiliasi dengan Saldo Laci ─────────────────
 def _kondisi_kas_calculated(db, p):
-    """Rumus baris Conditions Kas, sesuai frontend."""
+    """Rumus baris Conditions Kas, sesuai frontend.
+
+    TIDAK ada `+ titipan_dp.berjalan`: sejak aturan "DP = titipan", DP tidak
+    pernah menjadi entri kas, jadi `saldo_laci` sudah bersih dan menghitungnya
+    lagi akan mengganggu rekonsiliasi sebesar saldo titipan.
+    """
     import routers.dashboard as dash
     fin = dash.compute_finance(db, p.start_at, p.end_at, lihat_kas_besar=True)
     return (float(fin["kas_aset_awal"]) + float(fin["omset"])
-            + float(fin["titipan_dp"]["berjalan"])
             - float(fin["total_modal"]) - float(fin["total_beban"]))
 
 

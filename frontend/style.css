@@ -292,20 +292,22 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 }
 /* CTO FLOATING CARD — non-blocking, draggable (drag via header).
    Muncul hanya saat CTS tercapai & CTO belum (logic di shouldShowCto).
-   position:fixed tidak pernah memicu scrollbar body. z-index di bawah overlay. */
+   position:fixed tidak pernah memicu scrollbar body. z-index di bawah overlay.
+   Ringkas: judul 1 baris, angka + persen sebaris, bar progres, 1 catatan. */
 .cto-float {
     display: none;
     position: fixed;
     right: 16px;
     bottom: 16px;
-    width: 280px;
+    width: 252px;
     max-width: calc(100vw - 32px);
     z-index: 8000;
-    background: #ecfeff;
+    background: linear-gradient(160deg, #ffffff 0%, #ecfeff 100%);
     border: 1px solid #a5f3fc;
-    border-radius: 14px;
-    box-shadow: 0 16px 40px rgba(8, 145, 178, 0.28);
-    padding: 10px 12px 12px;
+    border-radius: 16px;
+    box-shadow: 0 18px 42px rgba(8, 145, 178, 0.26);
+    padding: 11px 13px 12px;
+    overflow: hidden;
 }
 .cto-float.open { display: block; }
 .cto-float-head {
@@ -316,28 +318,60 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     user-select: none;
     -webkit-user-select: none;
     touch-action: none;
-    padding-bottom: 8px;
-    margin-bottom: 8px;
-    border-bottom: 1px dashed #a5f3fc;
+    margin-bottom: 10px;
 }
 .cto-float-head:active { cursor: grabbing; }
-.cto-grip { color: #0891b2; font-size: 13px; }
-.cto-head-txt { display: flex; flex-direction: column; line-height: 1.25; }
-.cto-head-txt b { font-size: 12.5px; font-weight: 800; color: #0e7490; }
-.cto-head-txt span { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; color: #67b8c9; }
-.cto-float-val { font-size: 21px; font-weight: 800; color: #0f172a; line-height: 1.15; }
+.cto-grip { color: #94a3b8; font-size: 12px; }
+.cto-ico {
+    display: flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; flex: 0 0 28px;
+    border-radius: 9px;
+    background: linear-gradient(135deg, #06b6d4, #0e7490);
+    color: #fff; font-size: 13px;
+    box-shadow: 0 4px 10px rgba(14, 116, 144, 0.35);
+}
+.cto-head-txt { display: flex; flex-direction: column; line-height: 1.2; min-width: 0; }
+.cto-head-txt b {
+    font-size: 12.5px; font-weight: 800; color: #0e7490;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cto-head-txt span {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
+    color: #67b8c9; white-space: nowrap;
+}
+/* Angka target + persen dalam satu baris supaya card tidak meninggi */
+.cto-float-row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.cto-float-val {
+    font-size: 19px; font-weight: 800; color: #0f172a; line-height: 1.15;
+    font-variant-numeric: tabular-nums;
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cto-pct {
+    flex: 0 0 auto;
+    font-size: 11px; font-weight: 800; color: #b45309;
+    background: #fef3c7; border: 1px solid #fcd34d;
+    padding: 2px 7px; border-radius: 999px; white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.cto-bar { margin-top: 8px; }
+.cto-float-note {
+    display: flex; align-items: center; gap: 5px;
+    margin-top: 6px; font-size: 10.5px; color: #64748b;
+}
+.cto-float-note i { font-size: 10px; color: #94a3b8; }
 .dark .cto-float {
-    background: rgba(34,211,238,0.12);
-    border-color: rgba(34,211,238,0.28);
-    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.5);
+    background: linear-gradient(160deg, rgba(15, 23, 42, 0.92) 0%, rgba(8, 51, 68, 0.92) 100%);
+    border-color: rgba(34, 211, 238, 0.28);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.55);
     backdrop-filter: blur(8px);
 }
 .dark .cto-head-txt b { color: #67e8f9; }
 .dark .cto-float-val { color: #f1f5f9; }
-.dark .cto-float-head { border-bottom-color: rgba(34,211,238,0.28); }
+.dark .cto-pct { color: #fde68a; background: rgba(180, 83, 9, 0.3); border-color: rgba(252, 211, 77, 0.4); }
+.dark .cto-float-note { color: #94a3b8; }
 @media (max-width: 639px) {
-    .cto-float { width: 232px; right: 12px; bottom: 12px; padding: 8px 10px 10px; }
-    .cto-float-val { font-size: 18px; }
+    .cto-float { width: 216px; right: 12px; bottom: 12px; padding: 9px 11px 10px; }
+    .cto-float-val { font-size: 16px; }
 }
 .kpi-label-dark { font-size: 11px; font-weight: 600; color: #6b7280; }
 .dark .kpi-label-dark { color: #9ca3af; }
@@ -357,7 +391,9 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 }
 .dark .kpi-pct { color: #d1d5db; background: rgba(255,255,255,0.1); }
 .kpi-caption { font-size: 11px; color: #6b7280; }
+.kpi-caption i.fa-solid { font-size: 10px; color: #10b981; }
 .dark .kpi-caption { color: #9ca3af; }
+.dark .kpi-caption i.fa-solid { color: #34d399; }
 .kpi-caption-light { color: rgba(255,255,255,0.85); }
 .kpi-progress {
     height: 8px; border-radius: 999px; background: #eef1f5; overflow: hidden; margin-top: 6px;
@@ -2480,10 +2516,43 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     gap: 8px;
     margin: 10px 0 2px;
 }
-.ku-summary .sm-card { padding: 8px 10px; }
+.ku-summary .sm-card { padding: 8px 10px; min-width: 0; }
 .ku-summary .sm-top { font-size: 10px; gap: 5px; }
 .ku-summary .sm-num.ku-num { font-size: 14px; }
 @media (max-width: 560px) { .ku-summary { grid-template-columns: 1fr; } }
+
+/* Ringkasan Kas Operasional (#kuKasSummary) — 4 kartu: Total Masuk, Total Keluar,
+   Saldo Kas (Laci), Kas Aset. Semuanya sejajar satu baris, tidak pernah turun
+   ke bawah seperti grid 3 kolom bawaan. Panel lain (Master Kas, Hutang Beban)
+   tidak ikut aturan ini. */
+#kuKasSummary { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 640px) { #kuKasSummary { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 360px) { #kuKasSummary { grid-template-columns: minmax(0, 1fr); } }
+
+/* Pemisah blok di dalam panel Kas: Conditions Kas vs Rincian Arus Kas.
+   Tujuannya: dua tabel tidak lagi terlihat kembar, walau kolomnya sama. */
+.ku-block { margin-top: 12px; }
+.ku-block + .ku-block {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px dashed #e2e8f0;
+}
+.dark .ku-block + .ku-block { border-top-color: rgba(255, 255, 255, .1); }
+.ku-block-head { margin-bottom: 6px; }
+.ku-block-title {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12.5px; font-weight: 800; letter-spacing: .01em;
+    color: #1f2937;
+}
+.dark .ku-block-title { color: #f1f5f9; }
+.ku-block-title i { color: #dc2626; font-size: 11.5px; }
+.dark .ku-block-title i { color: #f87171; }
+.ku-block-sub { font-size: 10.5px; color: #6b7280; margin-top: 1px; line-height: 1.4; }
+.dark .ku-block-sub { color: #9ca3af; }
+
+@media (max-width: 640px) {
+    .ku-block-title { font-size: 12px; }
+}
 
 /* Pengingat Tutup Kas — jam 16:00 adalah patokan pengingat, bukan batas periode */
 .kas-period-warning {
@@ -2553,14 +2622,6 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .dark .ku-kondisi tbody tr.is-besar { background: rgba(220, 38, 38, .12); }
 .ku-kondisi tbody tr.is-total { font-weight: 800; border-top: 1px solid #e5e7eb; }
 .dark .ku-kondisi tbody tr.is-total { border-top-color: rgba(255, 255, 255, .08); }
-.ku-kd-tag {
-    display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 999px;
-    font-size: 9.5px; font-weight: 800; letter-spacing: .04em; vertical-align: 1px;
-    background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5;
-}
-.dark .ku-kd-tag { background: rgba(153, 27, 27, .4); color: #fecaca; border-color: rgba(248, 113, 113, .4); }
-.ku-kd-tag.is-laci { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-.dark .ku-kd-tag.is-laci { background: rgba(30, 64, 175, .4); color: #bfdbfe; border-color: rgba(147, 197, 253, .4); }
 
 .ku-bh-badge {
     font-size: 9.5px; font-weight: 800; letter-spacing: .06em;

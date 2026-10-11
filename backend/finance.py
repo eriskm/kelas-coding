@@ -1,19 +1,42 @@
 """P2-05 — FINANCIAL CORE Project B (Financial SSOT sebagai target).
 
-Implementasi rumus Owner:
-    OMZET       = total penjualan yang SETTLED/LUNAS pada periode bisnis (16:00->16:00)
-                  DP BUKAN Omzet, BUKAN Laba.
+Implementasi rumus Owner, diselaraskan ke Proyek A (FIN-MIRROR):
+    OMZET       = total penjualan unit CASH pada periode bisnis (16:00->16:00).
+                  DP BUKAN Omzet. Pelunasan penuh BUKAN syarat (FIN-MIRROR-2).
     MODAL       = Modal Part + Modal Jasa + Modal Lain-lain (3 komponen cost terpisah)
+    TAMBAHAN    = net transaksi kas manual (FIN-MIRROR-4, rumus A-1)
     BEBAN       = Gaji + Operasional (kategori lain tidak masuk Beban)
-    LABA BERSIH = OMZET - MODAL PART - MODAL JASA - MODAL LAIN-LAIN - BEBAN
+    LABA BERSIH = OMZET - MODAL PART - MODAL JASA - MODAL LAIN-LAIN
+                  + TAMBAHAN - BEBAN
 
-Aturan tambahan Owner:
-- Q4/SSOT-2: cohort Omzet = unit yang payment_status LUNAS dan momen settlement-nya
-  (lunas_at) berada dalam periode. DP tidak pernah masuk Omzet.
+FIN-MIRROR-1 (Beban permanen):
+    Proyek A `app.py:983-984,1017` memakai `SUM(nilai) FROM beban` TANPA filter
+    tanggal, dipotong dari siklus mana pun setiap hari. Di sini dibekukan:
+    beban `recurring=True` dibekukan ke SETIAP periode.
+
+FIN-MIRROR-2 (Gate Omzet = CASH):
+    Proyek A `app.py:1715` - `laba_final = h_jual - m_part - m_jasa - m_lain
+    if stat == 'Cash' else 0`. A hanya bergantung pada status Cash; tidak ada
+    syarat pelunasan penuh. Digunakan di sini sebagai gate cohort Omzet.
+
+FIN-MIRROR-4 (Transaksi kas manual masuk laba - rumus A-1):
+    Proyek A punya DUA rumus laba yang bertentangan. Yang dipakai di sini A-1
+    (`app.py:369-376`, `engine/kalkulator.py:15-27`, bot Telegram, milestone):
+        laba_kotor  = laba_servis + laba_tambahan
+        laba_bersih = laba_kotor + tambahan - beban
+    A-2 (`app.py:1004-1019`, basis bagi hasil) TIDAK memakai `tambahan`.
+    Perbedaan A-1 vs A-2 HANYA suku `tambahan`; selisih `omset - modal` sama
+    karena A menulis `Laba Kotor = Harga Jual - modal` untuk setiap unit Cash.
+
+FIN-MIRROR-3 (sisa pembuluan Distribution) TIDAK dimirror - lihat distribution.py.
+
+Aturan Owner yang tetap dipertahankan:
 - Q5/Q19/SSOT-3: ketiga modal adalah komponen terpisah; tidak digabung, tidak
   boleh dihitung dua kali (Laba Kotor hanya alias antara, bukan pengurangan kedua).
 - SSOT-4/OD-001: Beban dibebankan SEKALI per periode kas (snapshot beku, idempotent).
-- SSOT-5: Laba Bersih = 4 pengurang; tanpa double calculation.
+- SSOT-5: Laba Bersih tanpa double calculation. Perhatikan: setelah
+  FIN-MIRROR-4 jumlahnya 4 pengurang + 1 suku positif (`tambahan`), bukan lagi
+  4 pengurang murni.
 
 Modul ini TIDAK menghitung distribusi secara final (P2-07) dan TIDAK menutup kas (P2-08).
 """
@@ -26,7 +49,7 @@ from sqlalchemy.orm import Session
 
 from models import ExpensePeriod, ServiceOrder
 from money import ZERO, to_decimal
-from statusflow import payment_summary
+from statusflow import cash_moment, kewajiban, payment_summary
 
 # Kategori beban yang Recognized Owner (SSOT-4). Kategori lain TIDAK masuk Beban.
 BEBAN_KATEGORI = ("gaji", "operasional")
@@ -38,41 +61,141 @@ def period_key(start: datetime, end: datetime) -> str:
 
 
 def settled_orders(db: Session, start: datetime, end: datetime) -> list:
-    """Cohort Omzet: unit CASH dengan momen settlement di dalam periode.
+    """Cohort Omzet: unit CASH dengan momen CASH di dalam periode.
 
-    P2-15 / Owner Cash Model: **Omzet direalisasikan saat CASH**, bukan saat LUNAS.
-    Unit yang sudah LUNAS tetapi belum CASH → BELUM masuk Omzet (Payment Ledger
-    boleh berstatus LUNAS). Settlement/lunas tetap dibaca dari Payment Ledger
-    (P2-04 / Q17) — CASH bukan bypass, hanya titik pengakuan transaksi.
+    FIN-MIRROR-2 (Proyek A `app.py:1715`): pengakuan laba di Project A murni
+    bergantung pada `Status == 'Cash'`; tidak ada syarat pelunasan penuh. A
+    menghitung `Harga Jual` begitu unit di-CASH, apa pun status pembayarannya.
+    Kohort ini karena itu hanya menyaring status CASH + momen CASH.
+
+    Momen CASH memakai `cash_moment()`: `taken_at` (diisi saat event CASH) lebih
+    dulu, supaya order CASH yang belum LUNAS (order itu tidak punya `lunas_at`)
+    tetap bisa diatribusikan ke periodenya.
+
+    Proyek A tidak punya dimensi waktu sama sekali - "periode"-nya adalah
+    seluruh baris Cash yang masih ada di tabel saat tutup buku, karena A
+    mengarsipkan lalu menghapus baris tersebut di tutup buku (`app.py:2526`).
+    Batas periode di sini tetap dipertahankan (arsitektur periode B); hanya
+    gate-nya yang disamakan ke A.
     """
     orders = db.query(ServiceOrder).all()
     cohort = []
     for o in orders:
         if (getattr(o, "status", "") or "") != "CASH":
             continue
-        moment = getattr(o, "lunas_at", None) or getattr(o, "lunas_date", None)
-        if moment is None:
+        m = cash_moment(o)
+        if m is None:
             continue
-        if isinstance(moment, datetime):
-            m = moment
-        else:
-            m = datetime(moment.year, moment.month, moment.day, 12, 0, 0)
         if not (start <= m < end):
             continue
-        pays = db.query(__import__("models").Payment).filter(
-            __import__("models").Payment.service_order_id == o.id).all()
-        if payment_summary(o, pays)["payment_status"] == "LUNAS":
-            cohort.append(o)
+        cohort.append(o)
     return cohort
+
+
+def _expense_moment(e):
+    """Aturan moment beban (SAMA dengan sebelumnya, tidak diubah).
+
+    `created_at` dipakai bila ada; jika tidak, `tanggal` pada pukul 12:00.
+    """
+    moment = getattr(e, "created_at", None)
+    if moment is None:
+        tgl = getattr(e, "tanggal", None)
+        if tgl is None:
+            return None
+        return datetime(tgl.year, tgl.month, tgl.day, 12, 0, 0)
+    return moment
+
+
+def _kas_moment(k):
+    """Aturan moment entri kas (SAMA dengan `_kas_moment` di routers/dashboard.py).
+
+    `created_at` dipakai bila ada; jika tidak, `tanggal` pada pukul 12:00.
+    """
+    moment = getattr(k, "created_at", None)
+    if moment is not None:
+        return moment
+    tgl = getattr(k, "tanggal", None)
+    if tgl is None:
+        return None
+    return datetime(tgl.year, tgl.month, tgl.day, 12, 0, 0)
+
+
+def tambahan_kas(db: Session, start: datetime, end: datetime):
+    """FIN-MIRROR-4 - padanan `transaksi_tambahan` Proyek A (A-1).
+
+    Bukti A (`app.py:372-376`, `engine/kalkulator.py:19,27`):
+        SELECT SUM(CASE WHEN jenis='Masuk' THEN nominal ELSE -nominal END)
+          FROM transaksi_tambahan
+         WHERE uraian != 'MODAL KAS KECIL (LACI)'
+        ...
+        laba_kotor   = laba_servis + laba_tambahan
+        laba_bersih  = laba_kotor + tambahan - beban
+
+    Berbeda dengan A-2 (rumus dashboard A), A-1 MEMASUKKAN transaksi kas manual ke
+    laba. Bot Telegram dan milestone CTS/CTO/CTH Project A memakai A-1.
+
+    PEMETAAN KE B (presisi):
+    - `transaksi_tambahan` A  ->  `kas_entries` dengan `sumber = MANUAL`
+      (entri kas yang dibuat manual oleh staf, via endpoint kas B). Hanya itu.
+    - Pengecualian `uraian != 'MODAL KAS KECIL (LACI)'` A  ->  `kategori !=
+      'Saldo Awal'` B. Keduanya baris yang mewakili float kas fisik awal
+      siklus: di A ditandai uraian sentinel, di B ditandai kategori opening.
+
+    Yang SENGAJA TIDAK dihitung (mencegah double count dengan tiga suku lain
+    dari `laba_bersih`):
+    - `PAYMENT`  -> sudah masuk Omzet.
+    - `MODAL`    -> sudah masuk Modal Part/Jasa.
+    - `BEBAN`    -> sudah masuk Beban.
+    - `CASH_OUT` -> cash-out distribusi; di Project A pembagian hasil hanya
+      jadi baris `history_kas` di memori (`app.py:1029-1036`) dan TIDAK pernah
+      ditulis ke `transaksi_tambahan`. Menghitungnya di sini akan mengurangi
+      laba dua kali.
+
+    Batas periode: A tidak punya dimensi waktu (tabel `transaksi_tambahan`
+    di-`DELETE` seluruhnya saat tutup buku, `app.py:2533`), jadi A selalu
+    memakai seluruh isi tabel. Di B batas periode tetap dipatuhi agarcash tidak
+    dihitung ganda antar siklus.
+    """
+    from models import KasEntry
+
+    import cash as cash_mod
+
+    total = ZERO
+    for k in db.query(KasEntry).filter(
+            KasEntry.layer == cash_mod.LAYER_LACI).all():
+        sumber = (getattr(k, "sumber", None) or cash_mod.SUMBER_MANUAL)
+        if sumber != cash_mod.SUMBER_MANUAL:
+            continue
+        if (getattr(k, "kategori", None) or "").strip() == cash_mod.SALDO_AWAL_KATEGORI:
+            # Baris float kas fisik - padanan uraian 'MODAL KAS KECIL (LACI)' A.
+            continue
+        m = _kas_moment(k)
+        if m is None or not (start <= m < end):
+            continue
+        n = to_decimal(getattr(k, "nominal", 0))
+        if (getattr(k, "jenis", "") or "").strip().lower() == "masuk":
+            total += n
+        else:
+            total -= n
+    return total
 
 
 def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
                               commit: bool = False) -> dict:
     """Bekukan beban periode ini SEKALI (idempotent, SSOT-4 / OD-001).
 
-    Snapshot diambil dari `expenses` yang sudah bertepatan dengan periode (aturan
-    yang sama seperti sebelumnya, tidak mengubah angka), lalu disimpan agar
-    periode berikutnya tidak ikut berubah bila ada perubahan retroactive.
+    FIN-MIRROR-1 (Proyek A): beban `recurring=True` dibekukan ke SETIAP periode -
+    A tidak punya filter tanggal pada `SUM(nilai) FROM beban`, jadi gaji &
+    operasional dipotong dari siklus mana pun. Beban `recurring=False` tetap
+    diproses seperti sebelumnya: hanya periode di mana moment-nya jatuh.
+
+    Sifat beku (tidak berubah dari sebelumnya, dan itu disengaja):
+    - Kalau periode ini SUDAH punya baris beku, fungsi ini tidak melakukan apa
+      apa. Laba Bersih periode closed tidak boleh berubah hanya karena sebuah
+      beban baru dibuat belakangan - itu melindungi histori produksi.
+    - Periode yang belum punya baris beku sama sekali (mis. periode yang belum
+      pernah dihitung, atau yang dihitung saat katalog beban belum ada) tetap
+      bisa dibekukan di sini, jadi katalog `recurring` ikut terbawa.
     """
     from models import Expense
 
@@ -83,20 +206,16 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
 
     dibuat = 0
     for e in db.query(Expense).all():
-        # Aturan moment yang SAMA dengan sebelumnya (_expense_moment di dashboard):
-        # created_at dipakai bila ada, jika tidak tanggal pada 12:00.
-        moment = getattr(e, "created_at", None)
-        if moment is None:
-            tgl = getattr(e, "tanggal", None)
-            if tgl is None:
-                continue
-            moment = datetime(tgl.year, tgl.month, tgl.day, 12, 0, 0)
-        if not (start <= moment < end):
-            continue
         kategori = (e.kategori or "").strip().lower()
         if kategori not in BEBAN_KATEGORI:
             # SSOT-4: kategori lain bukan Beban -> tidak dibekukan sebagai beban.
             continue
+        if not bool(getattr(e, "recurring", True)):
+            moment = _expense_moment(e)
+            if moment is None:
+                continue
+            if not (start <= moment < end):
+                continue
         db.add(ExpensePeriod(
             periode=key,
             kategori=(e.kategori or "").strip(),
@@ -143,17 +262,27 @@ def compute_finance_core(db: Session, start: datetime, end: datetime,
     modal_jasa = ZERO
     modal_lain = ZERO
     for o in cohort:
-        omset += to_decimal(getattr(o, "final_price", None)) or to_decimal(
-            getattr(o, "estimate", 0))
+        # FIN-MIRROR-3: pakai `kewajiban()` (final_price ?? estimate), sama
+        # seperti `statusflow.order_profit`. Versi lama memakai operator `or`,
+        # sehingga `final_price = 0` diam-diam jatuh ke `estimate` - dua sumber
+        # kebenaran untuk angka yang sama. `kewajiban()` memakai null-coalescing,
+        # jadi 0 tetap 0.
+        omset += kewajiban(o)
         modal_part += to_decimal(getattr(o, "part_cost", 0))
         modal_jasa += to_decimal(getattr(o, "modal_jasa", 0))
         modal_lain += to_decimal(getattr(o, "modal_lainnya", 0))
     total_modal = modal_part + modal_jasa + modal_lain
 
+    # FIN-MIRROR-4: transaksi kas manual masuk laba (rumus A-1 Project A).
+    tambahan = tambahan_kas(db, start, end)
+
     beban = beban_frozen(db, start, end, commit=False)
     total_beban = beban["gaji"] + beban["operasional"]
 
-    laba_bersih = omset - modal_part - modal_jasa - modal_lain - total_beban
+    # A-1 (app.py:376 + kalkulator.py:27):
+    #     laba_kotor  = laba_servis + laba_tambahan
+    #     laba_bersih = laba_kotor + tambahan - beban
+    laba_bersih = omset - modal_part - modal_jasa - modal_lain + tambahan - total_beban
 
     return {
         "periode": period_key(start, end),
@@ -163,6 +292,7 @@ def compute_finance_core(db: Session, start: datetime, end: datetime,
         "modal_jasa": modal_jasa,
         "modal_lainnya": modal_lain,
         "total_modal": total_modal,
+        "tambahan": tambahan,
         "beban_gaji": beban["gaji"],
         "beban_operasional": beban["operasional"],
         "total_beban": total_beban,
