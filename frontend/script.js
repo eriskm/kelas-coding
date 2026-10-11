@@ -3828,7 +3828,6 @@ let _profitChart = null;
 let _kuFin = null;
 let _kuSaldoLapisan = null; // P2-06 / SSOT-7: saldo Laci & Kas Aset terpisah
 let _kuKasRows = [];
-let _kuKasAwal = 0; // v4 #10: opening SALDO LACI periode (KAS ASET AWAL)
 let _kuAllocView = [];
 let _kuSelAlloc = -1;
 
@@ -3855,7 +3854,8 @@ async function loadKuFinance() {
         if (my !== _kuReq) return; // respons basi — ada request lebih baru
         _kuFin = (ov && ov.finance) || null;
         _kuSaldoLapisan = sl || null;
-        _kuKasAwal = Number((_kuFin && _kuFin.kas_aset_awal) || 0);
+        // Saldo awal Mutasi Kas sekarang datang dari `/kas/riwayat.opening`
+        // (sumber tunggal yang sama dengan saldo berjalan), bukan dari sini.
         // P2-15: panel turunan lain (tidak kritis bila gagal).
         loadKuAset().catch(() => {});
         loadKuDistribusi().catch(() => {});
@@ -4569,6 +4569,72 @@ function initKeuForm() {
     });
 }
 
+// ─────────────────────────────────────────────
+// RIWAYAT TRANSAKSI — 3 bagian
+//   (1) Ringkasan Kas Laci : Saldo Awal / Total Masuk / Total Keluar / Saldo Akhir
+//   (2) Mutasi Kas         : tabel per peristiwa kas + saldo berjalan
+//   (3) Rekonsiliasi       : saldo sistem / fisik / selisih / penyesuaian
+// Semua angka berasal dari backend; tidak ada yang dihitung ulang di sini.
+// ─────────────────────────────────────────────
+
+// Baris pembuka "Saldo Awal" hanya ditampilkan di halaman pertama tanpa filter.
+// Kalau difilter, saldo berjalan akan terlihat melompat karena baris sebelumnya
+// tidak ikut tampil — jadi lebih baik disembunyikan daripada mengelirukan.
+function _kuAwalRow(opening) {
+    const tanpaFilter = !_kuQuery.trim() && !_kuJenis && !_kuDate && _kuPage === 1;
+    if (!tanpaFilter) return '';
+    return `<tr class="ku-row-awal">
+            <td class="tx-cell-muted tx-nowrap">&mdash;</td>
+            <td><span class="tx-device">SALDO AWAL</span><br><span class="text-[10.5px] text-gray-400">Saldo Laci / Kas Aset Kecil &mdash; awal periode</span></td>
+            <td><span class="tx-titipan-tag">Saldo Awal</span></td>
+            <td class="numeric-c"><span class="text-green-500">-</span></td>
+            <td class="numeric-c"><span class="text-red-500">-</span></td>
+            <td class="tx-saldo numeric-r">${kuRupiah(opening)}</td>
+            <td class="tx-aksi"></td>
+        </tr>`;
+}
+
+function _kuSumCard(label, value, icon, cls) {
+    return `<div class="sm-card ${cls || ''}">
+        <div class="sm-top"><i class="fa-solid ${icon}"></i>${escapeHtml(label)}</div>
+        <div class="sm-bot"><span class="sm-num ku-num">${value}</span></div>
+    </div>`;
+}
+
+// (1) Ringkasan Kas Laci
+function renderKuMutasiRingkasan(d) {
+    const el = document.getElementById('kuMutasiSummary');
+    if (!el) return;
+    el.innerHTML = [
+        _kuSumCard('Saldo Awal', kuRupiah(d.opening || 0), 'fa-flag', 'sm-blue'),
+        _kuSumCard('Total Masuk', kuRupiah(d.total_masuk || 0), 'fa-arrow-trend-up', 'sm-green'),
+        _kuSumCard('Total Keluar', kuRupiah(d.total_keluar || 0), 'fa-arrow-trend-down', 'sm-red'),
+        _kuSumCard('Saldo Akhir', kuRupiah(d.saldo_akhir || 0), 'fa-wallet', 'sm-blue'),
+    ].join('');
+}
+
+// (3) Rekonsiliasi Tutup Kas
+function renderKuRekonsiliasi(r) {
+    const el = document.getElementById('kuRekonsiliasi');
+    const note = document.getElementById('kuRekonsiliasiNote');
+    if (!el) return;
+    const belum = !r || r.saldo_fisik === null || r.saldo_fisik === undefined;
+    const nilai = (v) => (v === null || v === undefined) ? '<span class="text-gray-400">Belum dideklarasi</span>' : kuRupiah(v);
+    el.innerHTML = [
+        _kuSumCard('Saldo Sistem', kuRupiah((r && r.saldo_sistem) || 0), 'fa-scale-balanced', 'sm-blue'),
+        _kuSumCard('Saldo Fisik', nilai(r && r.saldo_fisik), 'fa-hand-holding-dollar', belum ? 'sm-blue' : 'sm-green'),
+        _kuSumCard('Selisih', belum ? '<span class="text-gray-400">-</span>'
+            : kuRupiah(r.selisih), 'fa-scale-unbalanced', belum ? 'sm-blue' : 'sm-red'),
+        _kuSumCard('Penyesuaian', (r && r.penyesuaian)
+            ? '<span class="text-amber-600">Dicatat</span>' : '<span class="text-gray-400">Tidak ada</span>',
+            'fa-pen-to-square', 'sm-blue'),
+    ].join('');
+    if (note) {
+        note.textContent = (r && r.catatan) || '';
+        note.classList.toggle('hidden', !note.textContent);
+    }
+}
+
 async function renderRiwayat() {
     try { kuMenuClose(); } catch (_) {}
     initKuToolbar();
@@ -4582,26 +4648,9 @@ async function renderRiwayat() {
     const pageBtns = document.getElementById('kuPageBtns');
     if (!body) return;
 
-    // Tabel ini adalah DETAIL dari Kondisi Kas Operasional, bukan arsip terpisah.
-    // Opening KAS ASET AWAL hanya relevan di halaman pertama tanpa filter,
-    // kalau tidak saldo berjalan akan terlihat melompat.
-    const tanpaFilter = !_kuQuery.trim() && !_kuJenis && !_kuDate && _kuPage === 1;
-    const awalRow = tanpaFilter
-        ? `<tr class="ku-row-awal">
-                <td class="tx-cell-muted tx-nowrap">&mdash;</td>
-                <td><span class="tx-device">KAS ASET AWAL</span><br><span class="text-[10.5px] text-gray-400">Saldo Laci / Kas Aset Kecil &mdash; awal periode</span></td>
-                <td class="tx-debit numeric-c">${kuRupiah(_kuKasAwal)}</td>
-                <td class="tx-kredit numeric-c"><span class="text-red-500">-</span></td>
-                <td class="tx-saldo numeric-r">${kuRupiah(_kuKasAwal)}</td>
-                <td class="tx-aksi"></td>
-            </tr>`
-        : '';
-
-    const loading = document.getElementById('kuLoading');
     body.innerHTML = '';
     empty.classList.add('hidden');
     pagination.classList.add('hidden');
-    if (loading) loading.classList.remove('hidden');
 
     try {
         // PENTING: period=current. Tanpa itu backend memakai default "all" dan
@@ -4614,40 +4663,48 @@ async function renderRiwayat() {
         if (_kuDate) params.set('date', _kuDate);
         const data = await apiGet('/kas/riwayat?' + params.toString());
         if (my !== _kuRiwReq) return; // respons basi — ada request lebih baru
-        if (loading) loading.classList.add('hidden');
+
         const items = (data && data.items) || [];
         _kuView = items;
         _kuPage = (data && data.page) || 1;
         const total = (data && data.total) || 0;
         const totalPages = (data && data.total_pages) || 1;
+
+        // (1) & (3) digambar lebih dulu supaya tetap tampil walau tabel kosong.
+        renderKuMutasiRingkasan(data || {});
+        renderKuRekonsiliasi((data && data.rekonsiliasi) || null);
+
         if (!items.length) {
             empty.innerHTML = (_kuQuery.trim() || _kuJenis || _kuDate)
-                ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Tidak ada transaksi yang cocok dengan filter.'
-                : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada arus kas periode ini.<br>Pembayaran servis, beban, dan entri manual akan tercatat otomatis di sini.';
+                ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Tidak ada mutasi kas yang cocok dengan filter.'
+                : '<i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>Belum ada mutasi kas periode ini.<br>Pembayaran, DP, beban, dan entri manual akan tercatat otomatis di sini.';
             empty.classList.remove('hidden');
             pagination.classList.add('hidden');
             if (info) info.textContent = '';
             if (pageBtns) pageBtns.innerHTML = '';
-            body.innerHTML = awalRow;
+            body.innerHTML = _kuAwalRow((data && data.opening) || 0);
             return;
         }
 
         const start = (_kuPage - 1) * KU_PER_PAGE;
-        body.insertAdjacentHTML('beforeend', awalRow);
-        items.forEach((r, i) => {
+        body.insertAdjacentHTML('beforeend', _kuAwalRow((data && data.opening) || 0));
+        items.forEach((r) => {
             const masuk = r.jenis === 'Masuk';
             const manual = r.source === 'manual';
-            const sub = [r.kategori || '', r.tgl || ''].filter(Boolean).join(' • ');
+            const isDp = r.source === 'dp';
+            const ketJudul = escapeHtml(r.ket || '-');
+            const ketSub = escapeHtml(r.kategori || '');
             const tr = document.createElement('tr');
             tr.innerHTML = `
                 <td class="tx-cell-muted tx-nowrap">${txDate(r.tgl)}</td>
-                <td><span class="tx-device tx-ellipsis" title="${escapeHtml(r.ket || '-')}">${escapeHtml(r.ket || '-')}</span>${sub ? `<br><span class="text-[10.5px] text-gray-400 tx-ellipsis" title="${escapeHtml(sub)}">${escapeHtml(sub)}</span>` : ''}</td>
+                <td><span class="tx-device tx-ellipsis" title="${ketJudul}">${ketJudul}</span></td>
+                <td><span class="tx-ellipsis" title="${ketSub}">${isDp ? '<span class="tx-titipan-tag">Uang Titipan</span>' : ''}${ketSub}</span></td>
                 <td class="tx-debit numeric-c">${masuk ? kuRupiah(r.nominal) : '<span class="text-green-500">-</span>'}</td>
                 <td class="tx-kredit numeric-c">${masuk ? '<span class="text-red-500">-</span>' : kuRupiah(r.nominal)}</td>
                 <td class="tx-saldo numeric-r">${kuRupiah(r.saldo)}</td>
                 <td class="tx-aksi">${manual ? `
                     <button type="button" class="tx-view-btn" data-kumenu-btn title="Menu" onclick="kuMenuToggle('${r.source}', ${r.ref_id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-                ` : `<span class="text-gray-300 dark:text-white/20" title="${r.source === 'order' ? 'Otomatis dari transaksi servis' : 'Otomatis dari beban'}"><i class="fa-solid fa-lock"></i></span>`}
+                ` : `<span class="text-gray-300 dark:text-white/20" title="${isDp ? 'Otomatis dari penerimaan DP' : (r.source === 'order' ? 'Otomatis dari transaksi servis' : 'Otomatis dari beban')}"><i class="fa-solid fa-lock"></i></span>`}
                 </td>
             `;
             body.appendChild(tr);
@@ -4656,37 +4713,30 @@ async function renderRiwayat() {
         const end = start + items.length;
         if (total > KU_PER_PAGE) pagination.classList.remove('hidden');
         else pagination.classList.add('hidden');
-        // Total dihitung server dari SELURUH hasil filter, bukan dari baris di
-        // halaman ini — jadi angkanya bisa langsung dicocokkan dengan kartu
-        // "Total Masuk" / "Total Keluar" di Conditions Kas.
         if (info) {
-            info.innerHTML = 'Halaman ' + _kuPage + '  ' + (start + 1) + ' - ' + end
-                + '  (dari ' + total + ' transaksi)  &middot;  '
-                + '<b>Masuk ' + kuRupiah(data.total_masuk || 0) + '</b>  &middot;  '
-                + '<b>Keluar ' + kuRupiah(data.total_keluar || 0) + '</b>';
+            info.textContent = 'Halaman ' + _kuPage + '  ' + (start + 1) + ' - ' + end
+                + '  (dari ' + total + ' mutasi)';
         }
 
-
-    if (pageBtns) {
-        pageBtns.innerHTML = '';
-        const mkBtn = (txt, p, disabled, active, label) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.innerHTML = txt;
-            if (label) { b.title = label; b.setAttribute('aria-label', label); }
-            b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
-            if (!disabled) b.addEventListener('click', () => { _kuPage = p; renderRiwayat(); });
-            return b;
-        };
-        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _kuPage - 1, _kuPage === 1, false, 'Sebelumnya'));
-        for (let p = 1; p <= totalPages; p++) {
-            pageBtns.appendChild(mkBtn(String(p), p, false, p === _kuPage));
-        }
-        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _kuPage + 1, _kuPage === totalPages, false, 'Berikutnya'));
+        if (pageBtns) {
+            pageBtns.innerHTML = '';
+            const mkBtn = (txt, p, disabled, active, label) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.innerHTML = txt;
+                if (label) { b.title = label; b.setAttribute('aria-label', label); }
+                b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
+                if (!disabled) b.addEventListener('click', () => { _kuPage = p; renderRiwayat(); });
+                return b;
+            };
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _kuPage - 1, _kuPage === 1, false, 'Sebelumnya'));
+            for (let p = 1; p <= totalPages; p++) {
+                pageBtns.appendChild(mkBtn(String(p), p, false, p === _kuPage));
+            }
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _kuPage + 1, _kuPage === totalPages, false, 'Berikutnya'));
         }
     } catch (err) {
         if (my !== _kuRiwReq) return;
-        if (loading) loading.classList.add('hidden');
         empty.innerHTML = '<i class="fa-solid fa-circle-exclamation text-3xl mb-2 block opacity-40"></i>' + escapeHtml(err.message || 'Gagal memuat data.');
         empty.classList.remove('hidden');
         pagination.classList.add('hidden');

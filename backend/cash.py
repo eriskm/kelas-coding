@@ -67,31 +67,35 @@ SUMBER_INJEKSI = "INJEKSI"
 SUMBER_REKONSILIASI = "REKONSILIASI"
 SUMBER_PENYESUAIAN = "PENYESUAIAN"
 SUMBER_HUTANG_BEBAN = "HUTANG_BEBAN"
-#: Pelepasan titipan DP ke Kas Laci ketika unitnya jadi LUNAS. DP masuk dicatat
-#: sebagai TITIPAN (tidak masuk ledger kas); nominalnya baru ikut di Kas Laci saat
-#: dilepas di sini, supaya satu baris pelunasan tetap mewakili SELURUH pembayaran
-#: unit tersebut (DP + sisa) tanpa uang fiktif.
-SUMBER_DP_RELEASE = "DP_RELEASE"
 
 #: Sumber yang boleh masuk ARUS KAS AKRUAL (`compute_finance` -> total_masuk /
 #: total_keluar). Harus SEMPIT: apa pun yang sudah tercakup di `omset`,
 #: `total_modal`, atau `total_beban` akan terhitung dua kali kalau ikut di sini.
-#: `DP_RELEASE` sengaja TIDAK ada — nilainya sudah termasuk di dalam Omzet.
 SUMBER_BUKU_KAS = frozenset({
     SUMBER_MANUAL, SUMBER_CASH_OUT, SUMBER_REFUND_DP, SUMBER_FAILED_CANCEL,
 })
 
-#: Sumber entri kas yang ditampilkan sebagai BARIS di Rincian Arus Kas
-#: (`routers.kas.period_rows`). Lebih luas dari `SUMBER_BUKU_KAS` karena tabel
-#: harus menampilkan SETIAP peristiwa kas, termasuk yang nilainya sudah tercakup
-#: di Omzet/total_modal:
-#:   - `MODAL`       : wajib tampil, kalau tidak baris "Total Modal" di Kondisi
-#:                     Kas tidak punya penurunan di tabel dan saldo baris meleset.
-#:   - `DP_RELEASE`  : tampil sebagai bukti pelepasan titipan, supaya Total Masuk
-#:                     tabel = Omzet + kas manual = kartu "Total Masuk".
-#: Yang tetap TIDAK ikut: mutasi posisi Kas Aset (TRANSFER / INJEKSI),
-#: penyesuaian rekonsiliasi, dan refund garansi (v4 #8).
-SUMBER_BARIS_KAS = frozenset(SUMBER_BUKU_KAS | {SUMBER_MODAL, SUMBER_DP_RELEASE})
+#: Sumber entri kas yang ditampilkan sebagai BARIS di Mutasi Kas
+#: (`routers.kas.period_rows`). Sifatnya **FISIS**: Mutasi Kas memuat SETIAP
+#: perpindahan uang di laci, supaya kolom Saldo Berjalan selalu sama dengan
+#: `saldo_laci()` dan bisa dipakai merekonsiliasi uang fisik saat Tutup Kas.
+#:
+#: Prinsip penyusunannya: semua sumber yang bisa menulis ke layer LACI, KECUALI
+#: `PAYMENT` dan `BEBAN` — keduanya sudah diambil langsung dari tabel aslinya
+#: (`payments` / `expenses`) oleh loop terpisah di `period_rows`, jadi ikutkan
+#: di sini akan menghitung dua kali.
+#:
+#: Yang TIDAK ikut dan alasannya:
+#:   - `PAYMENT`, `BEBAN`  : sudah di loop payments/expenses (cegah dobel).
+#:   - lapisan `KAS_ASET`  : bukan uang di laci; `period_rows` sudah memfilter
+#:                           `layer == LACI`, jadi pasangan transfer tidak pernah
+#:                           terhitung dua kali dan Master Kas tetap utuh.
+SUMBER_BARIS_KAS = frozenset({
+    SUMBER_MANUAL, SUMBER_MODAL, SUMBER_CASH_OUT, SUMBER_REFUND_DP,
+    SUMBER_REFUND_GARANSI, SUMBER_FAILED_CANCEL, SUMBER_TRANSFER,
+    SUMBER_INJEKSI, SUMBER_REKONSILIASI, SUMBER_PENYESUAIAN,
+    SUMBER_HUTANG_BEBAN,
+})
 
 KATEGORI = {
     SUMBER_PAYMENT: "Penerimaan Pembayaran",
@@ -106,7 +110,6 @@ KATEGORI = {
     SUMBER_REKONSILIASI: "Penyesuaian Rekonsiliasi",
     SUMBER_PENYESUAIAN: "Penyesuaian Laci",
     SUMBER_HUTANG_BEBAN: "Hutang Beban",
-    SUMBER_DP_RELEASE: "Pelepasan Titipan DP",
 }
 
 EVENT_TRANSFER = "KAS_ASET_DITRANSFER"
@@ -276,18 +279,21 @@ def _journal(db: Session, event: str, mutasi: dict, actor=None, details=None, am
 
 # ---------------------------------------------------------------- 1) PAYMENT (v4 #1)
 def catat_penerimaan(db: Session, payment, actor: str = None):
-    """Pembayaran non-DP diterima di toko -> SALDO LACI bertambah (v4 #1).
+    """Payment diterima di toko -> SALDO LACI bertambah (v4 #1). Idempotent per payment.
 
-    TITIPAN DP TIDAK pernah menyentuh ledger kas. DP adalah uang(customer yang
-    disimpan, bukan kas toko: tercatat di `payments` + Laporan Titipan DP saja.
-    Saat unitnya jadi LUNAS, nominal DP dilepas ke Kas Laci tepat satu kali lewat
-    `catat_pelepasan_dp`, sehingga total masuk kas untuk unit itu tetap sama
-    dengan kewajiban penuh — tanpa pernah ada uang fiktif maupun dobel.
+    Berlaku juga untuk **DP**. DP belum tentu Omzet — Omzet baru naik saat unit
+    LUNAS, lewat `statusflow.kewajiban` — TAPI uang DP benar-benar diterima
+    kasir dan wajib bisa direkonsiliasi saat Tutup Kas. Karena itu DP tetap
+    menjadi mutasi Saldo Laci.
 
-    Idempotent per payment.
+    Pemisahan "bukan Omzet" dibuat di LAPORAN, bukan dengan menghilangkan uangnya
+    dari ledger kas:
+      - `compute_finance` menghitung DP hanya lewat Omzet (`SUMBER_BUKU_KAS`
+        tidak memuat `PAYMENT`), jadi kartu Total Masuk tidak dobel;
+      - baris Conditions Kas "Kas Kecil/Laci" memakai `kas_aset_awal_operasional`
+        yang dikurangi saldo titipan (`routers/dashboard.py`);
+      - Mutasi Kas menampilkannya dengan label "DP / Uang Titipan (bukan Omzet)".
     """
-    if _is_dp(payment):
-        return None
     if mutasi_tersimpan(db, LAYER_LACI, SUMBER_PAYMENT, "payment", payment.id):
         return None
     mut = catat_mutasi(db, LAYER_LACI, "Masuk", KATEGORI[SUMBER_PAYMENT],
@@ -297,11 +303,13 @@ def catat_penerimaan(db: Session, payment, actor: str = None):
                        payment.amount, sumber=SUMBER_PAYMENT,
                        ref_type="payment", ref_id=payment.id, oleh=actor)
     _journal(db, EVENT_OPERASIONAL, mut, actor=actor,
-             details={"event": "PAYMENT", "service_order_id": payment.service_order_id})
+             details={"event": "PAYMENT", "service_order_id": payment.service_order_id,
+                      "kind": payment.kind})
     return mut
 
 
-def _is_dp(payment) -> bool:
+def is_dp(payment) -> bool:
+    """Payment ini DP (titipan), bukan pelunasan."""
     return (getattr(payment, "kind", "") or "").strip().upper() == "DP"
 
 
@@ -311,37 +319,9 @@ def dp_diterima(db: Session, order_id: int):
     total = ZERO
     for p in (db.query(Payment)
               .filter(Payment.service_order_id == order_id).all()):
-        if _is_dp(p):
+        if is_dp(p):
             total += _num(p.amount)
     return quantize(total)
-
-
-def catat_pelepasan_dp(db: Session, order, actor: str = None):
-    """Lepas titipan DP ke Kas Laci saat unitnya LUNAS. TEPAT SATU KALI per unit.
-
-    Dipanggil dari satu-satunya jalur tulis payment (`routers.payments.catat_payment`)
-    tepat ketika `payment_summary` sudah berstatus LUNAS. Nominal yang dilepas
-    adalah SELURUH DP unit tersebut — karena DP tidak pernah masuk ledger kas
-    sejak awal, Baris Arus Kas untuk unit itu akhirnya =
-    (sisa pelunasan) + (DP) = kewajiban penuh.
-
-    Idempotent lewat `ref_type='dp_release', ref_id=order.id`.
-    """
-    dp = dp_diterima(db, order.id)
-    if dp <= ZERO:
-        return None
-    if mutasi_tersimpan(db, LAYER_LACI, SUMBER_DP_RELEASE, "dp_release", order.id):
-        return None
-    mut = catat_mutasi(db, LAYER_LACI, "Masuk", KATEGORI[SUMBER_DP_RELEASE],
-                       "Pelepasan titipan DP unit %s (menjadi bagian pelunasan)" % (
-                           getattr(order, "no_servis", None) or order.id),
-                       dp, sumber=SUMBER_DP_RELEASE,
-                       ref_type="dp_release", ref_id=order.id, oleh=actor,
-                       check_saldo=False)
-    _journal(db, EVENT_OPERASIONAL, mut, actor=actor,
-             details={"event": "DP_RELEASE", "service_order_id": order.id,
-                      "dp": str(dp)})
-    return mut
 
 
 # ---------------------------------------------------------------- 2) MODAL (v4 #2)
@@ -465,9 +445,29 @@ def rekonsiliasi_laci(db: Session, cash_counted, actor: str = None, ref_type=Non
 
     TIDAK menyuntik opening. Selisih dicatat sebagai **penyesuaian Laci eksplisit**
     (+journal). Mengembalikan dict {'selisih', 'penyesuaian', 'saldo_sezudah'}.
+
+    IDEMPOTEN per `ref_type`/`ref_id` (= periode kas). Tanpa guard ini, menjalankan
+    Tutup Kas ulang untuk periode yang sama akan mencatat selisih DUA KALI: yang
+    pertama membuat saldo Laci bergerak mendekati fisik, sehingga selisih kedua
+    jadi terukur ulang dari angka yang sudah disesuaikan — bukan selisih asli.
     """
     if cash_counted is None:
         return {"dilewati": True, "selisih": None, "penyesuaian": None,
+                "saldo_sezudah": saldo_laci(db)}
+    # Sudah pernah direkonsiliasi untuk periode ini -> jangan catat lagi.
+    if ref_type and ref_id is not None and mutasi_tersimpan(
+            db, LAYER_LACI, SUMBER_REKONSILIASI, ref_type, ref_id):
+        from models import KasEntry
+        row = (db.query(KasEntry)
+               .filter(KasEntry.layer == LAYER_LACI,
+                       KasEntry.sumber == SUMBER_REKONSILIASI,
+                       KasEntry.ref_type == ref_type,
+                       KasEntry.ref_id == ref_id).first())
+        return {"dilewati": False, "sudah_ada": True,
+                "selisih": quantize(_num(row.nominal)) if (row.jenis or "").strip().lower() == "masuk"
+                else quantize(-_num(row.nominal)),
+                "penyesuaian": None, "entry_id": getattr(row, "id", None),
+                "sistem": saldo_laci(db), "fisik": quantize(_num(cash_counted)),
                 "saldo_sezudah": saldo_laci(db)}
     sistem = saldo_laci(db)
     fisik = quantize(_num(cash_counted))

@@ -37,6 +37,10 @@ router = APIRouter(prefix="/api/kas", tags=["kas"])
 
 SALDO_AWAL_KATEGORI = cash.SALDO_AWAL_KATEGORI
 
+#: Kategori baris DP di Mutasi Kas. Labelnya menegaskan DP bukan Omzet supaya
+#: tidak salah baca saat membandingkan tabel ini dengan kartu Conditions Kas.
+KATEGORI_DP = "DP / Uang Titipan (bukan Omzet)"
+
 DEFAULT_PAGE = 1
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 100
@@ -63,16 +67,29 @@ def opening_balance(db: Session) -> float:
     return cash.opening_layer(db, cash.LAYER_LACI)
 
 
-def period_rows(db: Session, start: datetime, end: datetime):
+def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool = False):
     """Seluruh baris kas dalam [start, end) terurut menaik + saldo berjalan.
-    Entri 'Saldo Awal' dikecualikan dari baris (sudah tercakup di opening).
 
-    Saldo dihitung dari AWAL WAKTU (opening + seluruh baris sebelum start +
+    Sifat laporan ini **FISIS**: memuat setiap perpindahan uang di laci, supaya
+    kolom Saldo Berjalan selalu sama dengan `cash.saldo_laci()` dan bisa dipakai
+    merekonsiliasi uang fisik saat Tutup Kas.
+
+    Tiga sumber, masing-masing tepat satu kali (tidak ada yang terhitung dobel):
+      1. `payments`   -> DP + pelunasan (DP berlabel "DP / Uang Titipan").
+      2. `expenses`   -> beban gaji & operasional.
+      3. `kas_entries`-> layer LACI dengan `sumber` di `cash.SUMBER_BARIS_KAS`
+                        (modal, cash-out distribusi, transfer masuk/keluar laci,
+                        penyesuaian rekonsiliasi, refund, entri manual).
+      Sumber `PAYMENT` & `BEBAN` DIKECUALIKAN dari (3) karena sudah diambil
+      langsung oleh (1) dan (2).
+
+    Saldo dihitung dari AWAL WAKTU (opening + seluruh baris sebelum `start` +
     baris periode) sehingga benar untuk periode apa pun, bukan hanya all-time.
+    Entri kategori "Saldo Awal" tidak jadi baris karena sudah tercakup di opening.
 
-    Syarat yang harus selalu berlaku agar tabel ini cocok dengan Conditions Kas:
-      - setiap arus kas punya tepat satu baris (modal ikut, titipan DP tidak), dan
-      - kolom Saldo hanya bergerak sebesar nominal baris itu (±), tidak melompat.
+    `with_opening=True` mengembalikan `(rows, opening)` di mana `opening` adalah
+    saldo tepat SEBELUM baris pertama periode — nilainya dijamin sama dengan
+    saldo baris pertama dan dengan `cash.saldo_laci_sampai(db, start)`.
     """
     rows = []
     _seq = 0
@@ -83,22 +100,24 @@ def period_rows(db: Session, start: datetime, end: datetime):
             continue
         o = p.service_order
         kind = (p.kind or "PELUNASAN").strip().upper()
-        # PEMISAHAN DP: DP adalah TITIPAN PELANGGAN, bukan arus kas operasional.
-        # Karena itu DP TIDAK pernah jadi baris Debit/Kredit/Saldo di tabel ini —
-        # catatannya hanya di `payments` + panel "Laporan Titipan DP". Saat unitnya
-        # LUNAS, nilainya masuk lewat baris "Pelepasan Titipan DP" (sumber
-        # DP_RELEASE) supaya total masuk tabel tetap sama dengan Omzet.
-        if kind == "DP":
-            continue
+        # DP = UANG TITIPAN yang benar-benar diterima kasir, jadi tetap menjadi
+        # baris Masuk (uangnya ada di laci & wajib direkonsiliasi). Yang berbeda
+        # hanya LKALANYA: DP tidak pernah menambah Omzet/Laba — itu ditangani di
+        # `compute_finance`, bukan di sini. Pelunasan atas unit yang sama hanya
+        # sebesar SISA, jadi DP + sisa = kewajiban, tanpa dobel.
+        is_dp = kind == "DP"
         rows.append({
             "moment": m,
             "tgl": m.date().isoformat() if hasattr(m, "date") else None,
             "jenis": "Masuk",
-            "kategori": "Pelunasan",
-            "ket": "%s • %s" % ((o.device if o else None) or "-",
-                                (o.no_servis if o else None) or "-"),
+            "kategori": KATEGORI_DP if is_dp else "Pelunasan",
+            "ket": ("%s • %s" % ((o.device if o else None) or "-",
+                                 (o.no_servis if o else None) or "-")) if not is_dp
+                   else ("DP / Uang Titipan (bukan Omzet) — %s • %s"
+                         % ((o.device if o else None) or "-",
+                            (o.no_servis if o else None) or "-")),
             "nominal": _num(p.amount),
-            "source": "order",
+            "source": "dp" if is_dp else "order",
             "ref_id": p.id,
         })
 
@@ -118,15 +137,11 @@ def period_rows(db: Session, start: datetime, end: datetime):
             "ref_id": e.id,
         })
 
-    # Buku Kas (Laci) hanya memuat layer LACI — mutasi Kas Aset
-    # tidak boleh muncul sebagai arus kas Laci.
-    # Allow-list TERSENDIRI (`SUMBER_BARIS_KAS`, bukan `SUMBER_BUKU_KAS`): tabel
-    # harus menampilkan modal & pelepasan titipan DP juga, supaya Total Masuk/Keluar
-    # tabel sama dengan kartu ringkasan Conditions Kas. `PAYMENT` dan `BEBAN`
-    # tetap dikecualikan karena loop di atas sudah mengambilnya langsung.
+    # Buku Kas (Laci) hanya memuat layer LACI — mutasi Kas Aset tidak boleh
+    # muncul sebagai arus kas Laci. Cukup sisi LACI dari sepasang entri transfer,
+    # karena sisi KAS_ASET terfilter di sini: Master Kas tetap utuh, tidak dobel.
     for k in db.query(KasEntry).filter(KasEntry.kategori != SALDO_AWAL_KATEGORI,
                                       KasEntry.layer == cash.LAYER_LACI).all():
-        # v4 #9: Buku Kas hanya arus periode (bukan mutasi posisi Master Kas).
         if (getattr(k, "sumber", None) or cash.SUMBER_MANUAL) not in cash.SUMBER_BARIS_KAS:
             continue
         m = _moment(getattr(k, "created_at", None), getattr(k, "tanggal", None))
@@ -158,14 +173,19 @@ def period_rows(db: Session, start: datetime, end: datetime):
         r["_seq"] = _seq
     rows.sort(key=lambda r: (r["moment"], r["_seq"]))
     saldo = opening_balance(db)
+    opening = None
     for r in rows:
+        if opening is None and r["moment"] >= start:
+            opening = saldo
         saldo += r["nominal"] if r["jenis"] == "Masuk" else -r["nominal"]
         r["saldo"] = saldo
+    if opening is None:
+        opening = saldo          # periode tanpa baris -> opening = saldo akhir
     rows = [r for r in rows if start <= r["moment"] < end]
     for r in rows:
         del r["moment"]
         del r["_seq"]
-    return rows
+    return (rows, opening) if with_opening else rows
 
 
 def _clamp(page: int, limit: int):
@@ -277,21 +297,16 @@ def delete_entry(entry_id: int, db: Session = Depends(get_db_session),
     return {"ok": True}
 
 
-# ---------- Riwayat gabungan ----------
-@router.get("/riwayat", response_model=schemas.KasRiwayatPage)
-def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
-                limit: int = DEFAULT_LIMIT, q: str = Query(""),
-                jenis: str = Query(""), date: str = Query(""),
-                period: str = Query("all", description="all | current")):
-    """Riwayat kas gabungan (jurnal payments + expenses + jurnal manual) + saldo berjalan.
-    Read-only turunan — tanpa tabel baru, tanpa persistence."""
+# ---------- Riwayat / Mutasi Kas ----------
+def _riwayat(db, page, limit, q, jenis, date, period):
+    """Bagian (1) Ringkasan + (2) Mutasi Kas. Dipakai /riwayat dan /mutasi."""
     page, limit = _clamp(page, limit)
     period = (period or "all").strip().lower()
     if period == "current":
         p = get_active_period(db)
-        rows = period_rows(db, *batas_periode(p))
+        rows, opening = period_rows(db, *batas_periode(p), with_opening=True)
     else:
-        rows = period_rows(db, datetime.min, datetime.max)
+        rows, opening = period_rows(db, datetime.min, datetime.max, with_opening=True)
 
     if jenis.strip():
         j = jenis.strip().capitalize()
@@ -306,17 +321,76 @@ def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
     total = len(rows)
     total_pages = (total + limit - 1) // limit if total else 1
     page = min(max(DEFAULT_PAGE, page), total_pages)
-    shown = rows[::-1]
+    shown = rows[::-1]                      # terbaru di atas
     items = shown[(page - 1) * limit:page * limit]
-    # Total seluruh hasil filter — jadi footer tabel bisa dibandingkan dengan
-    # kartu "Total Masuk" / "Total Keluar" di Conditions Kas.
+    # Total SELURUH hasil filter (bukan 1 halaman) supaya bisa dibandingkan
+    # dengan kartu ringkasan dan dengan Saldo Akhir.
     tot_masuk = sum((_num(r["nominal"]) for r in rows if r["jenis"] == "Masuk"), Decimal("0"))
     tot_keluar = sum((_num(r["nominal"]) for r in rows if r["jenis"] == "Keluar"), Decimal("0"))
-    return schemas.KasRiwayatPage(total=total, page=page, limit=limit,
-                                  total_pages=total_pages,
-                                  opening=opening_balance(db),
-                                  total_masuk=tot_masuk, total_keluar=tot_keluar,
-                                  items=items)
+    # Saldo akhir = saldo baris TERAKHIR secara kronologis (bukan baris terakhir
+    # yang tampil), supaya tetap benar walau difilter.
+    saldo_akhir = rows[-1]["saldo"] if rows else opening
+    return dict(total=total, page=page, limit=limit, total_pages=total_pages,
+                opening=opening, total_masuk=tot_masuk, total_keluar=tot_keluar,
+                saldo_akhir=saldo_akhir, items=items)
+
+
+def _rekonsiliasi(db, period):
+    """Bagian (3) Rekonsiliasi Tutup Kas.
+
+    Menampilkan empat angka: Saldo Sistem (ledger saat ini), Saldo Fisik (hasil
+    hitung uang yang dideklarasikan saat Tutup Kas), Selisih, dan Penyesuaian
+    (entri yang dicatat sistem untuk menutup selisih itu).
+
+    Sumber declaration = `kas_periods.snapshot`, jadi historis periode tertutup
+    tetap terbaca tanpa mengubah atau menghapus apa pun. Saldo Fisik untuk
+    periode yang belum ditutup = None ("belum dideklarasi").
+    """
+    import json
+
+    from money import json_default
+
+    p = get_active_period(db) if period == "current" else get_active_period(db)
+    snap = None
+    if p is not None:
+        try:
+            snap = json.loads(p.snapshot) if p.snapshot else None
+        except (TypeError, ValueError):
+            snap = None
+    rec = (snap or {}).get("rekonsiliasi") or {}
+    sistem = cash.saldo_laci(db)
+    fisik = snap.get("cash_counted") if snap else None
+    selisih = rec.get("selisih")
+    return schemas.KasRekonsiliasiOut(
+        saldo_sistem=sistem,
+        saldo_fisik=(None if fisik is None else _num(fisik)),
+        selisih=(None if selisih is None else _num(selisih)),
+        penyesuaian=bool(rec.get("penyesuaian")),
+        sudah_ditutup=bool(snap),
+        periode=((snap or {}).get("period") or {}).get("start_at") or (
+            p.start_at.isoformat() if p is not None else None),
+        catatan="Saldo Fisik & Selisih muncul setelah Tutup Kas. "
+                "Penyesuaian sudah tercermin sebagai baris di Mutasi Kas "
+                "(sumber Penyesuaian Rekonsiliasi) — jangan dihitung dua kali.",
+    )
+
+
+@router.get("/riwayat", response_model=schemas.KasRiwayatPage)
+def kas_riwayat(db: Session = Depends(get_db_session), page: int = DEFAULT_PAGE,
+                limit: int = DEFAULT_LIMIT, q: str = Query(""),
+                jenis: str = Query(""), date: str = Query(""),
+                period: str = Query("all", description="all | current")):
+    """Mutasi Kas + Ringkasan Kas Laci. Read-only turunan — tanpa tabel baru."""
+    return schemas.KasRiwayatPage(
+        **_riwayat(db, page, limit, q, jenis, date, period),
+        rekonsiliasi=_rekonsiliasi(db, period))
+
+
+@router.get("/rekonsiliasi", response_model=schemas.KasRekonsiliasiOut)
+def kas_rekonsiliasi(db: Session = Depends(get_db_session),
+                     period: str = Query("current", description="all | current")):
+    """Bagian (3) Rekonsiliasi Tutup Kas (read-only)."""
+    return _rekonsiliasi(db, period)
 
 
 # ---------- Owner Cash Model v4: visibility posisi Master Kas ----------

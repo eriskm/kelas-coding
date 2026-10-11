@@ -152,7 +152,12 @@ def test_event_cash_lengkap(client, db, auth):
     import models
     import notifications as notif_mod
     o = _order(db, "PY-CASH-EVENT", 800000, modal=(300000, 100000, 20000), dp=300000)
-    _dp(db, o, 300000, kind="DP")
+    dp_row = _dp(db, o, 300000, kind="DP")
+    import cash as cash_mod
+    # DP tunai = uang nyata di laci -> harus jadi mutasi Saldo Laci (bukan Omzet).
+    # Dicatat manual di sini karena `_dp` hanya menulis baris Payment Ledger.
+    cash_mod.catat_penerimaan(db, dp_row)
+    db.commit()
     before_laci = _saldo_laci(db)
 
     r = client.put("/api/orders/%d" % o.id, headers=auth, json={"status": "CASH"})
@@ -167,20 +172,21 @@ def test_event_cash_lengkap(client, db, auth):
     assert o.lunas_at is not None
     # Laba = Omzet - Modal3 (800rb - 300rb - 100rb - 20rb = 380rb)
     assert to_decimal(o.laba_bersih) == to_decimal(380000)
-    # Saldo LACI pada event CASH = pelunasan sisa (500rb) + pelepasan DP (300rb)
-    # - Modal3 (420rb) = 380rb.
+    # Saldo LACI pada event CASH = pelunasan sisa (500rb) - Modal3 (420rb) = 80rb.
     # Keputusan Owner: Modal keluar dari kas saat CASH, bukan saat DONE.
-    # DP = TITIPAN: tidak pernah masuk ledger kas sebelum unit LUNAS; saat LUNAS
-    # nominalnya dilepas satu kali supaya total masuk kas = kewajiban penuh.
-    assert _saldo_laci(db) - before_laci == to_decimal(500000 + 300000 - 420000)
-    # Pelepasan DP tercatat tepat satu kali, dan hanya setelah LUNAS.
-    import cash as cash_mod
-    lepas = db.query(models.KasEntry).filter(
-        models.KasEntry.sumber == cash_mod.SUMBER_DP_RELEASE,
-        models.KasEntry.ref_type == "dp_release",
-        models.KasEntry.ref_id == o.id).all()
-    assert len(lepas) == 1, "Pelepasan titipan DP harus tercatat tepat satu kali"
-    assert to_decimal(lepas[0].nominal) == to_decimal(300000)
+    # DP 300rb SUDAH masuk laci sejak diterima (dicatat sebelum `before_laci`),
+    # jadi tidak dihitung lagi di sini.
+    assert _saldo_laci(db) - before_laci == to_decimal(500000 - 420000)
+    # DP punya tepat satu entri kas "Penerimaan Pembayaran" — tidak dobel.
+    dp_pay = db.query(models.Payment).filter(
+        models.Payment.service_order_id == o.id,
+        models.Payment.kind == "DP").first()
+    assert db.query(models.KasEntry).filter(
+        models.KasEntry.sumber == cash_mod.SUMBER_PAYMENT,
+        models.KasEntry.ref_type == "payment",
+        models.KasEntry.ref_id == dp_pay.id).count() == 1
+    # Dan tidak ada sumber "DP_RELEASE" lagi — DP langsung jadi baris Masuk.
+    assert not hasattr(cash_mod, "SUMBER_DP_RELEASE")
     # NOTIFIKASI Kas Masuk terbit (WA Selesai sudah di DONE)
     ev = db.query(models.Notification).filter(
         models.Notification.event == notif_mod.EVENT_KAS_MASUK,

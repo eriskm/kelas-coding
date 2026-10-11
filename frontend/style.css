@@ -2519,6 +2519,9 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .ku-summary .sm-card { padding: 8px 10px; min-width: 0; }
 .ku-summary .sm-top { font-size: 10px; gap: 5px; }
 .ku-summary .sm-num.ku-num { font-size: 14px; }
+/* Catatan kecil di bawah blok Rekonsiliasi */
+.ku-note-muted { margin-top: 8px; font-size: 10.5px; line-height: 1.5; color: #6b7280; }
+.dark .ku-note-muted { color: #9ca3af; }
 @media (max-width: 560px) { .ku-summary { grid-template-columns: 1fr; } }
 
 /* Ringkasan Kas Operasional (#kuKasSummary) — 4 kartu: Total Masuk, Total Keluar,

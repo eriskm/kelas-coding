@@ -1363,32 +1363,44 @@
                             </button>
                         </div>
 
-                        <!-- RIWAYAT TRANSAKSI: Rincian Arus Kas periode berjalan + arsip
-                             periode tertutup. Hanya dirender saat tombol di atas ditekan. -->
+                        <!-- RIWAYAT TRANSAKSI — 3 bagian:
+                             (1) Ringkasan Kas Laci, (2) Mutasi Kas,
+                             (3) Rekonsiliasi Tutup Kas. Hanya dirender saat
+                             tombol Riwayat Transaksi ditekan. -->
                         <div id="kuRiwayatView" class="hidden">
                             <div class="panel">
                                 <div class="flex items-start justify-between gap-3 flex-wrap">
                                     <div>
-                                        <h3 class="panel-title"><i class="fa-solid fa-list-ul"></i> Riwayat Transaksi &mdash; Rincian Arus Kas</h3>
-                                        <p class="ku-sub">Detail dari Kondisi Kas Operasional: satu baris = satu peristiwa kas. Titipan DP tidak ditampilkan di sini.</p>
+                                        <h3 class="panel-title"><i class="fa-solid fa-list-ul"></i> Riwayat Transaksi &mdash; Kas Laci</h3>
+                                        <p class="ku-sub">Bukti rinci setiap perpindahan uang di laci. Saldo akhir di sini sama dengan Saldo Kas (Laci) di Conditions Kas.</p>
                                     </div>
                                     <button type="button" onclick="kuShowMain()" class="receive-back-btn">
                                         <i class="fa-solid fa-arrow-left"></i> Kembali
                                     </button>
                                 </div>
 
+                                <!-- (1) RINGKASAN KAS LACI -->
+                                <section class="ku-block">
+                                    <header class="ku-block-head">
+                                        <h4 class="ku-block-title"><i class="fa-solid fa-scale-balanced"></i> Ringkasan Kas Laci</h4>
+                                        <p class="ku-block-sub">Saldo Awal + Total Masuk &minus; Total Keluar = Saldo Akhir.</p>
+                                    </header>
+                                    <div class="ku-summary" id="kuMutasiSummary"></div>
+                                </section>
+
+                                <!-- (2) MUTASI KAS -->
                                 <section class="ku-block">
                                     <header class="ku-block-head ku-riwayat-head">
                                         <div>
-                                            <h4 class="ku-block-title"><i class="fa-solid fa-list-ul"></i> Rincian Arus Kas</h4>
-                                            <p class="ku-block-sub">Periode berjalan &mdash; satu baris = satu peristiwa kas.</p>
+                                            <h4 class="ku-block-title"><i class="fa-solid fa-list-ul"></i> Mutasi Kas</h4>
+                                            <p class="ku-block-sub">Satu baris = satu peristiwa kas. DP tampil sebagai uang masuk berlabel &ldquo;Uang Titipan&rdquo; &mdash; bukan Omzet.</p>
                                         </div>
                                         <div class="tx-toolbar ku-tools">
                                             <div class="tx-search-wrap">
                                                 <i class="fa-solid fa-magnifying-glass"></i>
                                                 <input type="text" id="kuSearch" class="receive-input" placeholder="Cari keterangan, kategori..." autocomplete="off">
                                             </div>
-                                            <select id="kuJenisFilter" class="receive-input" aria-label="Filter jenis">
+                                            <select id="kuJenisFilter" class="receive-input" aria-label="Filter jenis transaksi">
                                                 <option value="">Semua</option>
                                                 <option value="Masuk">Masuk</option>
                                                 <option value="Keluar">Keluar</option>
@@ -1401,10 +1413,11 @@
                                             <thead>
                                                 <tr>
                                                     <th>Tanggal</th>
-                                                    <th>Uraian Transaksi</th>
-                                                    <th class="numeric-c cash-num">Debit</th>
-                                                    <th class="numeric-c cash-num">Kredit</th>
-                                                    <th class="numeric-r cash-num">Saldo</th>
+                                                    <th>Keterangan</th>
+                                                    <th>Jenis Transaksi</th>
+                                                    <th class="numeric-c cash-num">Masuk</th>
+                                                    <th class="numeric-c cash-num">Keluar</th>
+                                                    <th class="numeric-r cash-num">Saldo Berjalan</th>
                                                     <th class="text-center">Aksi</th>
                                                 </tr>
                                             </thead>
@@ -1413,7 +1426,7 @@
                                     </div>
                                     <div id="kuEmpty" class="hidden text-center py-10 text-sm text-gray-400">
                                         <i class="fa-solid fa-receipt text-3xl mb-2 block opacity-40"></i>
-                                        Belum ada riwayat transaksi.
+                                        Belum ada mutasi kas pada periode ini.
                                     </div>
                                     <div id="kuPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
                                         <div id="kuInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
@@ -1422,6 +1435,16 @@
 
                                     <!-- Arsip periode yang sudah ditutup (bukan transaksi periode berjalan) -->
                                     <div id="kuArsip" class="hidden space-y-3 mt-4 pt-4 border-t border-gray-100 dark:border-white/5"></div>
+                                </section>
+
+                                <!-- (3) REKONSILIASI TUTUP KAS -->
+                                <section class="ku-block">
+                                    <header class="ku-block-head">
+                                        <h4 class="ku-block-title"><i class="fa-solid fa-clipboard-check"></i> Rekonsiliasi Tutup Kas</h4>
+                                        <p class="ku-block-sub">Saldo Fisik &amp; Selisih muncul setelah Tutup Kas. Penyesuaian sudah tercermin di Mutasi Kas.</p>
+                                    </header>
+                                    <div class="ku-summary" id="kuRekonsiliasi"></div>
+                                    <div class="ku-note-muted" id="kuRekonsiliasiNote"></div>
                                 </section>
                             </div>
                         </div>

@@ -504,8 +504,23 @@ class KasRiwayatItem(BaseModel):
     ket: Optional[str] = None
     nominal: MoneyOut
     saldo: MoneyOut
-    source: str  # order | expense | manual
+    source: str  # order | dp | expense | manual
     ref_id: Optional[int] = None
+
+
+class KasRekonsiliasiOut(BaseModel):
+    """Bagian (3) Rekonsiliasi Tutup Kas.
+
+    Saldo Fisik / Selisih bernilai None selama periode belum ditutup — itu
+    berarti "belum dideklarasikan", bukan nol.
+    """
+    saldo_sistem: MoneyOut
+    saldo_fisik: Optional[MoneyOut] = None
+    selisih: Optional[MoneyOut] = None
+    penyesuaian: bool = False
+    sudah_ditutup: bool = False
+    periode: Optional[str] = None
+    catatan: str = ""
 
 
 class KasRiwayatPage(BaseModel):
@@ -513,13 +528,17 @@ class KasRiwayatPage(BaseModel):
     page: int
     limit: int
     total_pages: int
+    #: Saldo Awal Kas Laci (fisis) tepat sebelum baris pertama periode.
     opening: MoneyOut
     #: Total SELURUH baris yang lolos filter (bukan hanya halaman ini) supaya
-    #: footer tabel bisa mencocokkan angkanya dengan kartu ringkasanConditions
-    #: Kas. Tanpa ini user hanya melihat total satu halaman dan mengira rumusnya
-    #: salah saat halaman > 1.
+    #: ringkasan bisa dicocokkan dengan kartu Conditions Kas dan dengan saldo
+    #: akhir. Tanpa ini user hanya melihat total satu halaman dan mengira
+    #: rumusnya salah saat halaman > 1.
     total_masuk: MoneyOut = Decimal("0")
     total_keluar: MoneyOut = Decimal("0")
+    #: Saldo Laci setelah baris terakhir secara kronologis.
+    saldo_akhir: MoneyOut = Decimal("0")
+    rekonsiliasi: Optional[KasRekonsiliasiOut] = None
     items: List[KasRiwayatItem]
 
 

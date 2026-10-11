@@ -65,8 +65,9 @@ def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = No
 
     `berjalan` = DP yang **DITERIMA pada periode [start, end) tapi unitnya belum
     SETTLED**. DP milik unit yang sudah LUNAS TIDAK boleh ditambah lagi — saat
-    pelunasan, nilainya sudah dilepas ke Kas Laci (`cash.catat_pelepasan_dp`)
-    dan ikut tercakup di Omzet (Omzet = kewajiban = total pembayaran).
+    pelunasan, nilainya sudah tercakup di Omzet (Omzet = kewajiban = total
+    pembayaran), meski uang fisiknya tetap tercatat di Mutasi Kas sebagai baris
+    DP dan baris pelunasan.
     """
     from statusflow import payment_summary
 
@@ -96,8 +97,8 @@ def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = No
         if s["payment_status"] == "LUNAS":
             dipakai += dp_order
         else:
-            # Masih titipan murni: tercatat di `payments` + panel ini, TIDAK pernah
-            # menjadi entri kas (lihat `cash.catat_penerimaan`).
+            # Masih titipan: uangnya ada di Laci & TERWAKILI di ledger kas, tapi
+            # belum jadi Omzet (unit belum LUNAS). Dilacak di panel ini.
             berjalan += dp_periode
 
     dikembalikan = ZERO
@@ -361,9 +362,11 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     total_keluar = total_modal + total_beban + kas_keluar
     saldo = opening + total_masuk - total_keluar
 
-    # Titipan DP dihitung lebih dulu: dipakai untuk panel Titipan DP. Saldo Laci
-    # sendiri SUDAH bebas dari DP (DP tidak pernah jadi entri kas), jadi tidak
-    # ada lagi pengurangan titipan dari angka posisi kas.
+    # Titipan DP dihitung lebih dulu: dipakai untuk panel Titipan DP dan untuk
+    #Turunan Kas Awal versi OPERASIONAL (Saldo Laci dikurangi titipan berjalan).
+    # DP sendiri TETAP ada di ledger kas (uangnya nyata di laci) — yang dipisah
+    # hanya tampilannya, supaya kartu akrual bersih sementara Mutasi Kas & rekonsiliasi
+    # fisik tetap jujur.
     _titipan = ringkasan_titipan_dp(db, start, end)
     _kas_awal = cash.saldo_laci_sampai(db, start)
 
@@ -396,12 +399,14 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         "total_keluar": total_keluar,
         "saldo": saldo,
         # Owner Cash Model v4: posisi aset kas (terpisah dari Buku Kas).
+        # `kas_aset_awal` = saldo Laci FISIK pada awal periode (dipakai baris
+        # "Kas Aset Awal" di Mutasi Kas dan pembanding rekonsiliasi).
         "kas_aset_awal": _kas_awal,
-        # Saldo Laci untuk TAMPILAN Arus Kas OPERASIONAL.
-        #.dp_ TIDAK lagi dikurangi di sini: sejak aturan "DP = titipan", DP tidak
-        # pernah masuk `kas_entries`, jadi `saldo_laci` sudah bersih dari DP dan
-        # pengurangan kedua hanya akan membuat angka meleset sebesar saldo titipan.
-        "kas_aset_awal_operasional": _kas_awal,
+        # Versi AKRUAL untuk Conditions Kas: uang DP adalah kewajiban pelanggan,
+        # bukan kas toko, jadi dikurangi agar baris "Kas Kecil/Laci" sejajar dengan
+        # Omzet/Modal/Beban (yang semuanya sudah bebas dari DP).
+        "kas_aset_awal_operasional": max(
+            ZERO, _kas_awal - _titipan["saldo"]),
         "saldo_laci": cash.saldo_laci(db),
         "label_laci": cash.LABEL[cash.LAYER_LACI],
         # SSOT-7 / v4 #11: posisi Kas BESAR hanya untuk Admin & Pengelola.
