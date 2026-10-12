@@ -396,6 +396,28 @@ function akFiltered() {
     });
 }
 
+// Ringkasan hak akses tiap role, ditampilkan di bawah dropdown Role.
+// Disumber dari BACKEND (AUTHORITY_MATRIX) lewat /auth/roles supaya tidak ada
+// dua daftar hak akses yang bisa berbeda sendiri di frontend.
+let _akRoleHints = null;
+async function muatRoleHints() {
+    try {
+        const d = await apiGet('/auth/roles');
+        _akRoleHints = d && d.ringkasan;
+    } catch (_) { _akRoleHints = null; }
+    tampilkanRoleHint();
+}
+function tampilkanRoleHint() {
+    const el = document.getElementById('akRoleHint');
+    const sel = document.getElementById('akRole');
+    if (!el || !sel) return;
+    const v = String(sel.value || '').trim();
+    const info = _akRoleHints && _akRoleHints[v];
+    if (!info) { el.textContent = ''; return; }
+    el.innerHTML = '<b>' + escapeHtml(v) + '</b> &mdash; ' + escapeHtml(info.ringkas)
+        + (info.monitoring ? ' <span class="text-gray-400">(hanya lihat, tidak bisa mengubah data)</span>' : '');
+}
+
 function initAkToolbar() {
     const s = document.getElementById('akSearch');
     const r = document.getElementById('akRoleFilter');
@@ -421,6 +443,12 @@ function initAkToolbar() {
 async function renderAkun() {
     initAkToolbar();
     initAkunForm();
+    muatRoleHints();
+    const selRole = document.getElementById('akRole');
+    if (selRole && !selRole.dataset.bound) {
+        selRole.dataset.bound = '1';
+        selRole.addEventListener('change', tampilkanRoleHint);
+    }
     const my = ++_akReq;
     const body = document.getElementById('akBody');
     if (!body) return;
@@ -476,6 +504,7 @@ function akEdit(id) {
     document.getElementById('akPassword').placeholder = 'Kosongkan bila tidak diganti';
     document.getElementById('akRole').value = a.role || 'Teknisi';
     document.getElementById('akStatus').value = a.status || 'Aktif';
+    tampilkanRoleHint();
     openFormAkun();
 }
 
@@ -820,6 +849,11 @@ const BSSF_CAPS = {
         'SPAREPART_WRITE', 'CLAIM_WRITE'],
     teknisi: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'SPAREPART_WRITE', 'CLAIM_WRITE'],
     pengelola: [], // Q13: read-oriented (monitoring)
+    investor: [],  // read-oriented; TIDAK boleh melihat Kas Aset/Master Kas (SSOT-7)
+    // Role tidak dikenal / kosong = tanpa hak apa pun. Sengaja TIDAK fallback ke
+    // admin: kalau ada typo di kolom Role, akun itu harus terlihat "nyaris
+    // tidak bisa apa-apa", bukan diam-diam dapat akses penuh di tampilan.
+    custom: [],
 };
 function bssfCaps() {
     try { return (window._bssfCaps || BSSF_CAPS.admin); } catch (_) { return BSSF_CAPS.admin; }
@@ -842,8 +876,11 @@ function canViewAset() {
 function setRoleCapabilities(role) {
     const key = String(role || '').trim().toUpperCase();
     const map = { SUPERADMIN: 'admin', ADMIN: 'admin', KASIR: 'kasir', TEKNISI: 'teknisi',
-                  PENGELOLA: 'pengelola', PEMILIK: 'pengelola', INVESTOR: 'pengelola' };
-    const k = map[key] || 'admin';
+                  PENGELOLA: 'pengelola', PEMILIK: 'pengelola', INVESTOR: 'investor' };
+    // Fail-CLOSED. Sebelumnya `map[key] || 'admin'`, jadi role yang salah ketik
+    // atau kosong otomatis dapat hak admin di tampilan. Backend tetap menolak,
+    // tapi tampilannya menyesatkan -- dan `canViewAset()` ikut jadi true.
+    const k = map[key] || 'custom';
     try { window._bssfCaps = BSSF_CAPS[k]; window._bssfRoleKey = k; } catch (_) {}
     applyRoleUI(document);
 }

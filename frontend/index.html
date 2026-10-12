@@ -1596,6 +1596,9 @@
                                 <select id="akRoleFilter" class="receive-input sm:w-48">
                                     <option value="">Semua Role</option>
                                     <option value="Admin">Admin</option>
+                                    <option value="Kasir">Kasir</option>
+                                    <option value="Pengelola">Pengelola</option>
+                                    <option value="Investor">Investor</option>
                                     <option value="Teknisi">Teknisi</option>
                                 </select>
                                 <select id="akStatusFilter" class="receive-input sm:w-48">
@@ -1718,8 +1721,12 @@
                                             <label class="field-label" for="akRole">Role</label>
                                             <select class="receive-input" id="akRole">
                                                 <option value="Admin">Admin</option>
+                                                <option value="Kasir">Kasir</option>
+                                                <option value="Pengelola">Pengelola</option>
+                                                <option value="Investor">Investor</option>
                                                 <option value="Teknisi" selected>Teknisi</option>
                                             </select>
+                                            <p class="text-[10.5px] text-gray-500 dark:text-gray-400 mt-1 leading-snug" id="akRoleHint"></p>
                                         </div>
                                         <div class="field">
                                             <label class="field-label" for="akStatus">Status</label>

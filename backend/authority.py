@@ -1,4 +1,4 @@
-"""Authority matrix — Owner Decision Q12 & Q13.
+﻿"""Authority matrix — Owner Decision Q12 & Q13.
 
 ADAPT dari authority Project A ke architecture Project B (dependency-based).
 BUKAN permission string seperti Project A (Q12: "jangan copy permission string").
@@ -25,6 +25,7 @@ ROLE_ADMIN = "ADMIN"
 ROLE_KASIR = "KASIR"
 ROLE_TEKNISI = "TEKNISI"
 ROLE_PENGELOLA = "PENGELOLA"
+ROLE_INVESTOR = "INVESTOR"
 ROLE_CUSTOM = "CUSTOM"
 
 # Alias: Project B menyimpan role free-text, jadi dinormalisasi di satu tempat.
@@ -36,12 +37,18 @@ ROLE_ALIASES = {
     "TEKNIKER": ROLE_TEKNISI,
     "PENGELOLA": ROLE_PENGELOLA,
     "PEMILIK": ROLE_PENGELOLA,
-    "INVESTOR": ROLE_PENGELOLA,
+    # INVESTOR dulunya dipetakan ke PENGELOLA. Itu berarti akun "Investor"
+    # otomatis ikut boleh melihat Kas Aset + Master Kas -- sama dengan pengelola
+    # toko. Owner meminta keduanya dipisah, jadi sekarang jadi role sendiri.
+    "INVESTOR": ROLE_INVESTOR,
     "CUSTOM": ROLE_CUSTOM,
 }
 
 # Role yang hanya boleh melihat/monitoring (Q13).
-MONITORING_ROLES = frozenset({ROLE_PENGELOLA})
+# INVESTOR masuk sini: read-oriented seperti PENGELOLA, tapi TIDAK termasuk
+# role yang boleh melihat posisi Kas BESAR (lihat `_lihat_aset` di router
+# dashboard) -- itu masih khusus Admin & Pengelola sesuai SSOT-7 / v4 #11.
+MONITORING_ROLES = frozenset({ROLE_PENGELOLA, ROLE_INVESTOR})
 
 # Status "closing" di Project B. Warranty/claim/refund berada di domain terpisah (P2-09/P2-10).
 # P2-15 / Owner Cash Model: CASH ikut menjadi status closing (event realisasi transaksi
@@ -109,6 +116,10 @@ AUTHORITY_MATRIX = {
     # akun
     Action.USER_MANAGE: {ROLE_ADMIN},
 }
+
+# INVESTOR sengaja TIDAK muncul di satu pun set di atas: dia read-only
+# (monitoring). Kalau suatu saat perlu hak menulis, harus diputuskan eksplisit
+# -- bukan dengan diam-diam menambahkannya ke sini.
 
 DEFAULT_MESSAGES = {
     Action.ORDER_CREATE: "Hanya Admin/Kasir/Teknisi yang boleh menerima unit.",

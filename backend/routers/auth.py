@@ -186,6 +186,37 @@ def require_admin(user: User = Depends(get_authenticated_user)) -> User:
     return user
 
 
+@router.get("/roles")
+def list_roles(user: User = Depends(require_admin)):
+    """Daftar role + hak aksesnya, untuk form Kelola Akun.
+
+    Disumber dari `AUTHORITY_MATRIX` yang sama dengan penjaga di setiap endpoint.
+    Kalau daftar hak akses ini dibuat terpisah di frontend, keduanya bisa berbeda
+    sendiri -- lalu user melihat tombol yang jelas-jelas tidak akan pernah bekerja.
+    """
+    import authority as auth_mod
+    Label = {
+        auth_mod.ROLE_ADMIN: ("Admin", "Akses penuh: termasuk Tutup Kas, catat beban, hapus order, Kelola Akun."),
+        auth_mod.ROLE_KASIR: ("Kasir", "Terima unit, ubah harga/modal, catat pembayaran, ubah status CASH/CANCEL, refund DP, sparepart, klaim garansi."),
+        auth_mod.ROLE_TEKNISI: ("Teknisi", "Terima & kerjakan unit, catat serah-terima. Tidak boleh mengubah harga, modal, atau status CASH."),
+        auth_mod.ROLE_PENGELOLA: ("Pengelola", "Hanya lihat laporan. Boleh melihat Kas Aset & Master Kas."),
+        auth_mod.ROLE_INVESTOR: ("Investor", "Hanya lihat laporan keuangan. Tidak melihat Kas Aset/Master Kas."),
+    }
+    ringkasan = {}
+    for role, (nama, ket) in Label.items():
+        # `Action` adalah kelas konstanta biasa (bukan Enum), jadi kuncinya str.
+        boleh = sorted(str(a) for a, roles in auth_mod.AUTHORITY_MATRIX.items()
+                       if role in roles)
+        ringkasan[nama] = {"canonical": role, "ringkas": ket,
+                           "monitoring": role in auth_mod.MONITORING_ROLES,
+                           "otoritas": boleh}
+    return {"ringkasan": ringkasan,
+            "roles": sorted(ringkasan.keys()),
+            "catatan": "Hak akses mengikuti AUTHORITY_MATRIX; daftar ini bukan sumber "
+                       "kebenaran, endpoint tetap menjaga sendiri."}
+
+
+
 # ---------- Aturan keuangan (alur kas konsep) ----------
 # Istilah & UI tetap konsep baru; yang dijaga di sini hanya alur uang:
 # peran kasir/teknis vs admin sesuai konsep (Kasir ≈ Admin untuk closing).
