@@ -213,9 +213,12 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
         _dist_total = to_decimal((snapshot.get("distribusi") or {}).get("alokasi", {}).get("total", 0))
     except Exception:  # noqa: BLE001
         _dist_total = ZERO
+    # Kunci WAJIB "omset" (bukan "omzet"): `notifications.format_pesan` membacanya
+    # dengan nama itu. Dulu ditulis "omzet" sehingga Omzet di laporan Tutup Kas
+    # selalu keluar Rp 0 padahal snapshot-nya benar.
     notif_mod.kirim(db, notif_mod.EVENT_LAPORAN_TUTUP_KAS, ref_type="periode",
                     ref_code=periode_key,
-                    data={"periode": periode_key, "omzet": fin.get("omset"),
+                    data={"periode": periode_key, "omset": fin.get("omset"),
                           "total_beban": fin.get("total_beban"),
                           "laba_bersih": fin.get("laba_bersih"),
                           "distribusi": _dist_total,
