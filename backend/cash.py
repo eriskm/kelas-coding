@@ -400,7 +400,7 @@ def catat_cash_out(db: Session, nominal, keterangan: str, ref_type=None, ref_id=
 # ---------------------------------------------------------------- 5) TRANSFER (v4 #5)
 def transfer(db: Session, nominal, dari: str, ke: str, keterangan: str,
              actor: str = None, ref_type=None, ref_id=None, check_saldo: bool = True,
-             sumber: str = None):
+             sumber: str = None, idempoten: bool = True):
     """Transfer fisik Laci <-> Aset: Laci ∓, Aset ±, MASTER KAS TETAP (v4 #5).
 
     Bukan omzet/beban/laba/distribusi baru — karena itu `sumber` kedua baris
@@ -422,7 +422,13 @@ def transfer(db: Session, nominal, dari: str, ke: str, keterangan: str,
     src = sumber or SUMBER_TRANSFER
     kat = KATEGORI.get(src, KATEGORI[SUMBER_TRANSFER])
     ref = ref_id
-    if ref_type and ref_id is not None and mutasi_tersimpan(db, a, src, ref_type, ref):
+    # Guard idempoten dicocokkan pada (layer, sumber, ref_type, ref_id). Itu benar
+    # untuk satu transfer, tapimenOLAK top-up Distribusi: transfer Hak Kas Aset
+    # kedua untuk Distribution yang sama punya ref_id yang sama persis, sehingga
+    # porsinya tidak pernah berpindah ke Saldo Aset. `idempoten=False` dipakai
+    # hanya untuk top-up, yang memang_transfer kedua yang disengaja.
+    if (idempoten and ref_type and ref_id is not None
+            and mutasi_tersimpan(db, a, src, ref_type, ref)):
         return {"created": False, "dari": a, "ke": b, "nominal": n,
                 "master_sebelum": master_kas(db)}
 

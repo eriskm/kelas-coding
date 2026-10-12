@@ -186,6 +186,34 @@ def models_payment(s, order_id, kind, amount, saat):
     return p
 
 
+def _id_entri_tertinggi(db):
+    """Id entri kas terakhir -- penanda 'mulai dari sini' saat menghitung delta."""
+    import cash
+    M = cash._entry_model()
+    return db.query(M.id).order_by(M.id.desc()).first()[0] or 0
+
+
+def _pengaruh_distribusi_laci(db, id_entri_awal):
+    """_total uang Laci yang keluar karena distribusi sejak `id_entri_awal`.
+
+    Top-up Distribusi membuat_order_ yang menambah laba bisa MEMGERAKKAN uang
+    distribusi dari periode yang Distribution-nya sudah formed. Jadi assertion
+    "delta Laci == masuk - keluar unit ini" harus memperhitungkan itu; kalau
+    tidak, test ini mengukur efek samping fitur, bukan perilaku unit.
+    """
+    import cash
+    M = cash._entry_model()
+    total = ZERO
+    for k in db.query(M).filter(
+            M.id > id_entri_awal,
+            M.sumber.in_([cash.SUMBER_CASH_OUT, cash.SUMBER_DISTRIBUSI_ASET])).all():
+        if (k.layer or "") != cash.LAYER_LACI:
+            continue
+        if (k.jenis or "").lower() == "keluar":
+            total += to_decimal(k.nominal)
+    return total
+
+
 # ─────────── 1. DP tunai: kas naik, omzet/laba tidak ───────────
 def test_1_dp_tunai_meningkatkan_kas_tanpa_omzet(client, db):
     """DP 250rb harus jadi uang masuk di Mutasi Kas, TAPI Omzet tetap 0."""
@@ -246,12 +274,16 @@ def test_2_pelunasan_setelah_dp_tidak_menggandakan(client, db):
                modal=(200000, 100000, 0))
 
     laci_awal = _saldo_laci(db)
+    id_entri_awal = _id_entri_tertinggi(db)
     r = _cp(client, db, "post", "/api/payments", headers=adm,
             json={"service_order_id": o.id, "kind": "DP",
                   "amount": 200000, "method": "CASH"})
     assert r.status_code in (200, 201), r.text
     db.expire_all()
-    assert _saldo_laci(db) - laci_awal == to_decimal(200000)
+    # DP masuk penuh; kalau ada distribusi ikut terbentuk, pengaruhnya
+    # ditambahkan ke sisi ekspektasi (lihat _pengaruh_distribusi_laci).
+    assert (_saldo_laci(db) - laci_awal
+            == to_decimal(200000) - _pengaruh_distribusi_laci(db, id_entri_awal))
 
     rc = _cp(client, db, "put", "/api/orders/%d" % o.id, headers=adm,
              json={"status": "CASH"})
@@ -265,7 +297,10 @@ def test_2_pelunasan_setelah_dp_tidak_menggandakan(client, db):
     assert masuk == to_decimal(kewajiban(o)), \
         "Uang masuk unit = DP 200rb + pelunasan sisa 300rb = 500rb"
     assert keluar == to_decimal(300000), "Modal keluar 300rb saat CASH"
-    assert _saldo_laci(db) - laci_awal == masuk - keluar
+    # DELTA BERSIH unit ini tetap masuk - keluar._distribusi (kalau terjadi)
+    # dikurangi supaya tidak ikut terhitung sebagai milik unit ini.
+    assert (_saldo_laci(db) - laci_awal
+            == masuk - keluar - _pengaruh_distribusi_laci(db, id_entri_awal))
 
     # Baris pelunasan hanya SEKALI meski event CASH diulang.
     pelunasan = db.query(models.Payment).filter(
@@ -279,7 +314,8 @@ def test_2_pelunasan_setelah_dp_tidak_menggandakan(client, db):
     db.expire_all()
     assert _n_entry(db, cash.SUMBER_PAYMENT, "payment", pelunasan.id) == n_pay, \
         "Replay CASH tidak boleh menambah baris pelunasan"
-    assert _saldo_laci(db) - laci_awal == masuk - keluar, \
+    assert (_saldo_laci(db) - laci_awal
+            == masuk - keluar - _pengaruh_distribusi_laci(db, id_entri_awal)), \
         "Replay tidak boleh mengubah saldo lagi"
 
 
@@ -316,6 +352,7 @@ def test_3_modal_dan_beban_kurangi_kas_satu_kali(client, db):
     adm = _token(db, "pytest_admin", "ADMIN")
     laci_awal = _saldo_laci(db)
     n_modal_awal = _n_entry(db, cash.SUMBER_MODAL)
+    id_entri_awal = _id_entri_tertinggi(db)
 
     o = _order(db, "PY-S3-MODAL", "DONE", harga=800000,
                modal=(300000, 100000, 20000))
@@ -325,9 +362,11 @@ def test_3_modal_dan_beban_kurangi_kas_satu_kali(client, db):
     db.expire_all()
 
     # CASH juga menulis pelunasan sebesar sisa (kewajiban penuh, tanpa DP),
-    # jadi delta kas = masuk kewajiban - modal.
+    # jadi delta kas = masuk kewajiban - modal. Pengaruh distribusi (kalau
+    # terpicu) dikurangi agar assertion tetap mengukur unit ini saja.
+    dist = _pengaruh_distribusi_laci(db, id_entri_awal)
     delta = _saldo_laci(db) - laci_awal
-    assert delta == to_decimal(800000) - to_decimal(420000), \
+    assert delta == to_decimal(800000) - to_decimal(420000) - dist, \
         "Kas masuk pelunasan 800rb, keluar modal 420rb"
 
     assert _n_entry(db, cash.SUMBER_MODAL) - n_modal_awal == 3, \
@@ -338,7 +377,8 @@ def test_3_modal_dan_beban_kurangi_kas_satu_kali(client, db):
         json={"status": "CASH", "status_note": "replay"})
     db.expire_all()
     assert _n_entry(db, cash.SUMBER_MODAL) - n_modal_awal == 3
-    assert _saldo_laci(db) - laci_awal == delta
+    assert (_saldo_laci(db) - laci_awal
+            == delta - (_pengaruh_distribusi_laci(db, id_entri_awal) - dist))
 
     # Beban: 1 entri per baris expense, panggilan kedua idempoten.
     e = models.Expense(kategori="Gaji", uraian="S3 gaji",
@@ -747,6 +787,7 @@ def test_12_modal_nol_tidak_menguras_kas(client, db):
     import cash as cash_mod
     laci_awal = _saldo_laci(db)
     n_modal_awal = _n_entry(db, cash_mod.SUMBER_MODAL)
+    id_entri_awal = _id_entri_tertinggi(db)
 
     adm = _token(db, "pytest_admin", "ADMIN")
     o = _order(db, "PY-S12-MODAL0", "DONE", harga=400000,
@@ -760,7 +801,9 @@ def test_12_modal_nol_tidak_menguras_kas(client, db):
     assert _n_entry(db, cash_mod.SUMBER_MODAL) - n_modal_awal == 1, \
         "Modal Part 0 tidak boleh membuat entri kas"
     # Dan kas hanya keluar sebesar modal yang benar-benar ada.
-    assert _saldo_laci(db) - laci_awal == to_decimal(400000) - to_decimal(150000)
+    assert (_saldo_laci(db) - laci_awal
+            == to_decimal(400000) - to_decimal(150000)
+            - _pengaruh_distribusi_laci(db, id_entri_awal))
 
 
 # ─────────── 10. Tidak ada regresi di modul lain ───────────

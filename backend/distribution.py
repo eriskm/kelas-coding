@@ -221,53 +221,134 @@ def terapkan(db: Session, periode: str, laba_bersih, kas_period_id=None,
             "periode": label_periode(row.periode), "periode_key": row.periode}
 
 
-def catat_cash_out(db: Session, row, oleh: str = None) -> dict:
-    """70% distribusi KELUAR dari Saldo Laci (permanen). Idempoten per Distribution."""
+def catat_cash_out(db: Session, row, oleh: str = None,
+                   incremental: bool = False, nominal: Decimal = None) -> dict:
+    """70% distribusi KELUAR dari Saldo Laci (permanen). Idempoten per Distribution.
+
+    `incremental=True` dipakai untuk TOP-UP: Distribution yang sama menambah
+    alokasi baru, jadi cash-out-nya bertambah. Entri yang dikembalikan adalah
+    ENTRI KEDUA (punya nilainya sendiri), bukan mengulang entri pertama — dan
+    `cash_out_entry_id` sengaja tidak ditimpa supaya tetap menunjuk bukti asli.
+    """
     if row is None:
         return {"created": False, "nominal": ZERO, "entry_id": None}
-    if row.cash_out_entry_id:
-        from models import KasEntry
-        e = db.query(KasEntry).filter(
-            KasEntry.id == row.cash_out_entry_id).first()
-        return {"created": False,
-                "nominal": quantize(to_decimal(getattr(e, "nominal", 0))),
-                "entry_id": row.cash_out_entry_id}
-    nominal = quantize(to_decimal(row.cash_out))
+    if incremental:
+        nominal = quantize(to_decimal(nominal))
+    else:
+        if row.cash_out_entry_id:
+            from models import KasEntry
+            e = db.query(KasEntry).filter(
+                KasEntry.id == row.cash_out_entry_id).first()
+            return {"created": False,
+                    "nominal": quantize(to_decimal(getattr(e, "nominal", 0))),
+                    "entry_id": row.cash_out_entry_id}
+        nominal = quantize(to_decimal(row.cash_out))
     if nominal <= ZERO:
         return {"created": False, "nominal": ZERO, "entry_id": None}
-    mut = cash.catat_cash_out(db, nominal, "Bagi hasil periode %s" % row.periode,
+    ket = "Bagi hasil periode %s" % row.periode
+    if incremental:
+        ket += " (top-up laba baru)"
+    mut = cash.catat_cash_out(db, nominal, ket,
                               ref_type="distribusi", ref_id=row.id, actor=oleh,
                               check_saldo=False)
-    row.cash_out_entry_id = mut["id"]
+    if not incremental:
+        row.cash_out_entry_id = mut["id"]
     db.flush()
     return {"created": True, "nominal": mut["nominal"], "entry_id": mut["id"]}
 
 
-def catat_hak_kas_aset(db: Session, row, oleh: str = None) -> dict:
+def catat_hak_kas_aset(db: Session, row, oleh: str = None,
+                       incremental: bool = False, nominal: Decimal = None) -> dict:
     """30% Hak Kas Aset: KELUAR dari Laci lalu MASUK ke Saldo Aset.
 
-    Dipakai `cash.transfer` supaya dua sisinya dijamin berpasangan (Laci ∓,
-    Aset ±) dan Master Kas tidak berubah — hanya lokasi uang yang pindah.
+    Dipakai `cash.transfer` supaya dua sisinya dijamin berpasangan (Laci -,
+    Aset +) dan Master Kas tidak berubah — hanya lokasi uang yang pindah.
+
+    `incremental=True` = top-up: transfer kedua sebesar porsi baru, tanpa
+    menimpa `laci_adjust_entry_id` (tetap menunjuk transfer pertama).
     """
     if row is None:
         return {"created": False, "nominal": ZERO, "masuk_id": None}
-    if row.laci_adjust_entry_id:
-        return {"created": False,
-                "nominal": quantize(to_decimal(row.hak_kas_aset)),
-                "masuk_id": row.laci_adjust_entry_id}
-    nominal = quantize(to_decimal(row.hak_kas_aset))
+    if not incremental:
+        if row.laci_adjust_entry_id:
+            return {"created": False,
+                    "nominal": quantize(to_decimal(row.hak_kas_aset)),
+                    "masuk_id": row.laci_adjust_entry_id}
+        nominal = quantize(to_decimal(row.hak_kas_aset))
+    else:
+        nominal = quantize(to_decimal(nominal))
     if nominal <= ZERO:
         return {"created": False, "nominal": ZERO, "masuk_id": None}
+    ket = "Setoran Hak Kas Aset periode %s" % row.periode
+    if incremental:
+        ket += " (top-up laba baru)"
     res = cash.transfer(
-        db, nominal, cash.LAYER_LACI, cash.LAYER_ASET,
-        "Setoran Hak Kas Aset periode %s" % row.periode,
+        db, nominal, cash.LAYER_LACI, cash.LAYER_ASET, ket,
         actor=oleh, ref_type="distribusi", ref_id=row.id, check_saldo=False,
-        sumber=cash.SUMBER_DISTRIBUSI_ASET)
+        sumber=cash.SUMBER_DISTRIBUSI_ASET, idempoten=not incremental)
     masuk_id = res.get("masuk_id") or res.get("entry_id")
-    row.laci_adjust_entry_id = masuk_id
+    if not incremental:
+        row.laci_adjust_entry_id = masuk_id
     db.flush()
     return {"created": bool(res.get("created", True)), "nominal": nominal,
             "masuk_id": masuk_id, "keluar_id": res.get("keluar_id")}
+
+
+def topup(db: Session, row, selisih, oleh: str = None) -> dict:
+    """Tambahi Distribution yang SUDAH ada dengan laba baru (CTO masih tercapai).
+
+    Dipanggil dari `pastikan_otomatis` ketika ada transaksi baru setelah
+    distribusi pertama. distribution.py hanya menyimpan SATU baris per periode
+    kas, jadi top-up menaikkan akumulator baris itu (laba, tiap porsi, cash-out)
+    dan mencatat entri kas baru sebesar selisihnya saja.
+
+    Aturan:
+      - hanya bila CTO masih tercapai dan Laba Bersih > 0;
+      - TIDAK pernah mengurangi: kalau laba turun (koreksi modal/beban),
+        distribution lama dibiarkan utuh dan top-up dilewati;
+      -.all-or-nothing: Saldo Laci harus cukup untuk SELURUH porsi. Kalau kurang,
+        distributions ditunda sampai uangnya cukup, tidak keluar sebagian, supaya
+        tidak ada posisi uang menggantung.
+    """
+    from models import Distribution  # noqa: F401  (dipakai agar model ter-load)
+    selisih = quantize(to_decimal(selisih))
+    if selisih <= ZERO:
+        return {"created": False, "alasan": ALASAN_LABA_NOL}
+    hit = hitung(selisih)
+    if not hit["eligible"]:
+        return {"created": False, "alasan": hit.get("alasan") or ALASAN_LABA_NOL}
+    total = quantize(hit["cash_out"] + hit["kas_aset"])
+    saldo = cash.saldo_laci(db)
+    if saldo < total:
+        return {"created": False,
+                "alasan": "%s (butuh %s, ada %s)" % (ALASAN_KAS_KURANG, total, saldo)}
+    row.laba_bersih = quantize(to_decimal(row.laba_bersih) + hit["laba_bersih"])
+    row.bonus_karyawan = quantize(to_decimal(row.bonus_karyawan) + hit["karyawan"])
+    row.pengelola = quantize(to_decimal(row.pengelola) + hit["pengelola"])
+    row.investor = quantize(to_decimal(row.investor) + hit["investor"])
+    row.hak_kas_aset = quantize(to_decimal(row.hak_kas_aset) + hit["kas_aset"])
+    row.cash_out = quantize(to_decimal(row.cash_out) + hit["cash_out"])
+    db.flush()
+    catat_cash_out(db, row, oleh=oleh, incremental=True, nominal=hit["cash_out"])
+    catat_hak_kas_aset(db, row, oleh=oleh, incremental=True, nominal=hit["kas_aset"])
+    journal.record(
+        db, journal.DOMAIN_FINANCE, EVENT_DISTRIBUSI,
+        entity_type="distribution", entity_id=row.id,
+        amount=hit["laba_bersih"], actor=oleh,
+        ref_type="periode", ref_code=row.periode,
+        details={"laba_bersih": str(hit["laba_bersih"]),
+                 "karyawan": str(hit["karyawan"]), "pengelola": str(hit["pengelola"]),
+                 "investor": str(hit["investor"]), "kas_aset": str(hit["kas_aset"]),
+                 "cash_out": str(hit["cash_out"]),
+                 "rasio": ["10%", "30%", "30%", "30%"],
+                 "trigger": "CTO tercapai (top-up laba baru)",
+                 "hak_kas_aset": "dipindahkan Laci -> Saldo Aset",
+                 "master_kas_setelah": str(cash.master_kas(db))})
+    db.flush()
+    db.refresh(row)
+    return {"created": True, "distribution": row, "alokasi": hit,
+            "cash_out": hit["cash_out"], "kas_aset": hit["kas_aset"],
+            "alasan": None, "trigger": "CTO tercapai (top-up laba baru)"}
 
 
 def pastikan_otomatis(db: Session, periode: str, laba_bersih, cto_tercapai,
@@ -283,18 +364,40 @@ def pastikan_otomatis(db: Session, periode: str, laba_bersih, cto_tercapai,
 
     Idempoten lewat (4): dipanggil lagi pada periode yang sama tidak menggerakkan
     uang dua kali.
+
+    TOP-UP (keputusan Owner): kalau Distribution sudah ada lalu ada transaksi baru
+    yang menaikkan Laba Bersih, selisihnya langsung dialokasikan dengan rasio yang
+    sama supaya Distribution tidak "beku" di angka pertama. Yang dijaga:
+      - hanya bila CTO MASIH tercapai;
+      - laba yang turun tidak dikurangi, top-up dilewati;
+      - all-or-nothing; Laci kurang -> ditunda, bukan keluar sebagian;
+      - tanpa laba baru -> tidak terjadi apa-apa (idempoten).
     """
     res = {"dibentuk": False, "alasan": None, "alokasi": hitung(laba_bersih),
            "distribution": None, "cash_out": ZERO, "hak_kas_aset": ZERO}
-    # (1) Sudah pernah terbentuk? -> einde, tidak ada yang perlu dicek lagi.
+    # (1) Sudah pernah terbentuk? -> TOP-UP kalau ada laba baru, else nothing.
     # Dicek PALING AWAL supaya alasannya akurat ("sudah terbentuk"), bukan
     # salah dilaporkan sebagai "kas kurang" padahal saldonya memang sudah habis
     # karena distribusi tadi.
     existing = sudah_ada(db, periode, kas_period_id)
     if existing is not None:
-        res["alasan"] = "Sudah pernah terbentuk di periode ini"
-        res["alokasi"] = alokasi_dari(existing)
         res["distribution"] = existing
+        selisih = quantize(to_decimal(laba_bersih) - to_decimal(existing.laba_bersih))
+        if cto_tercapai and selisih > ZERO:
+            top = topup(db, existing, selisih, oleh=oleh)
+            if top.get("created"):
+                res.update({"dibentuk": True, "topup": True,
+                            "alasan": None,
+                            "alokasi_topup": top["alokasi"],
+                            "alokasi": alokasi_dari(existing),
+                            "cash_out": to_decimal(existing.cash_out),
+                            "hak_kas_aset": to_decimal(existing.hak_kas_aset),
+                            "trigger": top["trigger"]})
+                return res
+            res["alasan"] = top.get("alasan") or ALASAN_LABA_NOL
+        else:
+            res["alasan"] = "Sudah pernah terbentuk di periode ini"
+        res["alokasi"] = alokasi_dari(existing)
         res["cash_out"] = to_decimal(existing.cash_out)
         res["hak_kas_aset"] = to_decimal(existing.hak_kas_aset)
         return res
