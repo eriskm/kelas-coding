@@ -1757,6 +1757,34 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 
 .ku-back-btn { margin-bottom: 12px; }
 
+/* ── Blok 4 Riwayat: Arsip Tutup Kas ── */
+.ku-arsip-row {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 10px;
+    padding: 10px 12px; border-radius: 10px;
+    background: #f8fafc; border: 1px solid #eef2f6;
+}
+.dark .ku-arsip-row { background: rgba(255,255,255,0.03); border-color: rgba(255,255,255,0.06); }
+.ku-arsip-main { min-width: 0; }
+.ku-arsip-title {
+    display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+    font-size: 12.5px; font-weight: 700; color: #334155;
+}
+.dark .ku-arsip-title { color: #e2e8f0; }
+.ku-arsip-meta { margin-top: 3px; font-size: 11px; color: #94a3b8; }
+.ku-arsip-nums { display: flex; gap: 14px; flex-wrap: wrap; font-size: 11.5px; color: #64748b; }
+.dark .ku-arsip-nums { color: #94a3b8; }
+.ku-arsip-nums b { color: #0f172a; font-weight: 700; }
+.dark .ku-arsip-nums b { color: #e2e8f0; }
+
+.ku-arsip-chip {
+    display: inline-block; padding: 1px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    background: #e2e8f0; color: #475569;
+}
+.ku-arsip-chip.is-ok { background: #dcfce7; color: #166534; }
+.ku-arsip-chip.is-warn { background: #fee2e2; color: #991b1b; }
+
 /* ── Notifikasi (P2-13): hanya icon lonceng + popover ── */
 .ku-notif-wrap { position: relative; }
 .ku-notif-btn {
@@ -2632,6 +2660,9 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .dark .ku-kd-tunggu-txt { color: #fde68a; }
 .dark .ku-kd-tunggu-txt b { color: #fbbf24; }
 .ku-block { margin-top: 12px; }
+/* Jaga agar atribut `hidden` benar-benar menyembunyikan blok walau ada reset
+   yang men-set `display` pada `.ku-block`. */
+.ku-block[hidden] { display: none; }
 .ku-block + .ku-block {
     margin-top: 14px;
     padding-top: 14px;

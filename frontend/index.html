@@ -1441,9 +1441,6 @@
                                         <div id="kuInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
                                         <div id="kuPageBtns" class="flex items-center gap-1.5"></div>
                                     </div>
-
-                                    <!-- Arsip periode yang sudah ditutup (bukan transaksi periode berjalan) -->
-                                    <div id="kuArsip" class="hidden space-y-3 mt-4 pt-4 border-t border-gray-100 dark:border-white/5"></div>
                                 </section>
 
                                 <!-- (3) REKONSILIASI TUTUP KAS -->
@@ -1454,6 +1451,21 @@
                                     </header>
                                     <div class="ku-summary" id="kuRekonsiliasi"></div>
                                     <div class="ku-note-muted" id="kuRekonsiliasiNote"></div>
+                                </section>
+
+                                <!-- (4) ARSIP TUTUP KAS
+                                     Dulu `kuArsip` menempel di bawah tabel Mutasi Kas, tanpa
+                                     judul sendiri, sehingga terlihat seperti bagian dari
+                                    tabel periode BERJALAN padahal isinya periode yang sudah
+                                     DITUTUP. Sekarang jadi blok terpisah, setelah
+                                     Rekonsiliasi -- urutannya sama dengan alurnya:
+                                     mutasi -> rekonsiliasi -> arsip. -->
+                                <section class="ku-block" id="kuArsipBlock" hidden>
+                                    <header class="ku-block-head">
+                                        <h4 class="ku-block-title"><i class="fa-solid fa-box-archive"></i> Arsip Tutup Kas</h4>
+                                        <p class="ku-block-sub">Periode kas yang sudah ditutup &mdash; angkanya sudah tersimpan permanen di sini dan tidak lagi termasuk Mutasi Kas periode berjalan.</p>
+                                    </header>
+                                    <div id="kuArsip" class="space-y-2"></div>
                                 </section>
                             </div>
                         </div>

@@ -4230,25 +4230,56 @@ async function kuTutupKas() {
 // Arsip periode yang sudah ditutup (snapshot dari server).
 async function renderKuArsip() {
     const el = document.getElementById('kuArsip');
+    const block = document.getElementById('kuArsipBlock');
     if (!el) return;
     try {
         const periods = await apiGet('/kas/periods');
         const closed = (periods || []).filter(p => p && p.status === 'CLOSED' && p.snapshot);
-        if (!closed.length) { el.innerHTML = ''; el.classList.add('hidden'); return; }
-        el.classList.remove('hidden');
-        el.innerHTML = `<div class="panel"><h3 class="panel-title">Arsip Tutup Kas</h3>` + closed.map(p => {
-            let s = null;
-            try { s = JSON.parse(p.snapshot); } catch (_) { return ''; }
+        const snaps = closed.map(p => {
+            try { return { p, s: JSON.parse(p.snapshot) }; } catch (_) { return null; }
+        }).filter(x => x && x.s);
+        if (!snaps.length) {
+            el.innerHTML = '';
+            if (block) block.hidden = true;
+            return;
+        }
+        // Panel-nya sendiri sudah ada di HTML (blok 4 "Arsip Tutup Kas"), jadi di
+        // sini cukup baris-barisnya -- tidak perlu membuat `.panel` baru yang
+        // membuat blok ini terlihat seperti panel asing di dalam halaman.
+        if (block) block.hidden = false;
+        const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+        el.innerHTML = snaps.map(({ p, s }) => {
             const f = (s && s.finance) || {};
-            const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
-            return `<div class="al-row"><span class="al-dot" style="background:#64748b"></span>
-                <span class="al-name">Periode ${escapeHtml(String((s.period || {}).start_at || '').slice(0, 10))} — ditutup ${escapeHtml(String(p.closed_at || '').slice(0, 16).replace('T', ' '))} oleh ${escapeHtml(p.closed_by || '-')}</span>
-                <span class="al-nom">Masuk ${r(f.total_masuk)} • Keluar ${r(f.total_keluar)} • Saldo ${r(f.saldo)}${s.selisih !== null && s.selisih !== undefined ? ' • Selisih ' + r(s.selisih) : ''}</span>
+            const mulai = String(((s || {}).period || {}).start_at || '').slice(0, 16).replace('T', ' ');
+            const selesai = String(((s || {}).period || {}).end_at || '').slice(0, 16).replace('T', ' ');
+            const punyaSelisih = s.selisih !== null && s.selisih !== undefined;
+            const badge = punyaSelisih
+                ? (Number(s.selisih) === 0
+                    ? '<span class="ku-arsip-chip is-ok">Rekonsiliasi pas</span>'
+                    : '<span class="ku-arsip-chip is-warn">Selisih ' + r(s.selisih) + '</span>')
+                : '<span class="ku-arsip-chip">Tanpa Declare fisik</span>';
+            return `<div class="ku-arsip-row">
+                <div class="ku-arsip-main">
+                    <div class="ku-arsip-title">
+                        <span class="al-dot" style="background:#64748b"></span>
+                        Periode ${escapeHtml(mulai)} &ndash; ${escapeHtml(selesai)}
+                        ${badge}
+                    </div>
+                    <div class="ku-arsip-meta">
+                        Ditutup ${escapeHtml(String(p.closed_at || '').slice(0, 16).replace('T', ' '))}
+                        oleh ${escapeHtml(p.closed_by || '-')}
+                    </div>
+                </div>
+                <div class="ku-arsip-nums">
+                    <span>Masuk <b>${r(f.total_masuk)}</b></span>
+                    <span>Keluar <b>${r(f.total_keluar)}</b></span>
+                    <span>Saldo <b>${r(f.saldo)}</b></span>
+                </div>
             </div>`;
-        }).join('') + `</div>`;
-    } catch (_) {
+        }).join('');
+} catch (_) {
         el.innerHTML = '';
-        el.classList.add('hidden');
+        if (block) block.hidden = true;
     }
 }
 
