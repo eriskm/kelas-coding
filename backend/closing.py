@@ -120,15 +120,27 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
     fin = compute_finance(db, *batas_periode(period))
     periode_key = period.start_at.date().isoformat()
 
-    # Distribusi tidak lagi dibentuk di sini — sudah terjadi otomatis saat CTO
-    # tercapai. Dipanggil lewat `pastikan_otomatis` (bukan `terapkan` langsung)
-    # supaya pemeriksaan "Saldo Laci cukup untuk seluruh porsi" tetap berlaku dan
-    # Tutup Kas tidak setengah jalan.
-    dist = distribution_mod.pastikan_otomatis(
-        db, periode_key, fin.get("laba_bersih", 0),
-        cto_tercapai=bool(fin.get("cto_ter")),
-        kas_period_id=period.id, oleh=oleh)
-    dist_row = dist.get("distribution")
+# Distribusi TIDAK lagi dibentuk di sini. Ia terjadi OTOMATIS saat CTO tercapai,
+    # dipanggil dari setiap event CASH / jurnal kas (`distribution.pastikan_otomatis`),
+    # jadi di saat Tutup Kas cukup membaca apa yang sudah terbentuk.
+    #
+    # Memanggil `pastikan_otomatis` di sini sebelumnya berarti Tutup Kas bisa
+    # menggerakkan uang (cash-out + pindah ke Aset) TEPAT pada saat penutupan,
+    # SETELAH `counted` dicatat -- sehingga Selisih yang dilaporkan menjadi
+    # palsu karena Laci ikut berkurang. Karena itu yang dipanggil hanya
+    # pembacaan data, bukan gerbang pembentukan.
+    dist_row = distribution_mod.sudah_ada(db, periode_key, kas_period_id=period.id)
+    dist = {
+        "created": False,
+        "dibentuk": False,
+        "distribution": dist_row,
+        "alokasi": (distribution_mod.alokasi_dari(dist_row) if dist_row is not None
+                    else distribution_mod.hitung(fin.get("laba_bersih", 0))),
+        "trigger": "CTO tercapai",
+        "alasan": (None if dist_row is not None
+                   else "Belum ada distribusi di periode ini"),
+        "periode": (dist_row.periode if dist_row is not None else periode_key),
+    }
 
     laci_adjust = rekonsiliasi_periode(db, dist_row, counted, oleh=oleh)
 

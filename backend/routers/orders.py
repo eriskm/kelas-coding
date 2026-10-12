@@ -374,6 +374,59 @@ def _page_clamp(page: int, limit: int):
     return page, limit
 
 
+#: Status yang datanya sudah final -> diarsipkan saat periode kas ditutup.
+STATUS_DIARSIPKAN = ("CASH", "CANCEL")
+
+
+def _momen_terminal():
+    """Waktu order mencapai status finalnya.
+
+    `lunas_at` dipakai untuk CASH (dikunci saat event CASH). Untuk CANCEL kolom
+    itu NULL, jadi diambil dari `status_history` -- waktu transisi ke status
+    yang sekarang dimiliki order. `created_at` hanyacadangan terakhir supaya
+    order tanpa riwayat sama sekali tidak sampai hilang dari daftar.
+    """
+    from sqlalchemy import func, select
+    from models import StatusHistory
+    sub = (
+        select(func.max(StatusHistory.waktu))
+        .where(StatusHistory.service_order_id == ServiceOrder.id,
+               StatusHistory.ke_status == ServiceOrder.status)
+        .correlate(ServiceOrder)
+        .scalar_subquery()
+    )
+    return func.coalesce(ServiceOrder.lunas_at, sub, ServiceOrder.created_at)
+
+
+def _saring_belum_diarsipkan(db, qry):
+    """Sembunyikan order CASH/CANCEL yang periodenya sudah CLOSED.
+
+    Batas arsip adalah **Tutup Kas**, bukan status CASH: begitu periode ditutup,
+    unit yang sudah final hilang dari halaman Transaksi karena angkanya sudah
+    tersimpan di snapshot periode kas tersebut.
+
+    Order yang masih berjalan (DITERIMA, ANALISA, KONFIRMASI, WAIT PART, REPAIR,
+    DONE) TETAP tampil -- statusnya belum final dan masih perlu ditindaklanjuti.
+
+    Order CASH/CANCEL yang jatuh di periode yang masih OPEN tetap tampil, karena
+    uangnya memang belum pernah diarsipkan.
+    """
+    from sqlalchemy import and_, or_
+    from models import KasPeriod
+    closed = (
+        db.query(KasPeriod.start_at, KasPeriod.end_at)
+        .filter(KasPeriod.status == "CLOSED",
+                KasPeriod.start_at.isnot(None),
+                KasPeriod.end_at.isnot(None))
+        .all()
+    )
+    if not closed:
+        return qry
+    momen = _momen_terminal()
+    dalam = or_(*[and_(momen >= a, momen <= b) for a, b in closed])
+    return qry.filter(~and_(ServiceOrder.status.in_(STATUS_DIARSIPKAN), dalam))
+
+
 @router.get("", response_model=schemas.ServiceOrderPage)
 def list_orders(
     db: Session = Depends(get_db_session),
@@ -383,12 +436,12 @@ def list_orders(
 ):
     """Daftar servis order dengan pagination (backend-side).
 
-    Semua order tampil apa adanya (termasuk CASH + DIAMBIL). Tidak ada lagi
-    penyembunyian "riwayat": batas arsip adalah Tutup Kas, bukan status CASH.
+    Order CASH/CANCEL yang periodenya sudah DITUTUP disembunyikan -- batas arsip
+    adalah Tutup Kas, bukan status CASH. Order yang masih berjalan tetap tampil.
     Param `riwayat` diterima untuk kompatibilitas klien lama tapi diabaikan.
     """
     page, limit = _page_clamp(page, limit)
-    qry = db.query(ServiceOrder)
+    qry = _saring_belum_diarsipkan(db, db.query(ServiceOrder))
     total = qry.count()
     rows = (
         qry.options(joinedload(ServiceOrder.customer))
@@ -412,9 +465,10 @@ def list_orders(
 @router.get("/latest", response_model=list[schemas.ServiceOrderList])
 def latest_orders(db: Session = Depends(get_db_session), limit: int = 10,
                   riwayat: bool = False):
-    """Daftar order terbaru. Semua status tampil, termasuk CASH + DIAMBIL."""
+    """Daftar order terbaru. Sama seperti halaman Transaksi: order CASH/CANCEL yang
+    periodenya sudah ditutup tidak ikut ditampilkan."""
     limit = min(100, max(1, limit))
-    qry = db.query(ServiceOrder)
+    qry = _saring_belum_diarsipkan(db, db.query(ServiceOrder))
     rows = (
         qry.options(joinedload(ServiceOrder.customer))
         .order_by(ServiceOrder.created_at.desc())

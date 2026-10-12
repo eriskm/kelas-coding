@@ -315,24 +315,69 @@ def test_warranty_muncul_setelah_tutup_kas(client, db, auth):
 
 
 def test_transaksi_tampil_status_cash(client, db, auth):
-    """CASH + DIAMBIL tetap tampil di halaman Transaksi (tanpa filter riwayat)."""
+    """CASH di periode yang MASIH OPEN tetap tampil di halaman Transaksi.
+
+   _ATURAN_: batas arsip adalah Tutup Kas, bukan status CASH. Order CASH baru
+    disembunyikan setelah periodenya DITUTUP. Test lama pernah asserting
+    bahwa semua CASH selalu tampil -- itu sudah tidak sesuai aturan Owner.
+    """
+    from datetime import datetime, timedelta
     import models
-    o = _order(db, "PY-CASH-TRANSaksi", 300000, modal=(100000, 20000, 0))
+
+    # Periode deterministik: satu CLOSED di masa lalu + satu OPEN yang mencakup
+    # "sekarang", supaya test ini tidak bergantung pada periode sisa test lain.
+    db.query(models.KasPeriod).delete(synchronize_session=False)
+    db.commit()
+    db.add(models.KasPeriod(start_at=datetime(2000, 1, 1, 16), end_at=datetime(2000, 1, 2, 16),
+                            status="CLOSED", created_at=datetime(2000, 1, 1, 8)))
+    db.add(models.KasPeriod(start_at=datetime.now() - timedelta(days=1),
+                            end_at=datetime.now() + timedelta(days=365),
+                            status="OPEN", created_at=datetime.now() - timedelta(days=1)))
+    db.commit()
+    db.expunge_all()
+
+    # (1) CASH di periode OPEN -> harus tampil.
+    o = _order(db, "PY-CASH-OPEN", 300000, modal=(100000, 20000, 0))
     _dp(db, o, 300000, kind="PELUNASAN")
     assert client.put("/api/orders/%d" % o.id, headers=auth,
-                        json={"status": "CASH"}).status_code == 200
+                      json={"status": "CASH"}).status_code == 200
     db.expire_all()
     assert o.status == "CASH" and o.unit_status == "DIAMBIL"
 
     res = client.get("/api/orders?page=1&limit=100", headers=auth)
     assert res.status_code == 200, res.text
     ids = [it["id"] for it in res.json()["items"]]
-    assert o.id in ids, "Order CASH harus tetap tampil di Transaksi"
+    assert o.id in ids, "Order CASH di periode OPEN harus tampil"
 
     latest = client.get("/api/orders/latest?limit=100", headers=auth)
     assert latest.status_code == 200, latest.text
-    ids2 = [it["id"] for it in latest.json()]
-    assert o.id in ids2, "Order CASH harus tetap tampil di /orders/latest"
+    assert o.id in [it["id"] for it in latest.json()]
+
+    # (2) CASH yang periodenya sudah DITUTUP -> tidak boleh tampil lagi.
+    o2 = _order(db, "PY-CASH-ARSIP", 300000, modal=(100000, 20000, 0))
+    _dp(db, o2, 300000, kind="PELUNASAN")
+    assert client.put("/api/orders/%d" % o2.id, headers=auth,
+                      json={"status": "CASH"}).status_code == 200
+    db.expire_all()
+    # Mundurkan momen terminalnya ke dalam periode CLOSED.
+    db.query(models.ServiceOrder).filter(models.ServiceOrder.id == o2.id).update(
+        {"lunas_at": datetime(2000, 1, 1, 20)})
+    db.commit()
+    db.expire_all()
+
+    res2 = client.get("/api/orders?page=1&limit=100", headers=auth)
+    ids2 = [it["id"] for it in res2.json()["items"]]
+    assert o2.id not in ids2, "Order CASH periode CLOSED harus diarsipkan"
+    assert o.id in ids2, "Order CASH periode OPEN tidak boleh ikut hilang"
+    assert o2.id not in [it["id"] for it in
+                         client.get("/api/orders/latest?limit=100", headers=auth).json()]
+
+    # (3) Order yang BELUM final tetap tampil walau dibuat sebelum periode ditutup.
+    o3 = _order(db, "PY-MASIH-DONE", 300000, modal=(100000, 20000, 0), status="DONE")
+    db.commit()
+    ids3 = [it["id"] for it in
+            client.get("/api/orders?page=1&limit=100", headers=auth).json()["items"]]
+    assert o3.id in ids3, "Order DONE belum final harus tetap tampil"
 
 
 def _saldo_laci(db):

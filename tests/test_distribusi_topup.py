@@ -62,6 +62,16 @@ def _siapkan(db, IMAL="10000000"):
     p = KasPeriod(start_at=datetime(2026, 7, 5, 16), end_at=datetime(2026, 7, 6, 16),
                   status="CLOSED", created_at=datetime(2026, 7, 5, 8))
     db.add(p); db.commit(); db.refresh(p)
+    # SQLite MEMAKAI ULANG rowid setelah `DELETE FROM kas_periods`, jadi id periode
+    # baru ini bisa sama dengan id periode lama yang Distribution-nya masih tertinggal.
+    # Kalau dibiarkan, `sudah_ada()` akan menemukan distribution milik periode LAIN
+    # dan top-up tidak pernah terjadi. Bersihkan baris dengan id yang sama.
+    db.query(Distribution).filter(
+        Distribution.kas_period_id == p.id).delete(synchronize_session=False)
+    db.commit()
+    pid = p.id
+    db.expunge_all()   # melepas instance; diambil ulang supaya tidak detached
+    p = db.query(KasPeriod).filter(KasPeriod.id == pid).one()
     _set_laci(db, IMAL)
     return p, p.start_at.date().isoformat()
 
