@@ -585,28 +585,84 @@ def kas_aset_cukup(nominal: float = Query(..., description="jumlah yang akan dip
             "cara_baca": cash.CARA_BACA}
 
 
-# ---------- P2-07 / SSOT-6: Distribusi (read-only) ----------
+# ---------- P2-07 / SSOT-6: Distribusi ----------
 @router.get("/distribusi")
 def get_distribusi(db: Session = Depends(get_db_session),
                    period: str = Query("current", description="current | YYYY-MM-DD"),
                    user: User = Depends(get_authenticated_user)):
-    """Status distribusi. Distribution terbentuk HANYA saat Tutup Kas (bukan CTO)."""
+    """Status distribusi + alasan kalau belum terbentuk.
+
+    Distribusi terbentuk OTOMATIS begitu CTO tercapai (Laba Kotor >= Beban),
+    bukan lagi saat Tutup Kas.
+    """
     period = (period or "current").strip()
     pid = None
+    preview = 0
+    cto = False
     if period == "current":
         p_ = get_active_period(db)
         key = p_.start_at.date().isoformat() if p_.start_at else ""
-        preview = compute_finance(db, *batas_periode(p_)).get("laba_bersih", 0)
+        fin = compute_finance(db, *batas_periode(p_))
+        preview = fin.get("laba_bersih", 0)
+        cto = bool(fin.get("cto_tercapai"))
         # P2-15 B-1: teruskan id Kas Period agar distributor membaca baris
-        # miliknya sendiri ketika beberapa Kas Period berteGALANG sama.
+        # miliknya sendiri ketika beberapa Kas Period bertegang sama.
         pid = p_.id
     else:
         key = period
-        preview = 0
     out = distribution_mod.ringkasan(db, key, kas_period_id=pid)
     if not out.get("terbentuk"):
         out["preview"] = distribution_mod.preview(preview)
+        out["cto_tercapai"] = cto
+        out["alasan"] = _alasan_distribusi(db, preview, cto, key, pid)
     return out
+
+
+def _alasan_distribusi(db, laba_bersih, cto, key, pid):
+    """Kenapa distribusi belum terbentuk (atau None kalau sudah / boleh)."""
+    if distribution_mod.sudah_ada(db, key, pid) is not None:
+        return None
+    if not cto:
+        return distribution_mod.ALASAN_BELUM_SIAP
+    hit = distribution_mod.hitung(laba_bersih)
+    if not hit.get("eligible"):
+        return hit.get("alasan")
+    total = hit["cash_out"] + hit["kas_aset"]
+    if cash.saldo_laci(db) < total:
+        return "%s (butuh %s, ada %s)" % (
+            distribution_mod.ALASAN_KAS_KURANG, total, cash.saldo_laci(db))
+    return None
+
+
+@router.post("/distribusi/jalankan")
+def jalankan_distribusi(
+        db: Session = Depends(get_db_session),
+        user: User = Depends(require_authority(Action.KAS_ENTRY_WRITE))):
+    """Jalankan distribusi sekarang (tombol manual).
+
+    Dipakai saat periode sudah mencapai CTO tetapi pemicu otomatis belum
+    berjalan — misalnya data yang sudah terlanjur CASH sebelum aturan ini aktif.
+    Memakai gatekeeper yang sama (`pastikan_otomatis`), jadi aturannya persis
+    sama dengan otomatis: idempoten per periode, dan tidak jalan kalau Saldo
+    Laci tidak cukup untuk seluruh porsi.
+    """
+    p = get_active_period(db)
+    fin = compute_finance(db, *batas_periode(p))
+    try:
+        res = distribution_mod.pastikan_otomatis(
+            db, p.start_at.date().isoformat(), fin.get("laba_bersih", 0),
+            cto_tercapai=bool(fin.get("cto_tercapai")),
+            kas_period_id=p.id,
+            oleh=getattr(user, "display_name", None) or user.username)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return {"jalankan": bool(res.get("dibentuk")), "alasan": res.get("alasan"),
+            "alokasi": {k: str(v) for k, v in (res.get("alokasi") or {}).items()},
+            "saldo_laci": str(cash.saldo_laci(db)),
+            "saldo_kas_aset": str(cash.saldo_kas_aset(db)),
+            "master_kas": str(cash.master_kas(db))}
 
 
 # ---------- Tutup kas ----------

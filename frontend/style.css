@@ -2522,6 +2522,9 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 /* Catatan kecil di bawah blok Rekonsiliasi */
 .ku-note-muted { margin-top: 8px; font-size: 10.5px; line-height: 1.5; color: #6b7280; }
 .dark .ku-note-muted { color: #9ca3af; }
+/* Tombol "Jalankan Distribusi" di panel Alokasi Profit */
+.ku-bh-badge-wrap .ku-dist-btn { margin-top: 8px; width: 100%; font-size: 11.5px; padding: 8px 12px; }
+.ku-bh-badge-wrap .ku-dist-btn.hidden { display: none; }
 @media (max-width: 560px) { .ku-summary { grid-template-columns: 1fr; } }
 
 /* Ringkasan Kas Operasional (#kuKasSummary) — 4 kartu: Total Masuk, Total Keluar,

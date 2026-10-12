@@ -4336,9 +4336,38 @@ function renderBukuKas() {
 //   10% Karyawan / 30% Pengelola / 30% Investor -> keluar permanen dari Laci
 //   30% Hak Kas Aset                          -> keluar Laci, masuk Saldo Aset
 // Efeknya Master Kas turun hanya 70% (porsi Hak Kas Aset hanya pindah lokasi).
+// Jalankan distribusi sekarang (tombol manual). Memakai gatekeeper yang SAMA
+// dengan pemicu otomatis, jadi persis aturan yang berlaku: 70% keluar permanen
+// dari Laci, 30% Hak Kas Aset pindah ke Saldo Aset, dan tidak jalan kalau
+// Saldo Laci tidak cukup untuk seluruh porsi.
+async function kuJalankanDistribusi() {
+    if (!confirm('Jalankan Distribusi Laba sekarang?\n\n' +
+        '70% (Karyawan + Pengelola + Investor) akan KELUAR permanen dari Laci.\n' +
+        '30% Hak Kas Aset akan keluar dari Laci dan MASUK ke Kas Aset.\n\n' +
+        'Tindakan ini tidak bisa dibatalkan dari halaman ini.')) return;
+    const btn = document.getElementById('kuDistribusiBtn');
+    if (btn) { btn.disabled = true; }
+    try {
+        const res = await apiPost('/kas/distribusi/jalankan', {}, { idempotencyKey: newIdemKey() });
+        if (res && res.jalankan) {
+            toast('Distribusi dijalankan. Saldo Laci ' + (res.saldo_laci || '0') +
+                  ' • Kas Aset ' + (res.saldo_kas_aset || '0') +
+                  ' • Master Kas ' + (res.master_kas || '0'), 'success');
+        } else {
+            toast('Belum bisa distribusi: ' + ((res && res.alasan) || 'tidak diketahui'), 'error');
+        }
+        await loadKuFinance();
+    } catch (err) {
+        toast((err && err.message) || 'Gagal menjalankan distribusi.', 'error');
+    } finally {
+        if (btn) { btn.disabled = false; }
+    }
+}
+
 function renderAlloc() {
     const list = document.getElementById('kuAllocList');
     const totalEl = document.getElementById('kuTotalProfit');
+    const btn = document.getElementById('kuDistribusiBtn');
     const fin = _kuFin || {};
     const total = Number(fin.laba_bersih) || 0;
     const al = fin.alokasi || {};
@@ -4362,6 +4391,9 @@ function renderAlloc() {
                           : 'Menunggu perhitungan laba periode.'));
     }
     if (totalEl) totalEl.textContent = kuRupiah(total);
+    // Tombol manual hanya muncul kalau CTO tercapai tapi distributions belum
+    // jalan — mis. data sudah terlanjur CASH sebelum aturan otomatis ini aktif.
+    if (btn) btn.classList.toggle('hidden', !(cto && !formed));
     _kuAllocView = cto ? [
         { nama: 'Bonus Karyawan', val: src.karyawan || 0, color: '#f59e0b' },
         { nama: 'Pengelola', val: src.pengelola || 0, color: '#dc2626' },
