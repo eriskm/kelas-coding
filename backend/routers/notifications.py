@@ -22,6 +22,7 @@ def list_notifications(event: str = Query(""), limit: int = 100,
                        user: User = Depends(get_authenticated_user)):
     """Log notifikasi (read-only)."""
     return {"items": notif_mod.daftar(db, (event or "").strip().upper() or None, limit),
+            "n_diantrekan": notif_mod.hitung_diantrekan(db, (event or "").strip().upper() or None),
             "provider_aktif": notif_mod.provider_aktif(),
             "catatan": "Pengiriman eksternal hanya bila NOTIF_PROVIDER_ENABLED=1."}
 

@@ -1735,7 +1735,10 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .ku-tutup-btn:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 26px rgba(220,38,38,0.35); }
 .ku-tutup-btn:active { transform: translateY(0); }
-.ku-riwayat-toggle-wrap { display: flex; justify-content: center; padding: 2px 0 4px; }
+.ku-riwayat-toggle-wrap {
+    display: flex; align-items: center; justify-content: center;
+    gap: 10px; padding: 2px 0 4px;
+}
 .ku-riwayat-btn {
     display: inline-flex; align-items: center; gap: 8px;
     padding: 8px 18px; border-radius: 999px;
@@ -1746,6 +1749,70 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .dark .ku-riwayat-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
 .ku-riwayat-btn:hover { color: #dc2626; border-color: #fecaca; transform: translateY(-1px); }
 .ku-back-btn { margin-bottom: 12px; }
+
+/* ── Notifikasi (P2-13): hanya icon lonceng + popover ── */
+.ku-notif-wrap { position: relative; }
+.ku-notif-btn {
+    position: relative;
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 34px; height: 34px; border-radius: 999px;
+    font-size: 14px; color: #475569;
+    background: #fff; border: 1px solid #e5e7eb; box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+    transition: all .15s;
+}
+.dark .ku-notif-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
+.ku-notif-btn:hover { color: #dc2626; border-color: #fecaca; transform: translateY(-1px); }
+.ku-notif-btn[aria-expanded="true"] { color: #dc2626; border-color: #fecaca; }
+
+.ku-notif-badge {
+    position: absolute; top: -4px; right: -4px;
+    min-width: 17px; height: 17px; padding: 0 4px;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 999px;
+    background: #dc2626; color: #fff;
+    font-size: 10px; font-weight: 700; line-height: 1;
+    box-shadow: 0 0 0 2px #fff;
+}
+.dark .ku-notif-badge { box-shadow: 0 0 0 2px rgba(17,24,39,0.9); }
+.ku-notif-badge.hidden { display: none; }
+
+.ku-notif-pop {
+    position: absolute; bottom: calc(100% + 8px); left: 50%;
+    transform: translateX(-50%);
+    width: min(440px, calc(100vw - 32px));
+    z-index: 60;
+    background: #fff; border: 1px solid #e5e7eb; border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.14);
+    overflow: hidden;
+}
+.dark .ku-notif-pop { background: #111827; border-color: rgba(255,255,255,0.1); }
+.ku-notif-pop.hidden { display: none; }
+
+.ku-notif-pop-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 9px 12px; border-bottom: 1px solid #f1f5f9;
+    font-size: 11.5px; font-weight: 700; color: #64748b;
+}
+.dark .ku-notif-pop-head { border-bottom-color: rgba(255,255,255,0.08); }
+.ku-notif-pop-prov { font-weight: 500; text-transform: none; color: #94a3b8; }
+
+.ku-notif-pop-body { max-height: 260px; overflow-y: auto; }
+.ku-notif-pop-body .tx-table { font-size: 11.5px; }
+
+.ku-notif-chip {
+    display: inline-block; padding: 1px 7px; border-radius: 999px;
+    font-size: 10px; font-weight: 700; letter-spacing: .2px;
+    background: #f1f5f9; color: #64748b;
+}
+.ku-notif-chip-diantrekan { background: #fef3c7; color: #92400e; }
+.ku-notif-chip-terkirim { background: #dcfce7; color: #166534; }
+.ku-notif-chip-gagal { background: #fee2e2; color: #991b1b; }
+.ku-notif-chip-skipped_duplikat { background: #e0e7ff; color: #3730a3; }
+
+/* Layar kecil: popover jangan keluar meluber ke luar viewport. */
+@media (max-width: 640px) {
+    .ku-notif-pop { left: auto; right: -8px; transform: none; width: min(360px, calc(100vw - 24px)); }
+}
 #kuRiwayatView { display: flex; flex-direction: column; }
 #kuRiwayatView.hidden { display: none; }
 

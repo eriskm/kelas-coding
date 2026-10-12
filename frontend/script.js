@@ -4114,23 +4114,74 @@ async function kuDebtLunas() {
 }
 
 // Notifikasi (P2-13): log read-only + status provider.
+// Di UI hanya sebuah ICON lonceng (badge jumlah antrean) + popover 10 terbaru.
+let _kuNotifData = { items: [], n_diantrekan: 0, provider_aktif: false };
+
+async function kuToggleNotif(ev) {
+    if (ev) ev.stopPropagation();
+    const pop = document.getElementById('kuNotifPop');
+    const btn = document.getElementById('kuNotifBtn');
+    if (!pop) return;
+    const akanBuka = pop.classList.contains('hidden');
+    if (akanBuka) {
+        // Muat ulang saat dibuka supaya isinya tidak basi.
+        try { await loadKuNotif(); } catch (_) {}
+        pop.classList.remove('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+        document.addEventListener('click', kuTutupNotifJikalauDiLuar, true);
+    } else {
+        kuTutupNotif();
+    }
+}
+
+function kuTutupNotif() {
+    const pop = document.getElementById('kuNotifPop');
+    const btn = document.getElementById('kuNotifBtn');
+    if (pop) pop.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('click', kuTutupNotifJikalauDiLuar, true);
+}
+
+function kuTutupNotifJikalauDiLuar(e) {
+    const wrap = document.querySelector('.ku-notif-wrap');
+    if (wrap && !wrap.contains(e.target)) kuTutupNotif();
+}
+
+// Di-load saat halaman Keuangan dibuka supaya badge langsung terisi.
 async function loadKuNotif() {
     const body = document.getElementById('kuNotifBody');
     const prov = document.getElementById('kuNotifProvider');
-    if (!body) return;
+    const badge = document.getElementById('kuNotifBadge');
+    if (!body && !badge) return;
     let d = null;
-    try { d = await apiGet('/notifications?limit=25'); } catch (_) {}
+    try { d = await apiGet('/notifications?limit=10'); } catch (_) {}
     const items = (d && d.items) || [];
-    if (prov) {
-        prov.innerHTML = d && d.provider_aktif
-            ? 'Provider eksternal: <b>aktif</b>'
-            : 'Provider eksternal: nonaktif (notifikasi hanya tercatat di log).';
+    _kuNotifData = {
+        items: items,
+        n_diantrekan: (d && typeof d.n_diantrekan === 'number') ? d.n_diantrekan : 0,
+        provider_aktif: !!(d && d.provider_aktif)
+    };
+    if (badge) {
+        // Badge = antrean yang belum terkirim. Selama provider nonaktif angka ini
+        // hanya naik -- itu memang mencerminkan antrean, bukan error.
+        const n = _kuNotifData.n_diantrekan;
+        badge.textContent = n > 99 ? '99+' : String(n);
+        badge.classList.toggle('hidden', n <= 0);
+        badge.title = n + ' notifikasi belum terkirim';
     }
-    body.innerHTML = items.length ? items.map(n => `<tr>
-        <td>${escapeHtml(String(n.created_at || '').replace('T', ' ').slice(0, 16))}</td>
-        <td>${escapeHtml(n.event || '-')}</td>
-        <td>${escapeHtml(n.status || '-')}</td></tr>`).join('')
-        : `<tr><td colspan="3"><div class="text-center text-sm text-gray-400 py-6">Belum ada notifikasi.</div></td></tr>`;
+    if (prov) {
+        prov.textContent = _kuNotifData.provider_aktif
+            ? 'provider: aktif'
+            : 'provider: nonaktif';
+    }
+    if (body) {
+        body.innerHTML = items.length ? items.map(n => `<tr>
+            <td class="whitespace-nowrap">${escapeHtml(String(n.created_at || '').replace('T', ' ').slice(0, 16))}</td>
+            <td>${escapeHtml(n.event || '-')}</td>
+            <td><span class="ku-notif-chip ku-notif-chip-${escapeHtml(String(n.status || '').toLowerCase())}">${escapeHtml(n.status || '-')}</span></td></tr>`).join('')
+            : `<tr><td colspan="3"><div class="text-center text-sm text-gray-400 py-6">Belum ada notifikasi.</div></td></tr>`;
+    }
+    return _kuNotifData;
 }
 
 // ── Keuangan: Rincian Arus Kas dipindah ke "Riwayat Transaksi" ──

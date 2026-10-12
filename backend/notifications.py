@@ -200,3 +200,21 @@ def daftar(db: Session, event: str = None, limit: int = 100):
              "dedup_key": r.dedup_key, "provider": r.provider, "tujuan": r.tujuan,
              "status": r.status, "actor": r.actor, "created_at": r.created_at,
              "pesan": r.pesan} for r in rows]
+
+
+def hitung_diantrekan(db: Session, event: str = None) -> int:
+    """Berapa notifikasi yang statusnya masih DIANTREKAN (belum terkirim).
+
+    Dipakai badge di icon lonceng. Dihitung terpisah dari `daftar()` karena
+    `daftar()` sudah dipotong oleh `limit`, sedangkan badge harus menghitung
+    SELURUH antrean -- kalau tidak, angka di icon salah begitu log lewat 25 baris.
+
+    CATATAN untuk Owner: selama provider eksternal nonaktif, semua notifikasi
+    berhenti di DIANTREKAN. Jadi angka ini akan terus naik dan tidak pernah
+    turun -- itu memang mencerminkan antrean yang belum dikirim, bukan error.
+    """
+    from models import Notification
+    q = db.query(Notification).filter(Notification.status == STATUS_DIANTREKAN)
+    if event:
+        q = q.filter(Notification.event == event)
+    return int(q.count())

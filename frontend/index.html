@@ -1338,24 +1338,7 @@
                                 </div>
                             </div>
 
-                            <div class="panel">
-                                <h3 class="panel-title"><i class="fa-solid fa-bell"></i> Notifikasi</h3>
-                                <p class="ku-sub">Log notifikasi (unit baru, kas masuk, tutup/buka kas, WA selesai) &mdash; anti-duplikat.</p>
-                                <div id="kuNotifProvider" class="text-[11px] text-gray-500 dark:text-gray-400 mb-2"></div>
-                                <div class="overflow-x-auto">
-                                    <table class="tx-table w-full text-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Waktu</th>
-                                                <th>Event</th>
-                                                <th>Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="kuNotifBody"></tbody>
-                                    </table>
-                                </div>
                             </div>
-                        </div>
 
                         <!-- PEMBUKA RIWAYAT: Rincian Arus Kas sengaja tidak lagi tampil
                              di halaman utama. Buka lewat tombol paling bawah ini supaya
@@ -1364,6 +1347,39 @@
                             <button type="button" id="kuRiwayatBtn" onclick="kuShowRiwayat()" class="ku-riwayat-btn">
                                 <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Transaksi
                             </button>
+
+                            <!-- Notifikasi (P2-13): log read-only. Sengaja hanya ICON --
+                                 panel penuhnya dihapus supaya halaman Keuangan tidak
+                                 bertambah tinggi. Isinya tetap bisa dibuka kapan saja
+                                 lewat popover ini. -->
+                            <div class="ku-notif-wrap">
+                                <button type="button" id="kuNotifBtn" class="ku-notif-btn"
+                                        aria-haspopup="true" aria-expanded="false"
+                                        title="Notifikasi"
+                                        onclick="kuToggleNotif(event)">
+                                    <i class="fa-solid fa-bell"></i>
+                                    <span id="kuNotifBadge" class="ku-notif-badge hidden">0</span>
+                                </button>
+                                <div id="kuNotifPop" class="ku-notif-pop hidden"
+                                     role="dialog" aria-label="Notifikasi">
+                                    <div class="ku-notif-pop-head">
+                                        <span>Notifikasi &mdash; 10 terbaru</span>
+                                        <span id="kuNotifProvider" class="ku-notif-pop-prov"></span>
+                                    </div>
+                                    <div class="ku-notif-pop-body">
+                                        <table class="tx-table w-full text-sm">
+                                            <thead>
+                                                <tr>
+                                                    <th>Waktu</th>
+                                                    <th>Event</th>
+                                                    <th>Status</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="kuNotifBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- RIWAYAT TRANSAKSI — 3 bagian:
