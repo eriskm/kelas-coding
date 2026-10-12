@@ -2616,13 +2616,18 @@ function initUpdateServis() {
                         return;
                     }
                 } else if (_usSt === 'CASH') {
-                    // CASH = event realisasi (Owner Cash Model P2-15): wajib Tindakan,
-                    // Teknisi, Modal Part & Modal Jasa (sama seperti guard backend).
+                    // CASH = event realisasi (Owner Cash Model P2-15): wajib Tindakan + Teknisi.
+                    //
+// Modal Part & Modal Jasa SENGAJA TIDAK divalidasi di sini.
+                    // Dulu ada `usNum('usFinPart') > 0` yang menolak nilai 0,
+                    // padahal 0 itu sah (servis tanpa ganti part / hanya jasa).
+                    // Guard itu memicu pesan "Status CASH wajib melengkapi: Modal Part"
+                    // di layar SEBELUM request dikirim, jadi backend tidak pernah
+                    // sempat memprosesnya. Guard backend (router orders.py) yang
+                    // jadi satu-satunya penentu.
                     const _missing = [];
                     if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
                     if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
-                    if (!(usNum('usFinPart') > 0)) _missing.push(['Modal Part', 'usFinPart']);
-                    if (!(usNum('usFinJasa') > 0)) _missing.push(['Modal Jasa', 'usFinJasa']);
                     if (_missing.length) {
                         _needFail(_missing.map(m => m[0]).join(', '));
                         _needFocus(_missing[0][1]);
