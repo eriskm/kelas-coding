@@ -308,13 +308,25 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     laba_bersih = omset - modal_part - modal_jasa - modal_lain - total_beban
 
     # P2-07 / SSOT-6: TIDAK lagi digate CTO. Alokasi HANYA terbentuk saat
-    # Tutup Kas (Distribution tersimpan). Gate CTO tetap dilaporkan sebagai
-    # indikator legacy (cto_tercapai) tanpa mengatur distribusi.
+    # Distribusi sudah TERBENTUK otomatis saat CTO tercapai (lihat
+    # `distribution.pastikan_otomatis`), bukan lagi saat Tutup Kas. Gate CTO
+    # sekarang justru menentukan apakah distribusi boleh terbentuk.
     import distribution as _dist
     _periode_key = core["periode"]
     _row_dist = _dist.sudah_ada(db, _periode_key)
     _preview = _dist.preview(laba_bersih)
     alokasi_ok = _row_dist is not None
+    # Alasan singkat kalau CTO sudah tercapai tapi distribusi belum jalan —
+    # supaya UI bisa menjelaskan kenapa, bukan hanya diam saja.
+    _dist_alasan = None
+    if not alokasi_ok:
+        if not cto_ok:
+            _dist_alasan = _dist.ALASAN_BELUM_SIAP
+        elif not _preview.get("eligible"):
+            _dist_alasan = _preview.get("alasan")
+        elif cash.saldo_laci(db) < (to_decimal(_preview["cash_out"])
+                                    + to_decimal(_preview["kas_aset"])):
+            _dist_alasan = _dist.ALASAN_KAS_KURANG
     if _row_dist is not None:
         _al = _dist.alokasi_dari(_row_dist)
         karyawan = _al["karyawan"]
@@ -420,6 +432,8 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
             "cash_out": _preview["cash_out"], "eligible": _preview["eligible"],
         },
         "alokasi_terbentuk": alokasi_ok,
+        "distribusi_alasan": _dist_alasan,
+        "distribusi_trigger": "CTO tercapai",
         "alokasi": {
             "karyawan": karyawan,
             "pengelola": pengelola,

@@ -67,6 +67,10 @@ SUMBER_INJEKSI = "INJEKSI"
 SUMBER_REKONSILIASI = "REKONSILIASI"
 SUMBER_PENYESUAIAN = "PENYESUAIAN"
 SUMBER_HUTANG_BEBAN = "HUTANG_BEBAN"
+#: Porsi "Hak Kas Aset" 30% dari Distribusi Laba. Uangnya BENAR-BENAR pindah dari
+#: Laci ke Kas Aset (bukan sekadar penanda), jadi dicatat sebagai mutasi berpasangan
+#: di dua layer. Berbeda dari `TRANSFER` biasa, ini bersumber dari laba periode.
+SUMBER_DISTRIBUSI_ASET = "DISTRIBUSI_ASET"
 
 #: Sumber yang boleh masuk ARUS KAS AKRUAL (`compute_finance` -> total_masuk /
 #: total_keluar). Harus SEMPIT: apa pun yang sudah tercakup di `omset`,
@@ -94,7 +98,7 @@ SUMBER_BARIS_KAS = frozenset({
     SUMBER_MANUAL, SUMBER_MODAL, SUMBER_CASH_OUT, SUMBER_REFUND_DP,
     SUMBER_REFUND_GARANSI, SUMBER_FAILED_CANCEL, SUMBER_TRANSFER,
     SUMBER_INJEKSI, SUMBER_REKONSILIASI, SUMBER_PENYESUAIAN,
-    SUMBER_HUTANG_BEBAN,
+    SUMBER_HUTANG_BEBAN, SUMBER_DISTRIBUSI_ASET,
 })
 
 KATEGORI = {
@@ -110,6 +114,7 @@ KATEGORI = {
     SUMBER_REKONSILIASI: "Penyesuaian Rekonsiliasi",
     SUMBER_PENYESUAIAN: "Penyesuaian Laci",
     SUMBER_HUTANG_BEBAN: "Hutang Beban",
+    SUMBER_DISTRIBUSI_ASET: "Setoran Hak Kas Aset (Distribusi)",
 }
 
 EVENT_TRANSFER = "KAS_ASET_DITRANSFER"
@@ -376,11 +381,17 @@ def catat_beban(db: Session, expense, actor: str = None):
 
 # ---------------------------------------------------------------- 4) CASH-OUT 70% (v4 #4)
 def catat_cash_out(db: Session, nominal, keterangan: str, ref_type=None, ref_id=None,
-                   actor: str = None):
-    """70% distribusi = cash-out dari LACI (v4 #4)."""
+                   actor: str = None, check_saldo: bool = True):
+    """70% distribusi = cash-out dari LACI (v4 #4).
+
+    `check_saldo=False` dipakai `distribution.catat_cash_out` karena pemanggilnya
+    (`pastikan_otomatis`) sudah memastikan Saldo Laci cukup untuk SELURUH porsi
+    sebelum satu baris pun ditulis — jadi penolakan saat pencatatan tidak akan
+    pernah terjadi dan tidak ada Heidi yang tertulis separuh jalan.
+    """
     mut = catat_mutasi(db, LAYER_LACI, "Keluar", KATEGORI[SUMBER_CASH_OUT],
                        keterangan, nominal, sumber=SUMBER_CASH_OUT,
-                       ref_type=ref_type, ref_id=ref_id)
+                       ref_type=ref_type, ref_id=ref_id, check_saldo=check_saldo)
     _journal(db, EVENT_OPERASIONAL, mut, actor=actor,
              details={"event": "DISTRIBUSI_CASH_OUT", "porsi": "70%"})
     return mut
@@ -388,11 +399,17 @@ def catat_cash_out(db: Session, nominal, keterangan: str, ref_type=None, ref_id=
 
 # ---------------------------------------------------------------- 5) TRANSFER (v4 #5)
 def transfer(db: Session, nominal, dari: str, ke: str, keterangan: str,
-             actor: str = None, ref_type=None, ref_id=None, check_saldo: bool = True):
+             actor: str = None, ref_type=None, ref_id=None, check_saldo: bool = True,
+             sumber: str = None):
     """Transfer fisik Laci <-> Aset: Laci ∓, Aset ±, MASTER KAS TETAP (v4 #5).
 
     Bukan omzet/beban/laba/distribusi baru — karena itu `sumber` kedua baris
-    adalah `TRANSFER` (TIDAK masuk Buku Kas accrual).
+   adalah `TRANSFER` (TIDAK masuk Buku Kas accrual).
+
+    `sumber` bisa dioverride untuk transfer yang berasal dari kejadian lain,
+    misalnya `DISTRIBUSI_ASET` (porsi Hak Kas Aset dari Distribusi Laba).
+    Override ini tetap menghasilkan pasangan Laci/Aset yang sama dan Master Kas
+    tetap utuh; hanya label sumbernya yang lebih spesifik untuk pelacakan.
     """
     a = norm_layer(dari)
     b = norm_layer(ke)
@@ -402,21 +419,24 @@ def transfer(db: Session, nominal, dari: str, ke: str, keterangan: str,
     if n <= ZERO:
         raise CashError("Nominal transfer harus lebih besar dari nol")
 
+    src = sumber or SUMBER_TRANSFER
+    kat = KATEGORI.get(src, KATEGORI[SUMBER_TRANSFER])
     ref = ref_id
-    if ref_type and ref_id is not None and mutasi_tersimpan(db, a, SUMBER_TRANSFER, ref_type, ref):
+    if ref_type and ref_id is not None and mutasi_tersimpan(db, a, src, ref_type, ref):
         return {"created": False, "dari": a, "ke": b, "nominal": n,
                 "master_sebelum": master_kas(db)}
 
-    keluar = catat_mutasi(db, a, "Keluar", KATEGORI[SUMBER_TRANSFER], keterangan, n,
-                          sumber=SUMBER_TRANSFER, ref_type=ref_type, ref_id=ref_id,
+    keluar = catat_mutasi(db, a, "Keluar", kat, keterangan, n,
+                          sumber=src, ref_type=ref_type, ref_id=ref_id,
                           check_saldo=check_saldo)
-    masuk = catat_mutasi(db, b, "Masuk", KATEGORI[SUMBER_TRANSFER], keterangan, n,
-                         sumber=SUMBER_TRANSFER, ref_type=ref_type, ref_id=ref_id,
+    masuk = catat_mutasi(db, b, "Masuk", kat, keterangan, n,
+                         sumber=src, ref_type=ref_type, ref_id=ref_id,
                          check_saldo=False, oleh=actor)
     journal.record(db, journal.DOMAIN_FINANCE, EVENT_TRANSFER,
                    entity_type="kas_entry", entity_id=keluar["id"], amount=n, actor=actor,
                    ref_type=ref_type, ref_code=str(ref_id or keluar["id"]),
                    details={"dari": a, "ke": b, "nominal": str(n),
+                            "sumber": src,
                             "master_kas_setelah": str(master_kas(db)),
                             "keterangan": keterangan})
     db.flush()

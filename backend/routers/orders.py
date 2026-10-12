@@ -56,6 +56,24 @@ def _actor(user) -> str:
         return "sistem"
 
 
+def _pastikan_distribusi(db: Session, oleh: str = None) -> dict:
+    """Bentuk Distribusi Laba OTOMATIS kalau target operasional (CTO) tercapai.
+
+    Memakai helper yang sama dari modul `distribution` supaya aturan "70% keluar
+    permanen, 30% Hak Kas Aset pindah ke Saldo Aset" hanya ada di satu tempat.
+    Idempoten: kalau periode ini sudah punya Distribution, tidak ada yang berubah.
+    """
+    import distribution as dist_mod
+    from routers.dashboard import (batas_periode, compute_finance,
+                                   get_active_period)
+    p = get_active_period(db)
+    fin = compute_finance(db, *batas_periode(p))
+    return dist_mod.pastikan_otomatis(
+        db, p.start_at.date().isoformat(), fin.get("laba_bersih", 0),
+        cto_tercapai=bool(fin.get("cto_tercapai")),
+        kas_period_id=p.id, oleh=oleh)
+
+
 def _log_transition(db: Session, order_id: int, dari, ke, oleh, catatan=""):
     db.add(StatusHistory(service_order_id=order_id, dari_status=dari,
                          ke_status=ke, oleh=oleh, waktu=datetime.now(),
@@ -689,6 +707,13 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                                   "laba": str(order.laba_bersih),
                                   "sisa_dilunasi": str(_sisa)},
                             actor=_actor(user))
+    # (6) DISTRIBUSI OTOMATIS: event CASH menaikkan Laba Kotor, jadi ini salah
+    #     satu jalur yang bisa membuat CTO tercapai. Idempoten per periode kas.
+    try:
+        _pastikan_distribusi(db, _actor(user))
+    except Exception:  # noqa: BLE001
+        # Distribusi tidak boleh menggagalkan transaksi servis.
+        db.rollback()
     db.commit()
     # Konsistensi momen lunas: kolom `payment` masih bisa ditulis UI (arsip DP),
     # jadi kunci momen LUNAS bila ringkasan sudah LUNAS (untuk garansi & kas).

@@ -98,6 +98,12 @@ def db(app_env, client):
     finally:
         try:
             s.rollback()
+            # Buang identity map. Tanpa ini, object ORM dari test sebelumnya
+            # masih "dipinjam" session: ketika SQLite memakai ULANG rowid
+            # (mis. setelah `DELETE FROM distributions`), object BARU dengan id
+            # yang sama diam-diam memakai instance lama — termasuk nilai kolom
+            # lamanya (mis. `laci_adjust_entry_id` yang sudah terisi).
+            s.expunge_all()
         finally:
             s.close()
 

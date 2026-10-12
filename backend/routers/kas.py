@@ -240,7 +240,27 @@ def create_entry(data: schemas.KasEntryCreate, db: Session = Depends(get_db_sess
     db.add(row)
     db.commit()
     db.refresh(row)
+    # Jurnal manual "Penjualan Service" menaikkan Laba Kotor, jadi bisa membuat
+    # CTO tercapai -> distribusi terbentuk otomatis. Idempoten per periode.
+    try:
+        _pastikan_distribusi(db, actor=getattr(user, "display_name", None)
+                            or getattr(user, "username", None))
+    except Exception:  # noqa: BLE001
+        db.rollback()
     return row
+
+
+def _pastikan_distribusi(db: Session, actor: str = None) -> dict:
+    """Distribusi Laba otomatis saat CTO tercapai (lihat `orders` untuk penjelasan)."""
+    import distribution as dist_mod
+    from routers.dashboard import (batas_periode, compute_finance,
+                                   get_active_period)
+    p = get_active_period(db)
+    fin = compute_finance(db, *batas_periode(p))
+    return dist_mod.pastikan_otomatis(
+        db, p.start_at.date().isoformat(), fin.get("laba_bersih", 0),
+        cto_tercapai=bool(fin.get("cto_tercapai")),
+        kas_period_id=p.id, oleh=actor)
 
 
 @router.put("/entries/{entry_id}", response_model=schemas.KasEntryOut)

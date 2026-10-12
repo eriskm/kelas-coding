@@ -1,21 +1,34 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """P2-07 — Distribusi Laba Bersih 10% / 30% / 30% / 30% (Financial SSOT-6).
 
 SSOT-6:
     10% Bonus Karyawan | 30% Pengelola | 30% Investor | 30% Hak Kas Aset
-    70% = cash-out        30% = Hak Kas Aset
-    TRIGGER = Tutup Kas periode  (BUKAN CTO)
+    70% = cash-out (permanen keluar dari Laci)
+    30% = Hak Kas Aset (keluar dari Laci, MASUK ke Saldo Aset)
+    TRIGGER = CTO tercapai (Laba Kotor >= Beban Gaji + Beban Operasional)
+
+ATURAN BISNIS (keputusan Owner):
+    Saat target operasional (CTO) tercapai, distribusi LANGSUNG terbentuk dan
+    uangnya langsung bergerak — tidak menunggu Tutup Kas:
+
+        Bonus Karyawan 10%  -> keluar dari Laci (permanen)
+        Pengelola       30%  -> keluar dari Laci (permanen)
+        Investor        30%  -> keluar dari Laci (permanen)
+        Hak Kas Aset    30%  -> keluar dari Laci, masuk Saldo Aset
+
+    Efeknya: Master Kas turun HANYA 70% (uang yang benar-benar dibagikan).
+    Porsi Hak Kas Aset hanya pindah lokasi, jadi Master Kas tetap utuh.
 
 Aturan implementasi (ID-01/ID-14, bukan business rule baru):
 - Dasar pembagian = LABA BERSIH dari financial core P2-05.
 - Pembagian hanya bila Laba Bersih > 0. Bila Laba Bersih <= 0 tidak ada
-  distribusi (deficit Beban siguen SSOT-8: Kas Aset cover + Hutang Beban —
+  distribusi (deficit Beban mengikuti SSOT-8: Kas Aset cover + Hutang Beban —
   mekanisme hutang adalah tahap P2-11, TIDAK dibuat di sini).
 - Sisa pembulatan Placement di Hak Kas Aset supaya total selalu tepat 100%.
-- Satu baris `Distribution` per periode kas (idempotent, replay-safe).
-- 30% Hak Kas Aset dicatat sebagai mutasi Kas Aset (layer KAS_ASET, P2-06).
-- 70% cash-out dicatat sebagai jurnaldistribution; pengeluaran kas nyatanya
-  dieksekusi pada tahap Tutup Kas (P2-08), bukan mengurangi saldo Laci di sini.
+- Satu baris `Distribution` per periode kas (idempotent, replay-safe) — dipanggil
+  ulang berkali-kali TIDAK akan menggerakkan uang dua kali.
+- Tutup Kas TIDAK lagi membentuk distribusi; ia hanya melakukan rekonsiliasi +
+  arsip + buka periode baru.
 """
 from __future__ import annotations
 
@@ -38,6 +51,11 @@ NAMA = ("Bonus Karyawan", "Pengelola", "Investor", "Hak Kas Aset")
 KATEGORI = "Hak Kas Aset"
 
 EVENT_DISTRIBUSI = "DISTRIBUSI_DIBENTUK"
+
+#: Alasan distribusi tidak terbentuk — dikirim ke UI supaya user tahu kenapa.
+ALASAN_BELUM_SIAP = "Laba Kotor belum menutup Total Beban (CTO)"
+ALASAN_LABA_NOL = "Laba Bersih tidak positif"
+ALASAN_KAS_KURANG = "Saldo Laci tidak cukup untuk seluruh porsi distribusi"
 
 
 class DistributionError(ValueError):
@@ -122,17 +140,21 @@ def kunci_unik(db: Session, periode: str, kas_period_id) -> str:
 
 def terapkan(db: Session, periode: str, laba_bersih, kas_period_id=None,
              oleh: str = None, commit: bool = False):
-    """Bentuk distribusi untuk satu KAS PERIOD (dipanggil saat Tutup Kas).
+    """Bentuk distribusi untuk satu KAS PERIOD (dipanggil otomatis saat CTO tercapai).
 
     IDEMPOTENT per Kas Period: bila Kas Period ini sudah punya Distribution,
-    baris lama dikembalikan tanpa menulis ulang (tidak ada dobel cash-out).
+    baris lama dikembalikan tanpa menulis ulang dan TANPA menggerakkan uang lagi.
     Kas Period lain pada tanggal yang sama tetap mendapat barisnya sendiri.
+    Saat baris baru terbentuk, uangnya langsung bergerak: 70% keluar permanen dari
+    Laci, 30% Hak Kas Aset dipindahkan Laci -> Saldo Aset.
     Tidak memaksa commit; pemanggil (router) yang memutuskan transaksi.
     """
     existing = sudah_ada(db, periode, kas_period_id)
     if existing is not None:
         return {"created": False, "distribution": existing,
                 "alokasi": alokasi_dari(existing), "kas_aset_mutation": None,
+                "kas_aset_entry": None, "cash_out": ZERO,
+                "trigger": "CTO tercapai",
                 "periode": label_periode(existing.periode),
                 "periode_key": existing.periode}
 
@@ -141,8 +163,10 @@ def terapkan(db: Session, periode: str, laba_bersih, kas_period_id=None,
         if commit:
             db.commit()
         return {"created": False, "distribution": None, "alokasi": hit,
-                "kas_aset_mutation": None, "periode": periode,
-                "periode_key": periode}
+                "kas_aset_mutation": None, "kas_aset_entry": None,
+                "cash_out": ZERO, "trigger": None,
+                "alasan": hit.get("alasan"),
+                "periode": periode, "periode_key": periode}
 
     from models import Distribution
     row = Distribution(
@@ -158,11 +182,18 @@ def terapkan(db: Session, periode: str, laba_bersih, kas_period_id=None,
     db.add(row)
     db.flush()
 
-    # Owner Cash Model v4 #4: 30% Hak Kas Aset adalah ALOKASI, bukan uang baru.
-    # Tidak ada mutasi posisi kas: posisinya tetap di SALDO LACI sampai terjadi
-    # transfer fisik Laci -> Aset. Nilai alokasi tetap tersimpan di tabel
-    # `distributions.hak_kas_aset` (designation) dan diekspos di ringkasan.
-    mutasi = None
+    # ---------------------------------------------------------------------------
+    # UANGNYA SEKARANG BERGERAK (keputusan Owner: distribusi saat CTO tercapai).
+    #   70% (Karyawan + Pengelola + Investor) -> KELUAR permanen dari Laci.
+    #   30% (Hak Kas Aset)                   -> KELUAR dari Laci, MASUK Saldo Aset.
+    # Efek Master Kas: turun hanya sebesar 70%.
+    # ---------------------------------------------------------------------------
+    co_mut = catat_cash_out(db, row, oleh=oleh)
+    aset_mut = catat_hak_kas_aset(db, row, oleh=oleh)
+    row.cash_out_entry_id = co_mut.get("entry_id")
+    # Disimpan sisi MASUK (sisi Aset) — itu yang jadi bukti uang benar-benar
+    # berpindah posisi, dan dipakai closing untuk idempotensi.
+    row.laci_adjust_entry_id = aset_mut.get("masuk_id")
 
     journal.record(
         db, journal.DOMAIN_FINANCE, EVENT_DISTRIBUSI,
@@ -173,7 +204,10 @@ def terapkan(db: Session, periode: str, laba_bersih, kas_period_id=None,
                  "karyawan": str(hit["karyawan"]), "pengelola": str(hit["pengelola"]),
                  "investor": str(hit["investor"]), "kas_aset": str(hit["kas_aset"]),
                  "cash_out": str(hit["cash_out"]),
-                 "rasio": ["10%", "30%", "30%", "30%"]})
+                 "rasio": ["10%", "30%", "30%", "30%"],
+                 "trigger": "CTO tercapai",
+                 "hak_kas_aset": "dipindahkan Laci -> Saldo Aset",
+                 "master_kas_setelah": str(cash.master_kas(db))})
 
     if commit:
         db.commit()
@@ -181,8 +215,111 @@ def terapkan(db: Session, periode: str, laba_bersih, kas_period_id=None,
         db.flush()
     db.refresh(row)
     return {"created": True, "distribution": row, "alokasi": hit,
-            "kas_aset_mutation": mutasi, "periode": label_periode(row.periode),
-            "periode_key": row.periode}
+            "kas_aset_mutation": aset_mut, "kas_aset_entry": aset_mut["masuk_id"],
+            "cash_out": hit["cash_out"], "trigger": "CTO tercapai",
+            "alasan": None,
+            "periode": label_periode(row.periode), "periode_key": row.periode}
+
+
+def catat_cash_out(db: Session, row, oleh: str = None) -> dict:
+    """70% distribusi KELUAR dari Saldo Laci (permanen). Idempoten per Distribution."""
+    if row is None:
+        return {"created": False, "nominal": ZERO, "entry_id": None}
+    if row.cash_out_entry_id:
+        from models import KasEntry
+        e = db.query(KasEntry).filter(
+            KasEntry.id == row.cash_out_entry_id).first()
+        return {"created": False,
+                "nominal": quantize(to_decimal(getattr(e, "nominal", 0))),
+                "entry_id": row.cash_out_entry_id}
+    nominal = quantize(to_decimal(row.cash_out))
+    if nominal <= ZERO:
+        return {"created": False, "nominal": ZERO, "entry_id": None}
+    mut = cash.catat_cash_out(db, nominal, "Bagi hasil periode %s" % row.periode,
+                              ref_type="distribusi", ref_id=row.id, actor=oleh,
+                              check_saldo=False)
+    row.cash_out_entry_id = mut["id"]
+    db.flush()
+    return {"created": True, "nominal": mut["nominal"], "entry_id": mut["id"]}
+
+
+def catat_hak_kas_aset(db: Session, row, oleh: str = None) -> dict:
+    """30% Hak Kas Aset: KELUAR dari Laci lalu MASUK ke Saldo Aset.
+
+    Dipakai `cash.transfer` supaya dua sisinya dijamin berpasangan (Laci ∓,
+    Aset ±) dan Master Kas tidak berubah — hanya lokasi uang yang pindah.
+    """
+    if row is None:
+        return {"created": False, "nominal": ZERO, "masuk_id": None}
+    if row.laci_adjust_entry_id:
+        return {"created": False,
+                "nominal": quantize(to_decimal(row.hak_kas_aset)),
+                "masuk_id": row.laci_adjust_entry_id}
+    nominal = quantize(to_decimal(row.hak_kas_aset))
+    if nominal <= ZERO:
+        return {"created": False, "nominal": ZERO, "masuk_id": None}
+    res = cash.transfer(
+        db, nominal, cash.LAYER_LACI, cash.LAYER_ASET,
+        "Setoran Hak Kas Aset periode %s" % row.periode,
+        actor=oleh, ref_type="distribusi", ref_id=row.id, check_saldo=False,
+        sumber=cash.SUMBER_DISTRIBUSI_ASET)
+    masuk_id = res.get("masuk_id") or res.get("entry_id")
+    row.laci_adjust_entry_id = masuk_id
+    db.flush()
+    return {"created": bool(res.get("created", True)), "nominal": nominal,
+            "masuk_id": masuk_id, "keluar_id": res.get("keluar_id")}
+
+
+def pastikan_otomatis(db: Session, periode: str, laba_bersih, cto_tercapai,
+                      kas_period_id=None, oleh: str = None):
+    """Bentuk distribusi OTOMATIS begitu CTO tercapai. Aman dipanggil sesering mungkin.
+
+    Syarat (semua harus lewat, kalau tidak TIDAK ada yang disentuh):
+      1. CTO tercapai  : Laba Kotor >= Beban Gaji + Beban Operasional.
+      2. Laba Bersih > 0
+      3. Saldo Laci cukup untuk SELURUH porsi (cash-out + Hak Kas Aset), supaya
+         tidak ada uang yang keluar sebagian lalu posisi terpisah.
+      4. Periode ini belum punya Distribution.
+
+    Idempoten lewat (4): dipanggil lagi pada periode yang sama tidak menggerakkan
+    uang dua kali.
+    """
+    res = {"dibentuk": False, "alasan": None, "alokasi": hitung(laba_bersih),
+           "distribution": None, "cash_out": ZERO, "hak_kas_aset": ZERO}
+    # (1) Sudah pernah terbentuk? -> einde, tidak ada yang perlu dicek lagi.
+    # Dicek PALING AWAL supaya alasannya akurat ("sudah terbentuk"), bukan
+    # salah dilaporkan sebagai "kas kurang" padahal saldonya memang sudah habis
+    # karena distribusi tadi.
+    existing = sudah_ada(db, periode, kas_period_id)
+    if existing is not None:
+        res["alasan"] = "Sudah pernah terbentuk di periode ini"
+        res["alokasi"] = alokasi_dari(existing)
+        res["distribution"] = existing
+        res["cash_out"] = to_decimal(existing.cash_out)
+        res["hak_kas_aset"] = to_decimal(existing.hak_kas_aset)
+        return res
+    # (2) Syarat-syarat berurutan dari yang paling mendasar.
+    if not cto_tercapai:
+        res["alasan"] = ALASAN_BELUM_SIAP
+        return res
+    hit = hitung(laba_bersih)
+    if not hit["eligible"]:
+        res["alasan"] = hit.get("alasan") or ALASAN_LABA_NOL
+        return res
+    total = quantize(hit["cash_out"] + hit["kas_aset"])
+    if cash.saldo_laci(db) < total:
+        res["alasan"] = "%s (butuh %s, ada %s)" % (
+            ALASAN_KAS_KURANG, total, cash.saldo_laci(db))
+        res["alokasi"] = hit
+        return res
+    out = terapkan(db, periode, laba_bersih, kas_period_id=kas_period_id, oleh=oleh)
+    res["dibentuk"] = bool(out.get("created"))
+    res["alasan"] = None if out.get("created") else "Sudah pernah terbentuk"
+    res["alokasi"] = out.get("alokasi") or hit
+    res["distribution"] = out.get("distribution")
+    res["cash_out"] = out.get("cash_out") or ZERO
+    res["hak_kas_aset"] = (res["alokasi"] or {}).get("kas_aset", ZERO)
+    return res
 
 
 def alokasi_dari(row) -> dict:
@@ -210,17 +347,17 @@ def ringkasan(db: Session, periode: str, kas_period_id=None) -> dict:
     row = sudah_ada(db, periode, kas_period_id)
     if row is None:
         return {"terbentuk": False, "periode": periode,
-                "alokasi": hitung(ZERO), "trigger": "Tutup Kas",
+                "alokasi": hitung(ZERO), "trigger": "CTO tercapai",
                 "rasio": ["10%", "30%", "30%", "30%"],
-                "hak_kas_aset_posisi": "LACI (alokasi; belum transfer)",
+                "hak_kas_aset_posisi": "Sudah dipindahkan ke Saldo Aset",
                 "master_kas_setelah": str(cash.master_kas(db))}
     al = alokasi_dari(row)
     return {"terbentuk": True, "periode": label_periode(row.periode),
             "periode_key": row.periode, "alokasi": al,
             "created_at": row.created_at, "oleh": row.oleh,
-            "trigger": "Tutup Kas", "rasio": ["10%", "30%", "30%", "30%"],
-            # v4 #4: designation — belum menjadi uang di posisi Aset.
+            "trigger": "CTO tercapai", "rasio": ["10%", "30%", "30%", "30%"],
+            # Porsi Hak Kas Aset sudah berpindah Laci -> Saldo Aset.
             "hak_kas_aset": str(to_decimal(row.hak_kas_aset)),
-            "hak_kas_aset_posisi": "LACI (alokasi; belum transfer)",
+            "hak_kas_aset_posisi": "Sudah dipindahkan ke Saldo Aset",
             "catatan": "30% Hak Kas Aset adalah alokasi; posisinya tetap di Laci sampai transfer fisik.",
             "master_kas_setelah": str(cash.master_kas(db))}

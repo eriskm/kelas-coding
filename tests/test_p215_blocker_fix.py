@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """P2-15 B-1 & B-2 — regression test.
 
 B-1: Tutup Kas kedua pada TANGGAL KALENDER YANG SAMA harus berhasil
@@ -54,15 +54,30 @@ def test_b1_distribusi_unik_per_kas_period(db):
 
 def test_b1_replay_kas_period_yang_sama_tidak_menggandakan(db):
     """B-1b: Kas Period yang sama diproses dua kali -> idempoten, 1 baris, 1 cash-out."""
-    from models import Distribution, KasPeriod
+    import models
+    from models import Distribution, KasEntry, KasPeriod
     db.query(Distribution).delete()
     db.query(KasPeriod).delete()
+    # Rowid distributions dipakai ulang, jadi ref_id=1 yang dipakai sekarang bisa
+    # menabrak entri kas dari test sebelumnya. Guard idempoten
+    # `cash.mutasi_tersimpan` akan salah menyimpulkan "sudah pernah" kalau sisa
+    # entri itu tidak dibersihkan — jadi bersihkan dulu, seperti periode baru.
+    db.query(KasEntry).filter(
+        KasEntry.sumber.in_([cash.SUMBER_CASH_OUT, cash.SUMBER_DISTRIBUSI_ASET])
+    ).delete(synchronize_session=False)
     db.commit()
+    # Buang instance lama dari identity map — SQLite memakai ulang rowid, jadi
+    # Distribution baru bisa "mewarisi" nilai kolom dari object yang dihapus.
+    db.expunge_all()
 
     p = KasPeriod(start_at=datetime(2026, 10, 5, 16), end_at=datetime(2026, 10, 6, 16),
                   status="OPEN", created_at=datetime(2026, 10, 5, 8))
     db.add(p); db.commit(); db.refresh(p)
     key = _kunci(p.start_at)
+    # `db.query(Distribution).delete()` di atas membuat SQLite memakai ulang rowid,
+    # jadi ref_id Distribution yang baru bisa sama dengan distribution test lain.
+    # Karena itu hanya entri kas yang dibuat SESUDAH titik ini yang dihitung.
+    maks_id_awal = db.query(KasEntry.id).order_by(KasEntry.id.desc()).first()[0] or 0
 
     a = dist.terapkan(db, key, "1000000", kas_period_id=p.id, oleh="pytest")
     db.commit()
@@ -76,11 +91,22 @@ def test_b1_replay_kas_period_yang_sama_tidak_menggandakan(db):
     assert a["created"] is True
     assert b["created"] is False and b["distribution"].id == a["distribution"].id
     assert db.query(Distribution).count() == 1
-    assert co1["created"] is True
+    # Uang distributions sekarang bergerak SAAT BARISNYA TERBENTUK (keputusan
+    # Owner), jadi `closing.catat_cash_out` yang dipanggil setelahnya sudah
+    # tidak punya kerjaan — persis yang diuji di sini: replay tidak menggandakan.
+    assert co1["created"] is False
     assert co2["created"] is False
-    # cash-out TIDAK dobel
-    assert co2["nominal"] == co1["nominal"]
+    assert co1["nominal"] == co2["nominal"]
     assert closing._entry_id(co2["entry"]) == closing._entry_id(co1["entry"])
+    # Cash-out tercatat tepat satu kali untuk periode ini.
+    assert db.query(KasEntry).filter(
+        KasEntry.id > maks_id_awal,
+        KasEntry.layer == cash.LAYER_LACI,
+        KasEntry.sumber == cash.SUMBER_CASH_OUT).count() == 1
+    # Dan Hak Kas Aset juga tercatat tepat satu kali (Keluar Laci + Masuk Aset).
+    assert db.query(KasEntry).filter(
+        KasEntry.id > maks_id_awal,
+        KasEntry.sumber == cash.SUMBER_DISTRIBUSI_ASET).count() == 2
 
 
 def test_b1_entry_id_aman_untuk_dict_dan_orm(db):

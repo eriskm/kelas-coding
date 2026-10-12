@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """P2-08 — Orkestrasi Tutup Kas (OD-013, SSOT-1/6/7, Q7, Q14).
 
 Tanggung jawab modul ini (TANPA redesign Buku Kas):
@@ -104,11 +104,13 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
 
     Urutan (semua dalam satu transaksi):
       1. Laba Bersih authoritative (financial core P2-05).
-      2. Distribusi 10/30/30/30 (P2-07; idempotent per periode).
-      3. Cash-out 70% dari Laci (idempotent via Distribution.cash_out_entry_id).
-      4. Set Laci = uang fisik bila ada Declare (idempotent).
-      5. Snapshot periode (TIDAK menghapus apa pun — Q14).
-      6. Tutup periode & buka periode baru 16:00 → 16:00.
+      2. Distribusi TIDAK lagi dibentuk di sini — sudah terjadi otomatis saat
+         CTO tercapai (`distribution.pastikan_otomatis`). Kalau ternyata belum
+         terbentuk (mis. order masih di bawah CTO), baris lama dikembalikan apa
+         adanya karena `terapkan` bersifat idempoten.
+      3. Set Laci = uang fisik bila ada Declare (idempotent per periode).
+      4. Snapshot periode (TIDAK menghapus apa pun — Q14).
+      5. Tutup periode & buka periode baru 16:00 → 16:00.
     """
     from models import KasPeriod
 
@@ -118,11 +120,16 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
     fin = compute_finance(db, *batas_periode(period))
     periode_key = period.start_at.date().isoformat()
 
-    dist = distribution_mod.terapkan(db, periode_key, fin.get("laba_bersih", 0),
-                                      kas_period_id=period.id, oleh=oleh)
+    # Distribusi tidak lagi dibentuk di sini — sudah terjadi otomatis saat CTO
+    # tercapai. Dipanggil lewat `pastikan_otomatis` (bukan `terapkan` langsung)
+    # supaya pemeriksaan "Saldo Laci cukup untuk seluruh porsi" tetap berlaku dan
+    # Tutup Kas tidak setengah jalan.
+    dist = distribution_mod.pastikan_otomatis(
+        db, periode_key, fin.get("laba_bersih", 0),
+        cto_tercapai=bool(fin.get("cto_ter")),
+        kas_period_id=period.id, oleh=oleh)
     dist_row = dist.get("distribution")
 
-    cash_out = catat_cash_out(db, dist_row, oleh=oleh)
     laci_adjust = rekonsiliasi_periode(db, dist_row, counted, oleh=oleh)
 
     # P2-15 B-2: "Selisih Laci" memakai basis LEDGER (uang fisik vs Saldo Laci),
@@ -140,19 +147,21 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
         "selisih_basis": "LEDGER LACI (counted vs Saldo Laci)",
         "distribusi": {
             "terbentuk": bool(dist.get("created")),
+            "sudah_ada": not bool(dist.get("created")),
             "periode": dist.get("periode") or periode_key,
             "periode_key": (dist_row.periode if dist_row is not None else periode_key),
-            "trigger": "Tutup Kas",
+            # Distribusi kini terbentuk OTOMATIS saat CTO tercapai, bukan di sini.
+            "trigger": dist.get("trigger") or "CTO tercapai",
             "rasio": ["10%", "30%", "30%", "30%"],
             "alokasi": {k: str(v) for k, v in (dist.get("alokasi") or {}).items()},
+            "alasan_tidak_terbentuk": dist.get("alasan"),
         },
-        # P2-08: jejak eksekusi cash-out & setelan Laci (audit, tanpa hard delete).
-        "cash_out": {"tercatat": bool(cash_out["created"]),
-                     "nominal": str(cash_out["nominal"]),
-                     # P2-15 B-1: `entry` bisa dict (mutasi baru) ATAU objek ORM
-                     # KasEntry (cash-out yang sudah pernah dieksekusi pada Kas
-                     # Period ini). Ambil id dengan cara yang aman untuk keduanya.
-                     "entry_id": _entry_id(cash_out.get("entry"))},
+        # Jejak eksekusi uang (audit, tanpa hard delete).
+        "distribusi_uang": {
+            "cash_out": str(dist.get("cash_out") or 0),
+            "hak_kas_aset": str((dist.get("alokasi") or {}).get("kas_aset", 0)),
+            "kas_aset_setelah": str(cash.saldo_kas_aset(db)),
+        },
         "rekonsiliasi": {"selisih": (None if laci_adjust.get("selisih") is None
                                     else str(laci_adjust["selisih"])),
                          "penyesuaian": bool(laci_adjust.get("penyesuaian")),
@@ -210,7 +219,7 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
 
     return {"ok": True, "closed_period_id": period.id, "snapshot": snapshot,
             "distribusi": snapshot["distribusi"],
-            "cash_out": snapshot["cash_out"],
+            "distribusi_uang": snapshot["distribusi_uang"],
             "rekonsiliasi": snapshot["rekonsiliasi"],
             "saldo": snapshot["saldo"],
             "new_period": {"id": new_period.id,

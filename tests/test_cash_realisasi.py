@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """P2-15 (Owner Cash Model) — CASH sebagai event realisasi transaksi.
 
 Aturan yang diuji (meniru Project A):
@@ -12,7 +12,7 @@ Aturan yang diuji (meniru Project A):
 """
 from datetime import date, datetime, timedelta
 
-from money import to_decimal
+from money import ZERO as ZERO_SAFE, to_decimal
 
 
 def _order(db, no, harga, modal=(0, 0, 0), status="DONE", dp=0):
@@ -160,6 +160,17 @@ def test_event_cash_lengkap(client, db, auth):
     db.commit()
     before_laci = _saldo_laci(db)
 
+    # Catatan: event CASH bisa memicu DISTRIBUSI OTOMATIS kalau CTO tercapai
+    # (keputusan Owner). Kalau itu terjadi, 100% laba periode keluar dari Laci
+    # (70% cash-out + 30% Hak Kas Aset), jadi delta harus diperhitungkan supaya
+    # test ini tetap menguji event CASH-nya saja.
+    import distribution as dist_mod
+    from routers.dashboard import get_active_period
+    _p = get_active_period(db)
+    _kunci = _p.start_at.date().isoformat()
+    d_awal = dist_mod.sudah_ada(db, _kunci, _p.id)
+    _id_awal = d_awal.id if d_awal is not None else None
+
     r = client.put("/api/orders/%d" % o.id, headers=auth, json={"status": "CASH"})
     assert r.status_code == 200, r.text
     db.expire_all()
@@ -172,12 +183,17 @@ def test_event_cash_lengkap(client, db, auth):
     assert o.lunas_at is not None
     # Laba = Omzet - Modal3 (800rb - 300rb - 100rb - 20rb = 380rb)
     assert to_decimal(o.laba_bersih) == to_decimal(380000)
-    # Saldo LACI pada event CASH = pelunasan sisa (500rb) - Modal3 (420rb) = 80rb.
+    # Saldo LACI pada event CASH = pelunasan sisa (500rb) - Modal3 (420rb).
     # Keputusan Owner: Modal keluar dari kas saat CASH, bukan saat DONE.
-    # DP 300rb SUDAH masuk laci sejak diterima (dicatat sebelum `before_laci`),
-    # jadi tidak dihitung lagi di sini.
-    assert _saldo_laci(db) - before_laci == to_decimal(500000 - 420000)
+    # DP 300rb SUDAH masuk laci sejak diterima (dicatat sebelum `before_laci`).
+    d_akhir = dist_mod.sudah_ada(db, _kunci, _p.id)
+    tergakar = ZERO_SAFE
+    if d_akhir is not None and d_akhir.id != _id_awal:
+        tergakar = to_decimal(d_akhir.cash_out) + to_decimal(d_akhir.hak_kas_aset)
+
+    assert _saldo_laci(db) - before_laci == to_decimal(500000 - 420000) - tergakar
     # DP punya tepat satu entri kas "Penerimaan Pembayaran" — tidak dobel.
+    import cash as cash_mod
     dp_pay = db.query(models.Payment).filter(
         models.Payment.service_order_id == o.id,
         models.Payment.kind == "DP").first()

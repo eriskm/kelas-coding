@@ -89,14 +89,36 @@ def test_injeksi_memilih_posisi(db):
     assert cash.saldo_kas_aset(db) == aset0 + to_decimal("75000")
 
 
-def test_alokasi_30_bukan_masuk_kas_aset(db):
-    """Hak Kas Aset 30% adalah alokasi: Saldo Aset tidak bertambah (v4 #4)."""
+def test_alokasi_30_dipindahkan_ke_kas_aset(db):
+    """Hak Kas Aset 30% DIPINDAHKAN Laci -> Saldo Aset (keputusan Owner).
+
+    Dulu posisinya hanya "alokasi" (designation) dan uangnya tetap di Laci.
+    Sekarang saat distribusi terbentuk, 30% benar-benar keluar dari Laci dan
+    masuk Saldo Aset — jadi Master Kas turun hanya sebesar 70%.
+    """
+    import distribution as dist_mod
     key = "PY-ALOKASI-V4"
     aset_awal = cash.saldo_kas_aset(db)
-    hasil = dist.terapkan(db, key, "1000000", oleh="pytest")
+    laci_awal = cash.saldo_laci(db)
+    master_awal = cash.master_kas(db)
+
+    hasil = dist_mod.terapkan(db, key, "1000000", oleh="pytest")
     db.commit()
     assert hasil["created"] is True
-    assert cash.saldo_kas_aset(db) == aset_awal
+
+    al = hasil["alokasi"]
+    # 30% Hak Kas Aset benar-benar menambah Saldo Aset.
+    assert cash.saldo_kas_aset(db) == aset_awal + to_decimal(al["kas_aset"])
+    # 70% cash-out keluar permanen dari Laci.
+    assert cash.saldo_laci(db) == laci_awal - to_decimal(al["total"])
+    # Master Kas turun HANYA 70% (uang Hak Kas Aset hanya pindah lokasi).
+    assert cash.master_kas(db) == master_awal - to_decimal(al["cash_out"])
+
+    # Idempoten: membentuk ulang tidak menggerakkan uang lagi.
+    lagi = dist_mod.terapkan(db, key, "1000000", oleh="pytest")
+    db.commit()
+    assert lagi["created"] is False
+    assert cash.master_kas(db) == master_awal - to_decimal(al["cash_out"])
 
 
 def test_rekonsiliasi_jadi_penyesuaian_bukan_opening(db):

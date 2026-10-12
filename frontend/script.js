@@ -4330,15 +4330,18 @@ function renderBukuKas() {
     }
 }
 
+// Distribusi Laba — otomatis begitu CTO tercapai (Laba Kotor >= Total Beban).
+// Uangnya LANGSUNG bergerak saat baris distribusi terbentuk, tidak menunggu
+// Tutup Kas:
+//   10% Karyawan / 30% Pengelola / 30% Investor -> keluar permanen dari Laci
+//   30% Hak Kas Aset                          -> keluar Laci, masuk Saldo Aset
+// Efeknya Master Kas turun hanya 70% (porsi Hak Kas Aset hanya pindah lokasi).
 function renderAlloc() {
     const list = document.getElementById('kuAllocList');
     const totalEl = document.getElementById('kuTotalProfit');
     const fin = _kuFin || {};
     const total = Number(fin.laba_bersih) || 0;
     const al = fin.alokasi || {};
-    // Distribusi hanya tampil ketika target operasional (CTO) tercapai.
-    // Sumber angkanya: alokasi yang sudah TERBENTUK (Tutup Kas) kalau ada,
-    // kalau belum → pratinjau. Badge menjelaskan yang sedang ditampilkan.
     const cto = !!fin.cto_tercapai;
     const formed = !!fin.alokasi_terbentuk && total > 0;
     const src = formed ? al : (fin.alokasi_preview || {});
@@ -4347,14 +4350,16 @@ function renderAlloc() {
     if (badge) {
         badge.classList.toggle('is-ok', cto);
         badge.textContent = !cto ? 'MENUNGGU CTO'
-            : (formed ? 'TERBENTUK' : 'PRATINJAU');
+            : (formed ? 'TERBENTUK' : 'MENUNGGU');
     }
     if (note) {
+        const alasan = fin.distribusi_alasan;
         note.textContent = !cto
-            ? 'Target Operasional belum tercapai — distribusi belum ditampilkan.'
+            ? 'Belum otomatis: Laba Kotor masih di bawah Total Beban (CTO).'
             : (formed
-                ? 'Angka final, sudah dikunci saat Tutup Kas.'
-                : 'Angka perkiraan — akan dikunci saat Tutup Kas.');
+                ? 'Uang sudah dibagikan: 70% keluar dari Laci, 30% Hak Kas Aset masuk ke Kas Aset.'
+                : (alasan ? ('Belum terbentuk — ' + alasan + '.')
+                          : 'Menunggu perhitungan laba periode.'));
     }
     if (totalEl) totalEl.textContent = kuRupiah(total);
     _kuAllocView = cto ? [
