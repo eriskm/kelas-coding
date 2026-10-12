@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id" class="h-full">
 <head>
     <meta charset="UTF-8">
@@ -1197,6 +1197,11 @@
                                 </div>
                             </div>
                             <div class="panel lg:col-span-2">
+                                <!-- Panel "Distribusi Laba" yang dulu ada di baris bawah sudah
+                                     DIHAPUS: isinya empat baris 10/30/30/30 yang persis sama
+                                     dengan Alokasi Profit di atas, hanya lebih sedikit
+                                     informasi (tanpa donut, badge CTO, alasan, dan tombol).
+                                     Satu panel saja sudah cukup. -->
                                 <h3 class="panel-title">Alokasi Profit</h3>
                                 <div class="ku-bh-badge-wrap" id="kuAllocGate">
                                     <span class="ku-bh-badge" id="kuAllocBadge">MENUNGGU CTO</span>
@@ -1208,6 +1213,7 @@
                                 <div id="kuDonut"></div>
                                 <div class="al-list" id="kuAllocList"></div>
                                 <div class="al-total"><span>Total Profit</span><b id="kuTotalProfit"></b></div>
+                                <div class="ku-alloc-note" id="kuAllocCatatan"></div>
                             </div>
                         </div>
 
@@ -1240,7 +1246,9 @@
                             </div>
                         </div>
 
-                        <!-- P2-15: Kas Aset · Distribusi · Hutang Beban · Notifikasi -->
+                        <!-- P2-15: Kas Aset - Distribusi - Hutang Beban - Notifikasi.
+                             Panel Distribusi Laba dihapus (duplikat Alokasi Profit),
+                             Notifikasi jadi icon lonceng di baris Riwayat Transaksi. -->
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                             <div class="panel ku-kas-panel" id="kuMasterPanel">
                                 <h3 class="panel-title" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
@@ -1290,24 +1298,6 @@
                                     </div>
                                     <div id="kuAsetFeedback" class="hidden receive-feedback mt-2"></div>
                                 </form>
-                            </div>
-
-                            <div class="panel">
-                                <h3 class="panel-title"><i class="fa-solid fa-chart-pie"></i> Distribusi Laba</h3>
-                                <p class="ku-sub">10% Karyawan &middot; 30% Pengelola &middot; 30% Investor &middot; 30% Hak Kas Aset &mdash; terbentuk saat <b>Tutup Kas</b>.</p>
-                                <div class="overflow-x-auto mt-2">
-                                    <table class="tx-table w-full text-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Penerima</th>
-                                                <th class="numeric-r">Porsi</th>
-                                                <th class="numeric-r">Nilai</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="kuDistBody"></tbody>
-                                    </table>
-                                </div>
-                                <div class="al-total"><span id="kuDistNote">Belum ada distribusi</span><b id="kuDistTotal">Rp 0</b></div>
                             </div>
 
                             <div class="panel">

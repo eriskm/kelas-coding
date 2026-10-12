@@ -440,6 +440,23 @@ def alokasi_dari(row) -> dict:
                               + to_decimal(row.investor) + to_decimal(row.hak_kas_aset))}
 
 
+def jumlah_alokasi(db: Session, row) -> int:
+    """Berapa kali Distribution ini sudah dialokasikan (1 = awal, >1 = ada top-up).
+
+    Dihitung dari entri kas cash-out milik Distribution ini, bukan dari kolom
+    khusus -- jadi nilainya benar juga untuk baris yang dibuat SEBELUM fitur
+    top-up ada, dan tidak butuh migrasi.
+    """
+    if row is None:
+        return 0
+    from models import KasEntry
+    n = db.query(KasEntry.id).filter(
+        KasEntry.ref_type == "distribusi",
+        KasEntry.ref_id == row.id,
+        KasEntry.sumber == cash.SUMBER_CASH_OUT).count()
+    return max(1, int(n))
+
+
 def ringkasan(db: Session, periode: str, kas_period_id=None) -> dict:
     """Status distribusi satu KAS PERIOD (read-only untuk response API).
 
@@ -458,6 +475,7 @@ def ringkasan(db: Session, periode: str, kas_period_id=None) -> dict:
     return {"terbentuk": True, "periode": label_periode(row.periode),
             "periode_key": row.periode, "alokasi": al,
             "created_at": row.created_at, "oleh": row.oleh,
+            "jumlah_alokasi": jumlah_alokasi(db, row),
             "trigger": "CTO tercapai", "rasio": ["10%", "30%", "30%", "30%"],
             # Porsi Hak Kas Aset sudah berpindah Laci -> Saldo Aset.
             "hak_kas_aset": str(to_decimal(row.hak_kas_aset)),

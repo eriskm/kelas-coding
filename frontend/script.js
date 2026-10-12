@@ -3868,7 +3868,6 @@ async function loadKuFinance() {
         // (sumber tunggal yang sama dengan saldo berjalan), bukan dari sini.
         // P2-15: panel turunan lain (tidak kritis bila gagal).
         loadKuAset().catch(() => {});
-        loadKuDistribusi().catch(() => {});
         loadKuDebt().catch(() => {});
         loadKuNotif().catch(() => {});
         renderBukuKas();
@@ -4022,31 +4021,15 @@ async function kuAsetTransfer() {
     }
 }
 
-// Distribusi 10/30/30/30 (P2-07): data & rasio dari backend.
-async function loadKuDistribusi() {
-    const body = document.getElementById('kuDistBody');
-    const note = document.getElementById('kuDistNote');
-    const total = document.getElementById('kuDistTotal');
-    if (!body) return;
-    let d = null;
-    try { d = await apiGet('/kas/distribusi?period=current'); } catch (_) {}
-    const al = (d && d.alokasi) || {};
-    const rows = [
-        ['Bonus Karyawan', '10%', al.karyawan],
-        ['Pengelola', '30%', al.pengelola],
-        ['Investor', '30%', al.investor],
-        ['Hak Kas Aset', '30%', al.kas_aset],
-    ];
-    body.innerHTML = rows.map(([nama, pct, v]) => `<tr>
-        <td>${nama}</td><td class="numeric-r">${pct}</td>
-        <td class="numeric-r">${Number(v || 0) ? kuRupiah(v) : '-'}</td></tr>`).join('');
-    if (total) total.textContent = kuRupiah(al.total || 0);
-    if (note) {
-        note.textContent = d && d.terbentuk
-            ? 'Terbentuk saat Tutup Kas periode ' + (d.periode || '-')
-            : 'Belum terbentuk — terbentuk saat Tutup Kas';
-    }
-}
+// Panel "Distribusi Laba" sudah DIHAPUS dari halaman Keuangan.
+//
+// Fungsinya merender empat baris 10/30/30/30 yang IDENTIK dengan Alokasi
+// Profit, tanpa donut, badge CTO, alasan, maupun tombol Jalankan Distribusi.
+// Jadi tidak ada informasi yang hilang saat panel ini dibuang; semuanya sudah
+// ada (dan lebih lengkap) di panel Alokasi Profit.
+//
+// Catatan: teks lamanya berbunyi "Terbentuk saat Tutup Kas" -- itu sudah tidak
+// benar sejak distribution berubah otomatis (CTO tercapai), bukan Tutup Kas.
 
 // Hutang Beban (P2-11): status, ledger, proses defisit, pelunasan.
 async function loadKuDebt() {
@@ -4506,6 +4489,23 @@ function renderAlloc() {
                           : 'Menunggu perhitungan laba periode.'));
     }
     if (totalEl) totalEl.textContent = kuRupiah(total);
+    // Catatan kecil di bawah: KAPAN distribution terbentuk + berapa kali laba
+    // sudah ditambahkan lewat top-up. Tanpa ini, kenaikan yang terjadi (laba naik
+    // lalu dialokasikan lagi) terlihat seperti angka yang melompat tanpa sebab.
+    const catatan = document.getElementById('kuAllocCatatan');
+    if (catatan) {
+        if (!cto) {
+            catatan.innerHTML = 'Alokasi <b>otomatis</b> saat Target Operasional (CTO) tercapai — bukan saat Tutup Kas.';
+        } else if (!formed) {
+            catatan.innerHTML = 'Begitu CTO tercapai, laba bersih langsung dibagi <b>10% / 30% / 30% / 30%</b> secara otomatis. Kalau ada transaksi baru setelahnya, hanya <b>selisihnya</b> yang ditambah.';
+        } else {
+            // 1 = baru terbentuk, >1 = ada top-up karena laba naik lagi.
+            const n = Number(fin.distribusi_jumlah_alokasi) || 0;
+            let t = 'Sudah terbentuk otomatis. 70% keluar dari Laci, 30% Hak Kas Aset masuk ke Kas Aset.';
+            if (n > 1) t += ' Terjadi <b>' + (n - 1) + ' kali top-up</b> — tiap kali laba naik, hanya selisihnya yang ditambah.';
+            catatan.innerHTML = t;
+        }
+    }
     // Tombol manual hanya muncul kalau CTO tercapai tapi distributions belum
     // jalan — mis. data sudah terlanjur CASH sebelum aturan otomatis ini aktif.
     if (btn) btn.classList.toggle('hidden', !(cto && !formed));

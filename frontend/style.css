@@ -1748,6 +1748,13 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .dark .ku-riwayat-btn { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.1); color: #d1d5db; }
 .ku-riwayat-btn:hover { color: #dc2626; border-color: #fecaca; transform: translateY(-1px); }
+.ku-alloc-note {
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid #f1f5f9;
+    font-size: 11px; line-height: 1.5; color: #64748b;
+}
+.dark .ku-alloc-note { border-top-color: rgba(255,255,255,0.08); color: #94a3b8; }
+
 .ku-back-btn { margin-bottom: 12px; }
 
 /* ── Notifikasi (P2-13): hanya icon lonceng + popover ── */

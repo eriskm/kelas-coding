@@ -445,6 +445,10 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         },
         "alokasi_terbentuk": alokasi_ok,
         "distribusi_alasan": _dist_alasan,
+        # Berapa kali laba sudah dialokasikan di periode ini. 1 = baru terbentuk,
+        # >1 = ada top-up karena laba naik lagi setelahnya. Ditampilkan oleh UI
+        # supaya kenaikan angka terlihat wajar, bukan melompat tanpa sebab.
+        "distribusi_jumlah_alokasi": _dist.jumlah_alokasi(db, _row_dist),
         "distribusi_trigger": "CTO tercapai",
         "alokasi": {
             "karyawan": karyawan,
