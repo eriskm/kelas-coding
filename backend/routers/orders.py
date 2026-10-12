@@ -375,6 +375,9 @@ def _page_clamp(page: int, limit: int):
 
 
 #: Status yang datanya sudah final -> diarsipkan saat periode kas ditutup.
+#: CATATAN: `FAILED` SENGAJA TIDAK ada di sini. Unitnya masih ada di toko --
+#: belum diambil pelanggan dan pekerjaannya belum selesai, jadi masih harus
+#: kelihatan di daftar dan bisa ditindaklanjuti.
 STATUS_DIARSIPKAN = ("CASH", "CANCEL")
 
 

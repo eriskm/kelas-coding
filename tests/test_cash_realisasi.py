@@ -379,6 +379,20 @@ def test_transaksi_tampil_status_cash(client, db, auth):
             client.get("/api/orders?page=1&limit=100", headers=auth).json()["items"]]
     assert o3.id in ids3, "Order DONE belum final harus tetap tampil"
 
+    # (4) FAILED TIDAK ikut diarsipkan, walaupun periodenya sudah ditutup.
+    #     Alasannya bisnis: unitnya masih ada di toko -- belumTakenOut oleh
+    #     pelanggan dan pekerjaannya belum selesai, jadi masih harus kelihatan
+    #     dan bisa ditindaklanjuti (reparasi ulang / ambil unit / batalkan).
+    o4 = _order(db, "PY-FAILED-DITOKO", 300000, modal=(100000, 20000, 0))
+    db.query(models.ServiceOrder).filter(models.ServiceOrder.id == o4.id).update(
+        {"status": "FAILED", "unit_status": "DI TOKO",
+         "lunas_at": datetime(2000, 1, 1, 20)})   # di dalam periode CLOSED
+    db.commit()
+    db.expire_all()
+    ids4 = [it["id"] for it in
+            client.get("/api/orders?page=1&limit=100", headers=auth).json()["items"]]
+    assert o4.id in ids4, "Order FAILED (unit masih di toko) harus tetap tampil"
+
 
 def _saldo_laci(db):
     """Saldo Laci terkini (Cash Model v4 #1: penerimaan masuk Laci)."""
