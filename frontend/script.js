@@ -19,7 +19,11 @@ function clearToken() { localStorage.removeItem('bsf_token'); sessionStorage.rem
 function getSavedUsername() { return localStorage.getItem('bsf_username') || ''; }
 function setSavedUsername(u) { localStorage.setItem('bsf_username', u); }
 function clearSavedUsername() { localStorage.removeItem('bsf_username'); }
-function getRemember() { return localStorage.getItem('bsf_remember') !== '0'; }
+// Default MATI. Ware ini dipakai bersama di toko: kalau "Ingat Saya" nyala
+// dari awal, siapa pun yang membuka aplikasi di komputer kasir langsung masuk
+// tanpa passcode selama token masih hidup (TTL 7 hari). Jadi remembered harus
+// jadi pilihan sadar, bukan default.
+function getRemember() { return localStorage.getItem('bsf_remember') === '1'; }
 function setRemember(v) { localStorage.setItem('bsf_remember', v ? '1' : '0'); }
 
 // ─────────────────────────────────────────────
@@ -5077,6 +5081,54 @@ function initLogin() {
     checkServer();
 }
 
+// ── Ubah passcode milik sendiri (Kelola Akun) ────────────────────────────────
+// Endpoint membatalkan SEMUA token user ini, jadi setelah sukses kita paksa
+// logout: kalau tidak, passcode baru yang salah ketik tidak akanketahuan
+// sampai token lama sendiri kadaluarsa (7 hari).
+const MIN_PASSCODE = 4;
+function _pcFb(msg, isErr) {
+    const fb = document.getElementById('pcFeedback');
+    if (!fb) return;
+    fb.classList.remove('hidden', 'success', 'error');
+    fb.classList.add(isErr ? 'error' : 'success');
+    fb.innerHTML = `<i class="fa-solid ${isErr ? 'fa-triangle-exclamation' : 'fa-circle-check'}"></i> ${escapeHtml(msg)}`;
+}
+
+function initPasscodeForm() {
+    const form = document.getElementById('passcodeForm');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const oldEl = document.getElementById('pcOld');
+        const newEl = document.getElementById('pcNew');
+        const new2El = document.getElementById('pcNew2');
+        const btn = document.getElementById('pcBtn');
+        const lama = oldEl ? oldEl.value : '';
+        const baru = newEl ? newEl.value.trim() : '';
+        const baru2 = new2El ? new2El.value.trim() : '';
+        if (!lama) return _pcFb('Isi passcode lama dulu.', true);
+        if (baru.length < MIN_PASSCODE) return _pcFb('Passcode baru minimal ' + MIN_PASSCODE + ' karakter.', true);
+        if (baru !== baru2) return _pcFb('Ulangi passcode baru tidak sama.', true);
+        if (baru === lama) return _pcFb('Passcode baru harus berbeda dari yang lama.', true);
+        if (btn) btn.disabled = true;
+        try {
+            const res = await apiPost('/auth/change-passcode',
+                                     { current_passcode: lama, new_passcode: baru });
+            _pcFb((res && res.pesan) || 'Passcode diubah.', false);
+            form.reset();
+            // Semua token dicabut backend -- logout agar user langsung login ulang.
+            setTimeout(() => {
+                clearToken();
+                try { localStorage.removeItem('bsf_page'); } catch (_) {}
+                location.reload();
+            }, 1200);
+        } catch (err) {
+            _pcFb(err.message || 'Gagal mengubah passcode.', true);
+            if (btn) btn.disabled = false;
+        }
+    });
+}
+
 async function checkServer() {
     const box = document.getElementById('serverStatus');
     const txt = document.getElementById('serverStatusText');
@@ -7377,6 +7429,7 @@ document.addEventListener('DOMContentLoaded', async function () {
     initFloatDrag();
     initSparepart();
     initLogin();
+    initPasscodeForm();
 
     window.addEventListener('hashchange', () => {
         if (!getToken()) return;

@@ -1,4 +1,4 @@
-"""Auth endpoints - login, logout, current user.
+﻿"""Auth endpoints - login, logout, current user.
 Menggunakan token acak (persisted di DB) + PBKDF2 untuk hashing passcode.
 """
 import hashlib
@@ -37,6 +37,17 @@ class UserOut(BaseModel):
 class LoginResponse(BaseModel):
     token: str
     user: UserOut
+
+
+class ChangePasscodeRequest(BaseModel):
+    current_passcode: str
+    new_passcode: str
+
+
+#: Panjang minimum passcode agar tidak terlalu pendek untuk mesin kasir yang dipakai
+#: bersama, tapi juga tidak membuat passcode merepotkan staff yang menghafal.
+MIN_PASSCODE = 4
+MIN_PASSCODE = 4
 
 
 # ---------- Helpers ----------
@@ -123,6 +134,50 @@ def logout(
 @router.get("/me", response_model=UserOut)
 def me(user: User = Depends(get_authenticated_user)):
     return UserOut.model_validate(user)
+
+
+@router.post("/change-passcode")
+def change_passcode(
+    payload: ChangePasscodeRequest,
+    token: str = Depends(get_bearer_token),
+    user: User = Depends(get_authenticated_user),
+    db: Session = Depends(get_db_session),
+):
+    """Ganti passcode AKUN YANG SEDANG LOGIN.
+
+    Alasan kenapa ini perlu: tadinya tidak ada jalan mengubah passcode sendiri.
+    "Lupa Password?" di halaman login cuma menampilkan pesan "hubungi
+    administrator", padahal kalau toko cuma punya SATU akun, tidak ada admin lain
+    yang bisa membantu -- hasilnya user terkunci dari sistemnya sendiri.
+
+    Keamanan:
+    - WAJIB menyertakan passcode lama, jadi tanpa akses fisik ke sesi aktif
+      tidak ada yang bisa mengganti passcode orang lain.
+    - Ganti salt + hash (PBKDF2, sama seperti account creation), bukan hash saja.
+    - Semua token LAIN milik user ini langsung dicabut, supaya passcode lama
+      tidak masih berlaku di perangkat yang sebelumnya sudah login. Token yang
+      sedang dipakai (browser ini) juga dicabut supaya user harus login ulang
+      dengan passcode baru -- kalau tidak, passcode yang baru bisa salah ketik
+      tanpa terdeteksi sampai token-nya kadaluarsa 7 hari.
+    """
+    if not verify_passcode(payload.current_passcode, user.passcode_salt,
+                           user.passcode_hash):
+        raise HTTPException(status_code=400,
+                            detail="Passcode lama salah.")
+    baru = (payload.new_passcode or "").strip()
+    if len(baru) < MIN_PASSCODE:
+        raise HTTPException(
+            status_code=400,
+            detail="Passcode baru minimal %d karakter." % MIN_PASSCODE)
+    if baru == (payload.current_passcode or ""):
+        raise HTTPException(status_code=400,
+                            detail="Passcode baru harus berbeda dari yang lama.")
+    user.passcode_salt = secrets.token_hex(16)
+    user.passcode_hash = hash_passcode(baru, user.passcode_salt)
+    db.query(AuthToken).filter(AuthToken.user_id == user.id).delete()
+    db.commit()
+    return {"ok": True,
+            "pesan": "Passcode diubah. Silakan login ulang dengan passcode baru."}
 
 
 def require_admin(user: User = Depends(get_authenticated_user)) -> User:

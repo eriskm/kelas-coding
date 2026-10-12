@@ -1059,6 +1059,19 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 }
 
 /* Footer tepat di bawah card */
+.login-hint {
+    display: flex; align-items: flex-start; gap: 8px;
+    margin: 14px 0 2px; padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    font-size: 11.5px; line-height: 1.5;
+    color: rgba(255, 255, 255, 0.6);
+    text-align: left;
+}
+.login-hint i { margin-top: 2px; color: #94a3b8; flex-shrink: 0; }
+.login-hint b { color: rgba(255, 255, 255, 0.9); font-weight: 700; }
+
 .login-footer {
     margin: 16px 0 0;
     text-align: center;

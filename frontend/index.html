@@ -66,11 +66,11 @@
                     <span id="loginErrorText"></span>
                 </div>
                 <div class="login-row">
-                    <label class="remember">
-                        <input type="checkbox" id="rememberMe" checked>
-                        <span class="checkmark" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
-                        <span>Ingat Saya</span>
-                    </label>
+<label class="remember">
+                            <input type="checkbox" id="rememberMe">
+                            <span class="checkmark" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+                            <span>Ingat Saya</span>
+                        </label>
                     <button type="button" class="forgot-link" id="forgotLink">Lupa Password?</button>
                 </div>
                 <button type="submit" class="login-btn" id="loginBtn">
@@ -83,12 +83,17 @@
                 </div>
             </form>
 
-            <div class="login-divider"><span>atau masuk dengan</span></div>
-            <div class="social-row">
-                <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-brands fa-google"></i></button>
-                <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-brands fa-microsoft"></i></button>
-                <button type="button" class="social-btn" title="Segera hadir" disabled><i class="fa-solid fa-fingerprint"></i></button>
-            </div>
+<!-- Tiga tombol social (Google / Microsoft / Fingerprint) yang tadinya ada di
+                 sini sudah DIHAPUS: semuanya `disabled` dengan tooltip "Segera hadir", jadi
+                 hanya memakan ruang sesuatu yang sama sekali tidak bisa dipakai.
+                 Kalau suatu saat benar-benar diimplementasikan, baru dikembalikan di sini.
+                 Yang menggantikannya adalah catatan jujur di bawah: satu-satunya cara
+                 mengubah passcode adalah lewat aplikasi, bukan lewat halaman login. -->
+            <p class="login-hint">
+                <i class="fa-solid fa-circle-info"></i>
+                Lupa passcode? Masuk dengan akun lain, lalu ubah lewat
+                <b>Kelola Akun &rsaquo; Ubah Passcode Saya</b>.
+            </p>
         </div>
         <p class="login-footer">&copy; 2026 <b>SUKABUMI FLASHER</b> - Business Operating System • v1.0.0</p>
         </div>
@@ -1624,11 +1629,37 @@
                                 <div class="flex items-center gap-1.5">
                                     <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
                                     <button class="w-7 h-7 rounded flex items-center justify-center bg-brand-500 text-white font-bold text-xs">1</button>
-                                    <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
-                                </div>
-                            </div>
-                        </div>
-                    </section>
+<button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                                  </div>
+                              </div>
+                          </div>
+
+                      <!-- UBAH PASSCODE SENDIRI.
+                           Dulu tidak ada jalan mengubah passcode milik sendiri --
+                           "Lupa Password?" cuma mengarah ke administrator, padahal
+                           kalau toko hanya punya satu akun, tidak ada admin lain.
+                           Panel ini menutup jalan buntu itu (selama masih bisa login).
+                           Setelah diubah, semua sesi ikut logout paksa. -->
+                      <div class="panel p-4 rounded-xl">
+                          <h3 class="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-1">
+                              <i class="fa-solid fa-key text-brand-500"></i> Ubah Passcode Saya
+                          </h3>
+                          <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
+                              Untuk akun yang sedang login. Setelah diubah, semua perangkat lain otomatis keluar.
+                          </p>
+                          <form id="passcodeForm" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5" autocomplete="off">
+                              <input class="receive-input" type="password" id="pcOld" placeholder="Passcode lama" required>
+                              <input class="receive-input" type="password" id="pcNew" placeholder="Passcode baru (min. 4)" required>
+                              <input class="receive-input" type="password" id="pcNew2" placeholder="Ulangi passcode baru" required>
+                              <div class="sm:col-span-3 flex items-center gap-2.5 flex-wrap">
+                                  <button type="submit" id="pcBtn" class="receive-submit-btn">
+                                      <i class="fa-solid fa-rotate"></i> Ubah Passcode
+                                  </button>
+                                  <div id="pcFeedback" class="hidden receive-feedback"></div>
+                              </div>
+                          </form>
+                      </div>
+                  </section>
 
                     <!-- ===== FLOATING WINDOW: FORM AKUN ===== -->
                     <section id="pageFormAkun" class="float-window" role="dialog" aria-label="Form Akun">
