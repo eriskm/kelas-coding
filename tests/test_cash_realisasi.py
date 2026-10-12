@@ -393,6 +393,38 @@ def test_transaksi_tampil_status_cash(client, db, auth):
             client.get("/api/orders?page=1&limit=100", headers=auth).json()["items"]]
     assert o4.id in ids4, "Order FAILED (unit masih di toko) harus tetap tampil"
 
+    # (5) Alur nyata: DITERIMA -> ... -> FAILED (reparasi/part gagal), lalu
+    #     pelanggan ambil unit -> user ubah ke CANCEL.
+    #     Momen yang dipakai filter adalah SAAT masuk CANCEL, bukan saat FAILED
+    #     (yang lebih lama). Kalau momen terminalnya salah pilih, order ini akan
+    #     tetap nongol meski periodenya sudah ditutup.
+    o5 = _order(db, "PY-FAILED-LALU-CANCEL", 300000, modal=(100000, 20000, 0))
+    db.query(models.ServiceOrder).filter(models.ServiceOrder.id == o5.id).update(
+        {"status": "FAILED", "unit_status": "DI TOKO",
+         "lunas_at": datetime(2000, 1, 1, 20)})       # GAGAL saat periode CLOSED
+    db.commit()
+    db.add(models.StatusHistory(service_order_id=o5.id, dari_status="FAILED",
+                                ke_status="CANCEL", oleh="pytest",
+                                waktu=datetime.now(), catatan="Unit diambil pelanggan"))
+    db.commit()
+    oid5 = o5.id
+    db.expunge_all()
+    ids5 = [it["id"] for it in
+            client.get("/api/orders?page=1&limit=100", headers=auth).json()["items"]]
+    assert oid5 in ids5, "Masih FAILED -- harus tampil karena unitnya belum diambil"
+
+    # Saatnya diubah ke CANCEL -> harus diarsipkan.
+    assert client.put("/api/orders/%d" % oid5, headers=auth, json={
+        "status": "CANCEL", "status_note": "Unit diambil pelanggan"}).status_code == 200
+    db.expire_all()
+    ids6 = [it["id"] for it in
+            client.get("/api/orders?page=1&limit=100", headers=auth).json()["items"]]
+    assert oid5 not in ids6, "Order CANCEL (unit sudah diambil) harus diarsipkan"
+
+    # Order ID-nya masih bisa dibuka -- disembunyikan, bukan dihapus.
+    det = client.get("/api/orders/%d" % oid5, headers=auth)
+    assert det.status_code == 200 and det.json()["status"] == "CANCEL"
+
 
 def _saldo_laci(db):
     """Saldo Laci terkini (Cash Model v4 #1: penerimaan masuk Laci)."""
