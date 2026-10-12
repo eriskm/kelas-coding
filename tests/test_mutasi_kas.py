@@ -705,6 +705,64 @@ def test_9_transfer_laci_aset_tidak_menggandakan(client, db):
     s.close()
 
 
+# ─────────── 11. Modal boleh 0 (tapi wajib terisi) ───────────
+def test_11_modal_boleh_nol_tapi_wajib_terisi(client, db):
+    """Aturan Owner: Modal Part & Jasa WAJIB DIISI, tapi BOLEH bernilai 0.
+
+    Servis yang hanya ganti LCD / software tidak punya Modal Part. Sebelumnya
+    user dipaksa mengetik angka 1 supaya lolos, dan angka itu ikut menguras Kas
+    Laci sebagai uang fiktif.
+    """
+    from fastapi import HTTPException
+    import routers.orders as ords
+    adm = _token(db, "pytest_admin", "ADMIN")
+
+    # (a) Modal 0 pada kedua komponen -> LOLOS status CASH.
+    for part, jasa in ((0, 250000), (0, 0), (150000, 0)):
+        o = _order(db, "PY-S11-%d-%d" % (part, jasa), "DONE",
+                   harga=500000, modal=(part, jasa, 0))
+        rc = _cp(client, db, "put", "/api/orders/%d" % o.id, headers=adm,
+                 json={"status": "CASH"})
+        assert rc.status_code == 200, \
+            "Modal %s/%s harus boleh 0 (HTTP %s: %s)" % (
+                part, jasa, rc.status_code, rc.text[:80])
+    db.expire_all()
+
+    # (b) Kolom KOSONG (null) tetap ditolak — "belum dihitung" != "memang nol".
+    o2 = _order(db, "PY-S11-KOSONG", "DONE", harga=500000,
+                modal=(100000, 100000, 0))
+    rc2 = _cp(client, db, "put", "/api/orders/%d" % o2.id, headers=adm,
+              json={"part_cost": None, "status": "CASH"})
+    assert rc2.status_code == 400, "Modal Part kosong harus ditolak"
+    assert "Modal Part" in (rc2.json().get("detail") or "")
+
+    rc3 = _cp(client, db, "put", "/api/orders/%d" % o2.id, headers=adm,
+              json={"modal_jasa": None, "status": "CASH"})
+    assert rc3.status_code == 400, "Modal Jasa kosong harus ditolak"
+    assert "Modal Jasa" in (rc3.json().get("detail") or "")
+
+
+def test_12_modal_nol_tidak_menguras_kas(client, db):
+    """Modal 0 tidak boleh membuat entri kas keluar sama sekali."""
+    import cash as cash_mod
+    laci_awal = _saldo_laci(db)
+    n_modal_awal = _n_entry(db, cash_mod.SUMBER_MODAL)
+
+    adm = _token(db, "pytest_admin", "ADMIN")
+    o = _order(db, "PY-S12-MODAL0", "DONE", harga=400000,
+               modal=(0, 150000, 0))
+    rc = _cp(client, db, "put", "/api/orders/%d" % o.id, headers=adm,
+             json={"status": "CASH"})
+    assert rc.status_code == 200, rc.text
+    db.expire_all()
+
+    # Hanya 1 entri modal (Jasa); Part 0 tidak boleh ikut.
+    assert _n_entry(db, cash_mod.SUMBER_MODAL) - n_modal_awal == 1, \
+        "Modal Part 0 tidak boleh membuat entri kas"
+    # Dan kas hanya keluar sebesar modal yang benar-benar ada.
+    assert _saldo_laci(db) - laci_awal == to_decimal(400000) - to_decimal(150000)
+
+
 # ─────────── 10. Tidak ada regresi di modul lain ───────────
 def test_10_tanpa_regresi_omzet_laba_distribusi_garansi_periode(client, db):
     """Guard ringan: modul lain tetap hidup & bentuk datanya tidak berubah."""

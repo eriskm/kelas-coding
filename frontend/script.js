@@ -2644,9 +2644,14 @@ function initUpdateServis() {
                     estimate: usNum('usEstimate'),
                     payment: usNum('usDp'),
                     final_price: usNum('usFinFinal') || 0,
-                    part_cost: usVal('usFinPart') === '' ? 0 : usNum('usFinPart'),
-                    modal_jasa: usNum('usFinJasa') || 0,
-                    modal_lainnya: usNum('usFinLain') || 0,
+                    // Modal wajib DIISI tapi boleh 0 (servis tanpa ganti part).
+                    // Kolom kosong dikirim sebagai `null` supaya backend bisa
+                    // membedakan "belum dihitung" dari "memang nol" — kalau
+                    // kosong ikut jadi 0, validasi "wajib melengkapi" jadi
+                    // tidak pernah bekerja.
+                    part_cost: usVal('usFinPart').trim() === '' ? null : usNum('usFinPart'),
+                    modal_jasa: usVal('usFinJasa').trim() === '' ? null : usNum('usFinJasa'),
+                    modal_lainnya: usVal('usFinLain').trim() === '' ? 0 : usNum('usFinLain'),
                     warranty_months: usWarrantyMonths(),
                     technician: usVal('usTechnician'),
                     status: _usSt,
@@ -4304,6 +4309,16 @@ function renderKondisiKas() {
     row('Kas Kecil / Laci', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
     // 3. Total Penjualan Service (Omzet periode).
     row('Total Penjualan Service', Number(fin.omset) || 0, 0);
+    // 3b. Uang Titipan DP yang MASUK di periode ini tapi unitnya belum LUNAS.
+    //     Belum jadi Omzet, jadi tidak boleh ikut baris di atas — tapi uangnya
+    //     benar-benar ada di laci. Tanpa baris ini, kolom Saldo berjalan tidak
+    //     akan sama dengan kartu "Saldo Kas (Laci)" selama ada DP yang belum
+    //     dilunasi. Saat unitnya LUNAS, nilai ini otomatis keluar (sudah masuk
+    //     Omzet) sehingga tidak pernah dihitung dua kali.
+    const dpBerjalan = Number((fin.titipan_dp || {}).berjalan) || 0;
+    if (dpBerjalan > 0) {
+        row('Uang Titipan DP (Belum Jadi Omzet)', dpBerjalan, 0);
+    }
     // 4. Total Modal (Part + Jasa + Lain).
     row('Total Modal (Part+Jasa+Lain)', 0, Number(fin.total_modal) || 0);
     // 5. Total Beban (Gaji & Operasional).

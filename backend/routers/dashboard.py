@@ -1,4 +1,4 @@
-"""Dashboard endpoints - data untuk star cards & charts."""
+﻿"""Dashboard endpoints - data untuk star cards & charts."""
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -312,8 +312,20 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     # `distribution.pastikan_otomatis`), bukan lagi saat Tutup Kas. Gate CTO
     # sekarang justru menentukan apakah distribusi boleh terbentuk.
     import distribution as _dist
+    from models import KasPeriod
     _periode_key = core["periode"]
-    _row_dist = _dist.sudah_ada(db, _periode_key)
+    # WAJIB lewat `kas_period_id`. Admin boleh menutup Kas lebih dari sekali sehari,
+    # jadi dua Kas Period bisa bertanggal sama — masing-masing punya baris
+    # Distribution sendiri. Kalau hanya dicari lewat tanggal, baris periode lain
+    # bisa ikut terbaca dan angka alokasi yang tampil jadi milik periode yang
+    # salah.
+    _pid = (db.query(KasPeriod).filter(KasPeriod.start_at == start).first() or {})
+    _pid = getattr(_pid, "id", None)
+    _row_dist = _dist.sudah_ada(db, _periode_key, kas_period_id=_pid)
+    if _row_dist is None and _pid is not None:
+        # Baris distribusi yang dibuat sebelum `kas_period_id` jadi identitas
+        # tidak punya kolom terisi — cari lewat tanggal sebagai jaring pengaman.
+        _row_dist = _dist.sudah_ada(db, _periode_key)
     _preview = _dist.preview(laba_bersih)
     alokasi_ok = _row_dist is not None
     # Alasan singkat kalau CTO sudah tercapai tapi distribusi belum jalan —

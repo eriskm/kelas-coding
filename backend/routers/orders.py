@@ -1,4 +1,4 @@
-"""Service orders endpoints (FINAL LOCK: 3 dimensi terpisah)."""
+﻿"""Service orders endpoints (FINAL LOCK: 3 dimensi terpisah)."""
 import random
 from datetime import date, datetime
 
@@ -565,14 +565,24 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             # serah-terima unit, mengikuti Project A.
             #   - WAJIB hanya dari DONE (transisi sudah dijaga SERVICE_TRANSITIONS)
             #   - WAJIB ada Tindakan (meniru Project A)
-            #   - WAJIB Modal Part & Modal Jasa terisi (meniru Project A)
+            #   - WAJIB Modal Part & Modal Jasa SUDAH DIISI (boleh bernilai 0)
+            #
+            # ATURAN BISNIS: Modal Part dan Modal Jasa wajib DIISI, tapi TIDAK
+            # harus lebih dari nol. Servis yang hanya ganti LCD / software tidak
+            # punya Modal Part — sebelumnya user dipaksa mengetik angka 1 supaya
+            # lolos validasi, dan angka itu justru ikut menguras Kas Laci saat
+            # CASH (uang fiktif). Sekarang 0 = "tidak ada modal", dan
+            # `cash.catat_modal` sudah otomatis melewati komponen bernilai 0.
+            #
+            # Yang tetap ditolak adalah kolom KOSONG (None) — supaya tetap jelas
+            # bagian mana yang memang belum dihitung.
             missing = []
             plan = payload.get("repair_plan", order.repair_plan)
             if not (plan or "").strip():
                 missing.append("Tindakan Perbaikan")
-            if not (payload.get("part_cost", order.part_cost) or 0) > 0:
+            if payload.get("part_cost", order.part_cost) is None:
                 missing.append("Modal Part")
-            if not (payload.get("modal_jasa", order.modal_jasa) or 0) > 0:
+            if payload.get("modal_jasa", order.modal_jasa) is None:
                 missing.append("Modal Jasa")
             if missing:
                 raise HTTPException(

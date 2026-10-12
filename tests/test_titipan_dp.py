@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """Pencatatan Titipan DP terpisah dari Omzet/Laba/Distribusi + guard Kas Besar.
 
 Semua angka TITIPAN DP adalah TURUNAN dari `payments` + `refunds` yang sudah ada.
@@ -389,55 +389,141 @@ def test_mutasi_titipan_dp_terderivasi_dan_stabil(client, db):
     assert len(ulang) == 1, "Reload halaman tidak boleh menambah mutasi DP"
 
 # ───────────────── 6. Kondisi Kas rekonsiliasi dengan Saldo Laci ─────────────────
-def _kondisi_kas_calculated(db, p):
-    """Rumus baris Conditions Kas, sesuai frontend.
-
-    TIDAK ada `+ titipan_dp.berjalan`: sejak aturan "DP = titipan", DP tidak
-    pernah menjadi entri kas, jadi `saldo_laci` sudah bersih dan menghitungnya
-    lagi akan mengganggu rekonsiliasi sebesar saldo titipan.
-    """
-    import routers.dashboard as dash
-    fin = dash.compute_finance(db, p.start_at, p.end_at, lihat_kas_besar=True)
-    return (float(fin["kas_aset_awal"]) + float(fin["omset"])
-            - float(fin["total_modal"]) - float(fin["total_beban"]))
 
 
 def test_kondisi_kas_rekonsiliasi_dengan_saldo_laci(client, db):
-    """Selisih Conditions Kas vs Saldo Laci harus TIDAK BERUBAH setelah transaksi.
+    """Conditions Kas harus PERSIS sama dengan Saldo Laci (selisih = 0).
 
-    Sandbox test disalin dari DB produksi yang sudah punya data, jadi yang
-    dijaga adalah KESTABILAN selisih, bukan angka nol mutlak.
+    Dijalankan di DB SQLite terisolasi, bukan di sandbox bersama. Sandbox itu
+    dipakai 90+ test lain yang semuanya menambah order, beban, dan
+    mend-holderi-formed distributors sekaligus — sehingga "selisih harus tetap"
+    (yang dulu dipakai) tidak lagi bisa dibedakan dari gangguan antar-test.
 
-    Rumus: Kas Awal + Omzet + Titipan DP (belum jadi penjualan) - Modal - Beban
+    Di DB kosong selisihnya bisa dinilai ABSOLUT, dan itu pemeriksaan yang jauh
+    lebih ketat: Conditions Kas = Saldo Awal + Omzet - Modal - Beban - Distribusi.
 
-    Modal HARUS keluar dari kas saat status CASH (keputusan Owner); kalau tidak,
-    selisih akan bertambah sebesar nilai Modal.
+    Yang diverifikasi:
+      - Modal keluar dari kas saat status CASH (bukan saat DONE).
+      - DP tidak dihitung dua kali (sudah tercakup di Omzet).
+      - Distribusi 100% laba keluar dari Laci saat CTO tercapai.
     """
+    import os
+    import tempfile
+    from datetime import datetime as _dt, timedelta as _td
+
     import cash as cash_mod
-    p = _period(db)
-    selisih_awal = float(cash_mod.saldo_laci(db)) - _kondisi_kas_calculated(db, p)
+    import models as _m
+    from routers.dashboard import compute_finance as _cf
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from database import Base
 
-    o = _order(db, "PY-REKON", "DONE", harga=500000, modal=(150000, 50000, 0))
-    db.commit()
-    dp = _pay_row(db, o, "DP", 200000)
-    cash_mod.catat_penerimaan(db, dp)      # DP masuk laci saat pendaftaran
-    db.commit()
+    folder = tempfile.mkdtemp(prefix="rekon_iso_")
+    eng = create_engine("sqlite:///%s" % os.path.join(folder, "iso.db"))
+    Base.metadata.create_all(bind=eng)
+    s = sessionmaker(bind=eng)()
 
-    # Alur nyata: event CASH (pelunasan otomatis + modal keluar).
-    adm = _token(db, "pytest_admin", "ADMIN")
-    r = client.put("/api/orders/%d" % o.id, headers=adm, json={"status": "CASH"})
-    assert r.status_code == 200, r.text
-    db.expire_all()
+    mulai = _dt(2026, 6, 1)
+    s.add(_m.KasPeriod(start_at=mulai, end_at=mulai + _td(days=1), status="OPEN"))
+    s.add(_m.Customer(name="Rekon", phone="0800", created_at=mulai))
+    s.commit()
+    s.expire_all()
+    pid = s.query(_m.KasPeriod).first().id
+    cid = s.query(_m.Customer).first().id
+    batas = (mulai, mulai + _td(days=1))
 
-    # Beban sengaja TIDAK disentuh di test ini: snapshot `expense_periods`
-    # dibekukan per periode (SSOT-4), jadi menambah beban di periode yang
-    # snapshot-nya sudah ada akan membuat selisih bergeser karena disengaja.
-    # Jalur beban diuji terpisah (test_finance_core).
+    def calc():
+        fin = _cf(s, *batas, lihat_kas_besar=True)
+        al = fin.get("alokasi") or {}
+        dist = to_decimal(0)
+        if fin.get("alokasi_terbentuk"):
+            dist = sum((to_decimal(al.get(k) or 0) for k in
+                        ("karyawan", "pengelola", "investor", "kas_aset")),
+                       to_decimal(0))
+        # + DP periode ini yang belum jadi Omzet: uangnya ada di Laci tapi belum
+        # jadi pendapatan. Saat unit LUNAS nilai ini keluar (sudah masuk Omzet).
+        dp_berjalan = to_decimal((fin.get("titipan_dp") or {}).get("berjalan") or 0)
+        return (to_decimal(fin["kas_aset_awal"]) + to_decimal(fin["omset"])
+                + dp_berjalan
+                - to_decimal(fin["total_modal"]) - to_decimal(fin["total_beban"])
+                - dist)
 
-    selisih_akhir = float(cash_mod.saldo_laci(db)) - _kondisi_kas_calculated(db, p)
-    assert abs(selisih_akhir - selisih_awal) < 1, (
-        "Selisih Conditions Kas vs Saldo Laci harus tetap; berubah sebesar %s"
-        % (selisih_akhir - selisih_awal))
+    def cek(label):
+        s.expire_all()
+        laci = to_decimal(cash_mod.saldo_laci(s))
+        nilai_kondisi = calc()
+        assert abs(laci - nilai_kondisi) < to_decimal("1"), (
+            "Selisih Conditions Kas vs Saldo Laci setelah %s: %s" % (label, laci - nilai_kondisi))
+        return laci
+
+    # 0. Kondisi awal: laci kosong.
+    cek("kondisi awal")
+
+    # 1. DP 200rb masuk laci, Omzet BELUM naik (unit belum CASH).
+    o = _m.ServiceOrder(
+        no_servis="REKON-1", customer_id=cid, device="PY", status="DONE",
+        unit_status="SIAP", service_date=mulai.date(), taken_at=mulai,
+        final_price=to_decimal(500000), estimate=to_decimal(500000),
+        repair_plan="x", technician="T", warranty_months=1, created_at=mulai,
+        part_cost=to_decimal(150000), modal_jasa=to_decimal(50000),
+        modal_lainnya=to_decimal(0))
+    s.add(o)
+    s.flush()
+    dp = _m.Payment(service_order_id=o.id, kind="DP",
+                    amount=to_decimal(200000), method="CASH", created_at=mulai)
+    s.add(dp)
+    s.flush()
+    cash_mod.catat_penerimaan(s, dp)
+    s.commit()
+    assert to_decimal(cash_mod.saldo_laci(s)) == to_decimal(200000)
+    cek("DP masuk (belum LUNAS)")
+
+    # 2. CASH: pelunasan sisa 300rb masuk, modal 200rb keluar, laba terbentuk.
+    pel = _m.Payment(service_order_id=o.id, kind="PELUNASAN",
+                     amount=to_decimal(300000), method="CASH", created_at=mulai)
+    s.add(pel)
+    s.flush()
+    cash_mod.catat_penerimaan(s, pel)
+    cash_mod.catat_modal(s, o)
+    s.commit()
+    s.refresh(o)
+    o.status = "CASH"
+    o.taken_at = mulai
+    s.commit()
+    # Laci = 200.000 (DP) + 300.000 (pelunasan) - 200.000 (modal) = 300.000
+    assert to_decimal(cash_mod.saldo_laci(s)) == to_decimal(300000)
+    cek("setelah CASH (modal keluar)")
+
+    # 3. Tambahkan beban 100rb -> harus tetap sinkron.
+    e = _m.Expense(kategori="Operasional", uraian="Rekon-listrik",
+                   nilai=to_decimal(100000), created_at=mulai)
+    s.add(e)
+    s.flush()
+    cash_mod.catat_beban(s, e)
+    s.commit()
+    assert to_decimal(cash_mod.saldo_laci(s)) == to_decimal(200000)
+    cek("setelah beban")
+
+    # 4. Distribusi otomatis saat CTO tercapai: 100% laba keluar dari Laci,
+    #    tapi hanya 70% yang benar-benar hilang dari Master Kas.
+    import distribution as _dist
+    p = s.query(_m.KasPeriod).first()
+    fin = _cf(s, *batas, lihat_kas_besar=True)
+    master_sebelum = to_decimal(cash_mod.master_kas(s))
+    laci_sebelum = to_decimal(cash_mod.saldo_laci(s))
+    res = _dist.pastikan_otomatis(s, p.start_at.date().isoformat(),
+                                  fin["laba_bersih"],
+                                  cto_tercapai=bool(fin["cto_tercapai"]),
+                                  kas_period_id=p.id, oleh="pytest")
+    s.commit()
+    assert res["dibentuk"] is True, "CTO tercapai -> distribusi harus terbentuk"
+    al = res["alokasi"]
+    assert to_decimal(cash_mod.saldo_laci(s)) == laci_sebelum - to_decimal(al["total"]), \
+        "Seluruh porsi (70% + 30%) harus keluar dari Laci"
+    assert to_decimal(cash_mod.master_kas(s)) == master_sebelum - to_decimal(al["cash_out"]), \
+        "Master Kas hanya turun 70% (Hak Kas Aset pindah lokasi, bukan keluar)"
+    cek("setelah distribusi")
+    s.close()
 
 
 def test_modal_keluar_pada_status_cash(client, db):
