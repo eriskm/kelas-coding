@@ -1,4 +1,4 @@
-/* ============================================
+﻿/* ============================================
    SUKABUMI FLASHER — Dashboard Logic (fetch dari FastAPI)
    ============================================ */
 
@@ -4259,6 +4259,7 @@ function renderKuTitipan() {
 //   3. Total Penjualan  (Omzet — sudah CASH + LUNAS)
 //   4. Total Modal     (Part + Jasa + Lain — keluar saat status CASH)
 //   5. Total Beban     (Gaji & Operasional)
+//   6. Bagi Hasil      (hanya kalau distribusi sudah terbentuk — lihat di bawah)
 // Kolom: Uraian / Debit / Kredit / Saldo. Kasir & CS mulai dari baris
 // Kas Kecil/Laci — posisi Kas Besar tidak dikirim maupun dirender untuk mereka.
 // DP = TITIPAN: tidak pernah jadi entri kas maupun baris di sini. Saat unit
@@ -4274,22 +4275,30 @@ function renderKondisiKas() {
     const rows = [];
     // Tanpa tag di bawah nama: kategori (Kas Aset Awal / Omzet / Modal / Beban)
     // sudah terbaca dari uraian dan kartu ringkasan di atas tabel.
-    const row = (nama, debit, kredit, cls) => {
+    //
+    // Kolom Saldo = SALDO LACI yang berjalan. Baris berstatus `posisi` (hanya
+    // "Kas Besar") TIDAK ikut dijumlahkan: itu posisi uang di Kas Aset, bukan
+    // arus kas. Kalau ikut dijumlahkan, saldo terakhir tabel jadi Saldo Laci
+    // ditambah Kas Aset — jadi tidak sama dengan kartu "Saldo Kas (Laci)".
+    const row = (nama, debit, kredit, cls, posisi) => {
         const d = Number(debit) || 0;
         const k = Number(kredit) || 0;
-        saldo += d - k;
+        if (!posisi) {
+            saldo += d - k;
+        }
         rows.push(
             `<tr class="${cls || ''}">`
             + `<td><span class="tx-device">${escapeHtml(nama)}</span></td>`
             + `<td class="tx-debit numeric-c">${d ? kuRupiah(d) : '<span class="text-green-500">-</span>'}</td>`
             + `<td class="tx-kredit numeric-c">${k ? kuRupiah(k) : '<span class="text-red-500">-</span>'}</td>`
-            + `<td class="tx-saldo numeric-r">${kuRupiah(saldo)}</td>`
+            + `<td class="tx-saldo numeric-r">${kuRupiah(posisi ? d : saldo)}</td>`
             + `</tr>`);
     };
 
     // 1. Kas Besar — hanya role ber-authority (backend juga tidak mengirimnya).
+    //    Baris POSISI: tidak ikut menambah/mengurangi saldo berjalan.
     if (lihatAset && fin.saldo_aset !== undefined) {
-        row('Kas Besar (Pengelola)', Number(fin.saldo_aset) || 0, 0, 'is-besar');
+        row('Kas Besar (Pengelola)', Number(fin.saldo_aset) || 0, 0, 'is-besar', true);
     }
     // 2. Kas Kecil / Laci — saldo operasional (titipan DP dikurangi).
     row('Kas Kecil / Laci', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
@@ -4297,10 +4306,45 @@ function renderKondisiKas() {
     row('Total Penjualan Service', Number(fin.omset) || 0, 0);
     // 4. Total Modal (Part + Jasa + Lain).
     row('Total Modal (Part+Jasa+Lain)', 0, Number(fin.total_modal) || 0);
-    // 5. Total Beban (Gaji + Operasional).
-    row('Total Beban (Gaji & OPS)', 0, Number(fin.total_beban) || 0, 'is-total');
+    // 5. Total Beban (Gaji & Operasional).
+    row('Total Beban (Gaji & OPS)', 0, Number(fin.total_beban) || 0);
 
-    body.innerHTML = rows.join('');
+    // 6. BAGI HASIL — muncul kalau distribusi sudah benar-benar TERBENTUK,
+    //    yaitu uangnya sudah keluar dari Laci (70%) dan 30% Hak Kas Aset sudah
+    //    masuk ke Saldo Aset.
+    //
+    //    Syarat "sudah terbentuk" itu penting: kalau hanya CTO tercapai tapi
+    //    distributions belum dijalankan, uangnya masih ada di Laci. Kalau baris
+    //    ini ikut digambar dari angka pratinjau, kolom Saldo di tabel akan
+    //    berhenti di angka yang SALAH (tidak sama dengan Saldo Kas (Laci)).
+    //
+    //   Menambah 4 baris Kredit di sini TIDAK merusak saldo berjalan: seluruh
+    //    porsi (70% + 30%) memang benar-benar keluar dari Laci, sehingga saldo
+    //    terakhir tabel tetap sama dengan Saldo Kas (Laci).
+    const al = fin.alokasi || {};
+    const formed = !!fin.alokasi_terbentuk && Number(fin.laba_bersih) > 0;
+    if (formed) {
+        rows.push(
+            `<tr class="ku-kd-sep"><td colspan="4">`
+            + `<span class="ku-kd-sep-txt"><i class="fa-solid fa-share-from-square"></i> `
+            + `Bagi Hasil Laba — sudah dibagikan (CTO tercapai)</span></td></tr>`);
+        row('Bagi Hasil: Bonus Karyawan (10%)', 0, Number(al.karyawan) || 0);
+        row('Bagi Hasil: Pengelola (30%)', 0, Number(al.pengelola) || 0);
+        row('Bagi Hasil: Investor (30%)', 0, Number(al.investor) || 0);
+        // Porsi Hak Kas Aset keluar dari Laci lalu masuk ke Kas Aset. Di tabel
+        // ini tetap Kredit karena uangnya memang keluar dari Laci.
+        row('Setoran Kas Aset (30%)', 0, Number(al.kas_aset) || 0, 'is-total');
+    } else if (fin.cto_tercapai) {
+        rows.push(
+            `<tr class="ku-kd-tunggu"><td colspan="4">`
+            + `<span class="ku-kd-tunggu-txt"><i class="fa-solid fa-circle-info"></i> `
+            + `CTO tercapai — distribusi belum dijalankan. Tekan `
+            + `<b>Jalankan Distribusi</b> di panel Alokasi Profit. `
+            + `Baris Bagi Hasil akan muncul setelah uangnya benar-benar dibagikan.`
+            + `</span></td></tr>`);
+    }
+
+body.innerHTML = rows.join('');
 }
 
 // Kartu ringkasan (Total Masuk / Keluar / Saldo Laci / Kas Aset).

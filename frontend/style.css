@@ -2537,6 +2537,26 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 
 /* Pemisah blok di dalam panel Kas: Conditions Kas vs Rincian Arus Kas.
    Tujuannya: dua tabel tidak lagi terlihat kembar, walau kolomnya sama. */
+/* Baris pemisah & pengingat untuk blok "Bagi Hasil Laba" di Conditions Kas */
+.ku-kd-sep td { background: #f8fafc; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; padding: 6px 12px; }
+.dark .ku-kd-sep td { background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1); }
+.ku-kd-sep-txt {
+    display: inline-flex; align-items: center; gap: 7px;
+    font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+    color: #b45309;
+}
+.ku-kd-sep-txt i { color: #d97706; font-size: 11px; }
+.dark .ku-kd-sep-txt { color: #fcd34d; }
+.ku-kd-tunggu td { background: #fffbeb; border-top: 1px dashed #fcd34d; padding: 8px 12px; }
+.dark .ku-kd-tunggu td { background: rgba(180, 83, 9, 0.14); border-color: rgba(252, 211, 77, 0.35); }
+.ku-kd-tunggu-txt {
+    display: inline-flex; align-items: flex-start; gap: 7px;
+    font-size: 10.5px; line-height: 1.5; color: #92400e; font-weight: 600;
+}
+.ku-kd-tunggu-txt i { color: #d97706; font-size: 11px; margin-top: 1px; }
+.ku-kd-tunggu-txt b { color: #b45309; font-weight: 800; }
+.dark .ku-kd-tunggu-txt { color: #fde68a; }
+.dark .ku-kd-tunggu-txt b { color: #fbbf24; }
 .ku-block { margin-top: 12px; }
 .ku-block + .ku-block {
     margin-top: 14px;
