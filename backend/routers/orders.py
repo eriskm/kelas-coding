@@ -560,6 +560,14 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                                     detail="Status DONE wajib melengkapi: " + ", ".join(missing))
             if payload.get("part_cost") is None and order.part_cost is None:
                 payload["part_cost"] = 0
+            if payload.get("modal_jasa") is None and order.modal_jasa is None:
+                payload["modal_jasa"] = 0
+            # Jaring pengaman: Modal TIDAK BOLEH tersimpan NULL. Baris NULL
+            # membuat unit tidak bisa pindah ke CASH selamanya dan merusak
+            # perhitungan laba. Kosong dari form berarti "tidak ada modal" = 0.
+            for _kol in ("part_cost", "modal_jasa", "modal_lainnya"):
+                if _kol in payload and payload[_kol] is None:
+                    payload[_kol] = 0
         elif new_status == "CASH":
             # Owner Cash Model (P2-15): CASH = event realisasi transaksi +
             # serah-terima unit, mengikuti Project A.

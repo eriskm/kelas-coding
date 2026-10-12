@@ -2644,14 +2644,14 @@ function initUpdateServis() {
                     estimate: usNum('usEstimate'),
                     payment: usNum('usDp'),
                     final_price: usNum('usFinFinal') || 0,
-                    // Modal wajib DIISI tapi boleh 0 (servis tanpa ganti part).
-                    // Kolom kosong dikirim sebagai `null` supaya backend bisa
-                    // membedakan "belum dihitung" dari "memang nol" — kalau
-                    // kosong ikut jadi 0, validasi "wajib melengkapi" jadi
-                    // tidak pernah bekerja.
-                    part_cost: usVal('usFinPart').trim() === '' ? null : usNum('usFinPart'),
-                    modal_jasa: usVal('usFinJasa').trim() === '' ? null : usNum('usFinJasa'),
-                    modal_lainnya: usVal('usFinLain').trim() === '' ? 0 : usNum('usFinLain'),
+                    // Modal boleh bernilai 0 (servis tanpa ganti part / hanya jasa).
+                    // Kolom kosong dianggap 0 — sama seperti "Lain-lain".
+                    // PENTING: jangan kirim `null` di sini. Nilai null akan
+                    // tersimpan di DB dan membuat unit itu tidak bisa diubah ke
+                    // status CASH selamanya, dan perhitungan labanya rusak ketika dibaca lagi.
+                    part_cost: usNum('usFinPart') || 0,
+                    modal_jasa: usNum('usFinJasa') || 0,
+                    modal_lainnya: usNum('usFinLain') || 0,
                     warranty_months: usWarrantyMonths(),
                     technician: usVal('usTechnician'),
                     status: _usSt,
