@@ -4245,9 +4245,29 @@ async function kuTutupKas() {
         const raw = localStorage.getItem('bsf_audit_kas');
         if (raw) counted = JSON.parse(raw).nominal;
     } catch (_) {}
+
+    // PERINGATAN modal kosong (bukan pemblokiran -- modal 0 itu sah untuk servis
+    // tanpa ganti part). Kalau modal sebenarnya belum sempat dicatat, akibatnya
+    // bukan cuma laba kelihatan lebih besar: modal yang tidak tercatat tidak pernah
+    // keluar dari Laci, padahal bagiannya sudah ikut dibagikan sebagai laba,
+    // dan saat tutup kas uang fisik justru lebih besar -> terlihat seperti hilang.
+    let warn = '';
+    try {
+        const mk = await apiGet('/kas/modal-kosong?period=current');
+        if (mk && mk.jumlah > 0) {
+            warn = '\n\nPERINGATAN: ' + mk.jumlah + ' unit berstatus CASH belum punya Modal'
+                 + ' (Part/Jasa/Lain = 0):\n'
+                 + mk.items.slice(0, 8).map(x => '  - ' + x.no_servis + '  Rp ' + Number(x.harga).toLocaleString('id-ID')).join('\n')
+                 + (mk.items.length > 8 ? '\n  ... dan ' + (mk.items.length - 8) + ' unit lain' : '')
+                 + '\n\nModal 0 itu sah (servis tanpa ganti part / hanya jasa).'
+                   + ' Tapi kalau modal sebenarnya belum sempat dicatat, selisihnya'
+                   + ' akan muncul saat tutup kas. Tutup kas tetap bisa dilanjutkan.';
+        }
+    } catch (_) {}
+
     const msg = counted
-        ? 'Proses Tutup Kas & Pindah Arsip? Hitungan laci terakhir: Rp ' + Number(counted).toLocaleString('id-ID') + '. Selisih akan dicatat di arsip.'
-        : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.';
+        ? 'Proses Tutup Kas & Pindah Arsip? Hitungan laci terakhir: Rp ' + Number(counted).toLocaleString('id-ID') + '. Selisih akan dicatat di arsip.' + warn
+        : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.' + warn;
     if (!confirm(msg)) return;
     try {
         const res = await apiPost('/kas/close', { cash_counted: counted },

@@ -1,4 +1,4 @@
-"""Kas endpoints — jurnal manual, riwayat gabungan, tutup kas.
+﻿"""Kas endpoints — jurnal manual, riwayat gabungan, tutup kas.
 
 Prinsip single source of truth (FINAL LOCK):
 - Pemasukan servis = jurnal payments (DP/PELUNASAN) dalam periode.
@@ -17,7 +17,7 @@ from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
-from sqlalchemy import or_
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session, joinedload
 
 import cash
@@ -26,7 +26,7 @@ import idempotency as idem
 import distribution as distribution_mod
 from authority import Action, require_authority
 from dependencies import get_db_session
-from money import json_default, to_decimal
+from money import ZERO, json_default, to_decimal
 from models import Expense, KasEntry, KasPeriod, Payment, ServiceOrder, User
 from routers.auth import get_authenticated_user, require_admin
 from routers.dashboard import (_period_bounds, batas_periode, compute_finance,
@@ -616,6 +616,88 @@ def get_distribusi(db: Session = Depends(get_db_session),
         out["cto_tercapai"] = cto
         out["alasan"] = _alasan_distribusi(db, preview, cto, key, pid)
     return out
+
+
+@router.get("/modal-kosong")
+def modal_kosong(
+    db: Session = Depends(get_db_session),
+    period: str = Query("current", description="current | YYYY-MM-DD"),
+    user: User = Depends(get_authenticated_user),
+):
+    """Daftar order CASH yang Modalnya masih 0 semua (read-only, tidak menulis).
+
+    Untuk PERINGATAN sebelum Tutup Kas -- bukan pemblokiran. Modal 0 itu sah
+    (servis tanpa ganti part / hanya jasa), jadi tidak boleh melarang. Tapi
+    kalau modalnya sebenarnya belum sempat dicatat, akibatnya bukan cuma angka
+    laba yang kelihatan lebih besar: modal yang tidak tercatat itu TIDAK pernah
+    keluar dari Laci, padahal bagiannya sudah ikut dibagikan sebagai laba.
+
+    Simulasi (harga 500.000, modal sebenarnya 300.000 tapi dicatat 0):
+      - laba terbaca 500.000, bukan 200.000;
+      - CTO bisa tercapai lebih awal dan memicu distribution lebih besar;
+      - saat Tutup Kas, uang fisik laci justru LEBIH BESAR dari sistem, dan
+        selisihnya muncul seolah-olah uang hilang -- padahal itu modal yang
+        belum dicatat.
+
+    Yang dihitung hanya order berstatus CASH di periode berjalan: order DONE
+    masih aman karena modalnya belum menarik dari Laci sama sekali.
+
+    CATATAN: momen terminal TIDAK cukup pakai `lunas_at`. Order yang_price Finalnya kosong (0) dan tidak punya payment TIDAK PERNAH dikunci `lunas_at` --
+    di `orders.py` lock hanya jalan bila `payment_status == "LUNAS"`. Order seperti itu statusnya sudah CASH tapi `lunas_at`-nya NULL, jadi kalau
+    difilter `lunas_at IS NOT NULL` dia justru LEWAT dari peringatan ini.
+    Karena itu dipakai rantai yang sama dengan filter arsip di router orders.
+    """
+    import models as _models
+    from sqlalchemy import func
+    from models import StatusHistory
+    if period == "current":
+        p = get_active_period(db)
+        start, end = batas_periode(p)
+        pid = p.id
+    else:
+        p = db.query(_models.KasPeriod).filter(
+            _models.KasPeriod.start_at.date() == datetime.strptime(period, "%Y-%m-%d").date()
+        ).first()
+        start, end = batas_periode(p)
+        pid = p.id if p is not None else None
+
+    sub = (
+        select(func.max(StatusHistory.waktu))
+        .where(StatusHistory.service_order_id == _models.ServiceOrder.id,
+               StatusHistory.ke_status == _models.ServiceOrder.status)
+        .correlate(_models.ServiceOrder)
+        .scalar_subquery()
+    )
+    momen = func.coalesce(_models.ServiceOrder.lunas_at, sub,
+                          _models.ServiceOrder.taken_at,
+                          _models.ServiceOrder.created_at)
+
+    q = db.query(_models.ServiceOrder).filter(
+        _models.ServiceOrder.status == "CASH")
+    if start is not None:
+        q = q.filter(momen >= start)
+    if end is not None:
+        q = q.filter(momen <= end)
+    rows = q.all()
+
+    kosong = []
+    for o in rows:
+        total = (to_decimal(o.part_cost or 0) + to_decimal(o.modal_jasa or 0)
+                 + to_decimal(o.modal_lainnya or 0))
+        if total <= ZERO:
+            kosong.append({
+                "id": o.id, "no_servis": o.no_servis,
+                "harga": str(o.final_price or 0),
+                "lunas_at": o.lunas_at.isoformat() if o.lunas_at else None,
+            })
+    return {
+        "jumlah": len(kosong),
+        "total_cash": len(rows),
+        "items": kosong,
+        "keterangan": "Modal 0 itu sah (servis tanpa ganti part). Peringatan ini "
+                      "hanya pengingat supaya modal yang belum tercatat sempat "
+                      "diisi sebelum kas ditutup.",
+    }
 
 
 def _alasan_distribusi(db, laba_bersih, cto, key, pid):
