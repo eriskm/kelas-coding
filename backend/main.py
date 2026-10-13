@@ -129,11 +129,39 @@ def _backup_database():
             if not os.path.isfile(dst):
                 shutil.copy2(DB_PATH, dst)
                 _log("[backup] database disalin ke %s" % os.path.basename(dst))
+            _prune_backups(os.path.dirname(DB_PATH))
             return True
         return _backup_postgres(SQLALCHEMY_DATABASE_URL)
     except Exception as exc:
         _log("[backup] GAGAL: %s (migrasi data dilewati, aplikasi tetap jalan)" % exc)
         return False
+
+
+def _prune_backups(directory, keep=10):
+    """Buang backup otomatis yang paling lama, sisakan `keep` terbaru.
+
+    Hanya menyentuh file pola 'backup-servisku-*' -- backup bernama (pre*/checkpoint*)
+    milik Owner dan tidak pernah dihapus. Gagal diam-diam: prune bukan hal kritis.
+    """
+    try:
+        import glob
+        pattern = os.path.join(directory, "backup-servisku-*")
+        found = []
+        for path in glob.glob(pattern):
+            if not os.path.isfile(path):
+                continue
+            if not path.lower().endswith((".db", ".sql")):
+                continue
+            found.append((os.path.getmtime(path), path))
+        found.sort(reverse=True)
+        stale = found[keep:]
+        for _, path in stale:
+            os.remove(path)
+        if stale:
+            _log("[backup] %d backup lama dibersihkan, %d terbaru disimpan"
+                 % (len(stale), min(len(found), keep)))
+    except Exception as exc:
+        _log("[backup] prune dilewati: %s" % exc)
 
 
 def _backup_postgres(url):
