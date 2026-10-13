@@ -355,6 +355,7 @@ def _to_list_schema(o, summ=None):
         part_cost=o.part_cost,
         modal_jasa=o.modal_jasa,
         modal_lainnya=o.modal_lainnya,
+        tanpa_modal=bool(getattr(o, "tanpa_modal", False)),
         laba_bersih=getattr(o, "laba_bersih", 0) or 0,
         lunas_date=o.lunas_date,
         lunas_at=o.lunas_at,
@@ -564,6 +565,21 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
         raise HTTPException(status_code=400,
                             detail="No. Servis tidak dapat diubah")
     payload.pop("no_servis", None)
+    # Penanda "Tanpa Modal (sengaja 0)" harus konsisten dengan angkanya: kalau
+    # ada modal yang terisi, penanda itu tidak boleh aktif. Menolak lebih baik
+    # daripada diam-diam mengabaikannya -- kalau ditolak diam-diam, unit yang
+    # modalnya sudah terisi bisa ikut diperlakukan seolah-olah tanpa modal.
+    if payload.get("tanpa_modal") is not None:
+        _total_modal = sum(to_decimal(
+            payload.get(k, getattr(order, k, 0)) or 0)
+            for k in ("part_cost", "modal_jasa", "modal_lainnya"))
+        if payload.get("tanpa_modal") and _total_modal > ZERO:
+            raise HTTPException(
+                status_code=400,
+                detail="Tidak bisa menandai 'Tanpa Modal' kalau Modal sudah "
+                       "terisi (total Rp %s). Kosongkan modalnya dulu, atau "
+                       "uncheck penanda tersebut."
+                       % _total_modal)
     if "customer_id" in payload and payload["customer_id"] not in (None, order.customer_id):
         raise HTTPException(status_code=400,
                             detail="Pelanggan tidak dapat dipindah via update servis")

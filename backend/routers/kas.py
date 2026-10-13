@@ -683,7 +683,9 @@ def modal_kosong(
     for o in rows:
         total = (to_decimal(o.part_cost or 0) + to_decimal(o.modal_jasa or 0)
                  + to_decimal(o.modal_lainnya or 0))
-        if total <= ZERO:
+        # Unit yang Owner tandai "Tanpa Modal (sengaja 0)" BUKAN kelalaian --
+        # jangan diperingatkan. Itu memang sudah disahkan.
+        if total <= ZERO and not (o.tanpa_modal or False):
             kosong.append({
                 "id": o.id, "no_servis": o.no_servis,
                 "harga": str(o.final_price or 0),
@@ -696,8 +698,9 @@ def modal_kosong(
         "keterangan": "Modal kosong berarti unit ini BELUM masuk Omzet/Transaksi: "
                       "tanpa modal tidak ada biaya yang tercatat, sehingga "
                       "Harga Final-nya akan salah dianggap seluruhnya sebagai "
-                      "laba. Peringatan keras -- isi Modal Part & Modal Jasa "
-                      "sebelum kas ditutup.",
+                      "laba. Isi Modal Part & Modal Jasa -- atau, kalau memang "
+                      "tidak ada modal, centang 'Tanpa Modal (sengaja 0)' di "
+                      "form unit supaya tidak ikut disaring.",
     }
 
 

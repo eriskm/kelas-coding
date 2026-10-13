@@ -74,6 +74,9 @@ class ServiceOrderBase(BaseModel):
     part_cost: Optional[MoneyOut] = None
     modal_jasa: Optional[MoneyOut] = None
     modal_lainnya: Optional[MoneyOut] = None
+    # Owner menyatakan unit ini memang tanpa modal (hanya jasa software, tanpa
+    # ganti part). Membedakan dari unit yang modalnya belum sempat diisi.
+    tanpa_modal: Optional[bool] = None
     # laba_bersih = derive backend (diisi router, bukan input user).
     laba_bersih: Optional[MoneyOut]
     lunas_date: Optional[date] = None
@@ -128,6 +131,9 @@ class ServiceOrderUpdate(BaseModel):
     part_cost: Optional[MoneyOut] = None
     modal_jasa: Optional[MoneyOut] = None
     modal_lainnya: Optional[MoneyOut] = None
+    # Owner menyatakan unit ini memang tanpa modal (hanya jasa software, tanpa
+    # ganti part). Membedakan dari unit yang modalnya belum sempat diisi.
+    tanpa_modal: Optional[bool] = None
     warranty_months: Optional[int] = None
 
 
@@ -161,6 +167,7 @@ class ServiceOrderList(BaseModel):
     part_cost: Optional[MoneyOut] = None
     modal_jasa: Optional[MoneyOut] = None
     modal_lainnya: Optional[MoneyOut] = None
+    tanpa_modal: Optional[bool] = None
     laba_bersih: Optional[MoneyOut] = None
     lunas_date: Optional[date] = None
     lunas_at: Optional[datetime] = None

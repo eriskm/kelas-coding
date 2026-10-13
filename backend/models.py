@@ -99,6 +99,11 @@ class ServiceOrder(Base):
     part_cost = Column(MONEY, default=Decimal("0"))
     modal_jasa = Column(MONEY, default=Decimal("0"))
     modal_lainnya = Column(MONEY, default=Decimal("0"))
+    # Owner menyatakan unit ini memang TANPA modal (mis. hanya jasa software,
+    # tanpa ganti part). Bezakan ini dari unit yang modalnya belum sempat diisi:
+    # yang ditandai tetap masuk Omzet, yang tidak ditandai dianggap belum lengkap
+    # dan memicu peringatan keras saat Tutup Kas. Tidak menambah angka apa pun.
+    tanpa_modal = Column(Boolean, default=False, nullable=False, server_default="0")
     # laba_bersih per-order (alur keuangan): kewajiban − modal_* bila
     # SELESAI+LUNAS, selain itu 0. Dihitung backend, bukan input user.
     laba_bersih = Column(MONEY, default=Decimal("0"))

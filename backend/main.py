@@ -18,6 +18,7 @@ from starlette.responses import FileResponse
 from database import Base, engine
 from migrations_cash_layers import migrate_cash_layers
 from migrations_expense_recurring import migrate_expense_recurring
+from migrations_tanpa_modal import migrate_service_orders_tanpa_modal
 from migrations_money import migrate_money_precision
 from migrations_warranty_claims import migrate_warranty_claims
 from money import ZERO, to_decimal
@@ -92,6 +93,13 @@ def on_startup():
         _log("[FIN-MIRROR] migrasi beban recurring: %s" % _er["changed"])
     except Exception as _e:
         _log("[FIN-MIRROR] migrasi beban recurring dilewati: %s" % _e)
+    # Flag `tanpa_modal`: memisahkan unit yang modalnya belum diisi dari unit yang
+    # memang Owner nyatakan tanpa modal (hanya jasa software, tanpa ganti part).
+    try:
+        _tm = migrate_service_orders_tanpa_modal(engine)
+        _log("[MODAL] migrasi service_orders.tanpa_modal: %s" % _tm["changed"])
+    except Exception as _e:
+        _log("[MODAL] migrasi service_orders.tanpa_modal dilewati: %s" % _e)
     if _backup_ok:
         _migrate_status_data()
         _migrate_checklist_subset()

@@ -64,12 +64,31 @@ def modal_sudah_diisi(order) -> bool:
     """True kalau unit punya minimal satu komponen modal yang bernilai > 0.
 
     Ini yang membedakan "unit BELUM diisi modalnya" dari "unit tidak punya
-    modal sama sekali". Selama belum ada penanda eksplisit untuk kasus kedua,
-    keduanya tidak bisa dibedakan -- dan itu batas yang perlu diketahui Owner.
+    modal sama sekali". Owner sudah memberi jalan keluar untuk kasus kedua:
+    centang "Tanpa Modal (sengaja 0)" -- penanda `tanpa_modal`. Tanpa centang,
+    keduanya tidak bisa dibedakan dan unit tanpa modal tidak akan pernah masuk
+    Omzet.
     """
     return (to_decimal(getattr(order, "part_cost", 0) or 0)
             + to_decimal(getattr(order, "modal_jasa", 0) or 0)
             + to_decimal(getattr(order, "modal_lainnya", 0) or 0)) > ZERO
+
+
+def modal_ditandai_sengaja_nol(order) -> bool:
+    """True kalau Owner menandai unit ini memang tanpa modal."""
+    return bool(getattr(order, "tanpa_modal", False))
+
+
+def boleh_masuk_omzet(order) -> bool:
+    """Gerbang kohort Omzet: modal terisi, ATAU Owner menandainya tanpa modal.
+
+    Unit modal-kosong yang TIDAK ditandai tidak masuk Omzet sama sekali -- jadi
+    tidak menambah Omzet, Laba Kotor, maupun distribution, dan tetap muncul di
+    peringatan keras Tutup Kas sampai Modal-nya diisi.
+    """
+    if modal_sudah_diisi(order):
+        return True
+    return modal_ditandai_sengaja_nol(order)
 
 
 def settled_orders(db: Session, start: datetime, end: datetime) -> list:
@@ -97,18 +116,17 @@ def settled_orders(db: Session, start: datetime, end: datetime) -> list:
             continue
         # ATURAN OWNER: unit CASH yang Modalnya belum diisi (Part/Jasa/Lain
         # semuanya 0) BELUM dianggap transaksi sungguhan -- jadi tidak masuk
-        # Omzet/Transaksi sama sekali. kalau belum sempat sempat tidak mengisi modal,
-        # Preis Final masuk ke Laci tapi tidak ada biaya tercatat, sehingga
+        # Omzet/Transaksi sama sekali. Kalau belum sempat mengisi modal,
+        # Harga Final masuk ke Laci tapi tidak ada biaya tercatat, sehingga
         # seluruh harga dianggap laba; itu bisa membuat CTO tercapai lebih awal
         # dan memicu distribution dari uang yang sebenarnya bukan keuntungan.
         # Order seperti itu sengaja DITAMPILKAN di peringatan keras Tutup Kas
         # supaya modalnya sempat diisi sebelum periode ditutup.
         #
-        # CATATAN PENTING: unit yang memang SENGAJA tanpa modal (mis. hanya
-        # jasa software, tanpa ganti part) ikut tersaring di sini. Kalau itu
-        # sering terjadi, dibutuhkan penanda eksplisit "benar-benar tanpa
-        # modal" supaya bisa dibedakan dari "lupa mengisi".
-        if not modal_sudah_diisi(o):
+        # Jalur keluar: Owner menandai unit sebagai "Tanpa Modal (sengaja 0)"
+        # lewat kolom `tanpa_modal`. Unit bertanda itu tetap dihitung sebagai
+        # transaksi, hanya tidak menambah biaya (memang tidak ada).
+        if not boleh_masuk_omzet(o):
             continue
         m = cash_moment(o)
         if m is None:

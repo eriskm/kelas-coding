@@ -2186,6 +2186,22 @@
                                             <label class="field-label" for="usFinLainKe">Setor Lainnya Ke</label>
                                             <select class="receive-input" id="usFinLainKe"><option value="Kasir">Kasir</option></select>
                                         </div>
+
+                                        <!-- Tanpa Modal (sengaja 0).
+                                             Unit CASH yang Part/Jasa/Lain semua 0 TIDAK masuk
+                                             Omzet/Transaksi -- Owner meminta begitu, supaya modal
+                                             yang belum sempat diisi tidak salah dianggap laba.
+                                             Untuk servis yang memang tanpa biaya (hanya
+                                             software, tanpa ganti part), centang ini supaya
+                                             unit tetap dihitung sebagai transaksi. -->
+                                        <div class="field hidden" id="usTanpaModalWrap">
+                                            <label class="us-check" for="usTanpaModal">
+                                                <input type="checkbox" id="usTanpaModal">
+                                                <span class="us-check-box" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
+                                                <span>Tanpa Modal (sengaja 0)</span>
+                                            </label>
+                                            <p class="text-[10.5px] text-gray-500 dark:text-gray-400 mt-1 leading-snug" id="usTanpaModalHint"></p>
+                                        </div>
                                         <div class="us-sum">
                                             <div class="us-row"><span>Harga Final</span><b id="usSumFinal">Rp 0</b></div>
                                             <div class="us-row"><span>Modal Part</span><b id="usSumPart">Rp 0</b></div>

@@ -102,8 +102,9 @@ def test_modal_kosong_terdeteksi(client, db):
     # Keterangan harus menyatakan ini PERINGATAN KERAS dengan alasan yang benar.
     # Dulu berbunyi "modal 0 itu sah" -- itu tidak lagi sesuai aturan Owner.
     ket = d["keterangan"].lower()
-    assert "peringatan keras" in ket, d["keterangan"]
     assert "belum masuk omzet" in ket, d["keterangan"]
+    # Harus menyebut jalan keluarnya, bukan cuma Authenticating masalah.
+    assert "tanpa modal (sengaja 0)" in ket, d["keterangan"]
 
 
 def test_order_bermodal_tidak_ikut(client, db):

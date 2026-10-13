@@ -2216,6 +2216,9 @@ function openUpdateServis(o) {
     document.getElementById('usFinJasa').value = (o.modal_jasa !== null && o.modal_jasa !== undefined) ? o.modal_jasa : '';
     document.getElementById('usFinJasaKe').value = o.technician || '';
     document.getElementById('usFinLain').value = (o.modal_lainnya !== null && o.modal_lainnya !== undefined) ? o.modal_lainnya : '';
+    const _cbTanpaModal = document.getElementById('usTanpaModal');
+    if (_cbTanpaModal) _cbTanpaModal.checked = !!(o.tanpa_modal);
+    usSyncTanpaModal();
     // Checklist awal: SELALU dari data server per No. Servis (bukan dummy,
     // bukan store lokal). Setelah refresh pun tampil sama persis.
     const _usCheck = _usServerChecklist(o);
@@ -2526,6 +2529,29 @@ function usFinUpdate() {
     set('usSumSisa', final - part - jasa - lain);
     const wrap = document.getElementById('usFinLainKeWrap');
     if (wrap) wrap.classList.toggle('hidden', !(lain > 0));
+    usSyncTanpaModal();
+}
+
+// Samakan tampilan penanda "Tanpa Modal" dengan isi modal yang diketik.
+// - Modal sudah terisi -> checkbox dikunci OFF dan keterangannya disembunyikan
+//   (backend juga menolak kombinasi itu, jadi formnya lebih cepat).
+// - Modal kosong -> checkbox boleh dicentang.
+function usSyncTanpaModal() {
+    const cb = document.getElementById('usTanpaModal');
+    const wrap = document.getElementById('usTanpaModalWrap');
+    const hint = document.getElementById('usTanpaModalHint');
+    if (!cb || !wrap) return;
+    const total = (usNum('usFinPart') || 0) + (usNum('usFinJasa') || 0) + (usNum('usFinLain') || 0);
+    const adaModal = total > 0;
+    cb.disabled = adaModal;
+    if (adaModal) cb.checked = false;
+    wrap.classList.remove('hidden');
+    if (hint) {
+        hint.textContent = adaModal
+            ? 'Modal sudah terisi, jadi penanda ini tidak dipakai.'
+            : 'Centang HANYA kalau unit ini memang tanpa biaya (mis. hanya software, tanpa ganti part). Tanpa centang, unit CASH-nya tidak dihitung sebagai transaksi.';
+        hint.classList.toggle('text-amber-600', !adaModal && !cb.checked);
+    }
 }
 
 function usReprint() {
@@ -2598,6 +2624,11 @@ function initUpdateServis() {
     });
     const jm = document.getElementById('usFinJasaMode');
     if (jm && !jm.dataset.usBound) { jm.dataset.usBound = '1'; jm.addEventListener('change', usFinUpdate); }
+    const cbTM = document.getElementById('usTanpaModal');
+    if (cbTM && !cbTM.dataset.usBound) {
+        cbTM.dataset.usBound = '1';
+        cbTM.addEventListener('change', usSyncTanpaModal);
+    }
     const wm = document.getElementById('usWarrantyMonths');
     if (wm && !wm.dataset.usBound) { wm.dataset.usBound = '1'; wm.addEventListener('change', usWarrantyUpdate); }
     // P2-15: opsi dropdown dibangun dari STATUS_OPTIONS + gate role (Project A).
@@ -2713,6 +2744,10 @@ function initUpdateServis() {
                     part_cost: usNum('usFinPart') || 0,
                     modal_jasa: usNum('usFinJasa') || 0,
                     modal_lainnya: usNum('usFinLain') || 0,
+                    // Penanda "memang tanpa modal" (servis hanya software, tanpa
+                    // ganti part). Tanpa ini unit modal-0 tidak akan pernah masuk
+                    // Omzet. Backend menolak kalau modalnya ternyata sudah terisi.
+                    tanpa_modal: !!(document.getElementById('usTanpaModal') || {}).checked,
                     warranty_months: usWarrantyMonths(),
                     technician: usVal('usTechnician'),
                     status: _usSt,

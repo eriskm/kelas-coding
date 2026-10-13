@@ -1768,6 +1768,24 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 .dark .ku-alloc-note { border-top-color: rgba(255,255,255,0.08); color: #94a3b8; }
 
+.us-check {
+    display: flex; align-items: center; gap: 8px; cursor: pointer;
+    font-size: 12px; font-weight: 600; color: #475569;
+}
+.dark .us-check { color: #d1d5db; }
+.us-check input { position: absolute; opacity: 0; pointer-events: none; }
+.us-check-box {
+    width: 18px; height: 18px; flex-shrink: 0;
+    display: inline-flex; align-items: center; justify-content: center;
+    border-radius: 5px; border: 1.5px solid #cbd5e1; background: #fff;
+    color: #fff; font-size: 10px; transition: all .15s;
+}
+.dark .us-check-box { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.2); }
+.us-check input:checked + .us-check-box { background: #dc2626; border-color: #dc2626; }
+.us-check input:focus-visible + .us-check-box { box-shadow: 0 0 0 3px rgba(220,38,38,0.25); }
+.us-check input:disabled + .us-check-box { opacity: .45; }
+.us-check:has(input:disabled) { cursor: not-allowed; }
+
 .ku-back-btn { margin-bottom: 12px; }
 
 /* ── Blok 4 Riwayat: Arsip Tutup Kas ── */

@@ -63,6 +63,11 @@ FINANCE_FIELDS = (
     "modal_lainnya",
     "estimate",
     "payment",
+    # Menandai unit sebagai "memang tanpa modal" menentukan apakah unit ikut
+    # dihitung sebagai transaksi atau tidak -- jadi sama guarantorannya
+    # dengan angka modal itu sendiri. Role tanpa authority finance tidak boleh
+    # mengubahnya.
+    "tanpa_modal",
 )
 
 
