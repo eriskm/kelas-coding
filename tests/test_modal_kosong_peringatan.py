@@ -99,8 +99,11 @@ def test_modal_kosong_terdeteksi(client, db):
     punya = set(x["no_servis"] for x in d["items"])
     assert {"MK-KOSONG-1", "MK-KOSONG-2"} <= punya, d
     assert d["jumlah"] >= 2, d
-    # Keterangan harus menyatakan bahwa ini peringatan, bukan larangan.
-    assert "sah" in d["keterangan"].lower()
+    # Keterangan harus menyatakan ini PERINGATAN KERAS dengan alasan yang benar.
+    # Dulu berbunyi "modal 0 itu sah" -- itu tidak lagi sesuai aturan Owner.
+    ket = d["keterangan"].lower()
+    assert "peringatan keras" in ket, d["keterangan"]
+    assert "belum masuk omzet" in ket, d["keterangan"]
 
 
 def test_order_bermodal_tidak_ikut(client, db):

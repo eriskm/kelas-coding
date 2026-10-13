@@ -81,9 +81,38 @@ def test_omzet_hanya_unit_cash(db):
     o_done = _unit(db, "PY-DONE-OMZET", 111000, cashed=False)
     ids = [x.id for x in finance.settled_orders(db, p.start_at, p.end_at)]
     assert o_done.id not in ids, "unit DONE tidak boleh masuk Omzet"
-    o_cash = _unit(db, "PY-CASH-OMZET", 222000, cashed=True)
+    # Modal wajib diisi: unit CASH tanpa modal TIDAK masuk Omzet (aturan Owner).
+    o_cash = _unit(db, "PY-CASH-OMZET", 222000, modal=(50000, 20000, 0), cashed=True)
     ids2 = [x.id for x in finance.settled_orders(db, p.start_at, p.end_at)]
-    assert o_cash.id in ids2, "unit CASH harus masuk Omzet"
+    assert o_cash.id in ids2, "unit CASH yang modalnya terisi harus masuk Omzet"
+
+
+def test_omzet_tidak_menghitung_unit_cash_yang_modalnya_kosong(db):
+    """ATURAN OWNER: CASH tanpa Modal = belum masuk Omzet/Transaksi.
+
+    Kalau unit modal-0 ikut dihitung, seluruh Harga Final dianggap laba (tidak
+    ada biaya tercatat). Omzet meleset, CTO bisa tercapai lebih awal, dan
+    distribution bisa keluar dari uang yang sebenarnya bukan keuntungan.
+    """
+    p = _periode_aktif(db)
+    isi = _unit(db, "PY-CASH-MODAL-ISI", 400000, modal=(200000, 50000, 0),
+                cashed=True)
+    omset_sebelum = to_decimal(
+        finance.compute_finance_core(db, p.start_at, p.end_at)["omset"])
+
+    # Sekarang tambahkan unit CASH yang modalnya masih kosong.
+    kosong = _unit(db, "PY-CASH-MODAL-NOL", 500000, modal=(0, 0, 0), cashed=True)
+    ids = [x.id for x in finance.settled_orders(db, p.start_at, p.end_at)]
+    assert kosong.id not in ids, "CASH tanpa modal tidak boleh masuk Omzet"
+    assert isi.id in ids, "CASH dengan modal harus masuk Omzet"
+
+    omset_sesudah = to_decimal(
+        finance.compute_finance_core(db, p.start_at, p.end_at)["omset"])
+    # Absolute omset tidak bisa dibandingkan: sandbox dipakai bersama, jadi ada
+    # order milik test lain yang ikut terhitung. Yang diuji adalah DELTA-nya.
+    assert omset_sesudah == omset_sebelum, \
+        ("Harga Final unit modal-0 tidak boleh mengubah Omzet; "
+         "sebelum=%s sesudah=%s" % (omset_sebelum, omset_sesudah))
 
 
 def test_dp_tidak_masuk_omzet(db):

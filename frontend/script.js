@@ -2656,6 +2656,21 @@ function initUpdateServis() {
                         _needFocus('usTechnician');
                         return;
                     }
+                } else if (_usSt === 'DONE') {
+                    // DONE wajib: Perbaikan/Tindakan + Teknisi + Harga Final.
+                    // Harga Final = total pembayaran pelanggan; tanpa itu unit
+                    // bisa "selesai" tanpa tahu harganya, dan karena
+                    // kewajiban() memakai final_price ?? estimate, harga 0 ikut
+                    // terhitung sebagai omzet 0 -- unit lenyap dari laporan.
+                    const _missing = [];
+                    if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
+                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final (total pembayaran pelanggan)', 'usFinFinal']);
+                    if (_missing.length) {
+                        _needFail(_missing.map(m => m[0]).join(', '));
+                        _needFocus(_missing[0][1]);
+                        return;
+                    }
                 } else if (_usSt === 'CASH') {
                     // CASH = event realisasi (Owner Cash Model P2-15): wajib Tindakan + Teknisi.
                     //
@@ -4246,22 +4261,33 @@ async function kuTutupKas() {
         if (raw) counted = JSON.parse(raw).nominal;
     } catch (_) {}
 
-    // PERINGATAN modal kosong (bukan pemblokiran -- modal 0 itu sah untuk servis
-    // tanpa ganti part). Kalau modal sebenarnya belum sempat dicatat, akibatnya
-    // bukan cuma laba kelihatan lebih besar: modal yang tidak tercatat tidak pernah
-    // keluar dari Laci, padahal bagiannya sudah ikut dibagikan sebagai laba,
-    // dan saat tutup kas uang fisik justru lebih besar -> terlihat seperti hilang.
+    // PERINGATAN KERAS (bukan pemblokiran). Unit CASH yang Modalnya belum diisi
+    // TIDAK masuk Omzet/Transaksi sama sekali -- jadi kalau dibiarkan begitu,
+    // Laba maupun CTO jadi tidak benar. Tutup kas tetap boleh diteruskan,
+    // tapi harus terasa jelas bahwa ada transaksi yang belum lengkap.
     let warn = '';
+    let hard = 0;
     try {
         const mk = await apiGet('/kas/modal-kosong?period=current');
         if (mk && mk.jumlah > 0) {
-            warn = '\n\nPERINGATAN: ' + mk.jumlah + ' unit berstatus CASH belum punya Modal'
-                 + ' (Part/Jasa/Lain = 0):\n'
-                 + mk.items.slice(0, 8).map(x => '  - ' + x.no_servis + '  Rp ' + Number(x.harga).toLocaleString('id-ID')).join('\n')
-                 + (mk.items.length > 8 ? '\n  ... dan ' + (mk.items.length - 8) + ' unit lain' : '')
-                 + '\n\nModal 0 itu sah (servis tanpa ganti part / hanya jasa).'
-                   + ' Tapi kalau modal sebenarnya belum sempat dicatat, selisihnya'
-                   + ' akan muncul saat tutup kas. Tutup kas tetap bisa dilanjutkan.';
+            hard = mk.jumlah;
+            const daftar = mk.items.slice(0, 15);
+            warn = '\n\n' + '='.repeat(56)
+                 + '\n⚠  PERINGATAN KERAS — TRANSAKSI BELUM DIKASIH MODAL  ⚠'
+                 + '\n' + '='.repeat(56)
+                 + '\n' + mk.jumlah + ' unit berstatus CASH belum punya Modal'
+                   + ' (Part/Jasa/Lain = 0):'
+                 + '\n'
+                 + daftar.map(x => '   • ' + x.no_servis + '   Rp ' + Number(x.harga).toLocaleString('id-ID')).join('\n')
+                 + (mk.items.length > daftar.length
+                     ? '\n   • ... dan ' + (mk.items.length - daftar.length) + ' unit lainnya' : '')
+                 + '\n'
+                 + 'Unit-unit ini BELUM masuk Omzet/Transaksi, karena tanpa'
+                 + ' modal tidak ada biaya yang tercatat.'
+                 + '\nSebaiknya isi Modal Part & Modal Jasa dulu, lalu tutup kas.'
+                 + '\n\nNB: servis yang memang tanpa ganti part (hanya jasa)'
+                   + ' bisa modal 0 -- tapi harus dikejar agar tidak ikut disaring.'
+                 + '\n' + '='.repeat(56);
         }
     } catch (_) {}
 
@@ -4269,6 +4295,16 @@ async function kuTutupKas() {
         ? 'Proses Tutup Kas & Pindah Arsip? Hitungan laci terakhir: Rp ' + Number(counted).toLocaleString('id-ID') + '. Selisih akan dicatat di arsip.' + warn
         : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.' + warn;
     if (!confirm(msg)) return;
+    // Kalau ada modal kosong, minta konfirmasi kedua. Bukan sekadar mengulang
+    // dialog yang sama -- tujuannya supaya ini terasa benar-benar "keras" dan
+    // tidak lolos dengan tidak sengaja menekan OK.
+    if (hard > 0) {
+        const lagi = confirm(
+            'Yakin? ' + hard + ' transaksi akan ikut masuk ARSIP tanpa Modal\n'
+            + 'sehingga TIDAK terhitung di Omzet periode ini.\n\n'
+            + 'Klik Cancel untuk membatalkan dan mengisi Modal dulu.');
+        if (!lagi) return;
+    }
     try {
         const res = await apiPost('/kas/close', { cash_counted: counted },
                                  { idempotencyKey: newIdemKey() });

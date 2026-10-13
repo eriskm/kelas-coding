@@ -612,6 +612,13 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             tech = payload.get("technician", order.technician)
             if not (tech or "").strip():
                 missing.append("Teknisi Penanggung Jawab")
+            # Harga Final wajib diisi sebelum DONE. Tanpa ini unit bisa "selesai"
+            # tanpa tahu total harga pelanggan, dan karena `kewajiban()` memakai
+            # final_price ?? estimate, harga 0 ikut terhitung sebagai omzet 0 --
+            # unitnya lenyap dari laporan tanpa pernah ada angkanya.
+            harga = payload.get("final_price", order.final_price)
+            if not (to_decimal(harga or 0) > ZERO):
+                missing.append("Harga Final (total pembayaran pelanggan)")
             if missing:
                 raise HTTPException(status_code=400,
                                     detail="Status DONE wajib melengkapi: " + ", ".join(missing))

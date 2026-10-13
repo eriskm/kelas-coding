@@ -624,13 +624,12 @@ def modal_kosong(
     period: str = Query("current", description="current | YYYY-MM-DD"),
     user: User = Depends(get_authenticated_user),
 ):
-    """Daftar order CASH yang Modalnya masih 0 semua (read-only, tidak menulis).
+    """Daftar order CASH yang Modalnya masih kosong semua (read-only, tidak menulis).
 
-    Untuk PERINGATAN sebelum Tutup Kas -- bukan pemblokiran. Modal 0 itu sah
-    (servis tanpa ganti part / hanya jasa), jadi tidak boleh melarang. Tapi
-    kalau modalnya sebenarnya belum sempat dicatat, akibatnya bukan cuma angka
-    laba yang kelihatan lebih besar: modal yang tidak tercatat itu TIDAK pernah
-    keluar dari Laci, padahal bagiannya sudah ikut dibagikan sebagai laba.
+    Untuk PERINGATAN KERAS sebelum Tutup Kas -- bukan pemblokiran, tapi
+    Owner menegaskan: unit modal-kosong BELUM masuk Omzet/Transaksi. Jadi ini
+    harus diperbaiki sebelum periode ditutup. Dulu keterangan di sini
+    berbunyi "modal 0 itu sah" -- itu tidak lagi sesuai aturan Owner.
 
     Simulasi (harga 500.000, modal sebenarnya 300.000 tapi dicatat 0):
       - laba terbaca 500.000, bukan 200.000;
@@ -694,9 +693,11 @@ def modal_kosong(
         "jumlah": len(kosong),
         "total_cash": len(rows),
         "items": kosong,
-        "keterangan": "Modal 0 itu sah (servis tanpa ganti part). Peringatan ini "
-                      "hanya pengingat supaya modal yang belum tercatat sempat "
-                      "diisi sebelum kas ditutup.",
+        "keterangan": "Modal kosong berarti unit ini BELUM masuk Omzet/Transaksi: "
+                      "tanpa modal tidak ada biaya yang tercatat, sehingga "
+                      "Harga Final-nya akan salah dianggap seluruhnya sebagai "
+                      "laba. Peringatan keras -- isi Modal Part & Modal Jasa "
+                      "sebelum kas ditutup.",
     }
 
 

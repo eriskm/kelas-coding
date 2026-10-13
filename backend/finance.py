@@ -1,4 +1,4 @@
-"""P2-05 — FINANCIAL CORE Project B (Financial SSOT sebagai target).
+﻿"""P2-05 — FINANCIAL CORE Project B (Financial SSOT sebagai target).
 
 Implementasi rumus Owner, diselaraskan ke Proyek A (FIN-MIRROR):
     OMZET       = total penjualan unit CASH pada periode bisnis (16:00->16:00).
@@ -60,6 +60,18 @@ def period_key(start: datetime, end: datetime) -> str:
     return start.strftime("%Y-%m-%d")
 
 
+def modal_sudah_diisi(order) -> bool:
+    """True kalau unit punya minimal satu komponen modal yang bernilai > 0.
+
+    Ini yang membedakan "unit BELUM diisi modalnya" dari "unit tidak punya
+    modal sama sekali". Selama belum ada penanda eksplisit untuk kasus kedua,
+    keduanya tidak bisa dibedakan -- dan itu batas yang perlu diketahui Owner.
+    """
+    return (to_decimal(getattr(order, "part_cost", 0) or 0)
+            + to_decimal(getattr(order, "modal_jasa", 0) or 0)
+            + to_decimal(getattr(order, "modal_lainnya", 0) or 0)) > ZERO
+
+
 def settled_orders(db: Session, start: datetime, end: datetime) -> list:
     """Cohort Omzet: unit CASH dengan momen CASH di dalam periode.
 
@@ -82,6 +94,21 @@ def settled_orders(db: Session, start: datetime, end: datetime) -> list:
     cohort = []
     for o in orders:
         if (getattr(o, "status", "") or "") != "CASH":
+            continue
+        # ATURAN OWNER: unit CASH yang Modalnya belum diisi (Part/Jasa/Lain
+        # semuanya 0) BELUM dianggap transaksi sungguhan -- jadi tidak masuk
+        # Omzet/Transaksi sama sekali. kalau belum sempat sempat tidak mengisi modal,
+        # Preis Final masuk ke Laci tapi tidak ada biaya tercatat, sehingga
+        # seluruh harga dianggap laba; itu bisa membuat CTO tercapai lebih awal
+        # dan memicu distribution dari uang yang sebenarnya bukan keuntungan.
+        # Order seperti itu sengaja DITAMPILKAN di peringatan keras Tutup Kas
+        # supaya modalnya sempat diisi sebelum periode ditutup.
+        #
+        # CATATAN PENTING: unit yang memang SENGAJA tanpa modal (mis. hanya
+        # jasa software, tanpa ganti part) ikut tersaring di sini. Kalau itu
+        # sering terjadi, dibutuhkan penanda eksplisit "benar-benar tanpa
+        # modal" supaya bisa dibedakan dari "lupa mengisi".
+        if not modal_sudah_diisi(o):
             continue
         m = cash_moment(o)
         if m is None:
