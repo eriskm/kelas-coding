@@ -47,7 +47,7 @@ from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
-from models import ExpensePeriod, ServiceOrder
+from models import ExpensePeriod, Payment, ServiceOrder
 from money import ZERO, to_decimal
 from statusflow import cash_moment, kewajiban, payment_summary
 
@@ -110,6 +110,30 @@ def settled_orders(db: Session, start: datetime, end: datetime) -> list:
     gate-nya yang disamakan ke A.
     """
     orders = db.query(ServiceOrder).all()
+    # ATURAN OWNER (FIN-MIRROR-6): "Omzet = nilai transaksi yang SUDAH LUNAS."
+    # Sebelumnya gerbang ini hanya `status == 'CASH'`, jadi unit yang sudah
+    # diambil pelanggan tapi pelunasannya belum masuk ikut dihitung sebagai omzet.
+    # Akibatnya omzet lebih besar dari uang yang benar-benar diterima, laba kotor
+    # ikut membesar, dan distribusi bisa keluar dari uang yang belum masuk --
+    # persis kasus order dengan obligasi Rp 400.000 tapi dibayar Rp 0.
+    #
+    # Catatan: `status == 'CASH'` TIDAK otomatis berarti LUNAS. Pelunasan ditulis
+    # terpisah di tabel `payments` dan bisa bolong (mis. harga diubah setelah
+    # unit diambil, atau pelunasan dicatatmanual kemudian).
+    #
+    # Payment Ledger dikumpulkan SEKALI di depan supaya tidak jadi query N+1.
+    dari_payment = {}
+    for pid, sid in (db.query(Payment.id, Payment.service_order_id).all()):
+        dari_payment.setdefault(sid, []).append(pid)
+    cache_payment = {}
+    for o in orders:
+        ids = dari_payment.get(o.id) or []
+        pays = cache_payment.get(o.id)
+        if pays is None:
+            pays = (db.query(Payment).filter(Payment.id.in_(ids)).all()
+                    if ids else [])
+            cache_payment[o.id] = pays
+
     cohort = []
     for o in orders:
         if (getattr(o, "status", "") or "") != "CASH":
@@ -127,6 +151,9 @@ def settled_orders(db: Session, start: datetime, end: datetime) -> list:
         # lewat kolom `tanpa_modal`. Unit bertanda itu tetap dihitung sebagai
         # transaksi, hanya tidak menambah biaya (memang tidak ada).
         if not boleh_masuk_omzet(o):
+            continue
+        if (payment_summary(o, cache_payment.get(o.id) or []).get("payment_status")
+                or "") != "LUNAS":
             continue
         m = cash_moment(o)
         if m is None:

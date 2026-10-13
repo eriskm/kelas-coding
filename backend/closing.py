@@ -27,6 +27,7 @@ import notifications as notif_mod
 import journal
 from money import ZERO, quantize, to_decimal
 from routers.dashboard import batas_periode
+from finance import period_key
 
 KATEGORI_CASH_OUT = "Distribusi Laba"
 MARKER_CASH_OUT = "Cash-out distribusi 70%%"
@@ -98,19 +99,106 @@ def rekonsiliasi_periode(db: Session, dist_row, cash_counted, oleh: str = None):
         ref_type="periode", ref_id=(dist_row.periode if dist_row is not None else None))
 
 
+BE_REF_TYPE = "beban_periode"
+
+
+def selesaikan_periode(db: Session, period, fin: dict, oleh: str = None) -> dict:
+    """TUTUP KAS = menyelesaikan kewajiban kas periode ini (FIN-MIRROR-7).
+
+    Aturan Owner, urutan dan persis:
+        1. Ambil transaksi yang memenuhi kriteria pengakuan omzet (CASH + LUNAS).
+        2. Modal Part & Modal Jasa dikeluarkan dari Kas Perputaran.
+        3. Beban periode dikeluarkan dari Kas Perputaran.
+        4. Seluruh Laba Bersih dikeluarkan: 70% cash-out, 30% pindah ke Kas Aset.
+        5. Kalau Laba Kotor tidak menutup Beban -> defisit, bukan distribusi paksa.
+
+    Karena pelunasan = modal + beban + laba_bersih dan laba_bersih seluruhnya
+    keluar (70% + 30%), maka secara matematis:
+
+        Laci_akhir = Laci_awal + pelunasan - modal - beban - laba_bersih
+                  = Laci_awal
+
+    Jadi kalau Laci_awal 0, Laci AKAN kembali ke 0. Syaratnya: ketiga arus itu
+    benar-benar tercatat. Fungsi ini yang memastikan semuanya tercatat --
+    tanpa membuat jurnal fiktif, tanpa memakai DP titipan, dan tanpa memaksa
+    distribusi yang tidak tersedia.
+
+    Yang boleh TIDAK tercatat:
+      - modal yang tidak bisa dig deeperkan karena Laci kosong -> jadi defisit;
+      - beban yang tidak cukup bayarnya -> jadi defisit (Kas Aset + Hutang Beban).
+    """
+    from models import KasEntry
+    start, end = batas_periode(period)
+    key = period_key(start, end)
+    out = {"modal_selisih": ZERO, "beban_dibayar": ZERO, "beban_sisa": ZERO,
+           "distribusi": None, "defisit": None}
+
+    # ---- (1) Modal: catat selisih yang belum masuk ledger ------------------
+    # `catat_modal` idempoten per komponen, jadi modal yang diisi SESUDAH CASH
+    # tidak pernah masuk ledger. Yang terlewat dicatat di sini, per order.
+    for o in finance_cohort(db, start, end):
+        for mut in cash.catat_modal_selisih(db, o, actor=oleh):
+            out["modal_selisih"] += abs(to_decimal(mut["nominal"]))
+
+    # ---- (2) Beban periode dibayar dari Kas Perputaran ---------------------
+    total_beban = quantize(to_decimal(fin.get("total_beban") or 0))
+    sudah = db.query(KasEntry).filter(
+        KasEntry.layer == cash.LAYER_LACI,
+        KasEntry.sumber == cash.SUMBER_BEBAN,
+        KasEntry.ref_type == BE_REF_TYPE,
+        KasEntry.ref_id == key).first()
+    if sudah is None and total_beban > ZERO:
+        bayar = min(total_beban, cash.saldo_laci(db))
+        if bayar > ZERO:
+            mut = cash.catat_mutasi(
+                db, cash.LAYER_LACI, "Keluar", cash.KATEGORI[cash.SUMBER_BEBAN],
+                "Pembayaran Beban periode %s" % key, bayar,
+                sumber=cash.SUMBER_BEBAN, ref_type=BE_REF_TYPE, ref_id=key,
+                oleh=oleh, check_saldo=False)
+            out["beban_dibayar"] = bayar
+        else:
+            out["beban_dibayar"] = ZERO
+        out["beban_sisa"] = quantize(total_beban - out["beban_dibayar"])
+    elif sudah is not None:
+        out["beban_dibayar"] = quantize(to_decimal(sudah.nominal))
+        out["beban_sisa"] = quantize(total_beban - out["beban_dibayar"])
+
+    # ---- (3) Distribusi 10/30/30/30 atas Laba Bersih ----------------------
+    # Hanya kalau Laba Bersih > 0. Distribution sudah otomatis terjadi saat CTO
+    # tercapai; di sini cukup memanggil gatekeeper yang sama supaya top-up-nya
+    # tertangkap kalau ada laba baru setelahnya.
+    laba = to_decimal(fin.get("laba_bersih") or 0)
+    res = distribution_mod.pastikan_otomatis(
+        db, period.start_at.date().isoformat(), laba,
+        cto_tercapai=bool(fin.get("cto_tercapai")),
+        kas_period_id=period.id, oleh=oleh)
+    out["distribusi"] = res
+    db.flush()
+    return out
+
+
+def finance_cohort(db: Session, start, end):
+    """Kohort Omzet periode ini (CASH + LUNAS + modal terisi)."""
+    import finance as finance_mod
+    return finance_mod.settled_orders(db, start, end)
+
+
 def tutup_periode(db: Session, period, counted=None, oleh: str = None,
                   compute_finance=None, period_hour: int = 16):
     """Tutup satu periode kas. TANPA commit — pemanggil yang melakukan transaksi.
 
-    Urutan (semua dalam satu transaksi):
-      1. Laba Bersih authoritative (financial core P2-05).
-      2. Distribusi TIDAK lagi dibentuk di sini — sudah terjadi otomatis saat
-         CTO tercapai (`distribution.pastikan_otomatis`). Kalau ternyata belum
-         terbentuk (mis. order masih di bawah CTO), baris lama dikembalikan apa
-         adanya karena `terapkan` bersifat idempoten.
-      3. Set Laci = uang fisik bila ada Declare (idempotent per periode).
-      4. Snapshot periode (TIDAK menghapus apa pun — Q14).
-      5. Tutup periode & buka periode baru 16:00 → 16:00.
+    Urutan (SEMUA dalam satu transaksi, rollback bila gagal di tengah):
+      1. Laba Bersih authoritative dari financial core (P2-05).
+      2. Selesaikan kewajiban kas periode: modal yang terlewat, bayar Beban
+         periode, jalankan/pertahankan distribusi 10/30/30/30 (lihat
+         `selesaikan_periode`). Inilah yang membuat Saldo Kas Perputaran kembali
+         ke titik awal -- tidak lewat jurnal fiktif, tapi karena semua uang yang
+         masuk memang ikut keluar sebagai modal, beban, atau bagi hasil.
+      3. Kalau Laba Kotor tidak menutup Beban -> proses defisit (Kas Aset +
+         Hutang Beban). TIDAK memaksa distribusi, TIDAK memakai DP titipan.
+      4. Set Laci = uang fisik bila ada Declare (idempotent per periode).
+      5. Snapshot periode (TIDAK menghapus apa pun — Q14).
+      6. Tutup periode & buka periode baru 16:00 → 16:00.
     """
     from models import KasPeriod
 
@@ -120,27 +208,46 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
     fin = compute_finance(db, *batas_periode(period))
     periode_key = period.start_at.date().isoformat()
 
-# Distribusi TIDAK lagi dibentuk di sini. Ia terjadi OTOMATIS saat CTO tercapai,
-    # dipanggil dari setiap event CASH / jurnal kas (`distribution.pastikan_otomatis`),
-    # jadi di saat Tutup Kas cukup membaca apa yang sudah terbentuk.
+# ── PENYELESAIAN KAS PERIODE (FIN-MIRROR-7) ──────────────────────────────
+    # Dipanggil SEBELUM Declare/rekonsiliasi, supaya angka `counted` dibandingkan
+    # dengan saldo yang sudah benar-benar menyelesaikan kewajiban periode.
     #
-    # Memanggil `pastikan_otomatis` di sini sebelumnya berarti Tutup Kas bisa
-    # menggerakkan uang (cash-out + pindah ke Aset) TEPAT pada saat penutupan,
-    # SETELAH `counted` dicatat -- sehingga Selisih yang dilaporkan menjadi
-    # palsu karena Laci ikut berkurang. Karena itu yang dipanggil hanya
-    # pembacaan data, bukan gerbang pembentukan.
-    dist_row = distribution_mod.sudah_ada(db, periode_key, kas_period_id=period.id)
-    dist = {
-        "created": False,
-        "dibentuk": False,
-        "distribution": dist_row,
-        "alokasi": (distribution_mod.alokasi_dari(dist_row) if dist_row is not None
-                    else distribution_mod.hitung(fin.get("laba_bersih", 0))),
-        "trigger": "CTO tercapai",
-        "alasan": (None if dist_row is not None
-                   else "Belum ada distribusi di periode ini"),
-        "periode": (dist_row.periode if dist_row is not None else periode_key),
-    }
+    # Yang dilakukan: modal yang terlewat dicatat, Beban periode dibayar dari
+    # Laci, dan distribusi 10/30/30/30 dipastikan terbentuk sesuai Laba Bersih.
+    # Setelah itu Laci secara matematis kembali ke titik awal, karena:
+    #     pelunasan = modal + beban + laba_bersih, dan laba_bersih keluar 100%
+    #     (70% cash-out + 30% ke Kas Aset).
+    #
+    # Distribution TIDAK lagi "dibentuk diam-diam" seperti versi sebelumnya:
+    # `pastikan_otomatis` sudah idempoten per periode dan HANYA menambah selisih
+    # laba baru. Kalau periode defisit, gatekeeper menolak karena Laba Bersih
+    # tidak positif -- jadi tidak ada distribusi paksa.
+    settle = selesaikan_periode(db, period, fin, oleh=oleh)
+    dist_row = settle["distribusi"].get("distribution")
+    dist = dict(settle["distribusi"])
+    dist.setdefault("created", False)
+    dist.setdefault("alokasi", (distribution_mod.alokasi_dari(dist_row)
+                                if dist_row is not None else {}))
+    dist.setdefault("periode", dist_row.periode if dist_row is not None else periode_key)
+
+    # ── DEFISIT: Laba Kotor tidak menutup Beban ───────────────────────────
+    # Aturan Owner: JANGAN memaksa distribusi, JANGAN memakai DP titipan, JANGAN
+    # membuat saldo nol artifisial. Yang dilakukan: Kas Aset menutup sejauh
+    # mampu, sisanya menjadi Hutang Beban (carry forward).
+    defisit = None
+    if to_decimal(fin.get("laba_bersih") or 0) <= ZERO:
+        try:
+            import expense_debt as debt_mod
+            _p = debt_mod.proses_defisit(db, period.start_at, period.end_at,
+                                         kas_period_id=period.id, oleh=oleh)
+            defisit = {"dibuat": bool(_p.get("created")),
+                       "cover_kas_aset": str(_p.get("cover_kas_aset") or 0),
+                       "hutang_baru": str(_p.get("hutang_baru") or 0),
+                       "catatan": "Laba Kotor tidak menutup Beban: Kas Aset "
+                                  "menutup sejauh mampu, sisanya Hutang Beban."}
+        except Exception as _exc:  # noqa: BLE001
+            defisit = {"dibuat": False, "error": str(_exc)}
+    db.flush()
 
     laci_adjust = rekonsiliasi_periode(db, dist_row, counted, oleh=oleh)
 
@@ -173,6 +280,18 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
             "cash_out": str(dist.get("cash_out") or 0),
             "hak_kas_aset": str((dist.get("alokasi") or {}).get("kas_aset", 0)),
             "kas_aset_setelah": str(cash.saldo_kas_aset(db)),
+        },
+        # FIN-MIRROR-7: jejak penyelesaian kewajiban kas periode ini.
+        "penyelesaian": {
+            "modal_selisih_tercatat": str(settle["modal_selisih"]),
+            "beban_periode": str(fin.get("total_beban") or 0),
+            "beban_dibayar_dari_laci": str(settle["beban_dibayar"]),
+            "beban_belum_terbayar": str(settle["beban_sisa"]),
+            "defisit": defisit,
+            "laci_setelah_penyelesaian": str(cash.saldo_laci(db)),
+            "catatan": "Pelunasan = Modal + Beban + Laba Bersih; Laba Bersih "
+                       "keluar 100% (70% cash-out + 30% Kas Aset). Karena itu "
+                       "Laci kembali ke titik awal tanpa jurnal fiktif.",
         },
         "rekonsiliasi": {"selisih": (None if laci_adjust.get("selisih") is None
                                     else str(laci_adjust["selisih"])),

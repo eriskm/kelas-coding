@@ -431,6 +431,13 @@ def test_4_defisit_beban_menambah_hutang(client, db):
         modal_lainnya=to_decimal(0))
     s.add(o)
     s.flush()
+    # ATURAN OWNER (FIN-MIRROR-6): Omzet hanya dari transaksi yang SUDAH LUNAS.
+    # Order di atas sengaja belum punya baris pelunasan; tanpa baris di bawah
+    # Omzet-nya nol dan angka defisit test ini berubah.
+    s.add(models.Payment(service_order_id=o.id, kind="PELUNASAN",
+                         amount=to_decimal(1000000), method="CASH",
+                         note="lunas", created_at=mulai))
+    s.flush()
     # Beban dibuat lewat jalur aplikasi: expense + catat_beban (ledger sinkron).
     for nama, kat, nilai in (("Gaji A", "Gaji", 200000),
                              ("Gaji B", "Gaji", 200000),

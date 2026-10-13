@@ -358,6 +358,60 @@ def catat_modal(db: Session, order, actor: str = None):
 
 
 # ---------------------------------------------------------------- 3) BEBAN (v4 #3)
+def catat_modal_selisih(db: Session, order, actor: str = None) -> list:
+    """Catat SELISIH modal yang baru diisi SETELAH order sudah CASH.
+
+    `catat_modal` itu idempoten berdasarkan KEHADIRAN entri per komponen. Itu
+    benar untuk event CASH (replay tidak boleh menggandakan), tapi menyisakan
+    lubang: kalau Modal Part/Jasa diisi atau dikoreksi setelah unit di-CASH,
+    `catat_modal` melihat "sudah pernah" lalu MELewatkannya -- modalnya tidak
+    pernah masuk ledger dan Laci tidak pernah tergerus. Akibatnya beban tidak
+    tercatat, laba terlihat lebih besar, dan saat Tutup Kas uang fisik laci
+    justru lebih banyak dari sistem (terbaca sebagai selisih, bukan sebagai
+    modal).
+
+    Fungsi ini menutup lubang itu dengan membandingkan total modal SUDAH
+    tercatat di ledger dengan total modal saat ini per komponen, lalu mencatat
+    HANYA bedanya. Memanggilnya berulang aman: begitu selisih nol, tidak ada yang
+    ditulis.
+    """
+    from models import KasEntry
+    out = []
+    for attr, kode in (("part_cost", "MODAL_PART"), ("modal_jasa", "MODAL_JASA"),
+                       ("modal_lainnya", "MODAL_LAIN")):
+        pristine = quantize(_num(getattr(order, attr, 0)))
+        tercatat = ZERO
+        for e in db.query(KasEntry).filter(
+                KasEntry.layer == LAYER_LACI,
+                KasEntry.sumber == SUMBER_MODAL,
+                KasEntry.ref_type == kode,
+                KasEntry.ref_id == order.id).all():
+            n = _num(e.nominal)
+            # Modal yang SUDAH terbayar adalah entri "Keluar" -- jadi menambah
+            # modal yang tercatat. Entri "Masuk" adalah koreksi yang mengembalikan
+            # modal, jadi mengurangi. Kalau arahnya dibalik, `tercatat` jadi
+            # negatif dan koreksi justru menggandakan modal dua kali.
+            tercatat += n if (e.jenis or "").strip().lower() == "keluar" else -n
+        tercatat = quantize(_num(tercatat))
+        selisih = quantize(pristine - tercatat)
+        if selisih == ZERO:
+            continue
+        mut = catat_mutasi(db, LAYER_LACI, "Masuk" if selisih > ZERO else "Keluar",
+                           KATEGORI[SUMBER_MODAL],
+                           "%s unit %s (koreksi modal setelah CASH)"
+                           % (kode.replace("_", " ").title(), order.no_servis or order.id),
+                           abs(selisih), sumber=SUMBER_MODAL, ref_type=kode,
+                           ref_id=order.id, oleh=actor, check_saldo=False)
+        _journal(db, EVENT_OPERASIONAL, mut, actor=actor,
+                 details={"event": "MODAL_KOREKSI", "komponen": kode,
+                          "service_order_id": order.id,
+                          "modal_tercatat_sebelumnya": str(tercatat),
+                          "modal_sekarang": str(pristine),
+                          "selisih": str(selisih)})
+        out.append(mut)
+    return out
+
+
 def catat_beban(db: Session, expense, actor: str = None):
     """Beban (Gaji/Operasional) dibayar dari kas toko -> SALDO LACI berkurang (v4 #3).
 

@@ -64,7 +64,14 @@ def _isolasi(db):
     _bersihkan(db)      # supaya test lain tidak ikut Terdampak
 
 
-def _unit(db, no, harga, modal=(0, 0, 0), status="CASH", tanpa_modal=False):
+def _unit(db, no, harga, modal=(0, 0, 0), status="CASH", tanpa_modal=False,
+          lunas=True):
+    """Buat unit uji. `lunas=True` menulis PELUNASAN penuh ke Payment Ledger.
+
+    ATURAN OWNER: "Omzet = nilai transaksi yang sudah LUNAS." Unit CASH tanpa
+    baris pelunasan TIDAK masuk cohort Omzet, jadi test yang memang mengecualikan unit
+    sebagai transaksi wajib ``lunas=True``.
+    """
     import models
     cust = db.query(models.Customer).filter(
         models.Customer.name == "Pytest Customer").first()
@@ -76,6 +83,11 @@ def _unit(db, no, harga, modal=(0, 0, 0), status="CASH", tanpa_modal=False):
         payment=to_decimal("0"), tanpa_modal=bool(tanpa_modal))
     o.part_cost, o.modal_jasa, o.modal_lainnya = [to_decimal(x) for x in modal]
     db.add(o)
+    db.flush()
+    if lunas:
+        db.add(models.Payment(service_order_id=o.id, kind="PELUNASAN",
+                              amount=to_decimal(harga), method="CASH", note="lunas"))
+        db.flush()
     db.commit()
     db.refresh(o)
     return o

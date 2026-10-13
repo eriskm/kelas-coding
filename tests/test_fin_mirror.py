@@ -1,4 +1,4 @@
-# -*- coding: utf-8 -*-
+﻿# -*- coding: utf-8 -*-
 """FIN-MIRROR — regression: kesetaraan Financial Logic Project B vs Project A.
 
 Menguji aturan yang DIMIRROR dari Proyek A:
@@ -230,8 +230,19 @@ def test_kategori_di_luar_beban_kategori_tidak_dihitung(db):
 
 # ---------------------------------------------------------------- FIN-MIRROR-2
 
-def test_cash_tanpa_lunas_tetap_diakui(db):
-    """FIN-MIRROR-2: unit CASH tanpa pelunasan tetap masuk Omzet (perilaku A)."""
+def test_cash_tanpa_lunas_TIDAK_diakui(db):
+    """FIN-MIRROR-6 (keputusan Owner terbaru): Omzet HANYA transaksi yang LUNAS.
+
+    Aturan lama (FIN-MIRROR-2, mirror Proyek A) menyatakan unit CASH
+    tetap diakui walau belum lunas. Owner sekarang justru mengunci aturan yang
+    lebih ketat: "Omzet = nilai transaksi yang sudah LUNAS."
+
+    Alasan: pelunasan dicatat terpisah dari status CASH dan bisa bolong --
+    misalnya harga diubah setelah unit diambil, atau pelunasan baru dicatat
+    kemudian. Kalau unit seperti itu ikut dihitung, Omzet lebih besar dari uang
+    yang benar-benar diterima, Laba Kotor ikut membesar, dan distribusi bisa
+    keluar dari uang yang belum masuk.
+    """
     _bersihkan(db)
     cust = _customer(db)
     s0, e0 = _periode(0)
@@ -239,8 +250,29 @@ def test_cash_tanpa_lunas_tetap_diakui(db):
               modal=(200000, 100000, 0), status="CASH", moment=datetime.now())
     assert o.lunas_at is None, "order ini sengaja tidak LUNAS"
     ids = [x.id for x in finance.settled_orders(db, s0, e0)]
-    assert o.id in ids, "unit CASH harus masuk cohort Omzet meski belum LUNAS"
+    assert o.id not in ids, "unit CASH yang belum LUNAS TIDAK boleh masuk cohort Omzet"
+    # `order_profit` per-order tetap boleh positif; yang diexclude adalah
+    # pengakuan OMZET periode, bukan penghitungan laba unit.
     assert to_decimal(statusflow.order_profit(o, [])) == to_decimal(200000)
+
+
+def test_cash_lunas_dan_tidak_lunas_hanya_lunas_yang_diakui(db):
+    """Control: begitu dilunasi, unit yang sama langsung masuk cohort."""
+    _bersihkan(db)
+    cust = _customer(db)
+    s0, e0 = _periode(0)
+    o = _unit(db, cust, "FIN-MIRROR-JADI-LUNAS", 500000,
+              modal=(200000, 100000, 0), status="CASH", moment=datetime.now())
+    oid = o.id
+    ids = [x.id for x in finance.settled_orders(db, s0, e0)]
+    assert oid not in ids
+    db.add(models.Payment(service_order_id=oid, kind="PELUNASAN",
+                          amount=to_decimal(500000), method="CASH", note="lunas"))
+    db.flush()
+    db.commit()
+    db.expunge_all()
+    ids2 = [x.id for x in finance.settled_orders(db, s0, e0)]
+    assert oid in ids2, "setelah dilunasi, unit harus masuk cohort Omzet"
 
 
 def test_non_cash_nol_meski_lunas(db):

@@ -19,7 +19,7 @@ import finance
 
 
 def _unit(db, no, harga, modal=(0, 0, 0), status="CASH", repair_plan="x",
-          technician="B", final_price=None):
+          technician="B", final_price=None, lunas=True):
     import models
     from datetime import date
     from decimal import Decimal
@@ -36,6 +36,14 @@ def _unit(db, no, harga, modal=(0, 0, 0), status="CASH", repair_plan="x",
         payment=to_decimal("0"))
     o.part_cost, o.modal_jasa, o.modal_lainnya = [to_decimal(x) for x in modal]
     db.add(o)
+    db.flush()
+    if lunas and status == "CASH":
+        # ATURAN OWNER: Omzet hanya dari transaksi LUNAS. Tanpa baris pelunasan,
+        # unit tidak masuk cohort Omzet sama sekali -- jadi test yang menghitung
+        # dampak ke Omzet WAJIB menulis PELUNASAN lewat helper ini.
+        db.add(models.Payment(service_order_id=o.id, kind="PELUNASAN",
+                              amount=o.final_price, method="CASH", note="lunas"))
+        db.flush()
     db.commit()
     db.refresh(o)
     return o

@@ -121,21 +121,46 @@ def test_b1_entry_id_aman_untuk_dict_dan_orm(db):
     assert closing._entry_id(None) is None
 
 
+def _isolated_db():
+    """Session ke SQLite BARU yang kosong.
+
+    Dipakai karena Tutup Kas sekarang menyelesaikan kewajiban periode: Beban
+    periode dibayar dari Laci SEBELUM Declare dibandingkan. Di sandbox bersama
+    ada beban recurring dari test lain, jadi `counted` yang dihitung test ini
+    akan dibandingkan dengan saldo yang sudah berkurang oleh beban itu -- dan
+    test gagal bukan karena salahnya basis rekonsiliasi yang sedang diuji.
+    """
+    import os
+    import tempfile
+    from database import Base
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    folder = tempfile.mkdtemp(prefix="p215_iso_")
+    eng = create_engine("sqlite:///%s" % os.path.join(folder, "iso.db"))
+    Base.metadata.create_all(bind=eng)
+    return sessionmaker(bind=eng)()
+
+
 def test_b2_selisih_snapshot_pakai_basis_ledger(db):
-    """B-2: snapshot.selisih == selisih rekonsiliasi ledger, bukan `fin['saldo']`."""
+    """B-2: snapshot.selisih == selisih rekonsiliasi ledger, bukan `fin['saldo']`.
+
+    Dijalankan di DB terisolasi: Tutup Kas menyelesaikan kewajiban periode lebih
+    dulu (bayar Beban, catat modal terlewat, jalankan distribusi), dan itu akan
+    mengubah Saldo Laci sebelum Declare dibandingkan. Yang diuji di sini adalah
+    BASIS rekonsiliasi (ledger vs akrual), jadi perlu kondisi tanpa beban lain.
+    """
     from models import KasPeriod
-    db.query(KasPeriod).delete()
-    db.commit()
-    cash.catat_injeksi(db, cash.LAYER_LACI, to_decimal("1000000"), "UAT B-2", actor="pytest")
-    db.commit()
+    s = _isolated_db()
+    cash.catat_injeksi(s, cash.LAYER_LACI, to_decimal("1000000"), "UAT B-2", actor="pytest")
+    s.commit()
 
     p = KasPeriod(start_at=datetime(2026, 10, 5, 16), end_at=datetime(2026, 10, 6, 16),
                   status="OPEN", created_at=datetime(2026, 10, 5, 8))
-    db.add(p); db.commit(); db.refresh(p)
+    s.add(p); s.commit(); s.refresh(p)
 
-    counted = cash.saldo_laci(db) - to_decimal("12345")
-    out = closing.tutup_periode(db, p, counted=counted, oleh="pytest", compute_finance=_cf)
-    db.commit()
+    counted = cash.saldo_laci(s) - to_decimal("12345")
+    out = closing.tutup_periode(s, p, counted=counted, oleh="pytest", compute_finance=_cf)
+    s.commit()
 
     snap = out["snapshot"]
     # snapshot.selisih == rekonsiliasi.selisih (keduanya basis LEDGER LACI)
@@ -143,27 +168,37 @@ def test_b2_selisih_snapshot_pakai_basis_ledger(db):
     # Declare fisik = saldo Laci - 12.345  =>  selisih harus -12.345 (kurang)
     assert float(snap["selisih"]) == -12345.0
     # SALDO LACI benar-benar diselaraskan ke Declare fisik
-    assert cash.saldo_laci(db) == counted
+    assert cash.saldo_laci(s) == counted
     # penanda basis supaya tidak ambigu bagi pembaca snapshot/UI
     assert snap["selisih_basis"] == "LEDGER LACI (counted vs Saldo Laci)"
+    # Tanpa beban, tidak ada yang dibayar dan Laci tetap 1.000.000 - 12.345.
+    assert to_decimal(snap["penyelesaian"]["beban_dibayar_dari_laci"]) == to_decimal("0")
+    s.close()
 
 
 def test_b2_tidak_mengubah_financial_ssot(db):
-    """B-2: fix TIDAK boleh mengubah Financial SSOT (v4 #9)."""
+    """B-2: fix TIDAK boleh mengubah Financial SSOT (v4 #9).
+
+    DB terisolasi karena Tutup Cas kini menyelesaikan kewajiban periode lebih dulu
+    (bayar Beban, catat modal terlewat). Kalau ada beban recurring milik test
+    lain, Declare yang dihitung SEBELUM tutup akan dibandingkan dengan saldo
+    yang sudah berkurang -- dan test ini akan salah menangkap penyesuaian yang
+    sebenarnya konsekuensi penyelesaian periode, bukan Declare yang salah.
+    """
     from models import KasPeriod
-    db.query(KasPeriod).delete()
-    db.commit()
-    cash.catat_injeksi(db, cash.LAYER_LACI, to_decimal("500000"), "UAT B-2b", actor="pytest")
-    db.commit()
+    s = _isolated_db()
+    cash.catat_injeksi(s, cash.LAYER_LACI, to_decimal("500000"), "UAT B-2b", actor="pytest")
+    s.commit()
 
     p = KasPeriod(start_at=datetime(2026, 10, 5, 16), end_at=datetime(2026, 10, 6, 16),
                   status="OPEN", created_at=datetime(2026, 10, 5, 8))
-    db.add(p); db.commit(); db.refresh(p)
+    s.add(p); s.commit(); s.refresh(p)
 
-    master_before = cash.master_kas(db)
-    opening_before = cash.opening_layer(db, cash.LAYER_LACI)
-    out = closing.tutup_periode(db, p, counted=cash.saldo_laci(db), oleh="pytest", compute_finance=_cf)
-    db.commit()
+    master_before = cash.master_kas(s)
+    opening_before = cash.opening_layer(s, cash.LAYER_LACI)
+    out = closing.tutup_periode(s, p, counted=cash.saldo_laci(s), oleh="pytest",
+                                compute_finance=_cf)
+    s.commit()
 
     # snapshot.finance tetap memakai Financial SSOT (tidak diubah fix B-2)
     assert "finance" in out["snapshot"]
@@ -172,5 +207,6 @@ def test_b2_tidak_mengubah_financial_ssot(db):
     assert out["rekonsiliasi"]["penyesuaian"] is False
     # opening Laci TIDAK disuntik oleh Declare fisik (v4 #7)
     assert float(out["saldo"]["kas_perputaran_laci_awal"]) == float(opening_before)
-    assert cash.opening_layer(db, cash.LAYER_LACI) == opening_before
-    assert cash.master_kas(db) >= master_before
+    assert cash.opening_layer(s, cash.LAYER_LACI) == opening_before
+    assert cash.master_kas(s) >= master_before
+    s.close()
