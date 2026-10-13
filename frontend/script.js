@@ -4426,25 +4426,37 @@ function renderKuTitipan() {
     if (!grid && !body) return;
     const t = ((_kuFin || {}).titipan_dp) || {};
 
+    // Hanya DP yang MASIH DITAHAN. Unit yang sudah LUNAS atau DP-nya sudah
+    // dikembalikan tidak ditampilkan lagi -- begitu tidak ada yang tertahan,
+    // panel kosong (Owner: "jika sudah tidak ada Saldo Titipan, sebaiknya data
+    // ini dikosongkan saja"). Datanya sendiri tidak dihapus dari database.
+    const rows = Array.isArray(t.live) ? t.live : [];
+    const kosong = rows.length === 0;
+    // Saldo ditahan = seluruh mutasi yang masih tampil (masuk - kembali).
+    // Tidak boleh menjumlahkan kolom `saldo`: itu running balance per baris.
+    const ditahan = rows.reduce((a, it) =>
+        a + (Number(it.masuk) || 0) - (Number(it.keluar) || 0), 0);
+
     if (grid) {
-        const cells = [
-            { k: 'Total DP Diterima', v: t.diterima, c: 'v-in' },
-            { k: 'Total DP Digunakan untuk Pelunasan', v: t.dipakai, c: '' },
-            { k: 'Total DP Dikembalikan', v: t.dikembalikan, c: 'v-out' },
-            { k: 'Saldo Titipan Berjalan', v: t.saldo, c: 'v-saldo' },
+        const cells = kosong ? [
+            { k: 'DP Masih Ditahan', v: 0, c: 'v-saldo' },
+        ] : [
+            { k: 'DP Masuk', v: ditahan, c: 'v-in' },
+            { k: 'Jumlah Unit Bertitipan', v: rows.length, c: '' },
+            { k: 'Saldo Titipan Berjalan', v: ditahan, c: 'v-saldo' },
         ];
         grid.innerHTML = cells.map(c => `
             <div class="ku-tp-cell">
                 <span class="ku-tp-label">${escapeHtml(c.k)}</span>
-                <span class="ku-tp-val ${c.c}">${kuRupiah(c.v)}</span>
+                <span class="ku-tp-val ${c.c}">${c.v && Number(c.v).toLocaleString('id-ID') ? kuRupiah(c.v) : c.v}</span>
             </div>`).join('');
     }
 
     if (!body) return;
-    const rows = Array.isArray(t.mutasi) ? t.mutasi : [];
-    if (!rows.length) {
+    if (kosong) {
         body.innerHTML = '<tr><td colspan="7"><div class="text-center text-xs text-gray-400 py-5">'
-            + 'Belum ada mutasi titipan DP.</div></td></tr>';
+            + 'Tidak ada titipan DP yang sedang ditahan. Semua DP sudah menjadi '
+            + 'pembayaran transaksi atau dikembalikan.</div></td></tr>';
         return;
     }
     const cls = { 'DP Masuk': 'v-in', 'Dipakai untuk Pelunasan': '', 'Pengembalian DP': 'v-out' };
