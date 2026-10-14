@@ -14,7 +14,8 @@ import idempotency as idem
 from authority import Action, require_authority
 from dependencies import get_db_session
 from models import Payment, ServiceOrder, User
-from statusflow import PAYMENT_KINDS, kewajiban, lock_lunas_moment, payment_summary
+from statusflow import (PAYMENT_KINDS, cek_dp_vs_estimasi, kewajiban,
+                        lock_lunas_moment, payment_summary, total_dp_diterima)
 import schemas
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
@@ -67,6 +68,15 @@ def catat_payment(db: Session, order, kind: str, amount, method: str = "CASH",
     # dijumlahkan penuh oleh payment_summary serta Buku Kas.
     if allow_settled and before["sisa"] <= ZERO:
         return None
+    # OD-LOCK-04: DP tidak boleh lebih besar daripada estimasi biaya transaksi.
+    # Divalidasi pada TOTAL DP unit setelah baris ini ditambahkan, jadi baik
+    # DP pertama maupun penambahan DP berikutnya ikut tertangkap.
+    if kind == "DP":
+        _est = getattr(order, "estimate", None)
+        _total_dp = total_dp_diterima(order, pays) + amount
+        _ok, _pesan = cek_dp_vs_estimasi(_total_dp, _est)
+        if not _ok:
+            raise HTTPException(status_code=400, detail=_pesan)
     if before["total_bayar"] + amount > must + CENTS:
         raise HTTPException(
             status_code=400,

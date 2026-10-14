@@ -124,12 +124,18 @@ def test_modal_sudah_diisi_mendeteksi():
 def test_unit_cash_modal_nol_tidak_masuk_kohort(db):
     """Nilai mutlak tidak bisa dibandingkan (sandbox bersama) -> pakai delta."""
     from money import to_decimal
+    from routers.dashboard import batas_periode
     p = _periode_aktif(db)
+    # PENTING: pakai batas dari APLIKASI, bukan `p.end_at` mentah. Untuk periode
+    # yang masih OPEN, `batas_periode()` mengembalikan `datetime.max` -- kalau
+    # pakai end_at mentah (jam 16.00), setiap order yang dibuat lewat jam 16.00
+    # akan berada di LUAR periode dan test ini ikut gagal.
+    awal, akhir = batas_periode(p)
     isi = _unit(db, "AT-OMZET-ISI", 400000, modal=(200000, 50000, 0))
-    sebelum = to_decimal(finance.compute_finance_core(db, p.start_at, p.end_at)["omset"])
+    sebelum = to_decimal(finance.compute_finance_core(db, awal, akhir)["omset"])
     kosong = _unit(db, "AT-OMZET-KOSONG", 500000, modal=(0, 0, 0))
-    sesudah = to_decimal(finance.compute_finance_core(db, p.start_at, p.end_at)["omset"])
-    ids = [x.id for x in finance.settled_orders(db, p.start_at, p.end_at)]
+    sesudah = to_decimal(finance.compute_finance_core(db, awal, akhir)["omset"])
+    ids = [x.id for x in finance.settled_orders(db, awal, akhir)]
     assert kosong.id not in ids
     assert isi.id in ids
     assert sesudah == sebelum, "Omset harus tidak berubah: %s -> %s" % (sebelum, sesudah)

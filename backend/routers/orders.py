@@ -1,4 +1,4 @@
-﻿"""Service orders endpoints (FINAL LOCK: 3 dimensi terpisah)."""
+"""Service orders endpoints (FINAL LOCK: 3 dimensi terpisah)."""
 import random
 from datetime import date, datetime
 
@@ -20,8 +20,10 @@ from statusflow import (
     INITIAL_PATHS,
     SERVICE_STATUSES,
     TERMINAL_STATUSES,
+    cek_dp_vs_estimasi,
     check_initial_path,
     check_transition,
+    dp_total,
     lock_lunas_moment,
     order_profit,
     payment_summary,
@@ -194,6 +196,10 @@ def receive_unit(data: schemas.ServiceReceiveIn, db: Session = Depends(get_db_se
         dp_amount = ZERO
     if dp_amount < 0:
         raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
+    # OD-LOCK-04: DP tidak boleh melebihi estimasi biaya transaksi.
+    _ok, _pesan = cek_dp_vs_estimasi(dp_amount, data.estimate)
+    if not _ok:
+        raise HTTPException(status_code=400, detail=_pesan)
     try:
         customer = None
         if data.customer_phone:
@@ -526,6 +532,10 @@ def create_order(data: schemas.ServiceOrderCreate, db: Session = Depends(get_db_
         pay0 = ZERO
     if pay0 < 0:
         raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
+    # OD-LOCK-04: jalur input lain (POST /api/orders) juga wajib dijaga.
+    _ok, _pesan = cek_dp_vs_estimasi(pay0, dump.get("estimate"))
+    if not _ok:
+        raise HTTPException(status_code=400, detail=_pesan)
     order = ServiceOrder(**dump)
     db.add(order)
     try:
@@ -699,6 +709,19 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
         if _dp_legacy_baru < 0:
             raise HTTPException(status_code=400, detail="DP tidak boleh negatif")
         _dp_legacy_lama = to_decimal(getattr(order, "payment", 0))
+        # OD-LOCK-04: total DP unit (legacy + jurnal) tidak boleh melebihi
+        # estimasi. Estimasi yang dipakai adalah nilai yang akan berlaku setelah
+        # update ini, jadi_user yang menurunkan estimasi atau menaikkan DP
+        # sama-sama tertangkap.
+        _est_baru = payload.get("estimate", getattr(order, "estimate", None))
+        _jurnal_dp = dp_total(
+            db.query(Payment)
+              .filter(Payment.service_order_id == order.id).all())
+        _dp_total_baru = max(_dp_legacy_baru, _dp_legacy_lama) + max(
+            ZERO, _jurnal_dp - _dp_legacy_lama)
+        _ok, _pesan = cek_dp_vs_estimasi(_dp_total_baru, _est_baru)
+        if not _ok:
+            raise HTTPException(status_code=400, detail=_pesan)
         # Delta = kenaikan yang diminta vs nilai legacy saat ini.
         # BUKAN vs total ledger: data legacy bisa sudah punya DP tanpa baris ledger,
         # dan menghitung dari ledger akan membuat entri DP palsu.

@@ -135,12 +135,17 @@ def test_boleh_masuk_omzet_membedakan_dua_kasus():
 
 
 def test_unit_bertanda_masuk_omzet(db):
+    from routers.dashboard import batas_periode
     p = _p(db)
+    # Batas dari APLIKASI, bukan `p.end_at` mentah: periode OPEN punya
+    # `end_at` di jam 16.00, jadi order yang dibuat setelah itu akan jatuh di
+    # luar periode kalau end_at dipakai mentah.
+    awal, akhir = batas_periode(p)
     ditandai = _unit(db, "TM-BENAR-TANPA", 300000, modal=(0, 0, 0), tanpa_modal=True)
-    ids = [x.id for x in finance.settled_orders(db, p.start_at, p.end_at)]
+    ids = [x.id for x in finance.settled_orders(db, awal, akhir)]
     assert ditandai.id in ids, "unit yang ditandai harus tetap masuk Omzet"
 
-    core = finance.compute_finance_core(db, p.start_at, p.end_at)
+    core = finance.compute_finance_core(db, awal, akhir)
     # Tidak menambah biaya: modal total unit ini tetap 0.
     assert to_decimal(core["total_modal"]) >= 0
 

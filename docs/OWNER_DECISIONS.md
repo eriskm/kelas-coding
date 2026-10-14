@@ -218,36 +218,40 @@ yang berwenang**.
 > Dicatat sesuai instruksi: **jangan mengubah keputusan bisnis untuk
 > menyesuaikan kode.** Yang harus berubah adalah kodenya, mengikuti aturan.
 
-## KETIDAKS-SUAIAN-01 — OD-LOCK-03 belum ditegakkan
+## ✅ KETIDAKS-SUAIAN-01 — OD-LOCK-03 SUDAH DITEGAKKAN
 
 | | |
 |---|---|
 | **Aturan** | Status CASH final, tidak boleh kembali menjadi status lain |
-| **Kode saat ini** | `backend/statusflow.py:184-187` |
-| **Temuan** | Untuk status terminal (`CASH`/`FAILED`/`CANCEL`), fungsi `check_transition` **mengembalikan `True`** bila disertai `catatan`. Akibatnya transisi `CASH` -> `CANCEL` **saat ini secara kode dimungkinkan**, bertentangan dengan OD-LOCK-03. |
-| **Arah perbaikan** | Kode harus diubah agar menolak transisi dari CASH. **Aturan tidak berubah.** |
+| **Temuan (sebelum)** | `check_transition` mengembalikan `True` untuk status terminal bila disertai `catatan`, sehingga `CASH` -> `CANCEL` dimungkinkan. |
+| **Perbaikan** | `backend/statusflow.py` — `check_transition` menolak **sebarang** perubahan dari `CASH` ke status lain, **walaupun disertai catatan koreksi**. Pesan penolakan mengarah ke alur refund, bukan perubahan status. |
+| **Yang sengaja TIDAK diubah** | `FAILED` -> `CANCEL` dengan catatan tetap boleh (dipakai alur "unit diambil pelanggan"). OD-LOCK-03 hanya mengunci CASH. |
+| **Pengaman** | `tests/test_od_lock.py` — 6 test, termasuk uji end-to-end lewat HTTP. |
 
-## KETIDAKS-SUAIAN-02 — OD-LOCK-04 belum ada sama sekali
+## ✅ KETIDAKS-SUAIAN-02 — OD-LOCK-04 SUDAH DITEGAKKAN
 
 | | |
 |---|---|
 | **Aturan** | DP tidak boleh melebihi estimasi; validasi backend + UI |
-| **Kode saat ini** | `backend/routers/orders.py:190-196`, `:527-528`, `:699-700` |
-| **Temuan** | Yang ada **hanya** validasi `dp < 0` ("DP tidak boleh negatif"). **Tidak ada** validasi batas atas DP terhadap estimasi di seluruh backend. Kelebihan DP saat ini justru ditangani dengan cara menahannya sebagai saldo titipan - justru pendekatan yang dilarang OD-LOCK-04. |
-| **Jalur input yang harus dijaga** | `POST /api/orders/receive`, `POST /api/orders`, `PUT /api/orders/{id}` (kenaikan DP), `POST /api/payments` |
-| **Arah perbaikan** | Kode harus ditambah validasinya. **Aturan tidak berubah.** |
+| **Temuan (sebelum)** | Hanya ada validasi `dp < 0`. Tidak ada batas atas DP terhadap estimasi. Kelebihan DP justru ditahan sebagai saldo titipan. |
+| **Perbaikan** | `statusflow.cek_dp_vs_estimasi()` sebagai **helper tunggal**, dipasang di **semua** jalur input: `POST /api/orders/receive`, `POST /api/orders`, `PUT /api/orders/{id}` (kenaikan DP), dan `POST /api/payments` (termasuk akumulasi DP bertahap). Validasi UI ditambahkan di form Terima dan form Update Data Servis. |
+| **Catatan** | Estimasi yang dibandingkan adalah nilai `order.estimate`. Bila estimasi belum diisi, validasi dilewati karena jalur "Titip Unit" memang tidak mewajibkan estimasi. |
+| **Data lama** | Aturan ini berlaku saat **menyimpan**. Data historis yang sudah kelebihan DP **tidak** ikut diubah; jaring pengaman `dp_terpakai` (hanya sebesar kewajiban) tetap dipertahankan untuk data tersebut. |
+| **Pengaman** | `tests/test_od_lock.py` — 11 test. |
 
 ---
 
-## Status Implementasi yang Sudah Selaras
+## Status Implementasi
 
-Sebagai catatan, keputusan berikut **sudah sejalan** dengan kode saat ini:
+Seluruh keputusan Owner sudah sejalan dengan kode.
 
 | Keputusan | Letak implementasi |
 |---|---|
-| OD-LOCK-01 | `backend/routers/orders.py:788-792` - `cash.catat_modal` saat CASH; `backend/closing.py:139-141` hanya mencatat *selisih* modal yang terlewat, bukan mengulang modal yang sudah tercatat |
-| OD-LOCK-02 | `backend/routers/orders.py:808-814` — `pastikan_otomatis` saat CASH; idempoten per `kas_period_id` (`distribution.py:98-119`) sehingga Tutup Kas tidak mengeksekusi ulang |
-| OD-LOCK-05 | `backend/refunds.py:106-111` — `otomatis=False` untuk refund GARANSI; saldo Kas Aset tidak dikurangi otomatis |
+| OD-LOCK-01 | `backend/routers/orders.py` — `cash.catat_modal` saat CASH; `backend/closing.py` hanya mencatat *selisih* modal yang terlewat, bukan mengulang modal yang sudah tercatat |
+| OD-LOCK-02 | `backend/routers/orders.py` — `pastikan_otomatis` saat CASH; idempoten per `kas_period_id` (`distribution.py`) sehingga Tutup Kas tidak mengeksekusi ulang |
+| OD-LOCK-03 | `backend/statusflow.py` — `check_transition` menolak perubahan dari CASH |
+| OD-LOCK-04 | `backend/statusflow.py` — `cek_dp_vs_estimasi`, dipasang di 4 jalur input backend + 2 form UI |
+| OD-LOCK-05 | `backend/refunds.py` — `otomatis=False` untuk refund GARANSI; saldo Kas Aset tidak dikurangi otomatis |
 
 ---
 

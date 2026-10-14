@@ -2727,6 +2727,17 @@ function initUpdateServis() {
                         return;
                     }
                 }
+                // OD-LOCK-04 (Owner, LOCKED): total DP unit tidak boleh melebihi
+                // estimasi biaya. Mirror dari backend `statusflow.cek_dp_vs_estimasi`.
+                const _usEstNow = usNum('usEstimate');
+                const _usDpNow = usNum('usDp');
+                if (_usEstNow > 0 && _usDpNow > _usEstNow) {
+                    _needFail('DP tidak boleh lebih besar daripada estimasi biaya (estimasi Rp '
+                        + Number(_usEstNow).toLocaleString('id-ID') + ', DP Rp '
+                        + Number(_usDpNow).toLocaleString('id-ID') + ')');
+                    _needFocus('usDp');
+                    return;
+                }
                 const _usPayload = {
                     device: usVal('usDevice').trim(),
                     device_password: usVal('usPassword'),
@@ -5593,6 +5604,23 @@ async function initReceivePage() {
                 fb.textContent = 'Path ' + _rcPath + ' wajib melengkapi: ' + _rcMissing.map(m => m[0]).join(', ') + '.';
                 const _first = document.getElementById(_rcMissing[0][1]);
                 if (_first) _first.focus({ preventScroll: true });
+                btn.disabled = false;
+                txt.textContent = 'Terima & Daftarkan Servis';
+                return;
+            }
+            // OD-LOCK-04 (Owner, LOCKED): DP tidak boleh lebih besar daripada
+            // estimasi biaya. Divalidasi di sini agar user dapat umpan balik
+            // SEBELUM disimpan; backend tetap menjadi pengaman utama.
+            const _rcEst = parseFloat((document.getElementById('rcEstimate') || {}).value) || 0;
+            const _rcDp = parseFloat((document.getElementById('rcDp') || {}).value) || 0;
+            if (_rcEst > 0 && _rcDp > _rcEst) {
+                fb.classList.remove('hidden');
+                fb.classList.add('error');
+                fb.textContent = 'DP tidak boleh lebih besar daripada estimasi biaya '
+                    + '(estimasi Rp ' + _rcEst.toLocaleString('id-ID')
+                    + ', DP Rp ' + _rcDp.toLocaleString('id-ID') + ').';
+                const _dpEl = document.getElementById('rcDp');
+                if (_dpEl) _dpEl.focus({ preventScroll: true });
                 btn.disabled = false;
                 txt.textContent = 'Terima & Daftarkan Servis';
                 return;

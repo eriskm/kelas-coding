@@ -10,6 +10,8 @@ Tiga dimensi terpisah:
 - Status Bayar   : BELUM LUNAS / LUNAS (DERIVE dari payments, tidak disimpan)
 - Status Unit    : DI TOKO / DIAMBIL (+ taken_at)
 """
+from decimal import Decimal
+
 from money import ZERO, to_decimal
 from datetime import datetime, date
 
@@ -181,6 +183,18 @@ def check_transition(dari, ke, catatan=""):
         if _mapped is None or _mapped == dari:
             return False, "Status kini (%s) bukan status valid; koreksi manual diperlukan" % dari
         dari = _mapped
+    if dari == "CASH" and ke != "CASH":
+        # OD-LOCK-03 (Owner, LOCKED): CASH adalah status FINAL.
+        # Transaksi CASH tidak boleh diubah kembali ke status lain, termasuk
+        # CANCEL, melalui mekanisme perubahan status biasa -- tidak terkecuali
+        # bila disertai catatan koreksi.
+        #
+        # Aturan ini tidak boleh dilanggar hanya karena mesin transisi secara
+        # teknis masih bisa memuvasinya.
+        return False, (
+            "Status CASH bersifat final dan tidak dapat diubah menjadi %s. "
+            "Bila ada kekeliruan, gunakan alur pengembalian dana (refund), "
+            "bukan perubahan status." % ke)
     if dari in TERMINAL_STATUSES:
         if not (catatan or "").strip():
             return False, "Status %s sudah terminal; perubahan wajib menyertakan catatan koreksi" % dari
@@ -192,6 +206,51 @@ def check_transition(dari, ke, catatan=""):
     if (catatan or "").strip():
         return True, ""
     return False, "Transisi %s → %s tidak diizinkan tanpa catatan" % (dari, ke)
+
+
+def cek_dp_vs_estimasi(dp, estimasi) -> tuple:
+    """OD-LOCK-04 — DP tidak boleh lebih besar daripada estimasi biaya.
+
+    Owner: "Sebelum data servis disimpan, sistem wajib memvalidasi konsistensi
+    nilai estimasi biaya dan DP. DP tidak boleh lebih besar daripada estimasi
+    biaya transaksi."
+
+    Contoh yang ditolak: estimasi Rp200.000, DP Rp250.000.
+
+    `estimasi` yang dibandingkan adalah nilai estimasi biaya transaksi
+    (`order.estimate`). Bila estimasi belum diisi (0 atau None), tidak ada
+    pembanding sehingga validasi dilewati -- jalur "Titip Unit" memang tidak
+    mewajibkan estimasi.
+
+    Return (ok, pesan_error).
+    """
+    dp = _num(dp)
+    est = _num(estimasi)
+    if est <= _num(0):
+        return True, ""          # belum ada estimasi -> tidak bisa dibandingkan
+    if dp > est:
+        return False, (
+            "DP tidak boleh lebih besar daripada estimasi biaya "
+            "(estimasi %s, DP %s). Perbaiki data sebelum menyimpan."
+            % (est, dp))
+    return True, ""
+
+
+def dp_total(pay_rows) -> Decimal:
+    """Total DP dari jurnal `payments(kind='DP')` saja (tanpa kolom legacy)."""
+    return _dp_total(pay_rows)
+
+
+def total_dp_diterima(order, pay_rows) -> Decimal:
+    """Total DP yang benar-benar diterima untuk satu unit.
+
+    Sama dengan sumber yang dipakai `payment_summary` agar tidak dobel hitung:
+    kolom legacy `service_orders.payment` dan jurnal `payments(kind='DP')`
+    saling menimpa, jadi yang dipakai adalah nilai yang lebih besar.
+    """
+    legacy = _num(getattr(order, "payment", 0))
+    journal = _dp_total(pay_rows)
+    return max(legacy, journal)
 
 
 def kewajiban(order):
