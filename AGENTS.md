@@ -22,6 +22,7 @@ Isinya:
 | **OD-LOCK-03** | Status CASH bersifat FINAL | 🔒 LOCKED |
 | **OD-LOCK-04** | DP tidak boleh melebihi estimasi | 🔒 LOCKED |
 | **OD-LOCK-05** | Refund klaim garansi dilakukan MANUAL | 🔒 LOCKED |
+| **OD-LOCK-06** | Pembayaran Beban: Laci → Kas Aset → Hutang Beban | 🔒 LOCKED |
 
 Yang WAJIB dipatuhi:
 
@@ -140,6 +141,22 @@ Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
 - **Jangan pernah** memakai DP titipan, memaksa distribusi, atau membuat saldo
   nol artifisial. Defisit ditutup Kas Aset + Hutang Beban.
 
+### Pembayaran Beban (OD-LOCK-06)
+- Pembayaran **langsung** saat periode dibekukan — **tidak** menunggu Tutup Kas.
+- Urutan dana: **Laci → Kas Aset → Hutang Beban**.
+- Kas Aset **benar-benar berpindah** (transfer tercatat di jurnal), bukan
+  sekadar mencatat angka cover.
+- **Jangan pernah** membuat Laci negatif, dan **jangan** memakai Hutang Beban
+  seumpama uang yang sudah dibayar.
+- Satu-satunya pencatatatan pembayaran adalah
+  `beban_bayar.bayar_beban_periode()`. **Jangan** menambah jalur pembayaran
+  baru di tempat lain — dua jalur dengan penanda idempotensi berbeda adalah
+  penyebab Beban dibayar dua kali (lihat `KETIDAKS-SUAIAN-03`).
+- `ref_type` untuk Beban periode selalu `"beban_periode"` dengan
+  `ref_id = <periode>`. Penanda inilah yang membuat Tutup Kas tidak membayar
+  ulang.
+- Beban tetap **beku sekali per periode** (FR-01).
+
 ---
 
 ## 5. PETA TEKNIS
@@ -154,6 +171,7 @@ Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
 | File | Isi |
 |---|---|
 | `backend/finance.py` | **SATU-SATUNYA tempat** Laba Kotor & Laba Bersih dihitung |
+| `backend/beban_bayar.py` | **SATU-SATUNYA tempat** pembayaran Beban (OD-LOCK-06) |
 | `backend/routers/dashboard.py` |.endpoint `/api/overview`; **membaca** laba dari core, jangan hitung ulang |
 | `backend/closing.py` | Tutup Kas |
 | `backend/cash.py` | Ledger kas, `saldo_laci`, Declare/rekonsiliasi |

@@ -141,27 +141,21 @@ def selesaikan_periode(db: Session, period, fin: dict, oleh: str = None) -> dict
             out["modal_selisih"] += abs(to_decimal(mut["nominal"]))
 
     # ---- (2) Beban periode dibayar dari Kas Perputaran ---------------------
+    # OD-LOCK-06: pembayaran memakai MESIN YANG SAMA dengan pemicu beku
+    # (`beban_bayar.bayar_beban_periode`), jadi Tutup Kas hanya membayar SISA
+    # yang belum dibayar -- tidak pernah mengulang yang sudah dibayar saat
+    # periode dibekukan. Satu penanda idempotensi untuk semua jalur.
     total_beban = quantize(to_decimal(fin.get("total_beban") or 0))
-    sudah = db.query(KasEntry).filter(
-        KasEntry.layer == cash.LAYER_LACI,
-        KasEntry.sumber == cash.SUMBER_BEBAN,
-        KasEntry.ref_type == BE_REF_TYPE,
-        KasEntry.ref_id == key).first()
-    if sudah is None and total_beban > ZERO:
-        bayar = min(total_beban, cash.saldo_laci(db))
-        if bayar > ZERO:
-            mut = cash.catat_mutasi(
-                db, cash.LAYER_LACI, "Keluar", cash.KATEGORI[cash.SUMBER_BEBAN],
-                "Pembayaran Beban periode %s" % key, bayar,
-                sumber=cash.SUMBER_BEBAN, ref_type=BE_REF_TYPE, ref_id=key,
-                oleh=oleh, check_saldo=False)
-            out["beban_dibayar"] = bayar
-        else:
-            out["beban_dibayar"] = ZERO
-        out["beban_sisa"] = quantize(total_beban - out["beban_dibayar"])
-    elif sudah is not None:
-        out["beban_dibayar"] = quantize(to_decimal(sudah.nominal))
-        out["beban_sisa"] = quantize(total_beban - out["beban_dibayar"])
+    import beban_bayar as be_bayar
+    be = be_bayar.bayar_beban_periode(
+        db, start, end, key, total_beban, oleh=oleh,
+        kas_period_id=getattr(period, "id", None),
+        laba_kotor=to_decimal(fin.get("laba_kotor") or 0))
+    out["beban_dibayar"] = quantize(to_decimal(be.get("dari_laci") or 0)
+                                    + to_decimal(be.get("dari_kas_aset") or 0))
+    out["beban_sisa"] = quantize(to_decimal(be.get("hutang") or 0))
+    out["beban_dari_kas_aset"] = quantize(to_decimal(be.get("dari_kas_aset") or 0))
+    out["beban_detail"] = be
 
     # ---- (3) Distribusi 10/30/30/30 atas Laba Bersih ----------------------
     # Hanya kalau Laba Bersih > 0. Distribution sudah otomatis terjadi saat CTO

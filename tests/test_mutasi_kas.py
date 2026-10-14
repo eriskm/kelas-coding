@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """Mutasi Kas (Rincian Arus Kas) — 10 skenario wajib hasil audit.
 
 Test ini mengunci apa yang SEHARUSNYA terjadi pada Mutasi Kas, Laci, dan
@@ -438,7 +438,17 @@ def test_4_defisit_beban_menambah_hutang(client, db):
                          amount=to_decimal(1000000), method="CASH",
                          note="lunas", created_at=mulai))
     s.flush()
-    # Beban dibuat lewat jalur aplikasi: expense + catat_beban (ledger sinkron).
+    # Uang benar-benar masuk Laci dan Modal benar-benar keluar (OD-LOCK-01), supaya
+    # posisi kas koheren dengan Omzet yang diuji: 1.000.000 - 800.000 = 200.000.
+    _pel = s.query(models.Payment).filter(
+        models.Payment.service_order_id == o.id).first()
+    cash.catat_penerimaan(s, _pel)
+    cash.catat_modal(s, o)
+    # Beban dibuat lewat jalur aplikasi. OD-LOCK-06: pembayaran Beban TIDAK lagi
+    # dicatat per-baris di sini -- satu-satunya pencatatatan adalah
+    # `beban_bayar.bayar_beban_periode` (Laci -> Kas Aset -> Hutang Beban).
+    # `cash.catat_began` sengaja tidak dipanggil: itulah jalur yang dulu membuat
+    # Beban dibayar dua kali bersama Tutup Kas.
     for nama, kat, nilai in (("Gaji A", "Gaji", 200000),
                              ("Gaji B", "Gaji", 200000),
                              ("Sewa", "Operasional", 170000),
@@ -449,9 +459,12 @@ def test_4_defisit_beban_menambah_hutang(client, db):
                            created_at=mulai)
         s.add(e)
         s.flush()
-        cash.catat_beban(s, e)
     s.commit()
 
+    # Hutang dicatat DI SAAT beku periode (OD-LOCK-06), bukan oleh
+    # `proses_defisit` di Tutup Kas. Jadi `hutang_awal` harus diambil SEBELUM
+    # financial core dipanggil.
+    hutang_awal = to_decimal(debt_mod.saldo_hutang(s))
     hit = debt_mod.hitung_defisit(s, mulai, akhir)
     laba_kotor = to_decimal(hit["omset"]) - to_decimal(hit["total_modal"])
     beban = to_decimal(hit["beban"])
@@ -467,10 +480,11 @@ def test_4_defisit_beban_menambah_hutang(client, db):
     assert defisit == to_decimal(405000), \
         "Defisit = 605.000 - 200.000 = 405.000"
 
-    # Saldo Kas Aset = 0 -> tidak ada yang bisa menutup defisit -> penuh jadi hutang.
+    # Saldo Kas Aset = 0 -> tidak ada yang bisa menutup kekurangan -> jadi hutang.
     assert to_decimal(cash.saldo_kas_aset(s)) == MONEY_ZERO
 
-    hutang_awal = to_decimal(debt_mod.saldo_hutang(s))
+    # OD-LOCK-06: hutang sudah tercatat saat financial core dipanggil di atas.
+    # `proses_defisit` (dipanggil Tutup Kas) tidak boleh menambah lagi.
     laci_awal = to_decimal(cash.saldo_laci(s))
     res = debt_mod.proses_defisit(s, mulai, akhir, kas_period_id=None,
                                   oleh="pytest")
@@ -478,12 +492,14 @@ def test_4_defisit_beban_menambah_hutang(client, db):
     s.expire_all()
 
     assert to_decimal(debt_mod.saldo_hutang(s)) - hutang_awal == to_decimal(405000), \
-        "Defisit 405.000 harus ditambah ke Hutang Beban (bukan dibayar)"
+        "Defisit 405.000 harus menjadi Hutang Beban (Laci & Kas Aset kosong)"
     assert to_decimal(cash.saldo_laci(s)) == laci_awal, \
         "Pembentukan Hutang Beban tidak boleh mengurangi Saldo Laci"
-    assert to_decimal(res["periode_row"].hutang_baru) == to_decimal(405000)
-    assert to_decimal(res["periode_row"].hutang_akhir) == hutang_awal + to_decimal(405000)
-    assert to_decimal(res["periode_row"].defisit) == to_decimal(405000)
+    assert to_decimal(res["hitung"]["defisit"]) == to_decimal(405000)
+    row = s.query(models.ExpenseDebtPeriod).filter(
+        models.ExpenseDebtPeriod.periode == res["hitung"]["periode"]).first()
+    assert row is not None, "harus ada rincian Hutang Beban untuk periode ini"
+    assert to_decimal(row.defisit) == to_decimal(405000)
 
     # Idempoten per periode.
     debt_mod.proses_defisit(s, mulai, akhir, kas_period_id=None, oleh="pytest")

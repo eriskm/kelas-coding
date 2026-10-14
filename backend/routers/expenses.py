@@ -59,8 +59,19 @@ def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db_ses
                   recurring=True if data.recurring is None else bool(data.recurring))
     db.add(row)
     db.flush()
-    # Owner Cash Model v4 #3: beban dibayar dari kas toko -> SALDO LACI berkurang.
-    cash.catat_beban(db, row, actor=(user.display_name or user.username))
+    # OD-LOCK-06 (Owner, LOCKED): pembayaran Beban TIDAK dicatat per-baris di
+    # sini.
+    #
+    # Sebelumnya baris ini memanggil `cash.catat_beban(db, row)` yang langsung
+    # mengurangi Saldo Laci. Itu menyebabkan Beban dibayar DUA KALI, karena
+    # `closing.selesaikan_periode` juga membayar seluruh Total Beban periode
+    # dengan penanda idempotensi yang BERBEDA (`ref_type` 'expense' vs
+    # 'beban_periode'). Terbukti: Beban 300.000 mengurangi Laci 600.000.
+    #
+    # Sekarang satu-satunya pencatatatan pembayaran Beban adalah
+    # `beban_bayar.bayar_beban_periode` (Laci -> Kas Aset -> Hutang Beban),
+    # yang dipanggil saat periode dibekukan dan dipanggil ulang oleh Tutup Kas
+    # untuk membayar sisa saja. Satu jalur, satu penanda, tidak ada dobel.
     db.commit()
     db.refresh(row)
     return row

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """Pencatatan Titipan DP terpisah dari Omzet/Laba/Distribusi + guard Kas Besar.
 
 Semua angka TITIPAN DP adalah TURUNAN dari `payments` + `refunds` yang sudah ada.
@@ -470,9 +470,12 @@ def test_kondisi_kas_rekonsiliasi_dengan_saldo_laci(client, db):
                 - dist)
 
     def cek(label):
+        # PENTING: hitung DULU. `calc()` bisa memicu beku periode + pembayaran
+        # Beban otomatis (OD-LOCK-06). Kalau saldo dibaca lebih dulu, yang
+        # dibandingkan adalah kondisi SEBELUM pembayaran.
+        nilai_kondisi = calc()
         s.expire_all()
         laci = to_decimal(cash_mod.saldo_laci(s))
-        nilai_kondisi = calc()
         assert abs(laci - nilai_kondisi) < to_decimal("1"), (
             "Selisih Conditions Kas vs Saldo Laci setelah %s: %s" % (label, laci - nilai_kondisi))
         return laci
@@ -515,15 +518,16 @@ def test_kondisi_kas_rekonsiliasi_dengan_saldo_laci(client, db):
     assert to_decimal(cash_mod.saldo_laci(s)) == to_decimal(300000)
     cek("setelah CASH (modal keluar)")
 
-    # 3. Tambahkan beban 100rb -> harus tetap sinkron.
+# 3. Beban 100rb dibuat. Periode ini belum punya baris beku (belum ada Beban
+    #    sama sekali), jadi Beban ini masuk periode dan -- OD-LOCK-06 -- LANGSUNG
+    #    dibayar dari Laci, tidak menunggu Tutup Kas.
     e = _m.Expense(kategori="Operasional", uraian="Rekon-listrik",
                    nilai=to_decimal(100000), created_at=mulai)
     s.add(e)
-    s.flush()
-    cash_mod.catat_beban(s, e)
     s.commit()
-    assert to_decimal(cash_mod.saldo_laci(s)) == to_decimal(200000)
-    cek("setelah beban")
+    laci = cek("setelah beban (dibayar saat beku)")
+    assert to_decimal(laci) == to_decimal(200000), \
+        "Beban 100rb harus langsung keluar dari Laci: %s" % laci
 
     # 4. Distribusi otomatis saat CTO tercapai: 100% laba keluar dari Laci,
     #    tapi hanya 70% yang benar-benar hilang dari Master Kas.

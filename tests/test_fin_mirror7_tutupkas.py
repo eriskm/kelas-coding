@@ -163,8 +163,16 @@ def test_period_surplus_laci_kembali_nol():
             ) == to_decimal(40000), "distribusi harus 100% dari Laba Bersih"
 
     # Beban benar-benar KELUAR dari Laci (bukan hanya memotong angka laba).
+    # OD-LOCK-06: dibayar saat periode dibekukan, jadi Tutup Kas menambah NOL.
+    # Yang diperiksa di sini adalah TOTAL Beban yang keluar dari ledger.
+    import beban_bayar as _beb
+    total_beban_lucas = _beb._total_dibayar(
+        s, __import__("finance").period_key(*batas_periode(p)))
+    assert total_beban_lucas == to_decimal(405000), \
+        "Total Beban harus keluar dari Laci: %s" % total_beban_lucas
     assert quantize(to_decimal(
-        out["snapshot"]["penyelesaian"]["beban_dibayar_dari_laci"])) == to_decimal(405000)
+        out["snapshot"]["penyelesaian"]["beban_dibayar_dari_laci"])) == to_decimal(0), \
+        "Tutup Kas tidak boleh membayar lagi Beban yang sudah terbayar"
 
     # ATURAN 6: Kas Perputaran kembali ke Rp 0.
     assert cash.saldo_laci(s) == to_decimal(0), \
@@ -184,19 +192,32 @@ def test_period_surplus_laci_kembali_nol():
 
 
 def test_beban_dibayar_dari_laci_bukan_hanya_dihitung():
-    """Beban harus KELUAR dari Laci, bukan cuma memotong angka laba."""
+    """Beban harus KELUAR dari Laci, bukan cuma memotong angka laba.
+
+    OD-LOCK-06: pembayarannya terjadi saat periode DIBEKUKAN, bukan menunggu
+    Tutup Kas. Tutup Kas hanya pays SISA -- jadi angka yang diperiksa di sini
+    adalah TOTAL yang benar-benar keluar dari Laci, dan Tutup Kas harus
+    menambah NOL.
+    """
     s = _isolated()
     p = _setup(s)
     _transaksi(s, p, "FM7-B1", 900000, 455000, 0)
     _beban(s, p, gaji=300000, operasional=105000)
     s.commit()
-    saldo_akhir = cash.saldo_laci(s)
-    assert saldo_akhir == to_decimal(900000 - 455000)   # belum ada beban keluar
+
+    # Hitung pertama kali = bekukan periode = Beban langsung dibayar (OD-LOCK-06).
+    _CF(s, *batas_periode(p), lihat_kas_besar=True)
+    s.commit()
+    saldo_setelah_beku = cash.saldo_laci(s)
+    dibayar_awal = to_decimal(900000 - 455000) - saldo_setelah_beku
+    assert dibayar_awal == to_decimal(405000), (
+        "Beban harus dibayar saat periode dibekukan: %s" % dibayar_awal)
 
     out = closing.tutup_periode(s, p, counted=None, oleh="pytest", compute_finance=_CF)
     s.commit()
     peny = out["snapshot"]["penyelesaian"]
-    assert to_decimal(peny["beban_dibayar_dari_laci"]) == to_decimal(405000)
+    assert to_decimal(peny["beban_dibayar_dari_laci"]) == to_decimal(0), (
+        "Tutup Kas tidak boleh membayar lagi Beban yang sudah dibayar")
     assert cash.saldo_laci(s) == to_decimal(0)
     s.close()
 

@@ -1,4 +1,4 @@
-﻿"""P2-05 — FINANCIAL CORE Project B (Financial SSOT sebagai target).
+"""P2-05 — FINANCIAL CORE Project B (Financial SSOT sebagai target).
 
 Implementasi rumus Owner:
     OMZET       = total penjualan unit CASH + LUNAS pada periode kas berjalan.
@@ -312,12 +312,54 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
     return {"periode": key, "dibekukan": dibuat, "sudah_ada": 0}
 
 
+def _kas_period_id_untuk(db: Session, start: datetime):
+    """Id KasPeriod yang dimulai pada `start`, atau None.
+
+    Dipakai agar rincian Hutang Beban menyertakan periode asalnya, sesuai
+    OD-LOCK-06: rincian per periode, termasuk nilai awal, pembayaran atau
+    cover yang sudah dilakukan, dan sisa kewajiban.
+    """
+    try:
+        from models import KasPeriod
+        row = (db.query(KasPeriod)
+               .filter(KasPeriod.start_at == start)
+               .order_by(KasPeriod.id.desc()).first())
+        return row.id if row is not None else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _bayar_beban_langsung(db: Session, start: datetime, end: datetime,
+                          key: str, total_beban) -> dict:
+    """OD-LOCK-06 — bayar Beban periode: Laci → Kas Aset → Hutang Beban.
+
+    Import `beban_bayar` di dalam fungsi (lazy) karena modul itu mengimpor
+    `expense_debt`, yang sendiri mengimpor modul ini. Import di level modul akan
+    menghasilkan circular import.
+
+    Kegagalan dicatat, tidak boleh menggagalkan perhitungan keuangan yang sedang
+    berjalan -- tapi TIDAK boleh hilang tanpa jejak, jadi pesannya ditulis ke
+    logger dan pembayaran akan dicoba lagi pada pemicu berikutnya (fungsinya
+    sendiri idempoten).
+    """
+    try:
+        import beban_bayar
+        return beban_bayar.bayar_beban_periode(
+            db, start, end, key, total_beban, oleh="beban-otomatis",
+            kas_period_id=_kas_period_id_untuk(db, start))
+    except Exception as exc:  # noqa: BLE001
+        db.rollback()
+        _log("[beban] pembayaran otomatis periode %s GAGAL: %s" % (key, exc))
+        return {"error": str(exc), "dibayar": False}
+
+
 def beban_frozen(db: Session, start: datetime, end: datetime,
                  commit: bool = False) -> dict:
     """Baca beban beku periode; bekukan lebih dulu bila belum ada."""
     key = period_key(start, end)
     rows = db.query(ExpensePeriod).filter(ExpensePeriod.periode == key).all()
-    if not rows:
+    baru_beku = not rows
+    if baru_beku:
         freeze_expenses_for_period(db, start, end, commit=False)
         rows = db.query(ExpensePeriod).filter(ExpensePeriod.periode == key).all()
     gaji = ZERO
@@ -328,6 +370,13 @@ def beban_frozen(db: Session, start: datetime, end: datetime,
             gaji += to_decimal(r.nilai)
         elif kategori == "operasional":
             operasional += to_decimal(r.nilai)
+    # OD-LOCK-06 (Owner, LOCKED): Beban dibayar LANGSUNG begitu kewajiban
+    # periode sudah ditentukan -- tidak menunggu Tutup Kas.
+    # Dipanggil HANYA saat periode baru saja dibekukan, supaya pembacaan
+    # berikutnya tidak memutar pembayaran berulang (fungsinya sendiri sudah
+    # idempoten lewat ref_type/ref_id yang sama dengan Tutup Kas).
+    if baru_beku:
+        _bayar_beban_langsung(db, start, end, key, gaji + operasional)
     if commit:
         db.commit()
     return {"periode": key, "gaji": gaji, "operasional": operasional,

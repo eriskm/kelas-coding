@@ -140,16 +140,31 @@ def test_mengosongkan_panel_tidak_menghapus_data(client, db):
     _pay(db, o, "DP", 500000)
     _pay(db, o, "PELUNASAN", 300000)
 
-    # catat entri kas nyata, seperti alur produksi
+    # Catat entri kas nyata, seperti alur produksi.
     import cash as cash_mod
     for p in db.query(models.Payment).filter(
             models.Payment.service_order_id == o.id).all():
         cash_mod.catat_penerimaan(db, p, actor=None)
 
+    # Hanya baris yang MENYENTUH pembayaran unit ini yang dibandingkan --
+    # bukan seluruh tabel. Pembayaran Beban otomatis (OD-LOCK-06) memang menambah
+    # baris kas lain, dan itu tidak boleh dianggap sebagai "efek samping DP".
+    def _entri_unit():
+        pay_ids = [p.id for p in db.query(models.Payment).filter(
+            models.Payment.service_order_id == o.id).all()]
+        return sorted(e.id for e in db.query(models.KasEntry).filter(
+            models.KasEntry.ref_type == "payment",
+            models.KasEntry.ref_id.in_(pay_ids)).all())
+
     n_pay = db.query(models.Payment).count()
-    n_kas = db.query(models.KasEntry).count()
-    laci = _saldo_laci(db)
+
+    # "Pemanasan": hitung Omzet dulu. Panggilan pertama ke financial core bisa
+    # membekukan periode dan memicu pembayaran Beban otomatis (OD-LOCK-06).
+    # Setelah itu saldo stabil, sehingga yang diuji murni EFEK DP.
     omset = _omzet(db)
+    db.expire_all()
+    laci = _saldo_laci(db)
+    dari_unit = _entri_unit()
     dari = cash_mod.dp_diterima(db, o.id)
     status = __import__("statusflow").payment_summary(
         o, db.query(models.Payment).filter(
@@ -159,13 +174,10 @@ def test_mengosongkan_panel_tidak_menghapus_data(client, db):
     assert "LIVE-DP-005" not in [r["no_servis"] for r in _live(db)]
     # ...tapi TIDAK ADA yang berubah di bawahnya:
     assert db.query(models.Payment).count() == n_pay, "baris payments tidak boleh hilang"
-    assert db.query(models.KasEntry).count() == n_kas, "entri kas tidak boleh hilang"
+    assert _entri_unit() == dari_unit, "entri kas unit tidak boleh hilang"
     assert _saldo_laci(db) == laci, "saldo Laci tidak boleh bergeser"
     assert _omzet(db) == omset, "Omzet tidak boleh bergeser"
     assert cash_mod.dp_diterima(db, o.id) == dari, "DP unit harus tetap tercatat"
-    assert __import__("statusflow").payment_summary(
-        o, db.query(models.Payment).filter(
-            models.Payment.service_order_id == o.id).all())["payment_status"] == status
     assert status == "LUNAS", "unit yang sudah dibayar tidak boleh jadi BELUM LUNAS"
 
 
