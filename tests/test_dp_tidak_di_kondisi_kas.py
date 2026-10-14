@@ -60,13 +60,49 @@ def test_laporan_titipan_dp_masih_hidup():
     assert "live" in isi, "panel harus memakai data DP yang masih ditahan"
 
 
+def _argumen_baris(kode, label):
+    """Argumen pemanggilan row() untuk label tertentu, digabung jadi satu baris."""
+    m = re.search(r"row\(\s*'%s[^']*'(.*?)\)" % re.escape(label.split(" (")[0]),
+                  kode, flags=re.S)
+    return re.sub(r"\s+", " ", m.group(1)) if m else None
+
+
 def test_baris_kas_kecil_memakai_angka_bebas_dp():
     kode = _kode(_fungsi("renderKondisiKas"))
     assert "kas_aset_awal_operasional" in kode, (
-        "baris Kas Kecil/Laci harus memakai saldo operasional yang bebas DP")
-    pola = r"row\(\s*'Kas Kecil / Laci'[^)]*saldo_laci\b"
-    assert not re.search(pola, kode), (
-        "baris Kas Kecil/Laci tidak boleh memakai angka fisik yang memuat DP")
+        "baris Laci harus memakai saldo operasional yang bebas DP")
+
+    args = _argumen_baris(kode, "Kas Aset Kecil / Laci")
+    assert args, "baris 'Kas Aset Kecil / Laci' harus ada di tabel"
+    assert "kas_aset_awal_operasional" in args, (
+        "baris Laci harus memakai kas_aset_awal_operasional")
+    assert "saldo_laci" not in args, (
+        "baris Laci tidak boleh memakai saldo_laci fisik yang memuat DP")
+
+    assert _argumen_baris(kode, "Kas Kecil / Laci") is None, (
+        "label lama 'Kas Kecil / Laci' harus diganti -- itu yang membuat angka "
+        "awal periode tertukar dengan posisi kas sekarang")
+
+
+def test_baris_laci_jelas_saldo_awal_bukan_posisi_sekarang():
+    """Angka 'Laci' di tabel harus menyebut bahwa itu saldo AWAL periode.
+
+    Alasannya: kartu ringkasan menampilkan posisi uang SEKARANG, sedangkan baris
+    tabel adalah jangkar pembuka akumulasi laba. Dua angka berbeda dengan label
+    yang sama membuat layar ambigu (ditemukan Owner).
+    """
+    kode = _kode(_fungsi("renderKondisiKas"))
+    assert "saldo awal periode" in kode, (
+        "baris posisi kas di tabel harus ditandai 'saldo awal periode'")
+
+
+def test_tabel_akruas_memakai_nama_akumulasi_laba():
+    """Kepala kolom harus 'Akumulasi Laba', bukan 'Saldo' yang menyesatkan."""
+    with open(SCRIPT, encoding="utf-8") as f:
+        html = f.read()
+    assert "Akumulasi Laba" in html, "kolom terakhir tabel harus bernama Akumulasi Laba"
+    assert ">Saldo</th>" not in html, (
+        "nama kolom 'Saldo' membuat kolom akrual terbaca seperti saldo uang")
 
 
 def test_kartu_kas_memakai_angka_milik_toko():
