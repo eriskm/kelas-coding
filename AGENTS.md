@@ -4,6 +4,42 @@ Dokumen ini adalah pengingat yang WAJIB dibaca sebelum melakukan apa pun di repo
 
 ---
 
+## 0. ATURAN BISNIS TERKUNCI — WAJIB DIBACA DAHULU
+
+> ### 🔒 `docs/OWNER_DECISIONS.md` adalah **sumber kebenaran bisnis** BOSS SF.
+>
+> Sebelum melakukan audit, pengembangan, validasi, pengujian, atau perubahan kode,
+> **WAJIB** membaca dokumen itu lebih dulu.
+
+Isinya:
+
+| ID | Isi | Status |
+|---|---|---|
+| **FR-01** | Payment Ledger & Financial Core | 🔒 LOCKED |
+| **FR-02** | Mekanisme Tutup Kas | 🔒 LOCKED |
+| **OD-LOCK-01** | Modal Part & Jasa keluar dari Laci saat CASH | 🔒 LOCKED |
+| **OD-LOCK-02** | Distribusi Bagi Hasil 10/30/30/30 | 🔒 LOCKED |
+| **OD-LOCK-03** | Status CASH bersifat FINAL | 🔒 LOCKED |
+| **OD-LOCK-04** | DP tidak boleh melebihi estimasi | 🔒 LOCKED |
+| **OD-LOCK-05** | Refund klaim garansi dilakukan MANUAL | 🔒 LOCKED |
+
+Yang WAJIB dipatuhi:
+
+- ❌ **Jangan mengubah, menghapus, atau melemahkan aturan terkunci** tanpa
+  keputusan eksplisit dari Owner.
+- ❌ **Jangan mengubah keputusan bisnis untuk menyesuaikan kode.** Kalau kode
+  bertentangan, perbaiki **kodenya**.
+- ❌ **Jangan menafsirkan ulang** aturan terkunci berdasarkan asumsi teknis.
+- ✅ Catat ketidaksesuaian sebagai temuan, lalu tunggu keputusan Owner.
+- ✅ Keputusan Owner adalah acuan; **implementasi wajib mengikuti keputusan
+  yang terkunci, bukan sebaliknya.**
+
+Dokumen `OWNER_DECISIONS.md` juga punya bagian **Ketidaksesuaian Implementasi**
+yang mencatat aturan mana yang belum berjalan di kode. Itu daftar pekerjaan
+yang menunggu perintah Owner — **bukan** daftar untuk dikerjakan sendiri.
+
+---
+
 ## 1. KONFIRMASI DULU — TANPA KECUALI
 
 **Jangan pernah melakukan sesuatu berdasarkan asumsi sendiri.**

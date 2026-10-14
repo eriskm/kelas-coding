@@ -1,5 +1,22 @@
 # SUKABUMI FLASHER — Business Operating System
 
+> ### 🔒 Aturan bisnis yang terkunci Owner
+>
+> Sumber kebenaran bisnis BOSS SF ada di
+> **`docs/OWNER_DECISIONS.md`** — memuat FR-01, FR-02, dan OD-LOCK-01
+> sampai OD-LOCK-05 dengan status **LOCKED**.
+>
+> Dokumen itu **berada di atas** dokumen lain, termasuk README ini. Kalau ada
+> perbedaan antara yang tertulis di sini dengan keputusan Owner yang
+> terkunci, **keputusan Owner yang berlaku** dan README ini yang perlu
+> diperbarui.
+>
+> Catatan penting untuk pembaca dokumen ini: bagian di bawah ditulis dari
+> audit source code, sehingga **ada beberapa bagian yang sudah usang**
+> dibanding keputusan Owner terbaru (mis. pemicu distribusi, dan aturan
+> transisi status CASH). Lihat bagian **Ketidaksesuaian Implementasi** di
+> `docs/OWNER_DECISIONS.md` untuk daftar lengkapnya.
+
 Dokumentasi utama project. Disusun dari **audit source code aktual**
 (`frontend/`, `backend/`, `tests/`, file `.bat`).
 Jika ada perbedaan dengan dokumen lama di `docs/`, yang berlaku adalah source code.
