@@ -4004,7 +4004,7 @@ async function loadKuAset() {
     const _d = document.getElementById('kuMasterDesc');
     if (_d) {
         _d.classList.toggle('hidden', !lihatAset);
-        if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci ↔ Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung. Ini POSISI UANG yang ada sekarang, bukan laba: Modal dan Beban periode ini belum tentu sudah ditarik dari Laci.';
+        if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci ↔ Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung.';
     }
     if (summary) {
         // Angka FISIK (`laci`/`master_kas`) masih memuat DP karena uangnya benar-benar
@@ -4521,16 +4521,14 @@ function renderKondisiKas() {
     };
 
     // 1. Kas Besar — hanya role ber-authority (backend juga tidak mengirimnya).
-    //    Baris POSISI: tidak ikut menambah/mengurangi akumulasi laba.
+    //    Baris POSISI: tidak ikut menambah/mengurangi saldo berjalan.
     if (lihatAset && fin.saldo_aset !== undefined) {
-        row('Kas Aset Besar (saldo awal periode)', Number(fin.saldo_aset) || 0, 0, 'is-besar', true);
+        row('Kas Besar (Pengelola)', Number(fin.saldo_aset) || 0, 0, 'is-besar', true);
     }
-    // 2. Kas Kecil / Laci — SALDO AWAL PERIODE (bukan saldo sekarang).
-    //    Angka saldo uang yang sekarang ada di kartu ringkasan di atas; baris
-    //    ini cuma jangkar pembuka akumulasi laba.
-    row('Kas Aset Kecil / Laci (saldo awal periode)', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
+    // 2. Kas Kecil / Laci — saldo operasional (titipan DP dikurangi).
+    row('Kas Kecil / Laci', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
     // 3. Total Penjualan Service (Omzet periode).
-    row('Total Penjualan Service (Omzet)', Number(fin.omset) || 0, 0);
+    row('Total Penjualan Service', Number(fin.omset) || 0, 0);
     // TIDAK ADA baris titipan DP di Kondisi Kas Operasional.
     //
     // Owner (tegas): "uang DP tidak masuk ke Kondisi Kas Operasional. DP hanya
@@ -4539,11 +4537,9 @@ function renderKondisiKas() {
     // (Laci)". Sekarang kartu itu sudah bebas DP (laci_milik_toko), jadi baris
     // itu justru membuat DP muncul di tempat yang Owner larang. Seluruh
     // posisi titipan hanya dilacak di panel "Laporan Titipan DP".
-// 4. Total Modal (Part + Jasa + Lain) — dikurangkan LANGSUNG. Tidak harus
-    //    lebih dulu tertahan di Laci: yang dihitung adalah biaya usaha periode
-    //    ini, bukan sekadar perpindahan uang yang sudah terjadi.
+    // 4. Total Modal (Part + Jasa + Lain).
     row('Total Modal (Part+Jasa+Lain)', 0, Number(fin.total_modal) || 0);
-    // 5. Total Beban (Gaji & Operasional) — juga dikurangkan langsung.
+    // 5. Total Beban (Gaji & Operasional).
     row('Total Beban (Gaji & OPS)', 0, Number(fin.total_beban) || 0);
 
     // 6. BAGI HASIL — muncul kalau distribusi sudah benar-benar TERBENTUK,
@@ -4579,20 +4575,9 @@ function renderKondisiKas() {
             + `<b>Jalankan Distribusi</b> di panel Alokasi Profit. `
             + `Baris Bagi Hasil akan muncul setelah uangnya benar-benar dibagikan.`
             + `</span></td></tr>`);
-}
+    }
 
-    // BARIS PENUTUP — supaya kolom "Akumulasi Laba" diakhiri dengan angka yang
-    // jelas meaning-nya, bukan melayang sebagai "saldo" misterius.
-    rows.push(
-        `<tr class="ku-kd-sep"><td colspan="4">`
-        + `<span class="ku-kd-sep-txt"><i class="fa-solid fa-flag-checkered"></i> `
-        + `Hasil usaha periode ini</span></td></tr>`);
-    row('Laba Kotor (Omzet − Modal)', Number(fin.omset) || 0,
-        Number(fin.total_modal) || 0, 'is-total');
-    row('Laba Bersih (Laba Kotor − Beban)', 0,
-        Number(fin.total_beban) || 0, 'is-total');
-
-    body.innerHTML = rows.join('');
+body.innerHTML = rows.join('');
 }
 
 // Kartu ringkasan (Total Masuk / Keluar / Saldo Laci / Kas Aset).

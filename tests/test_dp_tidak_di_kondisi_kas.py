@@ -71,38 +71,32 @@ def test_baris_kas_kecil_memakai_angka_bebas_dp():
     kode = _kode(_fungsi("renderKondisiKas"))
     assert "kas_aset_awal_operasional" in kode, (
         "baris Laci harus memakai saldo operasional yang bebas DP")
-
-    args = _argumen_baris(kode, "Kas Aset Kecil / Laci")
-    assert args, "baris 'Kas Aset Kecil / Laci' harus ada di tabel"
-    assert "kas_aset_awal_operasional" in args, (
-        "baris Laci harus memakai kas_aset_awal_operasional")
-    assert "saldo_laci" not in args, (
-        "baris Laci tidak boleh memakai saldo_laci fisik yang memuat DP")
-
-    assert _argumen_baris(kode, "Kas Kecil / Laci") is None, (
-        "label lama 'Kas Kecil / Laci' harus diganti -- itu yang membuat angka "
-        "awal periode tertukar dengan posisi kas sekarang")
+    assert not re.search(r"row\(\s*'Kas Kecil / Laci'[^)]*\bsaldo_laci\b", kode), \
+        "baris Laci tidak boleh memakai angka fisik yang memuat DP"
 
 
-def test_baris_laci_jelas_saldo_awal_bukan_posisi_sekarang():
-    """Angka 'Laci' di tabel harus menyebut bahwa itu saldo AWAL periode.
+def test_laporan_akrual_tetap_berurutan_omzet_modal_beban():
+    """Owner: Conditions Kas adalah laporan AKRUAL.
 
-    Alasannya: kartu ringkasan menampilkan posisi uang SEKARANG, sedangkan baris
-    tabel adalah jangkar pembuka akumulasi laba. Dua angka berbeda dengan label
-    yang sama membuat layar ambigu (ditemukan Owner).
+    Modal dan Beban langsung dikurangkan dari Omzet -- tidak harus lebih dulu
+    "tertahan" di Kas Aset Kecil (Laci). Urutannya tidak boleh dibalik dan
+    tidak boleh ada baris DP di antaranya.
     """
     kode = _kode(_fungsi("renderKondisiKas"))
-    assert "saldo awal periode" in kode, (
-        "baris posisi kas di tabel harus ditandai 'saldo awal periode'")
-
-
-def test_tabel_akruas_memakai_nama_akumulasi_laba():
-    """Kepala kolom harus 'Akumulasi Laba', bukan 'Saldo' yang menyesatkan."""
-    with open(SCRIPT, encoding="utf-8") as f:
-        html = f.read()
-    assert "Akumulasi Laba" in html, "kolom terakhir tabel harus bernama Akumulasi Laba"
-    assert ">Saldo</th>" not in html, (
-        "nama kolom 'Saldo' membuat kolom akrual terbaca seperti saldo uang")
+    urutan = [m.group(1) for m in
+              re.finditer(r"row\(\s*'([^']*)'", kode)]
+    assert urutan[:3] == ["Kas Besar (Pengelola)", "Kas Kecil / Laci",
+                          "Total Penjualan Service"], (
+        "urutan baris berubah: %s" % urutan[:3])
+    assert "Total Modal (Part+Jasa+Lain)" in urutan
+    assert "Total Beban (Gaji & OPS)" in urutan
+    assert urutan.index("Total Penjualan Service") < urutan.index(
+        "Total Modal (Part+Jasa+Lain)") < urutan.index("Total Beban (Gaji & OPS)"), \
+        "urutan Omzet -> Modal -> Beban harus tetap"
+    # Modal dan Beban di kolom Kredit, jadi langsung mengurangi akumulasi.
+    for label in ("Total Modal (Part+Jasa+Lain)", "Total Beban (Gaji & OPS)"):
+        m = re.search(r"row\(\s*'%s',\s*0," % re.escape(label), kode)
+        assert m, "%s harus di kolom Kredit (langsung dikurangkan)" % label
 
 
 def test_kartu_kas_memakai_angka_milik_toko():
