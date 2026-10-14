@@ -100,28 +100,32 @@ def _stok(kas_aset_awal):
 
 
 # ───────────────────────────── SKENARIO A ─────────────────────────────
-def test_skenario_a_kas_aset_500ribu():
+def test_skenario_a_kas_aset_tidak_disentuh_otomatis():
+    """OD-LOCK-06 (revisi): Kas Aset TIDAK pernah menutup otomatis.
+
+    Owner: "keputusan untuk menutup dari Kas Aset dilakukan secara
+    manual oleh user". Jadi хотя Kas Aset 500.000 tersedia, sistem tetap hanya
+    membayar dari Laci dan mencatat sisanya sebagai Hutang Beban.
+    """
     import cash as cash_mod
     import expense_debt as debt_mod
 
     s = _stok(0)
     ctx = _skenario(s, to_decimal(500000))
-    assert to_decimal(cash_mod.saldo_laci(s)) == LACI_AWAL_SEJAK_MENJUAL
-
     _isi(s, ctx["pid"])
     s.commit()
     s.expire_all()
 
-    assert to_decimal(cash_mod.saldo_kas_aset(s)) == to_decimal(170000), \
-        "Kas Aset 500.000 - 330.000 = 170.000"
-    assert to_decimal(debt_mod.saldo_hutang(s)) == ZERO, \
-        "Kas Aset cukup -> Hutang Beban harus Rp0"
-    assert to_decimal(cash_mod.saldo_laci(s)) == ZERO
+    assert to_decimal(cash_mod.saldo_laci(s)) == ZERO, "Laci dibayar sampai habis"
+    assert to_decimal(cash_mod.saldo_kas_aset(s)) == to_decimal(500000), \
+        "Kas Aset TIDAK boleh tersentuh otomatis -- tetap 500.000"
+    assert to_decimal(debt_mod.saldo_hutang(s)) == KEKURANGAN, \
+        "kekurangan 330.000 menunggu keputusan manual, dicatat sebagai Hutang"
     s.close()
 
 
 # ───────────────────────────── SKENARIO B ─────────────────────────────
-def test_skenario_b_kas_aset_200ribu():
+def test_skenario_b_kas_aset_tidak_disentuh_otomatis():
     import cash as cash_mod
     import expense_debt as debt_mod
 
@@ -131,16 +135,15 @@ def test_skenario_b_kas_aset_200ribu():
     s.commit()
     s.expire_all()
 
-    assert to_decimal(cash_mod.saldo_kas_aset(s)) == ZERO, \
-        "Kas Aset habis dipakai 200.000"
-    assert to_decimal(debt_mod.saldo_hutang(s)) == to_decimal(130000), \
-        "Kekurangan 130.000 jadi Hutang Beban"
+    assert to_decimal(cash_mod.saldo_kas_aset(s)) == to_decimal(200000), \
+        "Kas Aset tetap 200.000 meski cukup menutup kekurangan"
+    assert to_decimal(debt_mod.saldo_hutang(s)) == KEKURANGAN
     assert to_decimal(cash_mod.saldo_laci(s)) == ZERO
     s.close()
 
 
 # ───────────────────────────── SKENARIO C ─────────────────────────────
-def test_skenario_c_kas_aset_nol():
+def test_skenario_c_tanpa_kas_aset():
     import cash as cash_mod
     import expense_debt as debt_mod
 
@@ -154,6 +157,33 @@ def test_skenario_c_kas_aset_nol():
         "Tanpa Kas Aset -> seluruh kekurangan 330.000 jadi Hutang Beban"
     assert to_decimal(cash_mod.saldo_laci(s)) == ZERO
     assert to_decimal(cash_mod.saldo_kas_aset(s)) == ZERO
+    s.close()
+
+
+def test_keputusan_cover_manual_ditawarkan_bukan_dijalankan():
+    """Sistem memberi tahu berapa yang BISA ditutup manual -- tidak memindahkan."""
+    import cash as cash_mod
+    import beban_bayar as bb
+
+    s = _stok(0)
+    ctx = _skenario(s, to_decimal(500000))
+    p = s.query(__import__("models").KasPeriod).get(ctx["pid"])
+    from finance import period_key
+    from routers.dashboard import batas_periode
+    key = period_key(*batas_periode(p))
+    aset_awal = to_decimal(cash_mod.saldo_kas_aset(s))
+    res = bb.bayar_beban_periode(s, *batas_periode(p), key, BEBAN)
+    s.commit()
+    s.expire_all()
+
+    assert to_decimal(res["dari_kas_aset"]) == ZERO, "cover otomatis harus nol"
+    assert to_decimal(res["hutang"]) == KEKURANGAN
+    assert to_decimal(res["bisa_ditutup_manual"]) == KEKURANGAN, \
+        "sistem harus memberi tahu jumlah yang bisa ditutup manual"
+    assert to_decimal(res["saldo_kas_aset_tersedia"]) == aset_awal
+    assert "manual" in (res["cara_cover"] or "").lower()
+    assert to_decimal(cash_mod.saldo_kas_aset(s)) == aset_awal, \
+        "saldo Kas Aset tidak boleh bergerak"
     s.close()
 
 
@@ -330,8 +360,12 @@ def test_hutang_terakumulasi_saat_periode_berganti():
     s.close()
 
 
-def test_kas_aset_benar_benar_berkurang_dan_tercatat():
-    """OD-LOCK-06 poin 3: Kas Aset BENAR-BENAR berkurang + ada di jurnal."""
+def test_tidak_ada_entri_kas_aset_dari_pembayaran_beban():
+    """OD-LOCK-06 (revisi): pembayaran Beban tidak boleh menyentuh Kas Aset.
+
+    Penutupan dari Kas Aset adalah keputusan manual user lewat
+    `POST /api/kas/aset/keluar` -- bukan konsekuensi otomatis pembayaran Beban.
+    """
     import cash as cash_mod
     import models as m
 
@@ -345,15 +379,14 @@ def test_kas_aset_benar_benar_berkurang_dan_tercatat():
         m.KasEntry.layer == cash_mod.LAYER_ASET,
         m.KasEntry.jenis == "Keluar",
         m.KasEntry.ref_type == "beban_periode").all()
-    assert mut, "harus ada entri Kas Aset Keluar untuk Penutupan Beban"
-    keluar = sum(to_decimal(k.nominal) for k in mut)
-    assert keluar == KEKURANGAN, \
-        "Kas Aset keluar %s harus sama dengan kekurangan %s" % (keluar, KEKURANGAN)
+    assert not mut, \
+        "pembayaran Beban tidak boleh membuat entri Kas Aset keluar otomatis"
+    assert to_decimal(cash_mod.saldo_kas_aset(s)) == to_decimal(500000)
 
-    n_terima = s.query(m.KasEntry).filter(
-        m.KasEntry.layer == cash_mod.LAYER_ASET, m.KasEntry.jenis == "Masuk").count()
-    n_keluar = s.query(m.KasEntry).filter(
-        m.KasEntry.layer == cash_mod.LAYER_ASET, m.KasEntry.jenis == "Keluar").count()
-    assert n_terima == n_keluar, \
-        "penutupan Beban harus PASANGAN: Aset masuk = Aset keluar"
+    # Entri Laci untuk Beban tetap ada -- pembayaran dari Laci itu wajib.
+    n_laci = s.query(m.KasEntry).filter(
+        m.KasEntry.layer == cash_mod.LAYER_LACI,
+        m.KasEntry.sumber == cash_mod.SUMBER_BEBAN,
+        m.KasEntry.ref_type == "beban_periode").count()
+    assert n_laci == 1, "harus ada satu pencatatan pembayaran Beban di Laci"
     s.close()

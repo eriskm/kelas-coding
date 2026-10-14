@@ -144,10 +144,11 @@ Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
 ### Pembayaran Beban (OD-LOCK-06)
 - Pembayaran **langsung** saat periode dibekukan — **tidak** menunggu Tutup Kas.
 - Urutan dana: **Laci → Kas Aset → Hutang Beban**.
-- Kas Aset **benar-benar berpindah** (transfer tercatat di jurnal), bukan
-  sekadar mencatat angka cover.
-- **Jangan pernah** membuat Laci negatif, dan **jangan** memakai Hutang Beban
-  seumpama uang yang sudah dibayar.
+- **Kas Aset TIDAK boleh tersentuh otomatis.** Kalau Laci minus, yang
+  **keputusan menutup dari Kas Aset adalah user**, dicatat manual lewat
+  `POST /api/kas/aset/keluar`. Sistem hanya memberi tahu `bisa_ditutup_manual`.
+- **Jangan pernah** membuat Laci negatif.
+- **Jangan** memakai Hutang Beban seumpama uang yang sudah dibayar.
 - Satu-satunya pencatatatan pembayaran adalah
   `beban_bayar.bayar_beban_periode()`. **Jangan** menambah jalur pembayaran
   baru di tempat lain — dua jalur dengan penanda idempotensi berbeda adalah

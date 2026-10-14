@@ -220,16 +220,21 @@ yang berwenang**.
 Ketika Beban Gaji dan Operasional harus dibayar:
 
 1. Bayarkan menggunakan **saldo Laci yang tersedia**.
-2. Jika Laci tidak mencukupi, sistem otomatis menggunakan **Kas Aset** untuk
-   menutup kekurangan.
-3. Uang yang digunakan dari Kas Aset **harus benar-benar mengurangi saldo
-   Kas Aset dan tercatat dalam jurnal kas** — bukan sekadar mencatat angka
-   cover.
-4. Jika saldo Kas Aset tidak mencukupi, gunakan **seluruh saldo yang tersedia**.
-5. Sisa kewajiban yang belum terbayar dicatat sebagai **Hutang Beban**, lengkap
-   dengan rincian dan **periode asalnya**.
-6. Hutang Beban **terakumulasi** dan tidak boleh hilang otomatis ketika periode
+2. Jika Laci tidak mencukupi, **keputusan untuk menutup dari Kas Aset diambil
+   MANUAL oleh user** — sistem tidak menutupinya sendiri.
+3. **Sisa yang belum tertutup dicatat sebagai Hutang Beban**, lengkap dengan
+   rincian dan **periode asalnya**, sambil menampilkan berapa yang *bisa*
+   ditutup manual.
+4. Penutupan Kas Aset dicatat sendiri oleh user melalui
+   `POST /api/kas/aset/keluar`.
+5. Hutang Beban **terakumulasi** dan tidak boleh hilang otomatis ketika periode
    berganti.
+
+> ⚠️ **Poin 2 dan 3 pernah tertulis "otomatis" dan telah DIREVISI oleh Owner.**
+> Naskah pertama menyatakan sistem otomatis memakai Kas Aset dan benar-benar
+> mengurangi saldonya. Owner memutuskan sebaliknya: yang manual adalah
+> **keputusannya**, sehingga **saldo Kas Aset tidak boleh pernah berkurang
+> sebagai akibat otomatis pembayaran Beban**.
 
 Ketentuan tambahan:
 
@@ -238,6 +243,7 @@ Ketentuan tambahan:
 - Transaksi **atomik dan idempoten**; saldo tidak boleh terpotong dua kali.
 - Setiap pembayaran memiliki **jejak audit dan referensi periode**.
 - ❌ Jangan membuat saldo Laci negatif hanya untuk memaksakan pembayaran.
+- ❌ Jangan mengurangi saldo Kas Aset secara otomatis.
 - ❌ Jangan menganggap Hutang Beban sebagai uang yang sudah dibayar.
 - ✅ **Beban tetap dibekukan SEKALI per periode kas** (FR-01 / OD-001). Poin ini
   tidak melonggarkan aturan beku; yang dijamin adalah kewajiban yang sudah
@@ -250,11 +256,14 @@ Ketentuan tambahan:
 Penjualan Rp600.000 · Modal Rp325.000 · Sisa Laci Rp275.000 · Beban Rp605.000
 · Kekurangan Rp330.000.
 
-| Skenario | Laci bayar | Kas Aset bayar | Sisa Kas Aset | Hutang Beban |
+Kas Aset **tidak boleh bergerak** berapa pun jumlahnya — keputusan menutup
+manual. Hutang Beban tetap Rp330.000 dan menunggu tindakan user.
+
+| Skenario | Laci bayar | Kas Aset berubah | Sisa Kas Aset | Hutang Beban |
 |---|---|---|---|---|
-| **A** — Kas Aset Rp500.000 | 275.000 | 330.000 | 170.000 | **Rp0** |
-| **B** — Kas Aset Rp200.000 | 275.000 | 200.000 | Rp0 | **Rp130.000** |
-| **C** — Kas Aset Rp0 | 275.000 | Rp0 | Rp0 | **Rp330.000** |
+| **A** — Kas Aset Rp500.000 | 275.000 | ❌ tidak | 500.000 | **Rp330.000** |
+| **B** — Kas Aset Rp200.000 | 275.000 | ❌ tidak | 200.000 | **Rp330.000** |
+| **C** — Kas Aset Rp0 | 275.000 | ❌ tidak | Rp0 | **Rp330.000** |
 
 ---
 
@@ -291,10 +300,10 @@ Penjualan Rp600.000 · Modal Rp325.000 · Sisa Laci Rp275.000 · Beban Rp605.000
 | **Aturan** | Beban dibayar sekali: Laci → Kas Aset → Hutang Beban |
 | **Temuan (sebelum)** | **Dua jalur pembayaran dengan penanda idempotensi BERBEDA.** `backend/routers/expenses.py` memanggil `cash.catat_began` per-baris (`ref_type='expense'`), sedangkan `closing.selesaikan_periode` membayar seluruh Total Beban periode (`ref_type='beban_periode'`). Terbukti dijalankan: Beban Rp300.000 mengurangi Saldo Laci **Rp600.000**.Selain itu `closing.catat_began` memakai `check_saldo=False`, sehingga Laci bisa menjadi **negatif**. |
 | **Perbaikan** | `backend/beban_bayar.py` (baru) — satu mesin pembayaran tunggal `bayar_beban_periode()`, idempoten lewat `ref_type='beban_periode'` + `ref_id=<periode>`. Dipanggil dari `finance.beban_frozen` saat periode dibekukan, dan dari `closing.selesaikan_periode` untuk membayar **sisa saja**. Panggilan per-baris di `routers/expenses.py` dihapus. |
-| **Kas Aset** | Sekarang benar-benar berpindah: `cash.transfer(KAS_ASET → LACI)` sehingga saldo Aset berkurang dan tercatat sebagai pasangan di jurnal kas — bukan sekadar angka cover. |
+| **Kas Aset** | **Otomatis DIHAPUS atas perintah Owner** (revisi OD-LOCK-06 poin 2–3). Naskah pertama sempat mewajibkan `cash.transfer(KAS_ASET → LACI)` saat menutup kekurangan; Owner menetapkan bahwa keputusan menutup dari Kas Aset itu **manual oleh user**. Sekarang sistem hanya melaporkan `bisa_ditutup_manual` dan `cara_cover`; uang Kas Aset berpindah lewat `POST /api/kas/aset/keluar`. |
 | **Hutang Beban** | Dicatat sebagai baris `expense_debt_periods` lengkap dengan periode asal, nilai beban, cover Kas Aset, dan sisa kewajiban. Pembayaran lanjutan **memperbarui** baris yang sama (`periode` UNIQUE), bukan menambah baris baru. |
 | **Yang sengaja TIDAK diubah** | Beban tetap beku sekali per periode (FR-01). Distribusi (OD-LOCK-02), Modal saat CASH (OD-LOCK-01), dan refund garansi manual (OD-LOCK-05) tidak tersentuh. |
-| **Pengaman** | `tests/test_od_lock_06_beban.py` — 10 test, termasuk ketiga skenario tabel di atas, request berulang, dan akumulasi hutang. |
+| **Pengaman** | `tests/test_od_lock_06_beban.py` — 11 test, termasuk ketiga skenario tabel di atas (Kas Aset tidak boleh tersentuh otomatis), request berulang, dan akumulasi hutang. |
 
 ---
 

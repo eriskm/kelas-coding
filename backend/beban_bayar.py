@@ -96,26 +96,25 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
     saldo_laci = cash.saldo_laci(db)
     dari_laci = quantize(min(sisa_kewajiban, saldo_laci)) if saldo_laci > ZERO else ZERO
 
-    # -- (2)+(3) Kas Aset menutup kekurangan --------------------------------
-    sisa2 = quantize(sisa_kewajiban - dari_laci)
-    dari_aset = ZERO
-    if sisa2 > ZERO:
-        saldo_aset = cash.saldo_kas_aset(db)
-        dari_aset = (quantize(min(sisa2, saldo_aset))
-                     if saldo_aset > ZERO else ZERO)
-
-    # Uang Kas Aset DIBERIKAN ke Laci sungguhan supaya bisa membayar Beban,
-    # dan tercatat sebagai pasangan transfer pada ledger kas.
-    if dari_aset > ZERO:
-        cash.transfer(db, dari_aset, cash.LAYER_ASET, cash.LAYER_LACI,
-                      "Penutupan Beban periode %s dari Kas Aset" % periode_key,
-                      actor=oleh, ref_type=BE_REF_TYPE, ref_id=periode_key,
-                      check_saldo=True, sumber=cash.SUMBER_HUTANG_BEBAN,
-                      idempoten=True)
+    # -- (2) KAS ASET: TIDAK PERNAH DISENTUH OTOMATIS -----------------------
+    # Owner: "ketika akhir kas bernilai minus, maka keputusan untuk menutup dari
+    # Kas Aset dilakukan SECARA MANUAL oleh user."
+    #
+    # Jadi sistem HANYA memberi tahu berapa yang bisa ditutup -- tidak
+    # memindahkan uang sendiri. Penutupan Kas Aset dicatat manual oleh Admin
+    # lewat `POST /api/kas/aset/keluar`.
+    #
+    # OD-LOCK-06 versi lama menaruh "otomatis" di sini; itu sudah DIREVISI.
+    # Balancing: Laci dibayar sampai habis, sisanya menjadi Hutang Beban.
+    sisa_kurang = quantize(sisa_kewajiban - dari_laci)
+    saldo_aset = cash.saldo_kas_aset(db)
+    bisa_ditutup = (quantize(min(sisa_kurang, saldo_aset))
+                    if (sisa_kurang > ZERO and saldo_aset > ZERO) else ZERO)
+    dari_aset = ZERO          # selalu nol: cover Kas Aset itu keputusan manual
 
     total_dibayar = quantize(dari_laci + dari_aset)
 
-    # -- (2) satu baris kas untuk seluruh pembayaran -------------------------
+    # -- (3) satu baris kas untuk seluruh pembayaran -------------------------
     if total_dibayar > ZERO:
         cash.catat_mutasi(
             db, cash.LAYER_LACI, "Keluar", cash.KATEGORI[cash.SUMBER_BEBAN],
@@ -126,7 +125,14 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
     # -- (4)+(5) sisa jadi Hutang Beban -------------------------------------
     hutang = quantize(total_beban - (sudah + total_dibayar))
     out.update({"dari_laci": dari_laci, "dari_kas_aset": dari_aset,
-                "hutang": hutang, "dibayar": total_dibayar > ZERO})
+                "hutang": hutang, "dibayar": total_dibayar > ZERO,
+                # INFORMASI SAJA -- sistem tidak memindahkan uang. Menutup
+                # Hutang Beban dari Kas Aset adalah keputusan user, dicatat
+                # manual lewat POST /api/kas/aset/keluar.
+                "kekurangan": sisa_kurang,
+                "saldo_kas_aset_tersedia": saldo_aset,
+                "bisa_ditutup_manual": bisa_ditutup,
+                "cara_cover": "manual oleh Admin (POST /api/kas/aset/keluar)"})
 
     if hutang > ZERO:
         from models import ExpenseDebtEntry, ExpenseDebtPeriod
