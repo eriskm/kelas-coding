@@ -91,22 +91,24 @@ def test_dp_lunas_kosongkan_panel(client, db):
     assert to_decimal(t["dipakai"]) >= to_decimal(500000)
 
 
-def test_semua_dp_lunas_laporan_penuh_kosong(client, db):
-    """Kasus Owner: satu-satunya DP sudah lunas -> tidak ada yang tertahan."""
+def test_unit_sendiri_lunas_keluar_dari_panel(client, db):
+    """Kasus Owner: satu-satunya DP milik unit ini lunas -> tidak ada yang tertahan.
+
+    Sengaja hanya memeriksa unit milik test ini, bukan seluruh isi `live`.
+    Sweep "lunasi semua" di seluruh DB akan mengotori sandbox yang dipakai test
+    lain (payments tanpa entri kas) dan merusak pengukuran saldo global.
+    """
     import routers.dashboard as dash
-    semua = dash.ringkasan_titipan_dp(db)["live"]
-    if semua:
-        for r in semua:
-            o = db.query(__import__("models").ServiceOrder).filter(
-                __import__("models").ServiceOrder.no_servis == r["no_servis"]).first()
-            rows = db.query(__import__("models").Payment).filter(
-                __import__("models").Payment.service_order_id == o.id).all()
-            from statusflow import payment_summary
-            _pay(db, o, "PELUNASAN",
-                 payment_summary(o, rows)["sisa"])
+    o = _order(db, "LIVE-DP-007", "CASH", harga=800000)
+    _pay(db, o, "DP", 500000)
+    _pay(db, o, "PELUNASAN", 300000)
+
     live = dash.ringkasan_titipan_dp(db)["live"]
-    assert live == [], "tidak boleh ada DP tersisa yang ditahan"
-    assert dash.ringkasan_titipan_dp(db)["berjalan"] == to_decimal(0)
+    assert "LIVE-DP-007" not in [r["no_servis"] for r in live]
+
+    # DP-nya jadi pembayaran, jadi masuk angka 'dipakai' (sebesar kewajiban).
+    t = dash.ringkasan_titipan_dp(db)
+    assert to_decimal(t["dipakai"]) >= to_decimal(500000)
 
 
 # ───────────────── 3. DP dikembalikan ─────────────────

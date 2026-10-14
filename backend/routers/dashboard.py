@@ -1,5 +1,6 @@
 ﻿"""Dashboard endpoints - data untuk star cards & charts."""
 from datetime import datetime, timedelta
+from decimal import Decimal
 from typing import Optional
 
 from fastapi import APIRouter, Depends
@@ -44,6 +45,37 @@ def boleh_lihat_kas_besar(user) -> bool:
         return False
 
 
+def _refund_dp_by_order(db: Session) -> dict:
+    """Total DP yang sudah dikembalikan ke customer, dikelompok per unit."""
+    out = {}
+    for r in db.query(Refund).all():
+        if (getattr(r, "jenis", "") or "").strip().upper() == "DP":
+            out[r.service_order_id] = out.get(r.service_order_id, ZERO) + to_decimal(r.nominal)
+    return out
+
+
+def _dp_terpakai(db: Session, o, rows, dp_order) -> Decimal:
+    """DP yang benar-benar berubah jadi pembayaran transaksi untuk satu unit.
+
+    HANYA sebesar kewajiban unit. Kalau DP-nya melebihi kewajiban, sisanya
+    BUKAN terpakai -- itu uang customer yang masih wajib dikembalikan, jadi
+    tetap menjadi titipan. Tanpa aturan ini, DP Rp1.000.000 pada unit dengan
+    kewajiban Rp200.000 akan dianggap habis dan Rp800.000-nya hilang dari
+    Laporan Titipan DP, padahal uangnya masih ada di laci.
+    """
+    if dp_order <= ZERO:
+        return ZERO
+    if payment_summary(o, rows)["payment_status"] != "LUNAS":
+        return ZERO
+    return min(dp_order, to_decimal(kewajiban(o)))
+
+
+def _dp_ditahan(dp_order, terpakai, dikembalikan) -> Decimal:
+    """Sisa DP unit yang masih dipegang untuk customer (dijepit di 0)."""
+    sisa = dp_order - (terpakai or ZERO) - (dikembalikan or ZERO)
+    return sisa if sisa > ZERO else ZERO
+
+
 def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = None) -> dict:
     """Ringkasan **Titipan DP** — pisah dari Omzet, Laba, dan Distribusi.
 
@@ -75,11 +107,12 @@ def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = No
     pembayaran), meski uang fisiknya tetap tercatat di Mutasi Kas sebagai baris
     DP dan baris pelunasan.
     """
-    from statusflow import payment_summary
 
     pays_by_order = {}
     for p in db.query(Payment).all():
         pays_by_order.setdefault(p.service_order_id, []).append(p)
+
+    refund_by_order = _refund_dp_by_order(db)
 
     diterima = ZERO
     dipakai = ZERO
@@ -99,18 +132,15 @@ def ringkasan_titipan_dp(db: Session, start: datetime = None, end: datetime = No
         if dp_order <= ZERO:
             continue
         diterima += dp_order
-        s = payment_summary(o, rows)
-        if s["payment_status"] == "LUNAS":
-            dipakai += dp_order
-        else:
-            # Masih titipan: uangnya ada di Laci & TERWAKILI di ledger kas, tapi
-            # belum jadi Omzet (unit belum LUNAS). Dilacak di panel ini.
+        # HANYA sebesar kewajiban yang dianggap jadi pembayaran transaksi.
+        # Kelebihannya tetap ditahan: uang customer yang belum wajib
+        # dikembalikan (Owner) -- tidak boleh hilang dari Laporan Titipan DP.
+        terpakai = _dp_terpakai(db, o, rows, dp_order)
+        dipakai += terpakai
+        if _dp_ditahan(dp_order, terpakai, refund_by_order.get(o.id)) > ZERO:
             berjalan += dp_periode
 
-    dikembalikan = ZERO
-    for r in db.query(Refund).all():
-        if (getattr(r, "jenis", "") or "").strip().upper() == "DP":
-            dikembalikan += to_decimal(r.nominal)
+    dikembalikan = sum(refund_by_order.values())
 
     return {
         "diterima": diterima,
@@ -153,28 +183,25 @@ def mutasi_titipan_dp(db: Session, pays_by_order: dict = None, live_only: bool =
     sendiri TIDAK dihapus dari database — hanya tidak ditampilkan; uang DP yang
     sudah jadi pembayaran tetap tercatat penuh di `payments` dan ledger kas.
     """
-    from statusflow import lunas_moment, payment_summary
+    from statusflow import lunas_moment
 
     if pays_by_order is None:
         pays_by_order = {}
         for p in db.query(Payment).all():
             pays_by_order.setdefault(p.service_order_id, []).append(p)
 
-    refund_by_order = {}
-    for r in db.query(Refund).all():
-        if (getattr(r, "jenis", "") or "").strip().upper() == "DP":
-            refund_by_order[r.service_order_id] = (
-                refund_by_order.get(r.service_order_id, ZERO) + to_decimal(r.nominal))
+    refund_by_order = _refund_dp_by_order(db)
 
     def masih_ditahan(o, rows, dp_order):
         """Sisa DP yang benar-benar masih dipegang untuk unit ini.
 
-        Unit LUNAS → DP-nya sudah menjadi pembayaran transaksi, sisa 0.
-        Belum LUNAS → dikurangi DP yang sudah dikembalikan ke customer.
+        Sudah LUNAS -> sisa 0 (semua DP-nya jadi pembayaran transaksi).
+        Belum LUNAS -> dikurangi DP yang sudah dikembalikan ke customer.
+        Overpaid    -> hanya sebesar kewajiban yang dianggap terpakai, jadi
+                       kelebihan bayarnya tetap dipegang sampai dikembalikan.
         """
-        if payment_summary(o, rows)["payment_status"] == "LUNAS":
-            return ZERO
-        return dp_order - refund_by_order.get(o.id, ZERO)
+        return _dp_ditahan(dp_order, _dp_terpakai(db, o, rows, dp_order),
+                           refund_by_order.get(o.id))
 
     items = []
     for o in db.query(ServiceOrder).all():
@@ -200,9 +227,9 @@ def mutasi_titipan_dp(db: Session, pays_by_order: dict = None, live_only: bool =
                 "masuk": to_decimal(p.amount),
                 "keluar": ZERO,
             })
-        if payment_summary(o, rows)["payment_status"] != "LUNAS":
+        terpakai = _dp_terpakai(db, o, rows, dp_order)
+        if terpakai <= ZERO:
             continue
-        dipakai = dp_order
         mm = lunas_moment(o, rows) or datetime.min
         items.append({
             "tgl": mm.date().isoformat() if hasattr(mm, "date") else None,
@@ -213,7 +240,7 @@ def mutasi_titipan_dp(db: Session, pays_by_order: dict = None, live_only: bool =
             "jenis": "DIPAKAI",
             "label": "Dipakai untuk Pelunasan",
             "masuk": ZERO,
-            "keluar": dipakai,
+            "keluar": terpakai,
         })
 
     for r in db.query(Refund).all():
@@ -224,7 +251,8 @@ def mutasi_titipan_dp(db: Session, pays_by_order: dict = None, live_only: bool =
             rows = pays_by_order.get(o.id) or []
             dp_rows = [p for p in rows
                        if (getattr(p, "kind", "") or "").strip().upper() == "DP"]
-            if not dp_rows or masih_ditahan(o, rows, sum(to_decimal(p.amount) for p in dp_rows)) <= ZERO:
+            dp_order = sum(to_decimal(p.amount) for p in dp_rows)
+            if dp_order <= ZERO or masih_ditahan(o, rows, dp_order) <= ZERO:
                 continue
         cust = getattr(o, "customer", None) if o is not None else None
         ca = getattr(r, "created_at", None) or datetime.min

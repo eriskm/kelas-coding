@@ -262,10 +262,14 @@ def test_dp_dan_pelunasan_tidak_menggandakan_kewajiban(client, db):
     assert len(db.query(models.Payment).filter(
         models.Payment.service_order_id == o.id).all()) == 2, \
         "Replay tidak boleh menambah baris payment"
-    # CASH: pelunasan sisa 300rb masuk, modal 200rb keluar -> netto +100rb.
+    # CASH: pelunasan sisa 300rb masuk, modal 200rb keluar, LANGSUNG distributions
+    # 10/30/30/30 atas laba yang baru terjadi (FIN-MIRROR-7): 70% keluar Laci,
+    # 30% pindah ke Kas Aset -- jadi 100% laba keluar dari Laci.
     modal = to_decimal(o.part_cost) + to_decimal(o.modal_jasa) + to_decimal(o.modal_lainnya)
-    assert to_decimal(cash_mod.saldo_laci(db)) - laci_awal == \
-        to_decimal(kewajiban(o)) - to_decimal(200000) - modal
+    laba = to_decimal(kewajiban(o)) - modal
+    expected = to_decimal(kewajiban(o)) - to_decimal(200000) - modal - laba
+    assert to_decimal(cash_mod.saldo_laci(db)) - laci_awal == expected, \
+        "Laci: pelunasan sisa - modal - distribusi(70% cash-out + 30% aset)"
 
 
 def test_refund_dp_kurangi_kas_dan_titipan(client, db):

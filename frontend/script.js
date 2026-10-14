@@ -4004,15 +4004,19 @@ async function loadKuAset() {
     const _d = document.getElementById('kuMasterDesc');
     if (_d) {
         _d.classList.toggle('hidden', !lihatAset);
-        if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci \\u2194 Aset tidak mengubah Master Kas.';
+        if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci ↔ Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung.';
     }
     if (summary) {
+        // Angka FISIK (`laci`/`master_kas`) masih memuat DP karena uangnya benar-benar
+        // ada di dalam laci, dan itulah yang dipakai saat Declare Tutup Kas. Yang
+        // ditampilkan ke Owner adalah versi setelah DP yang ditahan dikurangi,
+        // supaya uang customer tidak terbaca sebagai uang usaha (Owner).
         const cards = [
-            { label: 'Kas Aset Kecil (Laci)', value: kuRupiah(laci.laci || 0), icon: 'fa-wallet', cls: 'sm-blue' },
+            { label: 'Kas Aset Kecil (Laci)', value: kuRupiah(laci.laci_milik_toko != null ? laci.laci_milik_toko : (laci.laci || 0)), icon: 'fa-wallet', cls: 'sm-blue' },
         ];
         if (lihatAset) {
             cards.push({ label: 'Kas Aset Besar (Pengelola)', value: kuRupiah(laci.aset || 0), icon: 'fa-vault', cls: 'sm-blue' });
-            cards.push({ label: 'Master Kas', value: kuRupiah(laci.master_kas || 0), icon: 'fa-layer-group', cls: 'sm-green' });
+            cards.push({ label: 'Master Kas', value: kuRupiah(laci.master_kas_milik_toko != null ? laci.master_kas_milik_toko : (laci.master_kas || 0)), icon: 'fa-layer-group', cls: 'sm-green' });
         }
         summary.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">

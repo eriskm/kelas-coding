@@ -329,6 +329,72 @@ def dp_diterima(db: Session, order_id: int):
     return quantize(total)
 
 
+def dp_terpakai(db: Session, order, rows=None) -> Decimal:
+    """DP yang benar-benar berubah jadi pembayaran transaksi untuk satu unit.
+
+    HANYA sebesar kewajiban unit. Kalau DP-nya lebih besar dari kewajiban --
+    unit dibayar DP tapi RP-nya nanti dikurangi -- sisanya BUKAN terpakai:
+    itu uang customer yang masih WAJIB dikembalikan, jadi tetap dihitung
+    sebagai titipan (Owner). Tanpa aturan ini, DP Rp1.000.000 pada unit
+    kewajiban Rp200.000 akan dianggap habis seluruhnya dan Rp800.000-nya
+    hilang dari Laporan Titipan DP padahal uangnya masih di laci.
+    """
+    from statusflow import kewajiban, payment_summary
+    if rows is None:
+        from models import Payment
+        rows = (db.query(Payment)
+                .filter(Payment.service_order_id == order.id).all())
+    dp_order = ZERO
+    for p in rows:
+        if is_dp(p):
+            dp_order += _num(p.amount)
+    if dp_order <= ZERO:
+        return ZERO
+    if payment_summary(order, rows)["payment_status"] != "LUNAS":
+        return ZERO
+    return quantize(min(dp_order, to_decimal(kewajiban(order))))
+
+
+def saldo_titipan_dp(db: Session) -> Decimal:
+    """Total DP yang masih DITAHAN customer di laci (bukan milik toko).
+
+    Turunan dari `payments` + `refunds`, sama seperti Laporan Titipan DP:
+      ditahan per unit = DP - DP terpakai (max sebesar kewajiban) - DP dikembalikan
+    Tidak bisa negatif per unit; dijepit di 0.
+
+    Dipakai untuk MEMISAHKAN uang milik toko dari uang titipan saat menampilkan
+    posisi kas. Ledger sendiri TIDAK berubah -- uang DP tetap satu kesatuan
+    fisik di dalam laci, dan angka mentahnya tetap dipakai untuk rekonsiliasi
+    serta Declare saat Tutup Kas.
+    """
+    from models import Payment, Refund, ServiceOrder
+
+    pays_by_order = {}
+    for p in db.query(Payment).all():
+        pays_by_order.setdefault(p.service_order_id, []).append(p)
+
+    refund_by_order = {}
+    for r in db.query(Refund).all():
+        if (getattr(r, "jenis", "") or "").strip().upper() == "DP":
+            refund_by_order[r.service_order_id] = (
+                refund_by_order.get(r.service_order_id, ZERO) + _num(r.nominal))
+
+    total = ZERO
+    for o in db.query(ServiceOrder).all():
+        rows = pays_by_order.get(o.id) or []
+        dp_order = ZERO
+        for p in rows:
+            if is_dp(p):
+                dp_order += _num(p.amount)
+        if dp_order <= ZERO:
+            continue
+        ditahan = (dp_order - dp_terpakai(db, o, rows)
+                   - refund_by_order.get(o.id, ZERO))
+        if ditahan > ZERO:
+            total += ditahan
+    return quantize(total)
+
+
 # ---------------------------------------------------------------- 2) MODAL (v4 #2)
 def catat_modal(db: Session, order, actor: str = None):
     """Modal Part/Jasa/Lain yang dibayar dari kas toko -> SALDO LACI berkurang (v4 #2).
@@ -586,15 +652,31 @@ def cukup_laci(db: Session, jumlah):
 
 def ringkasan(db: Session, *, termasuk_aset: bool = True, periode_mulai=None) -> dict:
     """Ringkasan posisi kas. `termasuk_aset=False` untuk role yang hanya boleh
-    melihat Saldo Laci (v4 #11) — tidak ada key Aset/Master sama sekali."""
+    melihat Saldo Laci (v4 #11) - tidak ada key Aset/Master sama sekali.
+
+    DUA versi posisi, karena uang DP secara fisik ADA di dalam laci tapi BUKAN
+    milik toko (ia kewajiban customer):
+
+      * `laci` / `aset` / `master_kas` -- FISIK, apa yang benar-benar terhitung
+        saat dihitung tangan. INI yang dipakai untuk Declare saat Tutup Kas.
+      * `laci_milik_toko` / `master_kas_milik_toko` -- setelah DP yang masih
+        ditahan dikurangi. INI yang ditampilkan ke Owner sebagai posisi kas,
+        supaya uang customer tidak dibaca sebagai uang usaha (Owner).
+
+    Ledger tidak diubah oleh pemisahan ini; hanya pennyajiannya.
+    """
     laci = saldo_laci(db)
+    titipan = saldo_titipan_dp(db)
     out = {"laci": laci, "label_laci": LABEL[LAYER_LACI], "cara_baca": CARA_BACA,
            "kas_aset_awal": (saldo_laci_sampai(db, periode_mulai)
-                             if periode_mulai is not None else laci)}
+                             if periode_mulai is not None else laci),
+           "titipan_dp": titipan,
+           "laci_milik_toko": quantize(laci - titipan)}
     if termasuk_aset:
         aset = saldo_kas_aset(db)
         out.update({"aset": aset, "label_aset": LABEL[LAYER_ASET],
-                    "master_kas": quantize(laci + aset)})
+                    "master_kas": quantize(laci + aset),
+                    "master_kas_milik_toko": quantize(laci - titipan + aset)})
     return out
 
 
