@@ -4478,16 +4478,18 @@ function renderKuTitipan() {
 
 // Kondisi Kas — posisi kas + arus periode OPERASIONAL, URUTAN TETAP:
 //   1. Kas Besar        (hanya Admin/Pengelola)
-//   2. Kas Kecil/Laci   (Kas Aset Awal periode — SUDAH bebas dari Titipan DP)
+//   2. Kas Kecil/Laci   (Kas Aset Awal periode — bebas dari Titipan DP)
 //   3. Total Penjualan  (Omzet — sudah CASH + LUNAS)
 //   4. Total Modal     (Part + Jasa + Lain — keluar saat status CASH)
 //   5. Total Beban     (Gaji & Operasional)
 //   6. Bagi Hasil      (hanya kalau distribusi sudah terbentuk — lihat di bawah)
 // Kolom: Uraian / Debit / Kredit / Saldo. Kasir & CS mulai dari baris
 // Kas Kecil/Laci — posisi Kas Besar tidak dikirim maupun dirender untuk mereka.
-// DP = TITIPAN: tidak pernah jadi entri kas maupun baris di sini. Saat unit
-// LUNAS, DP dilepas ke Kas Laci sebagai bagian pelunasan, jadi Arus Kas
-// mencerminkan kewajiban penuh. Lacanya dilacak di "Laporan Titipan DP".
+//
+// ATURAN OWNER: uang DP TIDAK PERNAH muncul di tabel ini. DP itu titipan
+// customer, bukan kas toko, jadi tidak boleh jadi baris Debit/Kredit maupun
+// ikut dalam saldo berjalan di sini. Satu-satunya tempat DP dilacak adalah
+// panel "Laporan Titipan DP". Jangan menambahkan baris titipan ke tabel ini.
 function renderKondisiKas() {
     const body = document.getElementById('kuKondisiBody');
     if (!body) return;
@@ -4527,16 +4529,14 @@ function renderKondisiKas() {
     row('Kas Kecil / Laci', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
     // 3. Total Penjualan Service (Omzet periode).
     row('Total Penjualan Service', Number(fin.omset) || 0, 0);
-    // 3b. Uang Titipan DP yang MASUK di periode ini tapi unitnya belum LUNAS.
-    //     Belum jadi Omzet, jadi tidak boleh ikut baris di atas — tapi uangnya
-    //     benar-benar ada di laci. Tanpa baris ini, kolom Saldo berjalan tidak
-    //     akan sama dengan kartu "Saldo Kas (Laci)" selama ada DP yang belum
-    //     dilunasi. Saat unitnya LUNAS, nilai ini otomatis keluar (sudah masuk
-    //     Omzet) sehingga tidak pernah dihitung dua kali.
-    const dpBerjalan = Number((fin.titipan_dp || {}).berjalan) || 0;
-    if (dpBerjalan > 0) {
-        row('Uang Titipan DP (Belum Jadi Omzet)', dpBerjalan, 0);
-    }
+    // TIDAK ADA baris titipan DP di Kondisi Kas Operasional.
+    //
+    // Owner (tegas): "uang DP tidak masuk ke Kondisi Kas Operasional. DP hanya
+    // masuk Laporan Titipan DP." Baris 'Uang Titipan DP (Belum Jadi Omzet)'
+    // pernah ada di sini untuk mengejar kolom Saldo dengan kartu "Saldo Kas
+    // (Laci)". Sekarang kartu itu sudah bebas DP (laci_milik_toko), jadi baris
+    // itu justru membuat DP muncul di tempat yang Owner larang. Seluruh
+    // posisi titipan hanya dilacak di panel "Laporan Titipan DP".
     // 4. Total Modal (Part + Jasa + Lain).
     row('Total Modal (Part+Jasa+Lain)', 0, Number(fin.total_modal) || 0);
     // 5. Total Beban (Gaji & Operasional).
