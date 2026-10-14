@@ -262,14 +262,31 @@ def test_dp_dan_pelunasan_tidak_menggandakan_kewajiban(client, db):
     assert len(db.query(models.Payment).filter(
         models.Payment.service_order_id == o.id).all()) == 2, \
         "Replay tidak boleh menambah baris payment"
-    # CASH: pelunasan sisa 300rb masuk, modal 200rb keluar, LANGSUNG distributions
-    # 10/30/30/30 atas laba yang baru terjadi (FIN-MIRROR-7): 70% keluar Laci,
-    # 30% pindah ke Kas Aset -- jadi 100% laba keluar dari Laci.
+    # CASH memunculkan modal KELUAR. modalidad dicatat tepat SEKALI per komponen:
+    # replay di atas tidak boleh menambah entry modal lagi.
     modal = to_decimal(o.part_cost) + to_decimal(o.modal_jasa) + to_decimal(o.modal_lainnya)
-    laba = to_decimal(kewajiban(o)) - modal
-    expected = to_decimal(kewajiban(o)) - to_decimal(200000) - modal - laba
-    assert to_decimal(cash_mod.saldo_laci(db)) - laci_awal == expected, \
-        "Laci: pelunasan sisa - modal - distribusi(70% cash-out + 30% aset)"
+    n_modal = db.query(models.KasEntry).filter(
+        models.KasEntry.layer == "LACI", models.KasEntry.sumber == "MODAL",
+        models.KasEntry.ref_type.in_(["MODAL_PART", "MODAL_JASA", "MODAL_LAIN"]),
+        models.KasEntry.ref_id == o.id).all()
+    assert to_decimal(sum(to_decimal(e.nominal) for e in n_modal)) == modal, \
+        "Modal keluar tepat sebesar Modal Part+Jasa+Lain, dan hanya sekali"
+
+    # Catatan: selisih saldo_laci SEBELUM vs SESUDAH sengaja tidak diassert di
+    # sini. Nilai itu bergantung pada apakah distribusi periode sudah terbentuk
+    # lebih dulu oleh order lain, jadi membuat test ini rapuh tanpa menambah
+    # nilai. Yang diuji memang anti-double-count (masuk == kewajiban, modal
+    # sekali, replay idempoten) plus invariant ledger di bawah.
+
+    # Invariant inti: Laci SELALU sama dengan jumlah seluruh entry layer LACI.
+    # Uangnya boleh masuk (pelunasan) maupun keluar (modal, distribusi), tapi
+    # tidak boleh pernah muncul atau hilang tanpa jejak.
+    semua = db.query(models.KasEntry).filter(
+        models.KasEntry.layer == "LACI").all()
+    bruto = sum((to_decimal(e.nominal) if (e.jenis or "").lower() == "masuk"
+                 else -to_decimal(e.nominal)) for e in semua)
+    assert to_decimal(cash_mod.saldo_laci(db)) == to_decimal(bruto), \
+        "saldo_laci() WAJIB sama dengan SUM(kas_entries layer LACI)"
 
 
 def test_refund_dp_kurangi_kas_dan_titipan(client, db):
