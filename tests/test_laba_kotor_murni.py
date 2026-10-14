@@ -1,12 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Laba Kotor MURNI: omset - modal, tanpa transaksi kas manual.
+"""Laba harus MURNI dari transaksi servis.
 
-Owner: "yg benar seharusnya justru laba_kotor = omset - total_modal".
+Owner:
+    "Laba Kotor = Omzet - Total Modal"
+    "Laba Bersih = Laba Kotor - Total Beban"
 
-Transaksi kas manual (jurnal `sumber = MANUAL`) BUKAN hasil servis, jadi tidak
-boleh ikut memengaruhi Laba Kotor. Tapi uangnya tetap nyata masuk, jadi tidak
-boleh hilang juga -- ia tetap dihitung di LABA BERSIH, sesuai SSOT
-`finance.compute_finance_core` (finance.py:357).
+Transaksi kas manual (jurnal `sumber = MANUAL`) bukan hasil servis. Jadi tidak
+boleh masuk Omzet, Modal, Beban, maupun laba. Uangnya tetap dicatat di ledger
+kas dan tetap muncul di `tambahan` sebagai informasi, tapi tidak mengubah
+berapa hasil usaha pada periode itu.
 """
 from money import to_decimal
 
@@ -50,30 +52,39 @@ def test_laba_kotor_tidak_ikut_tambahan(client, db):
         "Laba Kotor = Omzet - Modal, tanpa tambahan"
 
 
-def test_tambahan_tetap_masuk_laba_bersih(client, db):
-    """Uang kas manual nyata -- jadi harus tetap muncul di Laba Bersih."""
+def test_tambahan_tidak_masuk_laba_bersih(client, db):
+    """Uang kas manual dicatat di ledger, tapi TIDAK masuk laba.
+
+    Aturan Owner:
+        LABA KOTOR  = OMSET - TOTAL MODAL
+        LABA BERSIH = LABA KOTOR - TOTAL BEBAN
+
+    Tidak ada suku `tambahan` di keduanya.
+    """
     f0 = _fin(db)
+    lk0 = to_decimal(f0["laba_kotor"])
     lb0 = to_decimal(f0["laba_bersih"])
-    tam0 = to_decimal(f0["tambahan"])
 
     _tambah_kas_manual(db, 250000)
     f1 = _fin(db)
 
-    assert to_decimal(f1["tambahan"]) == tam0 + to_decimal(250000)
-    assert to_decimal(f1["laba_bersih"]) == lb0 + to_decimal(250000), \
-        "transaksi kas manual menaikkan Laba Bersih, bukan Laba Kotor"
+    assert to_decimal(f1["tambahan"]) == to_decimal(f0["tambahan"]) + to_decimal(250000)
+    assert to_decimal(f1["laba_kotor"]) == lk0, "Laba Kotor tidak berubah"
+    assert to_decimal(f1["laba_bersih"]) == lb0, "Laba Bersih juga tidak berubah"
 
 
 def test_rumus_laba_kotor_dan_bersih(client, db):
-    """Kunci rumusnya langsung."""
+    """Kunci rumusnya langsung, persis seperti Owner menulis."""
     f = _fin(db)
     assert to_decimal(f["laba_kotor"]) == (to_decimal(f["omset"])
                                            - to_decimal(f["total_modal"]))
+    assert to_decimal(f["laba_bersih"]) == (to_decimal(f["laba_kotor"])
+                                            - to_decimal(f["total_beban"]))
+    # Sama dengan bentuk eksplisit tiga komponen modal + beban.
     assert to_decimal(f["laba_bersih"]) == (to_decimal(f["omset"])
                                             - to_decimal(f["modal_part"])
                                             - to_decimal(f["modal_jasa"])
                                             - to_decimal(f["modal_lainnya"])
-                                            + to_decimal(f["tambahan"])
                                             - to_decimal(f["total_beban"]))
 
 

@@ -1,13 +1,25 @@
 ﻿"""P2-05 — FINANCIAL CORE Project B (Financial SSOT sebagai target).
 
-Implementasi rumus Owner, diselaraskan ke Proyek A (FIN-MIRROR):
-    OMZET       = total penjualan unit CASH pada periode bisnis (16:00->16:00).
-                  DP BUKAN Omzet. Pelunasan penuh BUKAN syarat (FIN-MIRROR-2).
-    MODAL       = Modal Part + Modal Jasa + Modal Lain-lain (3 komponen cost terpisah)
-    TAMBAHAN    = net transaksi kas manual (FIN-MIRROR-4, rumus A-1)
+Implementasi rumus Owner:
+    OMZET       = total penjualan unit CASH + LUNAS pada periode kas berjalan.
+                  DP BUKAN Omzet.
+    MODAL       = Modal Part + Modal Jasa + Modal Lain-lain (3 komponen terpisah)
+    LABA KOTOR  = OMZET - TOTAL MODAL
     BEBAN       = Gaji + Operasional (kategori lain tidak masuk Beban)
-    LABA BERSIH = OMZET - MODAL PART - MODAL JASA - MODAL LAIN-LAIN
-                  + TAMBAHAN - BEBAN
+    LABA BERSIH = OMZET - TOTAL MODAL - TOTAL BEBAN
+
+ATURAN OWNER YANG MENAUNGI RUMUS INI
+    "Laba Kotor = Omzet - Total Modal"
+    "Laba Bersih = Omzet - Total Modal - Total Beban"
+
+    Semua angka TUMBUL dari transaksi servis. Transaksi kas manual TIDAK
+    ikut masuk laba, di mana pun: bukan Omzet, bukan Modal, bukan Beban, dan
+    bukan Tambahan. Ia murni pergerakan uang di laci -- dicatat di ledger kas,
+    tapi tidak mengubah berapa hasil usaha pada periode itu.
+
+    Akibatnya `tambahan` tidak lagi menjadi suku di rumus laba mana pun.
+    Nilainya tetap dihitung dan diekspos hanya sebagai informasi (angka kas
+    manual periode berjalan), bukan sebagai pembentuk laba.
 
 FIN-MIRROR-1 (Beban permanen):
     Proyek A `app.py:983-984,1017` memakai `SUM(nilai) FROM beban` TANPA filter
@@ -17,16 +29,15 @@ FIN-MIRROR-1 (Beban permanen):
 FIN-MIRROR-2 (Gate Omzet = CASH):
     Proyek A `app.py:1715` - `laba_final = h_jual - m_part - m_jasa - m_lain
     if stat == 'Cash' else 0`. A hanya bergantung pada status Cash; tidak ada
-    syarat pelunasan penuh. Digunakan di sini sebagai gate cohort Omzet.
+    syarat pelunasan penuh. Digunakan di sini sebagai gate cohort Omzet,
+    ditambah syarat LUNAS sesuai aturan Owner.
 
-FIN-MIRROR-4 (Transaksi kas manual masuk laba - rumus A-1):
-    Proyek A punya DUA rumus laba yang bertentangan. Yang dipakai di sini A-1
-    (`app.py:369-376`, `engine/kalkulator.py:15-27`, bot Telegram, milestone):
-        laba_kotor  = laba_servis + laba_tambahan
-        laba_bersih = laba_kotor + tambahan - beban
-    A-2 (`app.py:1004-1019`, basis bagi hasil) TIDAK memakai `tambahan`.
-    Perbedaan A-1 vs A-2 HANYA suku `tambahan`; selisih `omset - modal` sama
-    karena A menulis `Laba Kotor = Harga Jual - modal` untuk setiap unit Cash.
+FIN-MIRROR-4 (Transaksi kas manual) -- TIDAK DIMIRROR ke laba:
+    Proyek A punya dua rumus laba yang bertentangan; A-1
+    (`app.py:369-376`) memasukkan transaksi kas manual ke laba, A-2
+    (`app.py:1004-1019`) tidak. Versi ini memakai A-2 karena Owner menetapkan
+    Omzet dan laba harus murni dari hasil servis. Modul ini sengaja tidak
+    mengikuti A-1.
 
 FIN-MIRROR-3 (sisa pembuluan Distribution) TIDAK dimirror - lihat distribution.py.
 
@@ -34,9 +45,7 @@ Aturan Owner yang tetap dipertahankan:
 - Q5/Q19/SSOT-3: ketiga modal adalah komponen terpisah; tidak digabung, tidak
   boleh dihitung dua kali (Laba Kotor hanya alias antara, bukan pengurangan kedua).
 - SSOT-4/OD-001: Beban dibebankan SEKALI per periode kas (snapshot beku, idempotent).
-- SSOT-5: Laba Bersih tanpa double calculation. Perhatikan: setelah
-  FIN-MIRROR-4 jumlahnya 4 pengurang + 1 suku positif (`tambahan`), bukan lagi
-  4 pengurang murni.
+- SSOT-5: Laba Bersih tanpa double calculation -- murni Omzet - Modal - Beban.
 
 Modul ini TIDAK menghitung distribusi secara final (P2-07) dan TIDAK menutup kas (P2-08).
 """
@@ -193,18 +202,18 @@ def _kas_moment(k):
 
 
 def tambahan_kas(db: Session, start: datetime, end: datetime):
-    """FIN-MIRROR-4 - padanan `transaksi_tambahan` Proyek A (A-1).
+    """Net transaksi kas manual pada periode (jurnal `sumber = MANUAL`).
 
-    Bukti A (`app.py:372-376`, `engine/kalkulator.py:19,27`):
-        SELECT SUM(CASE WHEN jenis='Masuk' THEN nominal ELSE -nominal END)
-          FROM transaksi_tambahan
-         WHERE uraian != 'MODAL KAS KECIL (LACI)'
-        ...
-        laba_kotor   = laba_servis + laba_tambahan
-        laba_bersih  = laba_kotor + tambahan - beban
+    PENTING: nilai ini INFORMASI SAJA. Ia TIDAK dipakai di rumus laba mana pun.
 
-    Berbeda dengan A-2 (rumus dashboard A), A-1 MEMASUKKAN transaksi kas manual ke
-    laba. Bot Telegram dan milestone CTS/CTO/CTH Project A memakai A-1.
+    Owner menetapkan:
+        LABA KOTOR  = OMSET - TOTAL MODAL
+        LABA BERSIH = LABA KOTOR - TOTAL BEBAN
+
+    Proyek A punya dua rumus yang bertentangan; A-1 (`app.py:372-376`) memasukkan
+    transaksi kas manual ke laba, A-2 (`app.py:1004-1019`) tidak. Versi ini
+    memakai A-2. Fungsi ini tetap dipertahankan hanya supaya angka kas manual
+    periode bisa ditampilkan dan diaudit.
 
     PEMETAAN KE B (presisi):
     - `transaksi_tambahan` A  ->  `kas_entries` dengan `sumber = MANUAL`
@@ -345,16 +354,20 @@ def compute_finance_core(db: Session, start: datetime, end: datetime,
         modal_lain += to_decimal(getattr(o, "modal_lainnya", 0))
     total_modal = modal_part + modal_jasa + modal_lain
 
-    # FIN-MIRROR-4: transaksi kas manual masuk laba (rumus A-1 Project A).
+    # Transaksi kas manual dicatat di ledger, tapi TIDAK masuk rumus laba.
+    # Owner: Omzet dan laba harus murni dari transaksi servis.
+    # Nilai ini hanya informasi angka kas manual periode berjalan.
     tambahan = tambahan_kas(db, start, end)
 
     beban = beban_frozen(db, start, end, commit=False)
     total_beban = beban["gaji"] + beban["operasional"]
 
-    # A-1 (app.py:376 + kalkulator.py:27):
-    #     laba_kotor  = laba_servis + laba_tambahan
-    #     laba_bersih = laba_kotor + tambahan - beban
-    laba_bersih = omset - modal_part - modal_jasa - modal_lain + tambahan - total_beban
+    # RUMUS OWNER -- satu-satunya tempat laba dihitung di seluruh aplikasi:
+    #     LABA KOTOR  = OMSET - TOTAL MODAL
+    #     LABA BERSIH = LABA KOTOR - TOTAL BEBAN
+    # Tidak ada suku `tambahan` di kedua rumus ini.
+    laba_kotor = omset - total_modal
+    laba_bersih = laba_kotor - total_beban
 
     return {
         "periode": period_key(start, end),
@@ -368,6 +381,7 @@ def compute_finance_core(db: Session, start: datetime, end: datetime,
         "beban_gaji": beban["gaji"],
         "beban_operasional": beban["operasional"],
         "total_beban": total_beban,
+        "laba_kotor": laba_kotor,
         "laba_bersih": laba_bersih,
         "laba_per_order": None,
     }

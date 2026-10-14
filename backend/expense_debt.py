@@ -47,10 +47,11 @@ def hitung_defisit(db: Session, start, end) -> dict:
     """Defisit Beban periode = Beban yang tidak tertutup Laba Kotor.
 
     Membaca financial core (P2-05) TANPA mengubahnya. Beban = total_beban beku;
-    Laba Kotor = Omzet − total modal.
+    Laba Kotor dibaca apa adanya dari core, TIDAK dihitung ulang di sini --
+    satu-satunya tempat hitungnya adalah `finance.compute_finance_core`.
     """
     core = finance.compute_finance_core(db, start, end)
-    laba_kotor = quantize(to_decimal(core["omset"]) - to_decimal(core["total_modal"]))
+    laba_kotor = quantize(to_decimal(core["laba_kotor"]))
     beban = quantize(to_decimal(core["total_beban"]))
     defisit = quantize(beban - laba_kotor) if beban > laba_kotor else ZERO
     return {"periode": core["periode"], "omset": core["omset"],

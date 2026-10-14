@@ -397,20 +397,30 @@ def _kas_manual(db, nominal, jenis="Masuk", kategori="Penjualan Service",
     return row
 
 
-def test_tambahan_manual_masuk_laba_bersih(db):
-    """FIN-MIRROR-4 (A-1 `app.py:372-376`): kas manual Masuk menambah laba."""
+def test_tambahan_manual_tidak_masuk_laba_bersih(db):
+    """Kas manual Masuk TIDAK boleh mengubah laba (aturan Owner).
+
+    Owner menetapkan:
+        LABA KOTOR  = OMSET - TOTAL MODAL
+        LABA BERSIH = LABA KOTOR - TOTAL BEBAN
+
+    Transaksi kas manual bukan hasil servis, jadi tidak masuk rumus laba
+    mana pun. Angka `tambahan` tetap ada sebagai informasi kas manual.
+    """
     _bersihkan(db)
     _reset_periode(db, 0)
     s0, e0 = _periode(0)
     sebelum = to_decimal(finance.compute_finance_core(db, s0, e0)["laba_bersih"])
     _kas_manual(db, 100000, "Masuk", moment=s0 + timedelta(hours=1))
     core = finance.compute_finance_core(db, s0, e0)
-    assert to_decimal(core["tambahan"]) == to_decimal(100000)
-    assert to_decimal(core["laba_bersih"]) == sebelum + to_decimal(100000)
+    assert to_decimal(core["tambahan"]) == to_decimal(100000), \
+        "kas manual tetap tercatat sebagai angka informasi"
+    assert to_decimal(core["laba_bersih"]) == sebelum, \
+        "kas manual tidak boleh masuk Laba Bersih"
 
 
-def test_tambahan_manual_keluar_mengurangi_laba(db):
-    """FIN-MIRROR-4: kas manual Keluar mengurangi laba (sama seperti A)."""
+def test_tambahan_manual_keluar_tidak_mengubah_laba(db):
+    """Kas manual Keluar juga tidak boleh mengubah laba."""
     _bersihkan(db)
     _reset_periode(db, 0)
     s0, e0 = _periode(0)
@@ -418,7 +428,8 @@ def test_tambahan_manual_keluar_mengurangi_laba(db):
     _kas_manual(db, 30000, "Keluar", moment=s0 + timedelta(hours=1))
     core = finance.compute_finance_core(db, s0, e0)
     assert to_decimal(core["tambahan"]) == to_decimal(-30000)
-    assert to_decimal(core["laba_bersih"]) == sebelum - to_decimal(30000)
+    assert to_decimal(core["laba_bersih"]) == sebelum, \
+        "kas manual keluar tidak boleh masuk Laba Bersih"
 
 
 def test_tambahan_tidak_ganda_dengan_tiga_suku_lain(db):

@@ -346,28 +346,27 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     modal_jasa = core["modal_jasa"]
     modal_lain = core["modal_lainnya"]
     total_modal = core["total_modal"]
-    laba_kotor = omset - total_modal
     beban_gaji = core["beban_gaji"]
     beban_ops = core["beban_operasional"]
     beban_lain = ZERO  # SSOT-4: kategori lain bukan Beban
     total_beban = core["total_beban"]
 
-    # ATURAN OWNER: Laba Kotor itu MURNI dari transaksi servis.
-    #     laba_kotor = omset - total_modal
+    # SSOT-5 / SSOT-1: Laba Kotor dan Laba Bersih TIDAK dihitung ulang di sini.
+    # Satu-satunya tempat Hitungnya adalah `finance.compute_finance_core`
+    # (finance.py), dengan rumus Owner:
+    #     LABA KOTOR  = OMSET - TOTAL MODAL
+    #     LABA BERSIH = LABA KOTOR - TOTAL BEBAN
     #
-    # Versi sebelumnya menambahkan `tambahan` (transaksi kas manual) ke sini, dan
-    # itu tidak sesuai aturan: Laba Kotor harus persis mencerminkan hasil services
-    # yang sudah LUNAS saja. Transaksi kas manual bukan Omzet dan bukan hasil
-    # servis, jadi tidak boleh ikut memengaruhi Laba Kotor.
+    # Versi sini pernah menambah `tambahan` (transaksi kas manual) ke Laba Kotor
+    # lalu menghitung ulang Laba Bersih sendiri TANPA `tambahan` -- dua
+    # penyimpangan dari rumus Owner sekaligus. Sekarang keduanya dibaca apa
+    # adanya dari core, jadi mustahil lagi melenceng.
     #
-    # `tambahan` tetap punya tempat yang benar -- di LABA BERSIH, sesuai SSOT
-    # `finance.compute_finance_core` (finance.py:357). Jadi tidak ada angka yang
-    # hilang, hanya pindah ke baris yang tepat.
-    #
-    # Konsekuensi yang disengaja: ambang CTS/CTO ikut turun, karena keduanya
-    # diukur dari Laba Kotor. Itu lebih hati-hati -- target tidak boleh terpenuhi
-    # oleh pendapatan yang bukan hasil servis.
+    # `tambahan` tetap diambil hanya sebagai informasi (angka kas manual periode
+    # berjalan); ia tidak masuk Omzet, Modal, Beban, maupun laba.
     _tambahan = to_decimal(core.get("tambahan", 0))
+    laba_kotor = to_decimal(core["laba_kotor"])
+    laba_bersih = to_decimal(core["laba_bersih"])
 
     in_orders = []
     pays = db.query(Payment).all()
@@ -381,12 +380,6 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
     cto_target = beban_gaji + beban_ops
     cto_progress = (laba_kotor / cto_target * HUNDRED) if cto_target > 0 else (HUNDRED if laba_kotor > 0 else ZERO)
     cto_ok = bool(laba_kotor >= cto_target) if cto_target > 0 else True
-
-    # SSOT-5: Laba Bersih memakai rumus finance.compute_finance_core --
-    # omset - modal (3 komponen) + tambahan - beban. Versi sebelumnya
-    # menghitung ulang sendiri dan secara tidak sengaja MENAJAHKAN `tambahan`,
-    # sehingga module ini berbeda dari SSOT begitu ada transaksi kas manual.
-    laba_bersih = omset - modal_part - modal_jasa - modal_lain + _tambahan - total_beban
 
     # P2-07 / SSOT-6: TIDAK lagi digate CTO. Alokasi HANYA terbentuk saat
     # Distribusi sudah TERBENTUK otomatis saat CTO tercapai (lihat
