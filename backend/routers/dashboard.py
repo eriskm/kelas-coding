@@ -39,8 +39,9 @@ def boleh_lihat_kas_besar(user) -> bool:
     endpoint yang berbeda.
     """
     try:
-        from authority import ROLE_ADMIN, ROLE_PENGELOLA, canonical_role
-        return canonical_role(user) in (ROLE_ADMIN, ROLE_PENGELOLA)
+        from authority import (ROLE_ADMIN, ROLE_PENGELOLA, ROLE_SUPERADMIN,
+                          canonical_role)
+        return canonical_role(user) in (ROLE_SUPERADMIN, ROLE_ADMIN, ROLE_PENGELOLA)
     except Exception:  # noqa: BLE001
         return False
 

@@ -357,14 +357,31 @@ def warranty_summary(db: Session = Depends(get_db_session)):
         if any(p.start_at <= m < p.end_at for p in closed_periods):
             orders.append(o)
     oids = [o.id for o in orders]
-    # Satu query untuk klaim terbaru tiap order (hindari N+1).
-    latest_by_order = {}
+    # Semua klaim per order, terbaru lebih dulu (riwayat klaim untuk UI detail
+    # garansi). Satu query untuk semua order supaya tidak N+1.
+    # `objek_per_order` menyimpan objek WarrantyClaim-nya karena blok `klaim`
+    # di bawah (yang sudah ada sejak sebelumnya) masih membaca atribut objek --
+    # jangan diganti dict.
+    klaim_by_order = {}
+    objek_per_order = {}
     if oids:
         for c in (db.query(WarrantyClaim)
                     .filter(WarrantyClaim.service_order_id.in_(oids))
                     .order_by(WarrantyClaim.claim_date.desc(),
                               WarrantyClaim.id.desc()).all()):
-            latest_by_order.setdefault(c.service_order_id, c)
+            klaim_by_order.setdefault(c.service_order_id, []).append({
+                "tanggal": c.claim_date.isoformat() if c.claim_date else None,
+                "no_klaim": c.claim_no,
+                "keluhan": c.complaint,
+                "hasil_pemeriksaan": c.inspection_result,
+                "keputusan": c.decision,
+                "tindakan": c.action_needed,
+                "catatan_teknisi": c.tech_note,
+                "status": c.claim_status,
+                "resolusi": getattr(c, "resolusi", None),
+            })
+            objek_per_order.setdefault(c.service_order_id, c)
+    latest_by_order = objek_per_order
     cids = [o.customer_id for o in orders]
     names = {}
     if cids:
@@ -396,6 +413,15 @@ def warranty_summary(db: Session = Depends(get_db_session)):
             "damage": o.damagetype,
             "plan": o.repair_plan,
             "price": o.final_price if o.final_price not in (None,) else o.estimate,
+            # Identitas unit, diambil dari data servis ASAL (tidak ada input
+            # baru, tidak ada duplikasi). `brand`/`model`/`imei` sudah ada di
+            # `service_orders`.
+            "brand": o.brand,
+            "model": o.model,
+            "imei": o.imei,
+            "device": o.device,
+            "teknisi": o.technician,
+            "riwayat_klaim": klaim_by_order.get(o.id, []),
             "klaim": ({
                 "tgl": latest.claim_date.isoformat() if latest.claim_date else None,
                 "keluhan": latest.complaint,

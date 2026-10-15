@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from authority import Action, require_authority
 from dependencies import get_db_session
-from models import Customer, ServiceOrder, WarrantyClaim
+from models import Customer, ServiceOrder, User, WarrantyClaim
 import schemas
 
 router = APIRouter(prefix="/api/customers", tags=["customers"])
@@ -180,7 +181,9 @@ def get_customer(customer_id: int, db: Session = Depends(get_db_session)):
 
 
 @router.post("", response_model=schemas.CustomerOut, status_code=201)
-def create_customer(data: schemas.CustomerCreate, db: Session = Depends(get_db_session)):
+def create_customer(data: schemas.CustomerCreate,
+                   db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.CUSTOMER_WRITE))):
     customer = Customer(**data.model_dump())
     db.add(customer)
     db.commit()
@@ -189,7 +192,9 @@ def create_customer(data: schemas.CustomerCreate, db: Session = Depends(get_db_s
 
 
 @router.put("/{customer_id}", response_model=schemas.CustomerOut)
-def update_customer(customer_id: int, data: schemas.CustomerUpdate, db: Session = Depends(get_db_session)):
+def update_customer(customer_id: int, data: schemas.CustomerUpdate,
+                   db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.CUSTOMER_WRITE))):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")
@@ -201,7 +206,8 @@ def update_customer(customer_id: int, data: schemas.CustomerUpdate, db: Session 
 
 
 @router.delete("/{customer_id}")
-def delete_customer(customer_id: int, db: Session = Depends(get_db_session)):
+def delete_customer(customer_id: int, db: Session = Depends(get_db_session),
+                   user: User = Depends(require_authority(Action.CUSTOMER_DELETE))):
     customer = db.query(Customer).filter(Customer.id == customer_id).first()
     if not customer:
         raise HTTPException(status_code=404, detail="Customer tidak ditemukan")

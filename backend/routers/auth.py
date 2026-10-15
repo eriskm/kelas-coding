@@ -191,6 +191,35 @@ DOMAIN_AKUN = "AKUN"
 EVENT_AKUN_DIBUAT = "AKUN_DIBUAT"
 EVENT_AKUN_DIUBAH = "AKUN_DIUBAH"
 
+#: Role yang hanya boleh dikabulkan oleh Super Admin.
+_ROLE_SUPERADMIN_CANON = ("SUPERADMIN", "SUPER ADMIN", "SUPER_ADMIN",
+                          "DEV", "DEVELOPER")
+
+
+def _apakah_superadmin(role) -> bool:
+    import authority as auth_mod
+
+    return auth_mod.canonical_role(
+        type("_U", (), {"role": role})()) == auth_mod.ROLE_SUPERADMIN
+
+
+def _tolak_bila_bikin_superadmin(admin: User, role_baru) -> None:
+    """Cegah privilege escalation lewat pembuatan akun.
+
+    Admin (Manager Toko) boleh mengelola akun biasa, TAPI tidak boleh membuat
+    akun Super Admin: itu sama dengan memberikan `ROLE_CONFIG` ke dirinya
+    sendiri lewat pintu belakang.
+    """
+    import authority as auth_mod
+
+    if not _apakah_superadmin(role_baru):
+        return
+    if auth_mod.can(admin, auth_mod.Action.ROLE_CONFIG):
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="Hanya Super Admin yang boleh membuat akun Super Admin.")
+
 
 def _catat_jurnal_akun(db: Session, event: str, user: User, actor: User,
                         sebelum: dict, sesudah: dict) -> None:
@@ -230,11 +259,42 @@ def list_roles(user: User = Depends(require_admin)):
     """
     import authority as auth_mod
     Label = {
-        auth_mod.ROLE_ADMIN: ("Admin", "Akses penuh: termasuk Tutup Kas, catat beban, hapus order, Kelola Akun."),
-        auth_mod.ROLE_KASIR: ("Kasir", "Terima unit, ubah harga/modal, catat pembayaran, ubah status CASH/CANCEL, refund DP, sparepart, klaim garansi."),
-        auth_mod.ROLE_TEKNISI: ("Teknisi", "Terima & kerjakan unit, catat serah-terima. Tidak boleh mengubah harga, modal, atau status CASH."),
-        auth_mod.ROLE_PENGELOLA: ("Pengelola", "Hanya lihat laporan. Boleh melihat Kas Aset & Master Kas."),
-        auth_mod.ROLE_INVESTOR: ("Investor", "Hanya lihat laporan keuangan. Tidak melihat Kas Aset/Master Kas."),
+        auth_mod.ROLE_SUPERADMIN: (
+            "Super Admin",
+            "Akun Developer: mengelola akun, role, permission, konfigurasi, "
+            "dan audit log. Akses administratif seluruh sistem. Tidak "
+            "diberikan otomatis kepada Admin toko."),
+        auth_mod.ROLE_ADMIN: (
+            "Admin",
+            "Manager Toko: operasional harian, Tutup Kas, catat beban, "
+            "hapus order, Kelola Akun. Tidak boleh mengubah konfigurasi "
+            "teknis atau permission Super Admin."),
+        auth_mod.ROLE_KASIR: (
+            "Kasir",
+            "Terima unit, ubah harga/estimasi, catat pembayaran & pelunasan, "
+            "ambil unit, refund DP. TIDAK boleh mengubah modal, mencatat "
+            "beban, atau menjalankan Tutup Kas."),
+        auth_mod.ROLE_TEKNISI: (
+            "Teknisi",
+            "Kerjakan unit: diagnosis, tindakan perbaikan, catatan teknis, "
+            "serah-terima. Tidak boleh mengubah pembayaran, modal, laba, "
+            "bagi hasil, atau Tutup Kas."),
+        auth_mod.ROLE_PENGELOLA: (
+            "Pengelola",
+            "Pemilik: monitoring. Melihat dashboard, laporan keuangan, "
+            "laba kotor/bersih, Kas Aset, Hutang Beban, dan bagi hasil 30%. "
+            "Dilarang menulis apa pun."),
+        auth_mod.ROLE_INVESTOR: (
+            "Investor",
+            "Monitoring investasi: omzet, laba, tren, dan dasar perhitungan "
+            "bagi hasil 30%. Ringkasan Kas Aset & Hutang Beban saja. "
+            "Tanpa data pribadi pelanggan. Dilarang menulis apa pun."),
+        auth_mod.ROLE_ADMIN_SPAREPART: (
+            "Admin Sparepart",
+            "Kelola data barang, stok, dan pencatatan keluar-masuk "
+            "sparepart. Melihat kebutuhan sparepart untuk servis. Tidak "
+            "boleh mengubah transaksi pelanggan, pembayaran, laba, atau "
+            "Tutup Kas."),
     }
     ringkasan = {}
     for role, (nama, ket) in Label.items():
@@ -254,7 +314,7 @@ def list_roles(user: User = Depends(require_admin)):
 # ---------- Aturan keuangan (alur kas konsep) ----------
 # Istilah & UI tetap konsep baru; yang dijaga di sini hanya alur uang:
 # peran kasir/teknis vs admin sesuai konsep (Kasir ≈ Admin untuk closing).
-FINANCE_ROLES = ("SUPERADMIN", "ADMIN")
+FINANCE_ROLES = ("SUPERADMIN", "ADMIN", "SUPER ADMIN", "SUPER_ADMIN", "MANAGER")
 
 
 def can_edit_finance(user: User) -> bool:
@@ -312,6 +372,11 @@ def create_user(payload: UserCreate, admin: User = Depends(require_admin),
         raise HTTPException(status_code=409, detail="Username sudah dipakai akun lain.")
     if not payload.passcode or len(payload.passcode) < 4:
         raise HTTPException(status_code=400, detail="Passcode minimal 4 karakter")
+    # OD-LOCK-10: Admin (Manager Toko) "tidak boleh mengubah konfigurasi teknis
+    # atau permission Super Admin". Membuat akun SUPER ADMIN berarti memberi
+    # permission itu, jadi hanya boleh dilakukan oleh yang sudah punya
+    # ROLE_CONFIG (Super Admin sendiri).
+    _tolak_bila_bikin_superadmin(admin, payload.role)
     salt = secrets.token_hex(16)
     user = User(username=username, display_name=nama,
                 role=(payload.role or "Teknisi").strip() or "Teknisi",
@@ -336,8 +401,13 @@ def update_user(user_id: int, payload: UserUpdate,
         raise HTTPException(status_code=404, detail="Akun tidak ditemukan")
     if user.id == admin.id and (payload.role is not None or payload.active is not None):
         raise HTTPException(status_code=400, detail="Tidak dapat mengubah role/status akun sendiri")
-    if (user.role or "").upper() == "SUPERADMIN" and (admin.role or "").upper() != "SUPERADMIN":
+    if _apakah_superadmin(user.role) and not _apakah_superadmin(admin.role):
         raise HTTPException(status_code=403, detail="Hanya Superadmin yang boleh mengubah Superadmin")
+    # OD-LOCK-10: menaikkan role jadi SUPER ADMIN butuh ROLE_CONFIG, bukan
+    # sekadar `require_admin`. Kalau tidak, Admin bisa meng_eskalasi dirinya
+    # sendiri lewat edit akun.
+    if payload.role is not None:
+        _tolak_bila_bikin_superadmin(admin, payload.role)
     # Snapshot SEBELUM perubahan. Ini yang membuat koreksi bisa ditelusuri
     # kembali -- Owner: perubahan harus tercatat, tidak boleh diam-diam.
     sebelum = {"role": user.role, "active": user.active,

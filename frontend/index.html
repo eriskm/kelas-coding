@@ -133,7 +133,7 @@
                         </div>
                         <div class="min-w-0">
                             <div class="text-[13px] font-semibold text-white truncate" id="adminName">Admin</div>
-                            <div class="text-[10.5px] text-gray-500">Administrator</div>
+                            <div class="text-[10.5px] text-gray-500" id="adminRole">Administrator</div>
                         </div>
                     </div>
                 </div>
@@ -597,6 +597,41 @@
                                     </div>
                                 </div>
                                 <div class="rc-cust-grid" id="warrantyDetail"></div>
+                            </div>
+                            <!-- Identitas unit: merek/model/IMEI dari data servis
+                                 sebelumnya. Tidak ada input baru, tidak ada duplikasi. -->
+                            <div class="panel receive-panel mt-3">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Identitas Unit</h3>
+                                        <span class="text-[10.5px] text-gray-400">Diambil dari data unit pada servis sebelumnya</span>
+                                    </div>
+                                </div>
+                                <div class="rc-cust-grid" id="warrantyUnit"></div>
+                            </div>
+                            <!-- Teknisi penanggung jawab servis sebelumnya. -->
+                            <div class="panel receive-panel mt-3">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-user-gear"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Teknisi yang Menangani</h3>
+                                        <span class="text-[10.5px] text-gray-400">Dari penugasan teknisi pada transaksi servis terkait</span>
+                                    </div>
+                                </div>
+                                <div class="rc-cust-grid" id="warrantyTeknisi"></div>
+                            </div>
+                            <!-- Riwayat klaim garansi. Hanya yang benar-benar
+                                 tersimpan; tidak ada data riwayat fiktif. -->
+                            <div class="panel receive-panel mt-3">
+                                <div class="receive-panel-head">
+                                    <span class="receive-head-ico"><i class="fa-solid fa-clock-rotate-left"></i></span>
+                                    <div>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Riwayat Klaim Garansi</h3>
+                                        <span class="text-[10.5px] text-gray-400">Klaim yang terkait dengan garansi ini</span>
+                                    </div>
+                                </div>
+                                <div id="warrantyRiwayat" class="pt-1"></div>
                             </div>
                             <div id="warrantyClaim"></div>
                         </div>

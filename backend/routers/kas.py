@@ -1,4 +1,4 @@
-﻿"""Kas endpoints — jurnal manual, riwayat gabungan, tutup kas.
+"""Kas endpoints — jurnal manual, riwayat gabungan, tutup kas.
 
 Prinsip single source of truth (FINAL LOCK):
 - Pemasukan servis = jurnal payments (DP/PELUNASAN) dalam periode.
@@ -420,8 +420,9 @@ def _boleh_lihat_aset(user) -> bool:
     CS/KASIR/TEKNISI hanya melihat SALDO LACI (Kas Aset Kecil).
     """
     try:
-        from authority import ROLE_ADMIN, ROLE_PENGELOLA, canonical_role
-        return canonical_role(user) in (ROLE_ADMIN, ROLE_PENGELOLA)
+        from authority import (ROLE_ADMIN, ROLE_PENGELOLA, ROLE_SUPERADMIN,
+                          canonical_role)
+        return canonical_role(user) in (ROLE_SUPERADMIN, ROLE_ADMIN, ROLE_PENGELOLA)
     except Exception:  # noqa: BLE001
         return False
 

@@ -24,7 +24,7 @@ from migrations_warranty_claims import migrate_warranty_claims
 from money import ZERO, to_decimal
 from routers import (dashboard, orders, customers, auth, claims, expenses,
                      kas, spareparts, payments, refunds, expense_debt,
-                     inventory, notifications)
+                     inventory, laporan, notifications)
 from routers.auth import get_authenticated_user
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -438,6 +438,7 @@ app.include_router(payments.router, dependencies=[Depends(get_authenticated_user
 app.include_router(refunds.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(expense_debt.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(inventory.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(laporan.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(notifications.router, dependencies=[Depends(get_authenticated_user)])
 
 

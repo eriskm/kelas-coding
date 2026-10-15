@@ -306,7 +306,133 @@ Koreksi akun    -> AKUN_DIUBAH tercatat di journal, actor + nilai sebelum/sesuda
 Hapus akun      -> tidak ada DELETE /api/auth/users/{id}, tidak ada tombol hapus
 ```
 
+## OD-LOCK-09 - Role Pengelola dan Investor Read-Only
+
+**Status: LOCKED**
+
+Owner: *"Role pengelola hanya bisa melihat keseluruhan program = tidak ada
+wewenang untuk mengubah apapun."*
+
+- **PENGELOLA** (dan alias `PEMILIK`) **tidak boleh mengubah apa pun** - bukan
+  hanya di halaman kas, tapi di seluruh aplikasi.
+- **INVESTOR** sama: boleh melihat angka, tidak boleh menulis.
+- Satu-satunya jalan untuk mencabut akses adalah **Nonaktifkan** (OD-LOCK-08).
+- Lihat OD-LOCK-10 untuk pembagian peran monitoring yang lebih rinci
+  (`REPORT_FULL` dan `REPORT_INVESTOR` adalah hak BACA, bukan tulis).
+
+### Aturan ini ditegakkan di dua lapis
+
+1. **Matriks `AUTHORITY_MATRIX`** - role read-oriented hanya boleh muncul di
+   aksi baca laporan.
+2. **Blanket di `authority.can()`** - role read-oriented (`MONITORING_ROLES`)
+   ditolak **sebelum** matriks dibaca, kecuali untuk `MONITORING_READ_ACTIONS`.
+
+Lapis kedua bukan sekadar formalitas: ia yang membuat Admin salah tulis satu
+baris matriks tidak langsung membuka seluruh program untuk role read-only.
+Tanpa lapisan itu, PENGELOLA aman hanya karena kebetulan tidak tercatat di
+matriks - bukan karena ada penjaganya.
+
+### Kebocoran yang ditemukan dan ditutup
+
+`backend/routers/customers.py` **tidak punya penjaga role sama sekali** - nol
+`require_authority`, nol `require_admin`. Terbukti lewat HTTP: **PENGELOLA,
+INVESTOR, KASIR, dan TEKNISI** semuanya bisa menambah, mengubah, bahkan
+**MENGHAPUS data pelanggan**.
+
+Pembagian yang ditetapkan:
+
+| Aksi | Boleh |
+|---|---|
+| Melihat daftar / detail pelanggan | semua yang sudah login |
+| Tambah / Ubah pelanggan | Admin, Kasir |
+| Hapus pelanggan | Admin |
+
+KASIR tetap boleh menambah dan mengubah pelanggan - itu bagian pekerjaannya.
+Hanya **hapus** yang dikhususkan ke Admin.
+
 ---
+
+
+## OD-LOCK-10 - Struktur 7 Role BOSS SF
+
+**Status: LOCKED**
+
+Struktur role resmi. Tujuh role, tidak boleh ada duplikat.
+
+| # | Role | Peran | Boleh | Dilarang |
+|---|---|---|---|---|
+| 1 | **SUPER ADMIN** | Akun Developer | Kelola akun, role, permission, konfigurasi, audit log. Akses administratif seluruh sistem. | - |
+| 2 | **ADMIN** | Manager Toko | Operasional, supervise tim, Tutup Kas, catat beban, Kelola Akun. | Konfigurasi teknis / permission Super Admin |
+| 3 | **PENGELOLA** | Pemilik | Monitoring: dashboard, laporan keuangan (omzet, modal part/jasa, laba kotor, beban, laba bersih, CTS), laporan operasional & kinerja teknisi, riwayat Tutup Kas, Kas Aset, Hutang Beban, bagi hasil 30%. Filter & unduh laporan. | Semua operasi tulis. Tutup Kas. Konfigurasi. |
+| 4 | **INVESTOR** | Monitoring Investasi | Monitoring: omzet, laba, tren, laporan periode, dasar bagi hasil 30% + riwayat pembayarannya, ringkasan Kas Aset & Hutang Beban. Filter & unduh. | Semua operasi tulis. Data pribadi pelanggan. |
+| 5 | **KASIR / CS** | Admisi & penagihan | Terima unit, ubah harga/estimasi, pembayaran & pelunasan, nota, ambil unit, refund DP, tambah/ubah pelanggan. | Modal, rumus laba, bagi hasil, catat beban, konfigurasi keuangan, hapus transaksi, Tutup Kas. |
+| 6 | **TEKNISI** | Perbaikan unit | Daftar kerja yang ditugaskan, info perangkat & keluhan, progres, diagnosis, tindakan perbaikan, catatan teknis, serah-terima. | Pembayaran, modal, laba, bagi hasil, Tutup Kas, data keuangan sensitif. |
+| 7 | **ADMIN SPAREPART** | Kelola barang | Data barang, stok, pencatatan keluar-masuk, permintaan sparepart, riwayat pergerakan, laporan persediaan, melihat kebutuhan sparepart untuk servis. | Transaksi servis, pembayaran pelanggan, laba, bagi hasil, Tutup Kas, modal. |
+
+### 10.1 SUPER ADMIN dipisahkan dari ADMIN
+
+Sebelumnya `SUPERADMIN` adalah **alias** `ADMIN`, jadi keduanya identik dan
+"jangan berikan role ini otomatis kepada Admin toko" mustahil ditegakkan.
+Kini `ROLE_SUPERADMIN != ROLE_ADMIN`, dan `ROLE_CONFIG` (ubah role, permission,
+konfigurasi, audit log) hanya dimiliki SUPER ADMIN.
+
+### 10.2 Akses monitoring dibedakan
+
+Owner memberi keduanya hak **baca laporan**, jadi ada `REPORT_FULL`
+(Pengelola: laporan detail) dan `REPORT_INVESTOR` (Investor: laporan investasi
+dan dasar bagi hasil). Keduanya tetap **nol operasi tulis** - dibuktikan oleh
+blanket `can()` yang menolak role read-oriented sebelum membaca matriks.
+
+### 10.3 Modal dipisah dari harga
+
+Untuk menegakkan "Kasir boleh ubah harga, tidak boleh ubah modal",
+`FINANCE_FIELDS` dipecah jadi `MODAL_FIELDS` (part_cost, modal_jasa,
+modal_lainnya, tanpa_modal) dan sisanya. `MODAL_FIELDS` dijaga
+`ORDER_UPDATE_MODAL` yang hanya milik ADMIN + SUPER ADMIN.
+
+### 10.4 Fail-CLOSED di tampilan
+
+- `bssfCaps()` tidak boleh fallback ke admin -> `custom`
+- `canViewAset()` fallback `custom`, bukan `admin`
+- `showAkun()` menolak apa pun yang bukan `true` (termasuk `undefined`)
+- `navigateTo()` memanggil penjaga halaman; menu yang disembunyikan saja tidak
+  cukup karena halaman bisa dibuka lewat hash URL
+
+Menyembunyikan tombol **BUKAN** proteksi keamanan. Proteksi ada di backend;
+lapisan tampilan hanya agar tidak menyesatkan.
+
+### 10.5 Kasus yang perlu keputusan Owner
+
+Belum dikerjakan karena tidak boleh ditebak:
+
+1. **Akun `superadmin` di DB punya role `ADMIN`.** Setelah SUPER ADMIN
+   dipisah, akun itu jadi Manager Toko dan tidak punya `ROLE_CONFIG`. Data
+   tidak diubah (Owner: jangan ubah akun yang ada). Perlu keputusan apakah
+   akun itu dinaikkan ke SUPER ADMIN, atau dibuat akun baru.
+2. **Teknisi boleh `ORDER_CREATE`?** Spec hanya menyebut "melihat daftar
+   pekerjaan yang ditugaskan". Secara bawaan lama Teknisi bisa menerima unit;
+   itu dipertahankan karena bisa dipakai alur nyata.
+3. **Teknisi/Admin boleh `CLAIM_WRITE` (garansi)?** Spec tidak menyebut garansi
+   untuk Teknisi. Pertahankan status quo (hanya Admin).
+4. **Investor tidak boleh melihat Kas Aset penuh** (`_boleh_lihat_aset` =
+   Super Admin, Admin, Pengelola), tapi spec minta "ringkasan Kas Aset". Endpoint
+   ringkasan untuk Investor belum dibuat.
+5. **Unduh laporan** untuk Pengelola/Investor belum ada endpoint khusus.
+
+### Contoh pengujian (wajib jadi test)
+
+```
+Super Admin        -> punya semua aksi, termasuk ROLE_CONFIG
+Admin              -> boleh KAS_CLOSE, TIDAK boleh ROLE_CONFIG
+Kasir              -> boleh harga, TIDAK boleh modal/beban/Tutup Kas
+Teknisi            -> TIDAK boleh satu pun aksi uang
+Admin Sparepart    -> hanya SPAREPART_WRITE
+Pengelola/Investor -> nol operasi tulis, hanya REPORT_*
+PENGELOLA dipaksa masuk matriks KAS_CLOSE -> can() tetap menolak
+```
+
+---
+
 
 ## OD-LOCK-07 — Identitas Periode Kas & Dasar Hutang Beban
 
@@ -433,6 +559,13 @@ Seluruh keputusan Owner sudah sejalan dengan kode.
 | OD-LOCK-07.2 | `beban_bayar.bayar_beban_periode(..., laba_kotor=...)` — hutang = `max(0, Beban - Laba Kotor)` |
 | OD-LOCK-07.3 | `cash.saldo_titipan_dp` (DP), `expense_debt.saldo_hutang` (Hutang Beban), `cash.saldo_kas_aset` (Kas Aset) |
 
+| OD-LOCK-08 | `routers/auth.py` - tidak ada endpoint hapus; `create_user`/`update_user` menulis journal `AKUN_DIBUAT`/`AKUN_DIUBAH` |
+| OD-LOCK-08 | `routers/orders.py::_pastikan_teknisi_aktif` - penugasan baru ke teknisi nonaktif ditolak |
+| OD-LOCK-09 | `authority.MONITORING_ROLES` + blanket di `authority.can()` - role monitoring ditolak sebelum matriks dibaca, kecuali `MONITORING_READ_ACTIONS` |
+| OD-LOCK-09 | `routers/customers.py` - create/update butuh `CUSTOMER_WRITE` (Admin, Kasir), delete butuh `CUSTOMER_DELETE` (Admin) |
+| OD-LOCK-10 | `authority.ROLE_SUPERADMIN` terpisah dari `ROLE_ADMIN`; `ROLE_CONFIG` hanya Super Admin |
+| OD-LOCK-10 | `authority.MODAL_FIELDS` + `Action.ORDER_UPDATE_MODAL` - Kasir boleh harga, tidak boleh modal |
+| OD-LOCK-10 | `frontend/script.js` - `BSSF_CAPS` 7 role, `PAGE_CAP` penjaga halaman, `bssfCaps()`/`canViewAset()`/`showAkun()` fail-closed |
 ---
 
 # Aturan Penggunaan Dokumen Ini

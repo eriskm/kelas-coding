@@ -144,36 +144,39 @@ def _pastikan_teknisi_aktif(db: Session, nama):
 
 @router.get("/technicians")
 def list_technicians(db: Session = Depends(get_db_session)):
-    """Daftar teknisi dari data nyata: nama unik di service_orders + pengguna
-    aktif ber-role teknisi/admin. Kontrak tetap list[str] agar UI tak berubah.
+    """Daftar Teknisi Penanggung Jawab: HANYA akun ber-role TEKNISI.
 
-    Nama teknisi yang akunnya sudah dinonaktifkan TIDAK ikut ditampilkan,
-    supaya tidak bisa dipilih untuk unit baru.
+    Owner: "di halaman Update Data Servis dan Servis Baru pada Teknisi
+    Penanggung Jawab pilihannya dulu hanya akun teknisi saja."
+
+    Sebelumnya endpoint ini mengembalikan tiga sumber sekaligus:
+      1. nama bebas dari `service_orders.technician` (bisa nama siapa saja),
+      2. akun aktif ber-role TEKNISI,
+      3. akun aktif ber-role ADMIN dan SUPERADMIN.
+
+    Akibatnya Manager Toko dan akun Developer ikut muncul sebagai pilihan
+    "Teknisi Penanggung Jawab" di form Servis Baru, Update Data Servis, dan
+    Klaim Garansi. Sekarang hanya akun TEKNISI aktif.
+
+    Catatan: nama historis yang TIDAK punya akun (teknisi lama yang hanya ada di
+    teks order) tidak lagi muncul sebagai pilihan. Order lamanya tetap utuh --
+    field `service_orders.technician` tidak diubah.
+    Kontrak tetap `list[str]` agar ketiga form frontend tidak berubah.
     """
+    import authority as auth_mod
+
     names = set()
-    nonaktif = _nama_akun_nonaktif(db)
-    try:
-        rows = db.query(ServiceOrder.technician).filter(
-            ServiceOrder.technician.isnot(None),
-            ServiceOrder.technician != "",
-        ).distinct().all()
-        for (t,) in rows:
-            t = (t or "").strip()
-            if t and t not in nonaktif:
-                names.add(t)
-    except Exception:
-        pass
     try:
         users = db.query(User).filter(User.active == 1).all()
-        for u in users:
-            if (getattr(u, "role", "") or "").strip().upper() in (
-                "TEKNISI", "ADMIN", "SUPERADMIN",
-            ):
-                disp = (getattr(u, "display_name", "") or "").strip()
-                if disp:
-                    names.add(disp)
-    except Exception:
-        pass
+    except Exception:  # noqa: BLE001
+        return []
+    for u in users:
+        if auth_mod.canonical_role(u) != auth_mod.ROLE_TEKNISI:
+            continue
+        for nama in ((getattr(u, "display_name", "") or "").strip(),
+                     (getattr(u, "username", "") or "").strip()):
+            if nama:
+                names.add(nama)
     return sorted(names)
 
 

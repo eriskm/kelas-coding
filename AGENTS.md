@@ -26,6 +26,7 @@ Isinya:
 | **OD-LOCK-07** | Periode kas per-id, Hutang Beban dari Laba Kotor, hanya DP/Hutang/Kas Aset yang menyeber | 🔒 LOCKED |
 | **OD-LOCK-08** | Kelola Akun: Nonaktifkan, bukan hapus. Koreksi technisi wajib tercatat | 🔒 LOCKED |
 
+| **OD-LOCK-09** | PENGELOLA/PEMILIK/INVESTOR read-only: nol wewenang mengubah | 🔒 LOCKED |
 Yang WAJIB dipatuhi:
 
 - ❌ **Jangan mengubah, menghapus, atau melemahkan aturan terkunci** tanpa
@@ -189,6 +190,17 @@ Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
   Jangan pernah menjaganya dengan string polos — tidak ada akun ber-role
   `SUPERADMIN` di DB, jadi penjaganya jadi tidak bisa dipakai siapa pun.
 
+### Role Read-Only (OD-LOCK-09)
+- **PENGELOLA**, alias **PEMILIK**, dan **INVESTOR** **tidak boleh mengubah
+  apa pun** — nol wewenang di seluruh aplikasi, bukan cuma halaman kas.
+- ❌ Jangan pernah mendaftarkan role read-only di `AUTHORITY_MATRIX`. Aturan
+  read-only di `authority.can()` yang menahannya; matriks hanya lapisan kedua.
+- Setiap endpoint **tulis** wajib punya penjaga role. `customers.py` pernah
+  bocor total karena tidak punya penjaga apa pun — semua role bisa menghapus
+  pelanggan. Sebelum menambah router, pastikan tiap `post/put/delete` punya
+  `require_authority(...)` atau penjaga setara.
+- Hak customer: tambah/ubah = Admin + Kasir, hapus = Admin saja.
+
 ---
 
 ## 5. PETA TEKNIS
@@ -227,3 +239,16 @@ git status --short
 - `saldo_laci()` sengaja menjumlah seluruh entri (opening + semua mutasi) —
   itu memang benar untuk Declare. Yang menjaga agar tidak menumpuk adalah
   **Tutup Kas yang selalu menyelesaikan periode**, bukan bentuk fungsinya.
+
+### Struktur 7 Role (OD-LOCK-10)
+- Tujuh role: SUPER ADMIN (Developer), ADMIN (Manager Toko), PENGELOLA (Pemilik),
+  INVESTOR, KASIR/CS, TEKNISI, ADMIN SPAREPART. Jangan pernah menambah role
+  tanpa keputusan Owner, dan jangan samarkan role dengan alias.
+- `SUPERADMIN` **bukan** alias `ADMIN`. `ROLE_CONFIG` (role, permission,
+  konfigurasi, audit log) hanya Super Admin.
+- `MODAL_FIELDS` dijaga `ORDER_UPDATE_MODAL`: Kasir boleh ubah harga,
+  TIDAK boleh ubah modal.
+- Role monitoring hanya boleh `MONITORING_READ_ACTIONS`. Semua fallback di
+  frontend harus `custom`, **tidak pernah** `admin`.
+- `navigateTo()` wajib lewat penjaga `PAGE_CAP`; menu yang disembunyikan saja
+  tidak cukup karena halaman bisa dibuka lewat hash URL.

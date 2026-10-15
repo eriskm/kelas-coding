@@ -279,7 +279,34 @@ function getSavedPage() {
     return VALID_PAGES.includes(p) ? p : 'dashboard';
 }
 
+//: Halaman -> kapabilitas yang boleh membukanya. Ini PEMBANTU tampilan saja;
+//: proteksi sebenarnya ada di backend. Tujuannya role tidak melihat halaman
+//: yang memang bukan tugasnya, dan supaya "sembunyikan tombol"
+//: tidak dianggap satu-satunya lapis.
+const PAGE_CAP = {
+    'servisbaru': ['ORDER_CREATE'],
+    'transaksi': ['ORDER_CREATE', 'ORDER_UPDATE'],
+    'garansi': ['CLAIM_WRITE', 'REPORT_FULL'],
+    'sparepart': ['SPAREPART_WRITE'],
+    'keuangan': ['KAS_CLOSE', 'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'REPORT_FULL',
+        'REPORT_INVESTOR'],
+    'akun': ['USER_MANAGE'],
+};
+
+function bolehBukaHalaman(key) {
+    const butuh = PAGE_CAP[key];
+    if (!butuh) return true;                 // dashboard / pelanggan: semua login
+    return butuh.some(a => can(a));
+}
+
 function navigateTo(key) {
+    // Penjaga halaman. `navigateTo` bisa dipanggil dari hash URL, jadi menu yang
+    // disembunyikan saja TIDAK cukup untuk menutup akses halaman.
+    if (!bolehBukaHalaman(key)) {
+        toast('Halaman ini di luar kewenangan role Anda.');
+        showPage('dashboard');
+        return;
+    }
     if (key === 'transaksi') showTransaksi();
     else if (key === 'pelanggan') showPelanggan();
     else if (key === 'garansi') showGaransi();
@@ -842,23 +869,42 @@ function newIdemKey() {
 // P2-15: CAPABILITY (cermin authority matrix B yang sudah LOCKED)
 // Tampilan hanya menawarkan aksi yang diizinkan role; backend tetap penjaga utama.
 const BSSF_CAPS = {
-    admin: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_STATUS_CLOSING',
-        'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL', 'EXPENSE_WRITE',
-        'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
-        'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE'],
+    superadmin: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
+        'ORDER_STATUS_CLOSING', 'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL',
+        'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
+        'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
+        'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'ROLE_CONFIG', 'AUDIT_READ', 'REPORT_FULL',
+        'REPORT_INVESTOR'],
+    admin: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
+        'ORDER_STATUS_CLOSING', 'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL',
+        'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
+        'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
+        'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'AUDIT_READ', 'REPORT_FULL', 'REPORT_INVESTOR'],
     kasir: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_STATUS_CLOSING',
         'ORDER_HANDOVER', 'PAYMENT_CREATE', 'EXPENSE_WRITE', 'REFUND_DP', 'FAILED_CANCEL',
         'SPAREPART_WRITE', 'CLAIM_WRITE'],
-    teknisi: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'SPAREPART_WRITE', 'CLAIM_WRITE'],
-    pengelola: [], // Q13: read-oriented (monitoring)
-    investor: [],  // read-oriented; TIDAK boleh melihat Kas Aset/Master Kas (SSOT-7)
+    // ORDER_CREATE (penerimaan unit) TIDAK ada: itu tugas Kasir/CS (OD-LOCK-10).
+    teknisi: ['ORDER_UPDATE', 'ORDER_HANDOVER', 'CLAIM_WRITE'],
+    // Admin Sparepart: hanya area barang/stok. Tidak boleh menyentuh transaksi
+    // pelanggan, pembayaran, laba, atau Tutup Kas.
+    // Permission sparepart dipisah dari laporan keuangan: Admin Sparepart
+    // boleh laporan persediaan, tapi TIDAK laporan bisnis/keuangan.
+    adminSparepart: ['SPAREPART_WRITE', 'REPORT_SPAREPART'],
+    pengelola: ['REPORT_FULL'], // Q13: monitoring; boleh lihat + unduh laporan
+    investor: ['REPORT_INVESTOR'], // monitoring investasi; tanpa data pribadi
     // Role tidak dikenal / kosong = tanpa hak apa pun. Sengaja TIDAK fallback ke
     // admin: kalau ada typo di kolom Role, akun itu harus terlihat "nyaris
     // tidak bisa apa-apa", bukan diam-diam dapat akses penuh di tampilan.
     custom: [],
 };
 function bssfCaps() {
-    try { return (window._bssfCaps || BSSF_CAPS.admin); } catch (_) { return BSSF_CAPS.admin; }
+    // Fail-CLOSED. Dulu fallback-nya `BSSF_CAPS.admin`, padahal komentar di
+    // atas blok BSSF_CAPS sudah menyatakan itu TIDAK boleh terjadi: kalau
+    // `window._bssfCaps` belum terisi (halaman dimuat ulang, atau sesi belum
+    // selesai), seluruh tampilan sempat mendapat hak ADMIN penuh. Backend
+    // tetap menolak, tapi tampilannya menyesatkan -- dan ini persis yang
+    // dilarang Owner: menyembunyikan/menampilkan tombol BUKAN proteksi.
+    try { return (window._bssfCaps || BSSF_CAPS.custom); } catch (_) { return BSSF_CAPS.custom; }
 }
 function can(action) { return bssfCaps().indexOf(action) !== -1; }
 function applyRoleUI(root) {
@@ -871,14 +917,25 @@ function applyRoleUI(root) {
 // v4 #11: siapa boleh melihat SALDO ASET + MASTER KAS (data visibility).
 // CS/Kasir/Teknisi -> hanya SALDO LACI. Admin/Pengelola -> semuanya.
 function canViewAset() {
-    const k = (function () { try { return window._bssfRoleKey; } catch (_) { return 'admin'; } })();
-    return k === 'admin' || k === 'pengelola';
+    // Fail-CLOSED: tanpa sesi yang sudah knows, TIDAK ada hak melihat.
+    // Super Admin ikut boleh (dia akun developer, akses penuh).
+    const k = (function () { try { return window._bssfRoleKey; } catch (_) { return 'custom'; } })();
+    return k === 'superadmin' || k === 'admin' || k === 'pengelola';
 }
 
 function setRoleCapabilities(role) {
     const key = String(role || '').trim().toUpperCase();
-    const map = { SUPERADMIN: 'admin', ADMIN: 'admin', KASIR: 'kasir', TEKNISI: 'teknisi',
-                  PENGELOLA: 'pengelola', PEMILIK: 'pengelola', INVESTOR: 'investor' };
+    const map = {
+        SUPERADMIN: 'superadmin', 'SUPER ADMIN': 'superadmin', SUPER_ADMIN: 'superadmin',
+        DEV: 'superadmin', DEVELOPER: 'superadmin',
+        ADMIN: 'admin', MANAGER: 'admin',
+        KASIR: 'kasir', CS: 'kasir',
+        TEKNISI: 'teknisi', TEKNIKER: 'teknisi',
+        'ADMIN SPAREPART': 'adminSparepart', ADMIN_SPAREPART: 'adminSparepart',
+        ADM_SPAREPART: 'adminSparepart', SPAREPART_ADMIN: 'adminSparepart',
+        PENGELOLA: 'pengelola', PEMILIK: 'pengelola',
+        INVESTOR: 'investor',
+    };
     // Fail-CLOSED. Sebelumnya `map[key] || 'admin'`, jadi role yang salah ketik
     // atau kosong otomatis dapat hak admin di tampilan. Backend tetap menolak,
     // tapi tampilannya menyesatkan -- dan `canViewAset()` ikut jadi true.
@@ -1404,16 +1461,48 @@ function clearLoginError() {
     document.getElementById('loginError').classList.add('hidden');
 }
 
+//: Label role yang enak dibaca buat sidebar. Role di DB bisa campur huruf
+//: besar-kecil ("ADMIN", "Teknisi", "Kasir") dan ada alias (PEMILIK =
+//: PENGELOLA). Super Admin kini role TERPISAH dari Admin, jadi labelnya
+//: berbeda -- kalau tidak, akun developer akan tampil sebagai Manager Toko.
+const ROLE_LABEL = {
+    ADMIN: 'Administrator',
+    SUPERADMIN: 'Super Admin',
+    'SUPER ADMIN': 'Super Admin',
+    SUPER_ADMIN: 'Super Admin',
+    ADMIN_SPAREPART: 'Admin Sparepart',
+    'ADMIN SPAREPART': 'Admin Sparepart',
+    KASIR: 'Kasir',
+    TEKNISI: 'Teknisi',
+    PENGELOLA: 'Pengelola',
+    PEMILIK: 'Pengelola',
+    INVESTOR: 'Investor',
+};
+
+function labelRole(role) {
+    const key = String(role || '').trim().toUpperCase();
+    return ROLE_LABEL[key] || (role ? String(role) : 'Tanpa role');
+}
+
 function setAdminUI(user) {
     const name = user.display_name || 'Administrator';
     const initial = name.charAt(0).toUpperCase();
     document.getElementById('adminName').textContent = name;
+    // Sebelumnya baris role di sidebar tulisan "Administrator" itu HARDCODE di
+    // index.html dan tidak pernah berubah -- jadi akun Kasir/Teknisi/Pengelola
+    // tetap tampil/admin di situ. Sekarang ikut dari data akun.
+    const roleEl = document.getElementById('adminRole');
+    if (roleEl) roleEl.textContent = labelRole(user.role);
     const avatar = document.querySelector('#appSidebar .rounded-full.flex');
     if (avatar) avatar.textContent = initial;
     const welcome = document.querySelector('.app-topbar h1 span.text-brand-500');
     if (welcome) welcome.textContent = user.display_name || 'Admin';
-    // Menu Kelola Akun hanya untuk Admin/Superadmin (selaras dengan require_admin backend).
-    const isAdmin = ['SUPERADMIN', 'ADMIN'].includes(String(user.role || '').toUpperCase());
+    // Menu Kelola Akun hanya untuk Super Admin / Admin (selaras dengan
+    // `require_admin` di backend). Alias lain ikut dipastikan supaya role yang
+    // ditulis bebas di DB tidak diam-diam kehilangan menu.
+    const _rk = String(user.role || '').trim().toUpperCase();
+    const isAdmin = ['SUPERADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'DEV', 'DEVELOPER',
+        'ADMIN', 'MANAGER'].includes(_rk);
     document.querySelectorAll('[data-page="akun"]').forEach(el => {
         el.style.display = isAdmin ? '' : 'none';
     });
@@ -1423,8 +1512,11 @@ function setAdminUI(user) {
 }
 
 function showAkun() {
-    if (window._isAdmin === false) {
-        toast('Hanya Admin yang boleh membuka Kelola Akun.');
+    // Fail-CLOSED: `undefined` (belum ada sesi) diperlakukan sama dengan false.
+    // Dulu hanya `=== false` yang diblokir, jadi sebelum `setAdminUI` selesai
+    // halamannya tetap bisa dibuka.
+    if (window._isAdmin !== true) {
+        toast('Hanya Admin/Super Admin yang boleh membuka Kelola Akun.');
         showPage('dashboard');
         return;
     }
@@ -2620,7 +2712,7 @@ function initUpdateServis() {
     const wm = document.getElementById('usWarrantyMonths');
     if (wm && !wm.dataset.usBound) { wm.dataset.usBound = '1'; wm.addEventListener('change', usWarrantyUpdate); }
     // P2-15: opsi dropdown dibangun dari STATUS_OPTIONS + gate role (Project A).
-    const _rk = (function () { try { return window._bssfRoleKey; } catch (_) { return 'admin'; } })();
+    const _rk = (function () { try { return window._bssfRoleKey; } catch (_) { return 'custom'; } })();
     const _sa = document.getElementById('usStatus');
     renderStatusOptions(_sa, _rk, _usStatusInit);
     if (_sa && !_sa.dataset.usBound) { _sa.dataset.usBound = '1'; _sa.addEventListener('change', () => usSetStatus(_sa.value)); }
@@ -2952,6 +3044,48 @@ function grDetail(idx) {
         <div><span>Kerusakan Sebelumnya</span><b>${escapeHtml(g.damage || '-')}</b></div>
         <div><span>Rencana Perbaikan</span><b>${escapeHtml(g.plan || '-')}</b></div>
         <div><span>Nilai Servis</span><b>${plRupiah(g.price)}</b></div>`;
+
+    // -- (1) Identitas Unit -------------------------------------------------
+    // Diambil dari data unit pada servis sebelumnya. Kalau belum diisi di
+    // servis itu, ditampilkan jujur sebagai "Belum diisi" -- TIDAK dikarang.
+    const kosong = 'Belum diisi';
+    document.getElementById('warrantyUnit').innerHTML = `
+        <div><span>Merek HP</span><b>${escapeHtml((g.brand || '').trim() || kosong)}</b></div>
+        <div><span>Model HP</span><b>${escapeHtml((g.model || '').trim() || kosong)}</b></div>
+        <div><span>IMEI</span><b>${escapeHtml((g.imei || '').trim() || kosong)}</b></div>
+        <div><span>Device</span><b>${escapeHtml(g.device || '-')}</b></div>`;
+
+    // -- (3) Teknisi yang menangani ----------------------------------------
+    document.getElementById('warrantyTeknisi').innerHTML = `
+        <div><span>Teknisi Penanggung Jawab</span><b>${escapeHtml((g.teknisi || '').trim() || kosong)}</b></div>`;
+
+    // -- (2) Riwayat Klaim Garansi -----------------------------------------
+    // Hanya klaim yang benar-benar tersimpan. Kalau belum pernah ada klaim,
+    // tampilkan keterangan yang diminta Owner, bukan baris kosong.
+    const riwayat = Array.isArray(g.riwayat_klaim) ? g.riwayat_klaim : [];
+    const elRiwayat = document.getElementById('warrantyRiwayat');
+    if (!riwayat.length) {
+        elRiwayat.innerHTML = `<div class="text-[11.5px] text-gray-500 dark:text-gray-400">Belum ada riwayat klaim garansi.</div>`;
+    } else {
+        elRiwayat.innerHTML = '<div class="space-y-2.5">' + riwayat.map((r, i) => `
+            <div class="panel receive-panel">
+                <div class="receive-panel-head">
+                    <span class="receive-head-ico"><i class="fa-solid fa-file-circle-check"></i></span>
+                    <div>
+                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Klaim ${i + 1}</h3>
+                        <span class="text-[10.5px] text-gray-400">${escapeHtml(r.tanggal || 'Tanpa tanggal')}${r.no_klaim ? ' · ' + escapeHtml(r.no_klaim) : ''}${r.status ? ' · ' + escapeHtml(r.status) : ''}</span>
+                    </div>
+                </div>
+                <div class="rc-cust-grid">
+                    <div><span>Tanggal Klaim</span><b>${escapeHtml(r.tanggal || kosong)}</b></div>
+                    <div><span>Keluhan Pelanggan</span><b>${escapeHtml((r.keluhan || '').trim() || kosong)}</b></div>
+                    <div><span>Hasil Pemeriksaan</span><b>${escapeHtml((r.hasil_pemeriksaan || '').trim() || kosong)}</b></div>
+                    <div><span>Keputusan Klaim</span><b>${escapeHtml(r.keputusan || kosong)}</b></div>
+                    <div><span>Tindakan Perbaikan</span><b>${escapeHtml((r.tindakan || '').trim() || kosong)}</b></div>
+                    ${r.catatan_teknisi ? `<div><span>Catatan Teknisi</span><b>${escapeHtml(r.catatan_teknisi)}</b></div>` : ''}
+                </div>
+            </div>`).join('') + '</div>';
+    }
     document.getElementById('warrantyClaim').innerHTML = g.klaim ? `
         <div class="panel receive-panel mt-3">
             <div class="receive-panel-head">
@@ -3053,6 +3187,13 @@ async function renderGaransi() {
             plan: g.plan,
             price: g.price,
             klaim: g.klaim,
+            // Identitas unit & teknisi: dari data servis ASAL. Backend hanya
+            // pass-through apa yang sudah tersimpan; tidak ada nilai karangan.
+            brand: g.brand,
+            model: g.model,
+            imei: g.imei,
+            teknisi: g.teknisi,
+            riwayat_klaim: Array.isArray(g.riwayat_klaim) ? g.riwayat_klaim : [],
         }));
     } catch (err) {
         if (my !== _grReq) return;
