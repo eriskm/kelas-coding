@@ -64,9 +64,52 @@ from statusflow import cash_moment, kewajiban, payment_summary
 BEBAN_KATEGORI = ("gaji", "operasional")
 
 
-def period_key(start: datetime, end: datetime) -> str:
-    """Kunci periode kas = tanggal mulai periode (16:00->16:00)."""
+def period_key(db: Session, start: datetime, end: datetime) -> str:
+    """Kunci unik periode kas.
+
+    Owner: "pakai periode, karena selama pengujian dalam satu hari bisa berkali-
+    kali tutup kas."
+
+    Versi lama memakai `start.strftime("%Y-%m-%d")`, sehingga dua KasPeriod yang
+    sama-sama jatuh di tanggal yang sama menghasilkan kunci yang SAMA. Akibatnya
+    penanda idempotensi Beban (`ref_id`) bentrok: periode kedua dianggap sudah
+    membayar Beban padahal periode pertama yang membayarnya. Itu membuat Beban
+    periode kedua tidak pernah keluar dari Laci.
+
+    Sekarang kunci diambil dari `kas_periods.id`, jadi unik sewenang-wenang.
+    Kalau KasPeriod belum ada (mis. dipanggil sebelum periode dibuat), dipakai
+    stempel waktu penuh yang juga unik.
+    """
+    pid = _kas_period_id_untuk(db, start)
+    if pid is not None:
+        return "kas_period:%d" % pid
+    return "waktu:%s" % start.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def legacy_period_key(start: datetime) -> str:
+    """Kunci versi lama (tanggal). Hanya untuk MEMBACA data historis."""
     return start.strftime("%Y-%m-%d")
+
+
+def _semua_kunci(db: Session, start: datetime, end: datetime) -> list:
+    """Kunci beku yang boleh dibaca untuk satu periode.
+
+    Kunci baru (berbasis `kas_periods.id`) selalu dipakai. Kunci versi lama
+    (tanggal) HANYA ikut dibaca untuk periode yang sudah CLOSED, supaya periode
+    tertutup tidak dibekukan ulang -- hasilnya menjadi Beban ganda.
+
+    Untuk periode yang masih OPEN, kunci lama TIDAK boleh dipakai: baris lamanya
+    milik periode lain yang kebetulan jatuh di tanggal sama, dan membacanya
+    membuat periode ini terlihat "sudah beku" padahal belum. Persis itulah bug
+    yang membuat Beban periode berjalan tidak pernah keluar dari Laci.
+    """
+    kunci = [period_key(db, start, end)]
+    row = _kas_period_untuk(db, start)
+    if row is not None and (row.status or "").strip().upper() == "CLOSED":
+        lama = legacy_period_key(start)
+        if lama not in kunci:
+            kunci.append(lama)
+    return kunci
 
 
 def modal_sudah_diisi(order) -> bool:
@@ -280,8 +323,10 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
     """
     from models import Expense
 
-    key = period_key(start, end)
-    existing = db.query(ExpensePeriod).filter(ExpensePeriod.periode == key).all()
+    key = period_key(db, start, end)
+    existing = (db.query(ExpensePeriod)
+                .filter(ExpensePeriod.periode.in_(_semua_kunci(db, start, end)))
+                .all())
     if existing:
         return {"periode": key, "dibekukan": 0, "sudah_ada": len(existing)}
 
@@ -312,6 +357,17 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
     return {"periode": key, "dibekukan": dibuat, "sudah_ada": 0}
 
 
+def _kas_period_untuk(db: Session, start: datetime):
+    """Baris `KasPeriod` yang dimulai pada `start`, atau None."""
+    try:
+        from models import KasPeriod
+        return (db.query(KasPeriod)
+                .filter(KasPeriod.start_at == start)
+                .order_by(KasPeriod.id.desc()).first())
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _kas_period_id_untuk(db: Session, start: datetime):
     """Id KasPeriod yang dimulai pada `start`, atau None.
 
@@ -319,18 +375,12 @@ def _kas_period_id_untuk(db: Session, start: datetime):
     OD-LOCK-06: rincian per periode, termasuk nilai awal, pembayaran atau
     cover yang sudah dilakukan, dan sisa kewajiban.
     """
-    try:
-        from models import KasPeriod
-        row = (db.query(KasPeriod)
-               .filter(KasPeriod.start_at == start)
-               .order_by(KasPeriod.id.desc()).first())
-        return row.id if row is not None else None
-    except Exception:  # noqa: BLE001
-        return None
+    row = _kas_period_untuk(db, start)
+    return row.id if row is not None else None
 
 
 def _bayar_beban_langsung(db: Session, start: datetime, end: datetime,
-                          key: str, total_beban) -> dict:
+                          key: str, total_beban, laba_kotor=None) -> dict:
     """OD-LOCK-06 — bayar Beban periode: Laci → Kas Aset → Hutang Beban.
 
     Import `beban_bayar` di dalam fungsi (lazy) karena modul itu mengimpor
@@ -346,7 +396,8 @@ def _bayar_beban_langsung(db: Session, start: datetime, end: datetime,
         import beban_bayar
         return beban_bayar.bayar_beban_periode(
             db, start, end, key, total_beban, oleh="beban-otomatis",
-            kas_period_id=_kas_period_id_untuk(db, start))
+            kas_period_id=_kas_period_id_untuk(db, start),
+            laba_kotor=laba_kotor)
     except Exception as exc:  # noqa: BLE001
         db.rollback()
         _log("[beban] pembayaran otomatis periode %s GAGAL: %s" % (key, exc))
@@ -354,14 +405,16 @@ def _bayar_beban_langsung(db: Session, start: datetime, end: datetime,
 
 
 def beban_frozen(db: Session, start: datetime, end: datetime,
-                 commit: bool = False) -> dict:
+                 commit: bool = False, laba_kotor=None) -> dict:
     """Baca beban beku periode; bekukan lebih dulu bila belum ada."""
-    key = period_key(start, end)
-    rows = db.query(ExpensePeriod).filter(ExpensePeriod.periode == key).all()
+    key = period_key(db, start, end)
+    kunci = _semua_kunci(db, start, end)
+    rows = db.query(ExpensePeriod).filter(ExpensePeriod.periode.in_(kunci)).all()
     baru_beku = not rows
     if baru_beku:
         freeze_expenses_for_period(db, start, end, commit=False)
-        rows = db.query(ExpensePeriod).filter(ExpensePeriod.periode == key).all()
+        rows = (db.query(ExpensePeriod)
+                .filter(ExpensePeriod.periode.in_(kunci)).all())
     gaji = ZERO
     operasional = ZERO
     for r in rows:
@@ -376,7 +429,8 @@ def beban_frozen(db: Session, start: datetime, end: datetime,
     # berikutnya tidak memutar pembayaran berulang (fungsinya sendiri sudah
     # idempoten lewat ref_type/ref_id yang sama dengan Tutup Kas).
     if baru_beku:
-        _bayar_beban_langsung(db, start, end, key, gaji + operasional)
+        _bayar_beban_langsung(db, start, end, key, gaji + operasional,
+                              laba_kotor=laba_kotor)
     if commit:
         db.commit()
     return {"periode": key, "gaji": gaji, "operasional": operasional,
@@ -408,18 +462,22 @@ def compute_finance_core(db: Session, start: datetime, end: datetime,
     # Nilai ini hanya informasi angka kas manual periode berjalan.
     tambahan = tambahan_kas(db, start, end)
 
-    beban = beban_frozen(db, start, end, commit=False)
+    # Laba Kotor dihitung DI SINI, sebelum Beban, karena pemicu pembayaran Beban
+    # (OD-LOCK-06) butuh Laba Kotor untuk menentukan Hutang Beban:
+    #     LABA KOTOR = OMSET - TOTAL MODAL
+    laba_kotor = omset - total_modal
+
+    beban = beban_frozen(db, start, end, commit=False, laba_kotor=laba_kotor)
     total_beban = beban["gaji"] + beban["operasional"]
 
     # RUMUS OWNER -- satu-satunya tempat laba dihitung di seluruh aplikasi:
     #     LABA KOTOR  = OMSET - TOTAL MODAL
     #     LABA BERSIH = LABA KOTOR - TOTAL BEBAN
     # Tidak ada suku `tambahan` di kedua rumus ini.
-    laba_kotor = omset - total_modal
     laba_bersih = laba_kotor - total_beban
 
     return {
-        "periode": period_key(start, end),
+        "periode": period_key(db, start, end),
         "omset": omset,
         "n_settled": len(cohort),
         "modal_part": modal_part,

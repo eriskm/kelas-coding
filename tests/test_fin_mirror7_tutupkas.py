@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """FIN-MIRROR-7 — Tutup Kas sebagai PENYELESAIAN PERIODE.
 
 Aturan Owner yang dikunci di sini:
@@ -167,7 +167,7 @@ def test_period_surplus_laci_kembali_nol():
     # Yang diperiksa di sini adalah TOTAL Beban yang keluar dari ledger.
     import beban_bayar as _beb
     total_beban_lucas = _beb._total_dibayar(
-        s, __import__("finance").period_key(*batas_periode(p)))
+        s, __import__("finance").period_key(s, *batas_periode(p)))
     assert total_beban_lucas == to_decimal(405000), \
         "Total Beban harus keluar dari Laci: %s" % total_beban_lucas
     assert quantize(to_decimal(

@@ -129,7 +129,7 @@ def selesaikan_periode(db: Session, period, fin: dict, oleh: str = None) -> dict
     """
     from models import KasEntry
     start, end = batas_periode(period)
-    key = period_key(start, end)
+    key = period_key(db, start, end)
     out = {"modal_selisih": ZERO, "beban_dibayar": ZERO, "beban_sisa": ZERO,
            "distribusi": None, "defisit": None}
 

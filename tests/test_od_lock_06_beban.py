@@ -170,7 +170,7 @@ def test_keputusan_cover_manual_ditawarkan_bukan_dijalankan():
     p = s.query(__import__("models").KasPeriod).get(ctx["pid"])
     from finance import period_key
     from routers.dashboard import batas_periode
-    key = period_key(*batas_periode(p))
+    key = period_key(s, *batas_periode(p))
     aset_awal = to_decimal(cash_mod.saldo_kas_aset(s))
     res = bb.bayar_beban_periode(s, *batas_periode(p), key, BEBAN)
     s.commit()
@@ -280,7 +280,7 @@ def test_beban_tidak_dibayar_dua_kali():
     import beban_bayar as bb
     from finance import period_key
     dari_mesin = bb._total_dibayar(
-        s, period_key(*dash.batas_periode(s.query(m.KasPeriod).get(ctx["pid"]))))
+        s, period_key(s, *dash.batas_periode(s.query(m.KasPeriod).get(ctx["pid"]))))
     if n_legacy > 0:
         assert dari_mesin <= BEBAN, (
             "total dibayar %s tidak boleh melebihi Total Beban %s"

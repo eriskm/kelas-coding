@@ -23,6 +23,7 @@ Isinya:
 | **OD-LOCK-04** | DP tidak boleh melebihi estimasi | 🔒 LOCKED |
 | **OD-LOCK-05** | Refund klaim garansi dilakukan MANUAL | 🔒 LOCKED |
 | **OD-LOCK-06** | Pembayaran Beban: Laci → Kas Aset → Hutang Beban | 🔒 LOCKED |
+| **OD-LOCK-07** | Periode kas per-id, Hutang Beban dari Laba Kotor, hanya DP/Hutang/Kas Aset yang menyeber | 🔒 LOCKED |
 
 Yang WAJIB dipatuhi:
 
@@ -157,6 +158,20 @@ Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
   `ref_id = <periode>`. Penanda inilah yang membuat Tutup Kas tidak membayar
   ulang.
 - Beban tetap **beku sekali per periode** (FR-01).
+
+### Periode Kas & Hutang Beban (OD-LOCK-07)
+- `finance.period_key()` memakai **`kas_periods.id`**. ❌ Jangan pernah
+  mengembalikan kunci berbasis tanggal — Tutup Kas bisa diulang beberapa kali
+  sehari dan kuncinya akan bentrok, sehingga Beban periode berikutnya terlihat
+  "sudah bayar" dan tidak pernah keluar dari Laci.
+- `Hutang Beban = max(0, Total Beban − Laba Kotor)`. Penentunya **Laba Kotor**,
+  bukan sisa yang tidak kebayar dari Laci. Laba Kotor cukup = target CTO
+  tercapai = **tidak ada** hutang.
+- Hutang lama **dibiarkan**; periode berikutnya masih minus maka hutang **terus
+  nambah**.
+- **Hanya tiga hal** yang boleh menyeber antar periode: **uang DP yang belum
+  lunas**, **Hutang Beban**, dan **Kas Aset**. Payment masuk, Modal keluar, dan
+  Beban keluar hanya dibaca untuk periode miliknya sendiri.
 
 ---
 

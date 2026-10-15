@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """FIN-MIRROR — regression: kesetaraan Financial Logic Project B vs Project A.
 
 Menguji aturan yang DIMIRROR dari Proyek A:
@@ -91,8 +91,9 @@ def _reset_periode(db, *offsets):
     """
     for off in offsets:
         s, e = _periode(off)
+        kunci = [finance.period_key(db, s, e), finance.legacy_period_key(s)]
         db.query(models.ExpensePeriod).filter(
-            models.ExpensePeriod.periode == finance.period_key(s, e)).delete(
+            models.ExpensePeriod.periode.in_(kunci)).delete(
                 synchronize_session=False)
     db.flush()
 

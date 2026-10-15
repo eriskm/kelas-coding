@@ -65,7 +65,7 @@ def _expense(kategori, uraian, nilai, moment):
 def test_omzet_hanya_dari_cash_dan_modal_terpisah(db):
     p = _periode_aktif(db)
     core = finance.compute_finance_core(db, p.start_at, p.end_at)
-    assert core["periode"] == p.start_at.date().isoformat()
+    assert core["periode"] == "kas_period:%d" % p.id  # kunci unik per periode
     assert core["omset"] >= 0
     assert core["total_modal"] == (core["modal_part"] + core["modal_jasa"] + core["modal_lainnya"])
     assert core["total_beban"] == core["beban_gaji"] + core["beban_operasional"]

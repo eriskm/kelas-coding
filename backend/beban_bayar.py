@@ -122,8 +122,28 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
             sumber=cash.SUMBER_BEBAN, ref_type=BE_REF_TYPE,
             ref_id=periode_key, oleh=oleh, check_saldo=False)
 
-    # -- (4)+(5) sisa jadi Hutang Beban -------------------------------------
-    hutang = quantize(total_beban - (sudah + total_dibayar))
+    # -- (4)+(5) Hutang Beban ------------------------------------------------
+    # Owner (LOCKED): "dalam setiap periode jika Laba Kotor tidak dapat menutup
+    # Beban maka akan menjadi Hutang Beban."
+    #
+    # Jadi penentu hutang BUKAN "berapa yang tidak kebayar dari Laci", tapi
+    # "berapa Beban yang tidak tertutup Laba Kotor periode ini".
+    #   Laba Kotor >= Beban -> target tercapai, TIDAK ada hutang.
+    #   Laba Kotor <  Beban -> selisihnya jadi Hutang Beban.
+    #
+    # Pembayaran dari Laci tetap seperti OD-LOCK-06 (seadanya, tidak negatif);
+    # yang berubah hanya PENGUKURAN hutangnya.
+    if laba_kotor is None:
+        hutang = quantize(total_beban - (sudah + total_dibayar))
+    else:
+        lk = quantize(to_decimal(laba_kotor))
+        hutang = quantize(total_beban - lk)
+        if hutang < ZERO:
+            hutang = ZERO
+    # Catatan: kalau Laci fisiknya tidak cukup sehingga Beban belum lunas,
+    # itu BUKAN Hutang Beban -- shortsal-nya tetap dilaporkan lewat
+    # `kekurangan` / `bisa_ditutup_manual`, dan uangnya diputuskan manual oleh
+    # user. Aturan Owner: Laba Kotor cukup = target CTO tercapai.
     out.update({"dari_laci": dari_laci, "dari_kas_aset": dari_aset,
                 "hutang": hutang, "dibayar": total_dibayar > ZERO,
                 # INFORMASI SAJA -- sistem tidak memindahkan uang. Menutup

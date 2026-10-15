@@ -267,6 +267,75 @@ manual. Hutang Beban tetap Rp330.000 dan menunggu tindakan user.
 
 ---
 
+## OD-LOCK-07 — Identitas Periode Kas & Dasar Hutang Beban
+
+**Status: LOCKED**
+
+Aturan ini datang dari satu keputusan Owner dan berlaku sebagai satu kesatuan.
+
+### 7.1 Periode kas diidentifikasi per periode, bukan per tanggal
+
+Owner: *"pakai periode, karena selama pengujian dalam satu hari bisa berkali-kali
+tutup kas."*
+
+- Kunci periode kas memakai **`kas_periods.id`**, bukan tanggal.
+- ❌ Kunci berbasis tanggal **dilarang**, karena Tutup Kas bisa diulang beberapa
+  kali dalam satu hari sehingga menghasilkan kunci yang bentrok.
+- Dampak kunci yang bentrok: `ref_id` penanda idempotensi Beban dipakai bersama,
+  sehingga periode kedua terlihat "sudah membayar" dan **Beban-nya tidak pernah
+  keluar dari Laci**.
+- Data beku versi lama (kunci tanggal) **tetap boleh dibaca** supaya periode
+  tertutup tidak dibekukan dua kali.
+
+### 7.2 Hutang Beban dihitung dari Laba Kotor
+
+Owner: *"dalam setiap periode jika Laba Kotor tidak dapat menutup Beban maka
+akan menjadi Hutang Beban"* dan *"kalau Laba Kotor cukup untuk menutup beban,
+sama dengan Target CTO tercapai."*
+
+```
+Hutang Beban periode = max(0, Total Beban - Laba Kotor)
+```
+
+- **Laba Kotor ≥ Beban** → target CTO tercapai → **tidak ada** Hutang Beban.
+- **Laba Kotor < Beban** → selisihnya menjadi Hutang Beban.
+- Penentu hutang adalah **Laba Kotor**, bukan "berapa yang tidak kebayar dari
+  Laci". Kalau Laci fisik tidak cukup padahal Laba Kotor menutup Beban, sisanya
+  **bukan** Hutang Beban; shortfall-nya dilaporkan lewat `kekurangan` dan
+  `bisa_ditutup_manual` untuk diputuskan manual oleh user.
+- Pembayaran dari Laci tetap mengikuti OD-LOCK-06 (seadanya, tidak pernah
+  negatif).
+- Hutang yang sudah tercatat **dibiarkan**; kalau periode berikutnya masih
+  minus, hutang **terus nambah** — tidak direset, tidak saling menggantikan.
+
+### 7.3 Yang boleh menyeber antar periode
+
+Owner: *"Payment masuk, Modal keluar, Beban keluar dll hanya dihitung per
+periode. Jika ganti periode, data itu dianggap sampah jangan baca lagi."*
+
+Hanya **tiga hal** ini yang boleh relating ke periode berikutnya:
+
+| Boleh menyeber | Keterangan |
+|---|---|
+| 💰 Uang DP selama belum lunas | Titipan customer, bukan Omzet |
+| 📋 Beban Hutang | Terakumulasi sampai ditutup manual oleh user |
+| 🏦 Kas Aset | Saldo Kas Aset Besar / Pengelola |
+
+Seluruh mutasi Kas lainnya (**Payment masuk, Modal keluar, Beban keluar**)
+hanya dibaca untuk **periode miliknya sendiri**.
+
+### Contoh pengujian (wajib jadi test)
+
+Periode dengan Laba Kotor Rp275.000 dan Beban Rp605.000:
+
+```
+Hutang Beban = 605.000 - 275.000 = Rp330.000
+```
+
+Dua periode berturutan tanpa penjualan: `500.000 + 500.000 = Rp1.000.000` hutang.
+
+---
+
 # Ketidaksesuaian Implementasi
 
 > Dicatat sesuai instruksi: **jangan mengubah keputusan bisnis untuk
@@ -319,6 +388,9 @@ Seluruh keputusan Owner sudah sejalan dengan kode.
 | OD-LOCK-04 | `backend/statusflow.py` — `cek_dp_vs_estimasi`, dipasang di 4 jalur input backend + 2 form UI |
 | OD-LOCK-05 | `backend/refunds.py` — `otomatis=False` untuk refund GARANSI; saldo Kas Aset tidak dikurangi otomatis |
 | OD-LOCK-06 | `backend/beban_bayar.py` — satu mesin `bayar_beban_periode()` (Laci → Kas Aset → Hutang Beban), dipicu dari `finance.beban_frozen` dan `closing.selesaikan_periode` |
+| OD-LOCK-07.1 | `finance.period_key(db, start, end)` — kunci dari `kas_periods.id`, bukan tanggal; `legacy_period_key()` hanya untuk membaca data beku lama |
+| OD-LOCK-07.2 | `beban_bayar.bayar_beban_periode(..., laba_kotor=...)` — hutang = `max(0, Beban - Laba Kotor)` |
+| OD-LOCK-07.3 | `cash.saldo_titipan_dp` (DP), `expense_debt.saldo_hutang` (Hutang Beban), `cash.saldo_kas_aset` (Kas Aset) |
 
 ---
 
