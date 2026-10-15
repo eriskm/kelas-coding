@@ -113,7 +113,10 @@ def on_startup():
     _log("[boot] BOSS SF backend v%s — POST /api/auth/login %s"
           % (APP_VERSION, "TERDAFTAR" if _login_ok else "HILANG! matikan proses lama & restart"))
     from seed import ensure_admin
-    ensure_admin()
+    _ada, _role = ensure_admin()
+    if not _ada:
+        _log("[boot] PERINGATAN: tidak ada akun Admin/Super Admin. "
+             "Jalankan: python bootstrap_superadmin.py --username <nama>")
 
 
 def _backup_database():

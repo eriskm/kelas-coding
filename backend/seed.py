@@ -1,8 +1,21 @@
-"""Seed database. Mode operasi: hanya pastikan superadmin ada (idempotent).
+"""Seed database. Mode operasi: JANGAN pernah membuat akun otomatis.
 
 Data contoh (demo) TIDAK lagi diisi otomatis — diisi hanya bila env
 SUKABUMI_DEMO_SEED=1, agar database produksi tidak kemasukan data dummy
 saat server dijalankan via jalankan.bat.
+
+`ensure_admin()` dulu membuat akun `superadmin` dengan passcode default yang
+tertulis di source code, setiap kali username itu tidak ada. Itu pintu belakang:
+
+  - begitu username `superadmin` diganti/dihapus, server start berikutnya akan
+    MEMBUAT ULANG akun itu dengan passcode yang diketahui siapa pun yang
+    membaca source code;
+  - sejak SUPER ADMIN dipisah dari ADMIN (OD-LOCK-10), akun tersebut otomatis
+    mendapat ROLE_CONFIG, yaitu wewenang penuh.
+
+Sekarang fungsi ini hanya MENGECEK, tidak pernah membuat. Akun pertama dibuat
+lewat `python bootstrap_superadmin.py`, yang passcode-nya diketik sendiri dan
+tidak pernah dicetak.
 """
 import os
 import secrets
@@ -12,31 +25,28 @@ from database import SessionLocal, Base, engine
 from models import Customer, ServiceOrder, Payment, User
 from routers.auth import hash_passcode
 
+#: Hanya untuk pesan peringatan. TIDAK lagi dipakai sebagai passcode.
 SUPERADMIN_USERNAME = "superadmin"
-SUPERADMIN_PASSCODE = "Admin4100"
 
 
 def ensure_admin():
-    """Pastikan akun superadmin ada. Aman dipanggil tiap startup (idempotent)."""
+    """Cek apakah sudah ada akun admin. TIDAK pernah membuat akun baru.
+
+    Mengembalikan (ada, canonical_role) supaya pemanggil bisa memberi
+    peringatan yang berguna.
+    """
+    import authority as auth_mod
+
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
-
-    admin = db.query(User).filter(User.username == SUPERADMIN_USERNAME).first()
-    if not admin:
-        salt = secrets.token_hex(16)
-        db.add(
-            User(
-                username=SUPERADMIN_USERNAME,
-                display_name="Administrator",
-                role="SUPERADMIN",
-                passcode_hash=hash_passcode(SUPERADMIN_PASSCODE, salt),
-                passcode_salt=salt,
-                active=1,
-            )
-        )
-        db.commit()
-        print("Super admin dibuat.")
-    db.close()
+    try:
+        for u in db.query(User).all():
+            if auth_mod.canonical_role(u) in (auth_mod.ROLE_SUPERADMIN,
+                                               auth_mod.ROLE_ADMIN):
+                return True, auth_mod.canonical_role(u)
+        return False, None
+    finally:
+        db.close()
 
 
 def seed():

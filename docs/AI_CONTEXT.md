@@ -151,7 +151,7 @@ Tidak ditemukan endpoint aktif untuk: sparepart, garansi, keuangan, users/akun.
 ## 7. CURRENT FEATURES
 
 ### REAL / DATABASE CONNECTED
-* **Login/Logout/Session:** Form username+passcode, remember me, validasi 401, `superadmin / Admin4100` sebagai default (`backend/seed.py`).
+* **Login/Logout/Session:** Form username+passcode, remember me, validasi 401, AKUN ADMIN TIDAK LAGI DIBUAT OTOMATIS. `backend/seed.py` hanya mengecek, tidak pernah membuat akun. Akun pertama dibuat lewat `python bootstrap_superadmin.py` (passcode diketik sendiri, tidak pernah dicetak).
 * **Servis Baru (Penerimaan Unit):** Modal floating, `POST /orders/receive`, reuse customer by phone, field `customer_name, customer_phone, device, device_password, damagetype, repair_plan, estimate, dp, technician, status(default ANALISA)`. History Cerdas + dropdown teknisi REAL.
 * **Transaksi:** Tabel dari `GET /orders`, pagination backend 10/page, kolom No/Tanggal/Device/User-WA/Status/Kerusakan/Perbaikan/Teknisi/Laba/Aksi.
 * **Pelanggan:** Tabel dari `GET /customers/summary`, kolom Nama/WA/Device Terakhir/Tindakan Terakhir/Harga Terakhir/Total Servis.
