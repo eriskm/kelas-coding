@@ -1,4 +1,4 @@
-﻿"""Auth endpoints - login, logout, current user.
+"""Auth endpoints - login, logout, current user.
 Menggunakan token acak (persisted di DB) + PBKDF2 untuk hashing passcode.
 """
 import hashlib
@@ -186,6 +186,40 @@ def require_admin(user: User = Depends(get_authenticated_user)) -> User:
     return user
 
 
+DOMAIN_AKUN = "AKUN"
+
+EVENT_AKUN_DIBUAT = "AKUN_DIBUAT"
+EVENT_AKUN_DIUBAH = "AKUN_DIUBAH"
+
+
+def _catat_jurnal_akun(db: Session, event: str, user: User, actor: User,
+                        sebelum: dict, sesudah: dict) -> None:
+    """Owner: "Jika ada koreksi data teknisi, perubahan harus tercatat dan
+    tidak boleh diam-diam mengubah histori lama."
+
+    Setiap perubahan akun (role, status, nama, passcode) dicatat sebagai event
+    journal append-only. Yang dicatat adalah nilai SEBELUM dan SESUDAH, supaya
+    perubahan lama tetap bisa dilacak dan tidak hilang begitu saja.
+    """
+    import journal
+
+    berubah = {k: [sebelum.get(k), sesudah.get(k)]
+               for k in sorted(set(sebelum) | set(sesudah))
+               if sebelum.get(k) != sesudah.get(k)}
+    try:
+        journal.record(
+            db, DOMAIN_AKUN, event,
+            entity_type="user", entity_id=user.id,
+            actor=getattr(actor, "username", None),
+            ref_type="user", ref_code=user.username,
+            details={"perubahan": berubah,
+                     "halaman": "Kelola Akun"})
+    except Exception as exc:  # noqa: BLE001
+        # Audit tidak boleh diam-diam hilang, tapi juga tidak boleh membatalkan
+        # operasional. Dicatat di logger.
+        _log("journal AKUN gagal (%s): %s" % (event, exc))
+
+
 @router.get("/roles")
 def list_roles(user: User = Depends(require_admin)):
     """Daftar role + hak aksesnya, untuk form Kelola Akun.
@@ -286,6 +320,10 @@ def create_user(payload: UserCreate, admin: User = Depends(require_admin),
     db.add(user)
     db.commit()
     db.refresh(user)
+    _catat_jurnal_akun(db, EVENT_AKUN_DIBUAT, user, admin,
+                       {}, {"role": user.role, "active": user.active,
+                            "display_name": user.display_name})
+    db.commit()
     return user
 
 
@@ -300,6 +338,11 @@ def update_user(user_id: int, payload: UserUpdate,
         raise HTTPException(status_code=400, detail="Tidak dapat mengubah role/status akun sendiri")
     if (user.role or "").upper() == "SUPERADMIN" and (admin.role or "").upper() != "SUPERADMIN":
         raise HTTPException(status_code=403, detail="Hanya Superadmin yang boleh mengubah Superadmin")
+    # Snapshot SEBELUM perubahan. Ini yang membuat koreksi bisa ditelusuri
+    # kembali -- Owner: perubahan harus tercatat, tidak boleh diam-diam.
+    sebelum = {"role": user.role, "active": user.active,
+               "display_name": user.display_name,
+               "passcode": "diubah" if (payload.passcode or "") else None}
     data = payload.model_dump(exclude_unset=True)
     if "display_name" in data:
         if not (data["display_name"] or "").strip():
@@ -317,4 +360,11 @@ def update_user(user_id: int, payload: UserUpdate,
         user.passcode_hash = hash_passcode(data["passcode"], salt)
     db.commit()
     db.refresh(user)
+    sesudah = {"role": user.role, "active": user.active,
+               "display_name": user.display_name,
+               "passcode": sebelum["passcode"]}
+    _catat_jurnal_akun(db, EVENT_AKUN_DIUBAH, user, admin, sebelum, sesudah)
+    db.commit()
     return user
+
+

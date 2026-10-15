@@ -24,6 +24,7 @@ Isinya:
 | **OD-LOCK-05** | Refund klaim garansi dilakukan MANUAL | 🔒 LOCKED |
 | **OD-LOCK-06** | Pembayaran Beban: Laci → Kas Aset → Hutang Beban | 🔒 LOCKED |
 | **OD-LOCK-07** | Periode kas per-id, Hutang Beban dari Laba Kotor, hanya DP/Hutang/Kas Aset yang menyeber | 🔒 LOCKED |
+| **OD-LOCK-08** | Kelola Akun: Nonaktifkan, bukan hapus. Koreksi technisi wajib tercatat | 🔒 LOCKED |
 
 Yang WAJIB dipatuhi:
 
@@ -172,6 +173,21 @@ Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
 - **Hanya tiga hal** yang boleh menyeber antar periode: **uang DP yang belum
   lunas**, **Hutang Beban**, dan **Kas Aset**. Payment masuk, Modal keluar, dan
   Beban keluar hanya dibaca untuk periode miliknya sendiri.
+
+### Kelola Akun (OD-LOCK-08)
+- ❌ **Jangan pernah** menambah endpoint hapus akun atau tombol hapus di UI.
+  Satu-satunya cara mencabut akses adalah **Nonaktifkan**; datanya tetap dan
+  bisa diaktifkan lagi.
+- Teknisi nonaktif **tidak boleh** menerima penugasan baru. Pakai
+  `orders._pastikan_teknisi_aktif`, dan saring namanya di
+  `GET /api/orders/technicians`.
+- Riwayat servis, garansi, laporan, dan audit **tidak boleh** ikut terhapus.
+- Setiap koreksi akun (nama/role/status/passcode) **wajib** masuk journal lewat
+  `auth._catat_jurnal_akun`, lengkap dengan nilai sebelum + sesudah dan pelaku.
+  Koreksi diam-diam dilarang.
+- Catatan: `SUPERADMIN` itu **alias** dari `ADMIN` (`authority.ROLE_ALIASES`).
+  Jangan pernah menjaganya dengan string polos — tidak ada akun ber-role
+  `SUPERADMIN` di DB, jadi penjaganya jadi tidak bisa dipakai siapa pun.
 
 ---
 

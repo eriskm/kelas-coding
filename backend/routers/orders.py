@@ -110,11 +110,48 @@ def _refresh_money(db: Session, order):
     return order
 
 
+#: Nama akun yang sedang NONAKTIF. Owner: "Teknisi nonaktif tidak bisa login
+#: atau menerima penugasan baru." Nama diambil dari `users.display_name`
+#: karena itulah yang dipakai `service_orders.technician`.
+def _nama_akun_nonaktif(db: Session) -> set:
+    try:
+        return {(u.display_name or "").strip() for u in db.query(User).filter(User.active == 0).all()
+                if (u.display_name or "").strip()}
+    except Exception:  # noqa: BLE001
+        return set()
+
+
+def _pastikan_teknisi_aktif(db: Session, nama):
+    """Tolak penugasan ke teknisi yang akunnya sudah dinonaktifkan.
+
+    Nama bebas yang tidak terdaftar sebagai akun tidak bisa diverifikasi, jadi
+    tetap diterima -- itu perilaku lama dan dipakai untuk teknisi yang hanya
+    ada di data lama. Yang DIJAGA adalah akun yang benar-benar ada: begitu
+    dinonaktifkan, namanya tidak boleh dipakai lagi untuk unit baru.
+
+    Histori unit lama TIDAK disentuh: hanya penugasan BARU yang ditolak.
+    """
+    nama = (nama or "").strip()
+    if not nama:
+        return
+    if nama in _nama_akun_nonaktif(db):
+        raise HTTPException(
+            status_code=400,
+            detail="Teknisi '%s' sudah dinonaktifkan dan tidak bisa "
+                   "menerima penugasan baru. Unit yang sedang dikerjakan "
+                   "tetap bisa diselesaikan." % nama)
+
+
 @router.get("/technicians")
 def list_technicians(db: Session = Depends(get_db_session)):
     """Daftar teknisi dari data nyata: nama unik di service_orders + pengguna
-    aktif ber-role teknisi/admin. Kontrak tetap list[str] agar UI tak berubah."""
+    aktif ber-role teknisi/admin. Kontrak tetap list[str] agar UI tak berubah.
+
+    Nama teknisi yang akunnya sudah dinonaktifkan TIDAK ikut ditampilkan,
+    supaya tidak bisa dipilih untuk unit baru.
+    """
     names = set()
+    nonaktif = _nama_akun_nonaktif(db)
     try:
         rows = db.query(ServiceOrder.technician).filter(
             ServiceOrder.technician.isnot(None),
@@ -122,7 +159,7 @@ def list_technicians(db: Session = Depends(get_db_session)):
         ).distinct().all()
         for (t,) in rows:
             t = (t or "").strip()
-            if t:
+            if t and t not in nonaktif:
                 names.add(t)
     except Exception:
         pass
@@ -630,6 +667,7 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             if not (tech or "").strip():
                 raise HTTPException(status_code=400,
                                     detail="Status REPAIR wajib melengkapi: Teknisi Penanggung Jawab")
+            _pastikan_teknisi_aktif(db, tech)
         elif new_status == "DONE":
             missing = []
             plan = payload.get("repair_plan", order.repair_plan)
@@ -638,6 +676,12 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             tech = payload.get("technician", order.technician)
             if not (tech or "").strip():
                 missing.append("Teknisi Penanggung Jawab")
+            else:
+                # Unit yang teknisinya NONAKTIF masih boleh diselesaikan --
+                # yang ditolak hanya penugasan BARU ke dia. Kalau nama teknisi
+                # yang dikoreksi justru menunjuk akun yang aktif, ganti dulu.
+                _pastikan_teknisi_aktif(
+                    db, tech if tech != order.technician else None)
             # Harga Final wajib diisi sebelum DONE. Tanpa ini unit bisa "selesai"
             # tanpa tahu total harga pelanggan, dan karena `kewajiban()` memakai
             # final_price ?? estimate, harga 0 ikut terhitung sebagai omzet 0 --

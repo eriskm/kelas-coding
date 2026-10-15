@@ -1,4 +1,4 @@
-﻿/* ============================================
+/* ============================================
    SUKABUMI FLASHER — Dashboard Logic (fetch dari FastAPI)
    ============================================ */
 
@@ -473,7 +473,9 @@ async function renderAkun() {
         return `
         <tr class="tx-row">
             <td class="text-center text-gray-500">${_akView.indexOf(a) + 1}</td>
-            <td class="font-semibold text-gray-800 dark:text-gray-200">${escapeHtml(a.nama)}</td>
+            <td class="font-semibold ${a.status === 'Aktif'
+                ? 'text-gray-800 dark:text-gray-200'
+                : 'text-red-600 dark:text-red-400 line-through'}">${escapeHtml(a.nama)}</td>
             <td class="text-gray-500">${escapeHtml(a.username)}</td>
             <td class="text-center">${akRoleBadge(a.role)}</td>
             <td class="text-center">${akStatusBadge(a.status)}</td>
@@ -481,7 +483,7 @@ async function renderAkun() {
             <td class="text-center">
                 <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun" onclick="akEdit(${a.id})"><i class="fa-solid fa-pen-to-square"></i></button>
                 ${a.status === 'Aktif'
-                    ? `<button class="tx-view-btn tx-del-btn" title="Nonaktifkan Akun" onclick="akDeactivate(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-trash"></i></button>`
+                    ? `<button class="tx-view-btn tx-del-btn" title="Nonaktifkan Akun (tidak bisa login, bisa diaktifkan lagi)" onclick="akDeactivate(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-user-slash"></i></button>`
                     : `<button class="tx-view-btn tx-edit-btn" title="Aktifkan Lagi" onclick="akReactivate(${a.id})"><i class="fa-solid fa-rotate-left"></i></button>`}
             </td>
         </tr>`;
@@ -901,20 +903,6 @@ async function apiPut(path, body) {
         throw new Error(detail);
     }
     return res.json();
-}
-
-async function apiDel(path) {
-    const headers = {};
-    const token = getToken();
-    if (token) headers['Authorization'] = 'Bearer ' + token;
-    const res = await fetch(API_BASE + path, { method: 'DELETE', headers });
-    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
-    if (!res.ok) {
-        let detail = 'Gagal menghapus data (HTTP ' + res.status + ')';
-        try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
-        throw new Error(detail);
-    }
-    try { return await res.json(); } catch (_) { return { ok: true }; }
 }
 
 // Warna semantik KPI (ref: warna-reference.png):

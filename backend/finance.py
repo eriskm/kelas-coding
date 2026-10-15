@@ -60,6 +60,18 @@ from models import ExpensePeriod, Payment, ServiceOrder
 from money import ZERO, to_decimal
 from statusflow import cash_moment, kewajiban, payment_summary
 
+
+def _log(pesan):
+    """Catat pesan ke logger.
+
+    Dulu fungsi ini tidak pernah ada di modul ini padahal dipanggil di jalur
+    error `_bayar_beban_langsung`. Akibatnya kalau pembayaran Beban gagal,
+    baris `_log(...)` justru melempar NameError -- jadi error aslinya hilang
+    dan justru membuat financial core ikut ikut exception.
+    """
+    import logging
+    logging.getLogger("bosssf.finance").warning(pesan)
+
 # Kategori beban yang Recognized Owner (SSOT-4). Kategori lain TIDAK masuk Beban.
 BEBAN_KATEGORI = ("gaji", "operasional")
 
