@@ -46,6 +46,21 @@ def _buat_periode(s, mulai):
         m.KasPeriod.start_at == mulai).one()
 
 
+def _input_hutang_admin(db, period, nominal=None, oleh="pytest"):
+    """OD-LOCK-12: simulasi Admin mencatat Hutang Beban manual, 1x per periode."""
+    import expense_debt as debt_mod
+    from finance import period_key
+    from routers.dashboard import batas_periode, compute_finance
+
+    start, end = batas_periode(period)
+    fin = compute_finance(db, start, end)
+    kka = to_decimal(fin["kondisi_kas_akhir"])
+    n = nominal if nominal is not None else max(ZERO, -kka)
+    return debt_mod.catat_hutang_manual(
+        db, period_key(db, start, end), n, kas_period_id=period.id,
+        oleh=oleh, kondisi_kas_akhir=kka)
+
+
 def test_kunci_berbeda_walau_satu_hari(db):
     """Dua periode di hari yang sama WAJIB punya kunci berbeda."""
     import finance
@@ -160,7 +175,14 @@ def test_beban_tiap_periode_dibayar_masing_masing(db):
     assert to_decimal(core2["total_beban"]) == to_decimal(500000), (
         "periode kedua harus punya kewajiban Beban sendiri")
 
-    # Dua periode, dua hutang terpisah.
+    # OD-LOCK-12: dua periode TIDAK otomatis punya baris hutang.
+    rows = db.query(m.ExpenseDebtPeriod).all()
+    assert len(rows) == 0, (
+        "Hutang Beban tidak boleh otomatis terbentuk hanya karena beku Beban")
+    # Admin yang menginput, satu kali per periode -> dua baris terpisah.
+    _input_hutang_admin(db, p1)
+    _input_hutang_admin(db, p2)
+    db.commit()
     rows = db.query(m.ExpenseDebtPeriod).all()
     assert len(rows) == 2, (
         "tiap periode harus punya baris hutang sendiri, bukan berbagi satu")

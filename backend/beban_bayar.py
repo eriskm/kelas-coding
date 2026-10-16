@@ -133,6 +133,11 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
     #
     # Pembayaran dari Laci tetap seperti OD-LOCK-06 (seadanya, tidak negatif);
     # yang berubah hanya PENGUKURAN hutangnya.
+    # OD-LOCK-12 (Owner): Hutang Beban TIDAK lagi dihitung di sini. Nilai
+    # `hutang` di bawah tetap dihitung sebagai INFORMASI untuk laporan, tapi
+    # TIDAK PERNAH menulis ExpenseDebtPeriod / ExpenseDebtEntry.
+    # Hutang Beban hanya boleh masuk lewat keputusan Admin saat Tutup Kas
+    # (`expense_debt.catat_hutang_manual`), satu kali per periode.
     if laba_kotor is None:
         hutang = quantize(total_beban - (sudah + total_dibayar))
     else:
@@ -154,40 +159,15 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
                 "bisa_ditutup_manual": bisa_ditutup,
                 "cara_cover": "manual oleh Admin (POST /api/kas/aset/keluar)"})
 
-    if hutang > ZERO:
-        from models import ExpenseDebtEntry, ExpenseDebtPeriod
-
-        hutang_awal = quantize(saldo_hutang(db))
-        # `expense_debt_periods.periode` UNIQUE: satu periode satu baris
-        # rincian. Pembayaran lanjutan (mis. Kas Aset baru masuk belakangan)
-        # MEMPERBARUI baris itu, bukan menambah baris baru.
-        row = (db.query(ExpenseDebtPeriod)
-               .filter(ExpenseDebtPeriod.periode == periode_key).first())
-        if row is None:
-            row = ExpenseDebtPeriod(
-                periode=periode_key, kas_period_id=kas_period_id,
-                beban=total_beban, laba_kotor=quantize(to_decimal(laba_kotor)),
-                defisit=hutang, cover_kas_aset=dari_aset, hutang_baru=hutang,
-                hutang_awal=hutang_awal,
-                hutang_akhir=quantize(hutang_awal + hutang), oleh=oleh)
-            db.add(row)
-            db.flush()
-            entry = ExpenseDebtEntry(
-                tipe=TIPE_HUTANG, nominal=hutang,
-                saldo_setelah=quantize(hutang_awal + hutang),
-                periode=periode_key, expense_debt_period_id=row.id,
-                kas_entry_id=None, oleh=oleh)
-            db.add(entry)
-            out["hutang_row"] = row
-        else:
-            # Pembayaran lanjutan: hutang yang tersisa tinggal yang dikurangi.
-            hutang_berkurang = quantize(row.defisit - hutang)
-            row.defisit = hutang
-            row.cover_kas_aset = quantize(to_decimal(row.cover_kas_aset) + dari_aset)
-            row.hutang_baru = hutang
-            row.hutang_akhir = quantize(to_decimal(row.hutang_akhir) - hutang_berkurang)
-            row.hutang_awal = hutang_awal
-            out["hutang_row"] = row
+    # OD-LOCK-12: penulisan ExpenseDebtPeriod / ExpenseDebtEntry di blok ini
+    # SUDAH DINONAKTIFKAN. Dulu blok ini membuat Hutang Beban otomatis
+    # setiap kali Beban dibayar dan setiap kali Tutup Kas jalan, sehingga
+    # satu periode kosong pun langsung menambah hutang. Aturan Owner sekarang:
+    # Hutang Beban hanya masuk kalau Admin MEMERIKSA manual saat Tutup Kas,
+    # dan hanya sebesar nilai minus di akhir Kondisi Kas Operasional.
+    out["hutang_row"] = None
+    out["hutang_otomatis"] = False
+    out["hutang_manual_endpoint"] = "POST /api/kas/hutang-beban/catat"
 
     journal.record(
         db, journal.DOMAIN_FINANCE, EVENT_BEBAN_DIBayar,

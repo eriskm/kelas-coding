@@ -245,21 +245,37 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
 
     # ── DEFISIT: Laba Kotor tidak menutup Beban ───────────────────────────
     # Aturan Owner: JANGAN memaksa distribusi, JANGAN memakai DP titipan, JANGAN
-    # membuat saldo nol artifisial. Yang dilakukan: Kas Aset menutup sejauh
-    # mampu, sisanya menjadi Hutang Beban (carry forward).
-    defisit = None
-    if to_decimal(fin.get("laba_bersih") or 0) <= ZERO:
-        try:
-            import expense_debt as debt_mod
-            _p = debt_mod.proses_defisit(db, period.start_at, period.end_at,
-                                         kas_period_id=period.id, oleh=oleh)
-            defisit = {"dibuat": bool(_p.get("created")),
-                       "cover_kas_aset": str(_p.get("cover_kas_aset") or 0),
-                       "hutang_baru": str(_p.get("hutang_baru") or 0),
-                       "catatan": "Laba Kotor tidak menutup Beban: Kas Aset "
-                                  "menutup sejauh mampu, sisanya Hutang Beban."}
-        except Exception as _exc:  # noqa: BLE001
-            defisit = {"dibuat": False, "error": str(_exc)}
+    # ── DEFISIT / HUTANG BEBAN ───────────────────────────────────────────
+    # OD-LOCK-12 (Owner, 2026-10-15) — ATURAN INI BERUBAH TOTAL.
+    #
+    # DULU: Tutup Kas otomatis memanggil `proses_defisit` begitu Laba Bersih
+    # <= 0, sehingga SETIAP tutup kas yang concluded minus langsung menambah
+    # Hutang Beban. Akibatnya satu periode kosong pun menambah 605.000 hutang,
+    # berulang, dan saldo Hutang tumbuh tanpa henti.
+    #
+    # SEKARANG: Tutup Kas TIDAK membuat Hutang Beban sama sekali. Ia hanya
+    # MENGUKUR dan menampilkan nilai minus di akhir Kondisi Kas Operasional.
+    # Yang memutuskan besaran Hutang Beban adalah ADMIN, secara manual, satu
+    # kali per periode, lewat `POST /api/kas/hutang-beban/catat`
+    # (`expense_debt.catat_hutang_manual`).
+    #
+    # Angka yang ditawarkan ke Admin = `fin["kondisi_kas_akhir"]`, yaitu nilai
+    # SALDO baris paling bawah tabel "Kondisi Kas Operasional" di halaman
+    # Keuangan (dihitung satu sumber di `dashboard._kondisi_kas_akhir`).
+    import expense_debt as debt_mod
+    _kka = to_decimal(fin.get("kondisi_kas_akhir") or 0)
+    defisit = {
+        "otomatis": False,
+        "kondisi_kas_akhir": str(_kka),
+        "minus": str(-_kka) if _kka < ZERO else "0",
+        "perlu_input_manual": bool(_kka < ZERO),
+        "sudah_tercatat": bool(debt_mod.sudah_diproses(
+            db, period_key(db, period.start_at, period.end_at))),
+        "endpoint": "POST /api/kas/hutang-beban/catat",
+        "catatan": ("Hutang Beban tidak lagi otomatis. Kalau nilai minus di "
+                    "akhir Kondisi Kas Operasional, Admin yang menginput "
+                    "sendiri satu kali saat Tutup Kas."),
+    }
     db.flush()
 
     laci_adjust = rekonsiliasi_periode(db, dist_row, counted, oleh=oleh)

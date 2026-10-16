@@ -100,6 +100,21 @@ def _stok(kas_aset_awal):
 
 
 # ───────────────────────────── SKENARIO A ─────────────────────────────
+def _input_hutang_admin(db, period, nominal=None, oleh="pytest"):
+    """OD-LOCK-12: simulasi Admin mencatat Hutang Beban manual, 1x per periode."""
+    import expense_debt as debt_mod
+    from finance import period_key
+    from routers.dashboard import batas_periode, compute_finance
+
+    start, end = batas_periode(period)
+    fin = compute_finance(db, start, end)
+    kka = to_decimal(fin["kondisi_kas_akhir"])
+    n = nominal if nominal is not None else max(ZERO, -kka)
+    return debt_mod.catat_hutang_manual(
+        db, period_key(db, start, end), n, kas_period_id=period.id,
+        oleh=oleh, kondisi_kas_akhir=kka)
+
+
 def test_skenario_a_kas_aset_tidak_disentuh_otomatis():
     """OD-LOCK-06 (revisi): Kas Aset TIDAK pernah menutup otomatis.
 
@@ -119,8 +134,10 @@ def test_skenario_a_kas_aset_tidak_disentuh_otomatis():
     assert to_decimal(cash_mod.saldo_laci(s)) == ZERO, "Laci dibayar sampai habis"
     assert to_decimal(cash_mod.saldo_kas_aset(s)) == to_decimal(500000), \
         "Kas Aset TIDAK boleh tersentuh otomatis -- tetap 500.000"
-    assert to_decimal(debt_mod.saldo_hutang(s)) == KEKURANGAN, \
-        "kekurangan 330.000 menunggu keputusan manual, dicatat sebagai Hutang"
+    # OD-LOCK-12: kekurangan TIDAK boleh otomatis jadi Hutang Beban. Menunggu
+    # Admin yang menginput manual saat Tutup Kas.
+    assert to_decimal(debt_mod.saldo_hutang(s)) == ZERO, \
+        "kekurangan 330.000 tidak boleh otomatis jadi Hutang Beban"
     s.close()
 
 
@@ -137,7 +154,8 @@ def test_skenario_b_kas_aset_tidak_disentuh_otomatis():
 
     assert to_decimal(cash_mod.saldo_kas_aset(s)) == to_decimal(200000), \
         "Kas Aset tetap 200.000 meski cukup menutup kekurangan"
-    assert to_decimal(debt_mod.saldo_hutang(s)) == KEKURANGAN
+    assert to_decimal(debt_mod.saldo_hutang(s)) == ZERO, \
+        "Kas Aset cukup menutup kekurangan, tapi hutang tetap TIDAK otomatis"
     assert to_decimal(cash_mod.saldo_laci(s)) == ZERO
     s.close()
 
@@ -153,8 +171,8 @@ def test_skenario_c_tanpa_kas_aset():
     s.commit()
     s.expire_all()
 
-    assert to_decimal(debt_mod.saldo_hutang(s)) == KEKURANGAN, \
-        "Tanpa Kas Aset -> seluruh kekurangan 330.000 jadi Hutang Beban"
+    assert to_decimal(debt_mod.saldo_hutang(s)) == ZERO, \
+        "Tanpa Kas Aset -> TIDAK ada Hutang Beban otomatis (OD-LOCK-12)"
     assert to_decimal(cash_mod.saldo_laci(s)) == ZERO
     assert to_decimal(cash_mod.saldo_kas_aset(s)) == ZERO
     s.close()
@@ -301,8 +319,14 @@ def test_hutang_punya_rincian_periode():
 
     row = s.query(m.ExpenseDebtPeriod).filter(
         m.ExpenseDebtPeriod.kas_period_id == ctx["pid"]).first()
+    # OD-LOCK-12: tanpa perintah Admin, TIDAK ada baris rincian sama sekali.
+    assert row is None, "Hutang Beban tidak boleh ada sebelum Admin menginput"
+    # Setelah Admin menginput manual, baris rinciannya terbentuk.
+    _input_hutang_admin(s, s.query(m.KasPeriod).get(ctx["pid"]))
+    s.commit()
+    row = s.query(m.ExpenseDebtPeriod).filter(
+        m.ExpenseDebtPeriod.kas_period_id == ctx["pid"]).first()
     assert row is not None, "harus ada baris rincian Hutang Beban"
-    assert to_decimal(row.beban) == BEBAN, "rincian nilai beban"
     assert to_decimal(row.defisit) == KEKURANGAN, "rincian sisa kewajiban"
     assert to_decimal(row.cover_kas_aset) == ZERO, "rincian cover Kas Aset"
     assert to_decimal(row.hutang_baru) == KEKURANGAN
@@ -332,9 +356,14 @@ def test_hutang_terakumulasi_saat_periode_berganti():
     s.commit()
     s.expire_all()
     hutang_1 = to_decimal(debt_mod.saldo_hutang(s))
+    # OD-LOCK-12: periode pertama belum otomatis jadi hutang.
+    assert hutang_1 == ZERO, "Hutang Beban tidak boleh otomatis muncul"
+    p = s.query(m.KasPeriod).get(ctx["pid"])
+    _input_hutang_admin(s, p)
+    s.commit()
+    hutang_1 = to_decimal(debt_mod.saldo_hutang(s))
     assert hutang_1 == KEKURANGAN
 
-    p = s.query(m.KasPeriod).get(ctx["pid"])
     nxt = m.KasPeriod(start_at=p.end_at, end_at=p.end_at + timedelta(days=1),
                       status="OPEN")
     s.add(nxt)
@@ -345,6 +374,11 @@ def test_hutang_terakumulasi_saat_periode_berganti():
     _isi(s, nxt_id)
     s.commit()
     s.expire_all()
+    # Periode kedua juga harus menunggu Admin.
+    assert to_decimal(debt_mod.saldo_hutang(s)) == hutang_1, \
+        "periode kedua TIDAK boleh otomatis menambah hutang"
+    _input_hutang_admin(s, s.query(m.KasPeriod).get(nxt_id))
+    s.commit()
 
     hutang_2 = to_decimal(debt_mod.saldo_hutang(s))
     assert hutang_2 > hutang_1, (

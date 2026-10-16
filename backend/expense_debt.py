@@ -133,6 +133,81 @@ def proses_defisit(db: Session, start, end, kas_period_id=None, oleh: str = None
             "kas_aset_mutation": mutasi}
 
 
+
+def catat_hutang_manual(db: Session, periode_key: str, nominal,
+                       kas_period_id=None, oleh: str = None,
+                       kondisi_kas_akhir=None, catatan: str = None) -> dict:
+    """OD-LOCK-12 (Owner): Admin mencatat Hutang Beban secara MANUAL.
+
+    Berbeda total dengan `proses_defisit` versi lama:
+
+      - TIDAK ada pemicu otomatis. Ini hanya jalan kalau Admin memanggilnya.
+      - Besarnya TIDAK dihitung dari `Beban - Laba Kotor`. Besarnya adalah
+        nilai yang di-input Admin, yangynch diasumsikan sama dengan nilai
+        minus di akhir tabel "Kondisi Kas Operasional".
+      - SATU KALI per periode. `expense_debt_periods.periode` UNIQUE jadi
+        penaganya, dan pengecekan di bawah memberi pesan 400 yang jelas.
+
+    Nominal tidak boleh melebihi nilai minus yang diukur, karena itu berarti
+    Admin salah baca angka. Nominal lebih kecil tetap boleh (Admin boleh
+    mencatat sebagian).
+
+    `catatan` disimpan ke journal, bukan ke baris periode: tabel
+    `expense_debt_periods` tidak punya kolom teks dan sengaja tidak ditambah
+    supaya tidak perlu migrasi skema produksi.
+    """
+    from models import ExpenseDebtEntry, ExpenseDebtPeriod
+
+    n = quantize(to_decimal(nominal))
+    if n <= ZERO:
+        raise DebtError("Nominal Hutang Beban harus lebih besar dari nol")
+
+    existing = sudah_diproses(db, periode_key)
+    if existing is not None:
+        raise DebtError(
+            "Hutang Beban untuk periode ini sudah tercatat (%s). "
+            "Satu periode hanya boleh satu kali pencatatan." % periode_key)
+
+    if kondisi_kas_akhir is not None:
+        batas = -quantize(to_decimal(kondisi_kas_akhir))
+        if batas <= ZERO:
+            raise DebtError(
+                "Kondisi Kas Operasional periode ini tidak minus, jadi tidak "
+                "ada Hutang Beban yang perlu dicatat.")
+        if n > batas:
+            raise DebtError(
+                "Nominal %s lebih besar dari nilai minus Conditions Kas "
+                "Operasional (%s)." % (n, batas))
+
+    hutang_awal = quantize(saldo_hutang(db))
+    hutang_akhir = quantize(hutang_awal + n)
+    row = ExpenseDebtPeriod(
+        periode=periode_key, kas_period_id=kas_period_id,
+        beban=ZERO, laba_kotor=ZERO,
+        defisit=n, cover_kas_aset=ZERO, hutang_baru=n,
+        hutang_awal=hutang_awal, hutang_akhir=hutang_akhir,
+        oleh=oleh)
+    db.add(row)
+    db.flush()
+    entry = ExpenseDebtEntry(
+        tipe=TIPE_HUTANG, nominal=n, saldo_setelah=hutang_akhir,
+        periode=periode_key, expense_debt_period_id=row.id,
+        kas_entry_id=None, oleh=oleh)
+    db.add(entry)
+    db.flush()
+    journal.record(
+        db, journal.DOMAIN_FINANCE, EVENT_DEFSIT,
+        entity_type="expense_debt_period", entity_id=row.id,
+        amount=n, actor=oleh, ref_type="periode", ref_code=periode_key,
+        details={"hutang_baru": str(n), "hutang_awal": str(hutang_awal),
+                 "hutang_akhir": str(hutang_akhir),
+                 "kondisi_kas_akhir": (None if kondisi_kas_akhir is None
+                                       else str(kondisi_kas_akhir)),
+                 "sumber": "input manual Admin saat Tutup Kas (OD-LOCK-12)",
+                 "catatan": catatan})
+    return {"periode_row": row, "entry": entry, "hutang_baru": n,
+            "hutang_awal": hutang_awal, "hutang_akhir": hutang_akhir}
+
 def precheck_hutang(db: Session) -> dict:
     """Pre-check pelunasan (read-only): saldo hutang & saldo Kas Aset."""
     hutang = saldo_hutang(db)

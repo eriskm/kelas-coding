@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from dependencies import get_db_session
 from finance import compute_finance_core
 import cash
-from money import HUNDRED, PCT_10, PCT_30, ZERO, to_decimal
+from money import HUNDRED, PCT_10, PCT_30, ZERO, quantize, to_decimal
 from models import Expense, KasEntry, KasPeriod, Payment, Refund, ServiceOrder, User
 from routers.auth import get_authenticated_user
 from statusflow import kewajiban, lunas_moment, payment_summary
@@ -325,6 +325,38 @@ def _expense_moment(e) -> Optional[datetime]:
     return None
 
 
+def _kondisi_kas_akhir(kas_awal_operasional, omset, total_modal, total_beban,
+                      alokasi_terbentuk, laba_bersih, alokasi) -> Decimal:
+    """OD-LOCK-12: nilai akhir kolom Saldo di tabel "Kondisi Kas Operasional".
+
+    Meniru PERSIS urutan baris tabelnya (lihat `renderKondisiKas` di
+    `frontend/script.js`), supaya angka yang dilihat Admin = angka yang
+    dicatat ke Hutang Beban:
+
+        saldo = Kas Kecil/Laci (operasional, bebas DP)
+              + Omzet
+              - Total Modal (Part+Jasa+Lain)
+              - Total Beban (Gaji & OPS)
+              - Bagi Hasil 100%  <- HANYA kalau distribusi sudah TERBENTUK
+
+    Baris "Kas Besar (Pengelola)" adalah baris POSISI: tidak ikut menambah
+    saldo berjalan, jadi sengaja tidak dipakai di sini.
+
+    PerGKAT: baris Bagi Hasil hanya digambar kalau `alokasi_terbentuk` DAN
+    `laba_bersih > 0`. Kalau distribusi belum terbentuk, sedangkan 100% Laba
+    Bersih tetap dipotong, tabel akan terlihat lebih minus daripada reality.
+    """
+    saldo = to_decimal(kas_awal_operasional)
+    saldo += to_decimal(omset)
+    saldo -= to_decimal(total_modal)
+    saldo -= to_decimal(total_beban)
+    laba = to_decimal(laba_bersih)
+    if alokasi_terbentuk and laba > ZERO:
+        for kunci in ("karyawan", "pengelola", "investor", "kas_aset"):
+            saldo -= to_decimal((alokasi or {}).get(kunci) or 0)
+    return quantize(saldo)
+
+
 def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar: bool = True) -> dict:
     """Satu-satunya sumber hitungan keuangan (dipakai overview & Tutup Kas).
 
@@ -421,6 +453,10 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         investor = _al["investor"]
         kas_aset = _al["kas_aset"]
     else:
+        # Wajib diinisialisasi: dipakai `_kondisi_kas_akhir` (OD-LOCK-12) di
+        # bawah. Tanpa branch ini, distributor yang belum terbentuk membuat
+        # UnboundLocalError saat halaman Keuangan dibuka.
+        _al = {}
         karyawan = pengelola = investor = kas_aset = ZERO
 
     # Jurnal kas manual periode aktif (di luar servis & beban).
@@ -509,6 +545,18 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         # Omzet/Modal/Beban (yang semuanya sudah bebas dari DP).
         "kas_aset_awal_operasional": max(
             ZERO, _kas_awal - _titipan["saldo"]),
+        # OD-LOCK-12: nilai AKHIR tabel "Kondisi Kas Operasional" (kolom Saldo
+        # baris paling bawah) — persis yang dibaca Admin di halaman Keuangan.
+        # Dihitung di SATU tempat supaya angka di layar, angka yang offered ke
+        # form input Hutang Beban, dan angka yang dicatat ke DB tidak mungkin
+        # berbeda. `frontend/script.js:renderKondisiKas` memakai formula yang
+        # sama dengan urutan baris tabelnya.
+        "kondisi_kas_akhir": _kondisi_kas_akhir(
+            kas_awal_operasional=max(ZERO, _kas_awal - _titipan["saldo"]),
+            omset=omset, total_modal=total_modal, total_beban=total_beban,
+            alokasi_terbentuk=alokasi_ok,
+            laba_bersih=laba_bersih,
+            alokasi=_al),
         "saldo_laci": cash.saldo_laci(db),
         "label_laci": cash.LABEL[cash.LAYER_LACI],
         # SSOT-7 / v4 #11: posisi Kas BESAR hanya untuk Admin & Pengelola.

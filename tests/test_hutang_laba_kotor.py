@@ -72,55 +72,82 @@ def _skenario(s, nama, omset, modal, beban_gaji, beban_ops):
     return s.query(m.KasPeriod).order_by(m.KasPeriod.id.desc()).first()
 
 
-def _skenario_dengan_dp(s, nama, omset, modal, beban_gaji, beban_ops, dp=0):
-    """Skenario dengan DP: uang DP ikut masuk Laci tapi BUKAN bagian Omzet.
+def _input_hutang_admin(db, period, nominal=None, oleh="pytest"):
+    """OD-LOCK-12: simulasi Admin mencatat Hutang Began secara manual.
 
-    Efeknya Laci = Laba Kotor + DP, jadi Laci TIDAK sama dengan Laba Kotor.
-    Inilah yang membuat test bisa membedakan "hutang dari Laba Kotor" dari
-    "hutang dari sisa Laci".
+    Meniru `POST /api/beban-hutang/catat`: ambil nilai minus di akhir
+    Kondisi Kas Operasional dari SATU sumber (`kondisi_kas_akhir`), lalu catat
+    sebesar itu (atau sebesar `nominal` kalau diberikan).
     """
-    import models as m
-    import cash
+    import expense_debt as debt_mod
+    from finance import period_key
+    from routers.dashboard import batas_periode, compute_finance
 
-    mulai = datetime(2026, 8, 1, 9, 0, 0)
-    s.add(m.KasPeriod(start_at=mulai, end_at=mulai + timedelta(days=1),
-                      status="OPEN"))
-    s.add(m.Customer(name=nama, phone="0800", created_at=mulai))
-    s.commit()
-    s.expire_all()
-    cid = s.query(m.Customer).filter(m.Customer.name == nama).one().id
+    start, end = batas_periode(period)
+    fin = compute_finance(db, start, end)
+    kka = to_decimal(fin["kondisi_kas_akhir"])
+    n = nominal if nominal is not None else max(ZERO, -kka)
+    return debt_mod.catat_hutang_manual(
+        db, period_key(db, start, end), n, kas_period_id=period.id,
+        oleh=oleh, kondisi_kas_akhir=kka)
 
-    for kategori, nilai in (("Gaji", beban_gaji), ("Operasional", beban_ops)):
-        s.add(m.Expense(kategori=kategori, uraian=nama, nilai=to_decimal(nilai),
-                        created_at=mulai, recurring=True))
-    s.flush()
 
-    o = m.ServiceOrder(
-        no_servis=nama, customer_id=cid, device="PY", status="CASH",
-        unit_status="DIAMBIL", service_date=mulai.date(), taken_at=mulai,
-        final_price=to_decimal(omset), estimate=to_decimal(omset),
-        repair_plan="x", technician="T", warranty_months=1, created_at=mulai,
-        part_cost=to_decimal(modal), modal_jasa=to_decimal(0),
-        modal_lainnya=to_decimal(0))
-    s.add(o)
-    s.flush()
+def test_od_lock_12_hutang_beban_tidak_lagi_otomatis(db):
+    """OD-LOCK-12: Beku periode lalu Tutup Kas TIDAK boleh bikin hutang sendiri."""
+    import finance
+    import expense_debt
 
-    if dp:
-        pay_dp = m.Payment(service_order_id=o.id, kind="DP", amount=to_decimal(dp),
-                           method="CASH", created_at=mulai)
-        s.add(pay_dp)
-        s.flush()
-        cash.catat_penerimaan(s, pay_dp)
+    p = _skenario(db, "OL12-OTOMATIS", 600000, 325000, 405000, 200000)
+    core = finance.compute_finance_core(db, p.start_at, p.end_at, freeze=True)
+    db.commit()
+    # Kondisi Kas minus, tapi hutang TIDAK boleh muncul sendiri.
+    assert to_decimal(core["laba_kotor"]) == to_decimal(275000)
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(0), (
+        "Beban beku saja TIDAK boleh membuat Hutang Beban (OD-LOCK-12)")
 
-    pay = m.Payment(service_order_id=o.id, kind="PELUNASAN",
-                    amount=to_decimal(omset), method="CASH", created_at=mulai)
-    s.add(pay)
-    s.flush()
-    cash.catat_penerimaan(s, pay)
-    cash.catat_modal(s, o)
-    s.commit()
-    s.expire_all()
-    return s.query(m.KasPeriod).order_by(m.KasPeriod.id.desc()).first()
+    import closing
+    closing.tutup_periode(db, p, counted=None, oleh="pytest",
+                          compute_finance=finance.compute_finance_core)
+    db.commit()
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(0), (
+        "Tutup Kas TIDAK boleh membuat Hutang Beban tanpa perintah Admin")
+
+
+def test_od_lock_12_admin_input_manual_satu_kali(db):
+    """OD-LOCK-12: Admin menginput manual = nilai minus Kondisi Kas, 1x/period."""
+    import finance
+    import expense_debt
+
+    p = _skenario(db, "OL12-MANUAL", 600000, 325000, 405000, 200000)
+    finance.compute_finance_core(db, p.start_at, p.end_at, freeze=True)
+    db.commit()
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(0)
+
+    _input_hutang_admin(db, p)
+    db.commit()
+    assert to_decimal(expense_debt.saldo_hutang(db)) > to_decimal(0), (
+        "setelah Admin input manual, Hutang Beban harus tercatat")
+
+    # Satu periode = satu kali. Input kedua harus DITOLAK.
+    import pytest
+    with pytest.raises(Exception):
+        _input_hutang_admin(db, p)
+    db.rollback()
+
+
+def test_od_lock_12_nominal_lebih_besar_dari_minus_ditolak(db):
+    """Nominal tidak boleh melebihi nilai minus yang diukur."""
+    import finance
+    import expense_debt
+    import pytest
+
+    p = _skenario(db, "OL12-LEBIH", 600000, 325000, 405000, 200000)
+    finance.compute_finance_core(db, p.start_at, p.end_at, freeze=True)
+    db.commit()
+    with pytest.raises(Exception):
+        _input_hutang_admin(db, p, nominal=to_decimal(99_000_000))
+    db.rollback()
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(0)
 
 
 def test_laba_kotor_cukup_tidak_ada_hutang(db):
@@ -150,8 +177,13 @@ def test_laba_kotor_kurang_jadi_hutang(db):
 
     assert to_decimal(core["laba_kotor"]) == to_decimal(275000)
     assert to_decimal(core["total_beban"]) == to_decimal(605000)
+    # OD-LOCK-12: TIDAK ada hutang sampai Admin yang input.
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(0)
+    _input_hutang_admin(db, p)
+    db.commit()
     assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(330000), (
-        "605.000 - 275.000 = 330.000 harus menjadi Hutang Beban")
+        "nilai minus Conditions Kas harus menjadi Hutang Beban setelah "
+        "Admin input manual")
 
 
 def test_hutang_menumpuk_antar_periode(db):
@@ -183,8 +215,15 @@ def test_hutang_menumpuk_antar_periode(db):
         s.commit()
         assert to_decimal(core["laba_kotor"]) == ZERO, "tanpa penjualan"
 
+    # OD-LOCK-12: ketiga periode TIDAK otomatis menambah hutang.
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(0), (
+        "beberapa periode kosong tidak boleh otomatis menambah hutang")
+    # Admin yang memutuskan, satu kali per periode.
+    for pp in s.query(m.KasPeriod).order_by(m.KasPeriod.id).all():
+        _input_hutang_admin(s, pp)
+    s.commit()
     assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(1500000), (
-        "3 x 500.000 harus menumpuk, bukan saling menggantikan")
+        "3 x 500.000 menumpuk karena Admin thrice input manual")
 
 
 def test_hutang_lama_tidak_ditimpa_periode_baru(db):
@@ -196,7 +235,7 @@ def test_hutang_lama_tidak_ditimpa_periode_baru(db):
 
     mulai = datetime(2026, 8, 1, 9, 0, 0)
     s = db
-    # Hutang lama dari "uji sebelumnya", tanpa baris rincian per periode.
+    # Hutang Beban dari periode sebelumnya (satu-satunya yang boleh terbawa).
     s.add(m.ExpenseDebtEntry(tipe=TIPE_HUTANG, nominal=to_decimal(1147000),
                              saldo_setelah=to_decimal(1147000),
                              periode="lama-sebelum-perubahan",
@@ -207,49 +246,23 @@ def test_hutang_lama_tidak_ditimpa_periode_baru(db):
     finance.compute_finance_core(s, p.start_at, p.end_at, freeze=True)
     s.commit()
 
+    # OD-LOCK-12 + aturan Owner: periode BARU tidak boleh membawa pengaruh
+    # periode lama, KECUALI DP dan Beban Hutang. Jadi Hutang Beban lama (1.147.000)
+    # boleh terbawa; sisanya (Omzet/Modal/Beban periode lama) tidak.
+    assert to_decimal(expense_debt.saldo_hutang(s)) == to_decimal(1147000), \
+        "Hutang Beban boleh terbawa; periode baru tidak otomatis menambah"
+    _input_hutang_admin(s, p)
+    s.commit()
     assert to_decimal(expense_debt.saldo_hutang(s)) == to_decimal(1147000 + 330000), \
-        "hutang lama 1.147.000 harus tetap utuh lalu nambah 330.000"
-
-
-def test_aturannya_bukan_cara_lama_bayar_kurang_di_laci(db):
-    """Pemisah yang wajib ada: Laci harus TIDAK sama dengan Laba Kotor.
-
-    Kalau Laci persis sama dengan Laba Kotor (penjualan dibayar penuh),
-    maka "cara lama" (hutang = beban yang tidak kebayar dari Laci) dan "cara
-    baru" (hutang = beban yang tidak ditutup Laba Kotor) menghasilkan angka
-    yang sama -- sehingga test tidak akan pernah membedakan keduanya.
-
-    Di sini Laci 375.000 tapi Laba Kotor hanya 275.000 (ada DP 100.000 yang
-    ikut masuk laci). Dua aturan harus memberi jawaban BERBEDA:
-        cara lama -> hutang 605.000 - 375.000 = 230.000   (SALAH)
-        cara baru -> hutang 605.000 - 275.000 = 330.000   (BENAR)
-    """
-    import finance
-    import expense_debt
-    import cash
-
-    p = _skenario_dengan_dp(db, "DP-DI-LACI", 600000, 325000, 405000, 200000,
-                            dp=100000)
-    # Diperiksa SEBELUM Beban dibayar: di titik ini Laci masih 375.000.
-    assert to_decimal(cash.saldo_laci(db)) == to_decimal(375000), \
-        "Laci harus 375.000 supaya berbeda dari Laba Kotor 275.000"
-
-    core = finance.compute_finance_core(db, p.start_at, p.end_at, freeze=True)
-    db.commit()
-
-    assert to_decimal(core["laba_kotor"]) == to_decimal(275000)
-    assert to_decimal(core["total_beban"]) == to_decimal(605000)
-    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(330000), \
-        "hutang harus dihitung dari Laba Kotor (330.000), bukan sisa Laci (230.000)"
+        "Hutang Beban lama tetap utuh, lalu nambah setelah Admin input manual"
 
 
 def test_laba_kotor_cukup_tetap_tanpa_hutang_walau_laci_kurang(db):
     """Laba Kotor >= Beban = target CTO tercapai, walau uangnya belum cukup.
 
-    Cara lama akan mencatat hutang di sini karena Laci tidak cukup. Aturan
-    Owner menyatakan Laba Kotor cukup berarti target tercapai, jadi hutang
-    harus nol; sisa yang belum terbayar dilaporkan lewat `kekurangan` untuk
-    diputuskan manual oleh user, bukan dicatat sebagai Hutang Beban.
+    Sesuai OD-LOCK-12: Hutang Beban hanya muncul kalau nilai AKHIR di tabel
+    "Kondisi Kas Operasional" minus DAN Admin menginputnya. Di sini Laba Kotor
+    sudah menutup Beban, jadi tidak ada minus dan tidak ada hutang sama sekali.
 
     Cara membuat Laci < Laba Kotor: penjualan lunas 600.000 (Laba Kotor
     500.000 setelah modal 100.000), lalu keluar CASH_OUT 200.000 dari Laci.

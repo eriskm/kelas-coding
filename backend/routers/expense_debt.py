@@ -4,7 +4,10 @@ Authority (Q13: PENGELOLA read-oriented):
 - baca (GET)  : semua akun terautentikasi, termasuk PENGELOLA (monitoring);
 - tulis       : `Action.EXPENSE_DEBT_WRITE` = Admin saja (PENGELOLA 403).
 """
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from typing import Optional
+from money import to_decimal
 from sqlalchemy.orm import Session
 
 import expense_debt as debt_mod
@@ -141,3 +144,60 @@ def defisit_periode(kas_period_id: int, db: Session = Depends(get_db_session),
     """Simulasi defisit satu periode (read-only, tidak menulis apa pun)."""
     period = _target_period(db, kas_period_id)
     return debt_mod.hitung_defisit(db, period.start_at, period.end_at)
+
+
+class _HutangManualIn(BaseModel):
+    """Body input manual Hutang Beban (OD-LOCK-12)."""
+    kas_period_id: int
+    nominal: Optional[float] = None
+    catatan: Optional[str] = None
+
+
+@router.post("/catat")
+def catat_hutang_beban_manual(data: _HutangManualIn,
+                              db: Session = Depends(get_db_session),
+                              user: User = Depends(require_authority(Action.KAS_CLOSE))):
+    """OD-LOCK-12: Admin mencatat Hutang Beban secara manual, 1x per periode.
+
+    Tutup Kas TIDAK lagi membuat hutang otomatis. Endpoint inilah satu-satunya
+    jalan masuk Hutang Beban. Nominal WAJIB <= nilai minus di akhir Kondisi
+    Kas Operasional; kalau tidak, ditolak.
+    """
+    import expense_debt as debt_mod
+    from finance import period_key
+    from routers.dashboard import batas_periode, compute_finance
+
+    p = db.query(KasPeriod).filter(KasPeriod.id == data.kas_period_id).first()
+    if p is None:
+        raise HTTPException(status_code=404, detail="Periode kas tidak ditemukan")
+    if (p.status or "").upper() != "OPEN":
+        raise HTTPException(status_code=400,
+                            detail="Hanya periode OPEN yang bisa dicatat hutangnya")
+
+    key = period_key(db, p.start_at, p.end_at)
+    fin = compute_finance(db, *batas_periode(p))
+    kka = to_decimal(fin.get("kondisi_kas_akhir") or 0)
+
+    nominal = data.nominal
+    if nominal is None:
+        if kka >= ZERO:
+            raise HTTPException(status_code=400, detail=(
+                "Kondisi Kas Operasional tidak minus, jadi tidak ada Hutang "
+                "Beban yang perlu dicatat."))
+        nominal = float(-kka)
+
+    try:
+        res = debt_mod.catat_hutang_manual(
+            db, key, nominal, kas_period_id=p.id,
+            oleh=(user.display_name or user.username),
+            kondisi_kas_akhir=kka, catatan=data.catatan)
+    except debt_mod.DebtError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    db.commit()
+    return {"created": True,
+            "periode": key,
+            "kondisi_kas_akhir": str(kka),
+            "hutang_baru": str(res["hutang_baru"]),
+            "hutang_awal": str(res["hutang_awal"]),
+            "hutang_akhir": str(res["hutang_akhir"]),
+            "saldo_hutang": str(debt_mod.saldo_hutang(db))}
