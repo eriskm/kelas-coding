@@ -1358,9 +1358,23 @@
                                     </table>
                                 </div>
                                 <div class="flex flex-wrap items-center gap-2 mt-3 pt-3 border-t border-gray-100 dark:border-white/5" data-cap="EXPENSE_DEBT_WRITE">
-                                    <button type="button" onclick="kuDebtProses()" class="receive-back-btn">
-                                        <i class="fa-solid fa-calculator"></i> Proses Defisit Periode
-                                    </button>
+                                    <!-- OD-LOCK-12: Hutang Beban TIDAK lagi otomatis.
+                                         Admin yang menginput manual saat Tutup Kas,
+                                         sebesar nilai minus di akhir Conditions Kas
+                                         Operasional. Satu periode satu kali. -->
+                                    <div id="kuHutangManualWrap" class="w-full">
+                                        <div class="flex flex-wrap items-end gap-2">
+                                            <div class="field" style="min-width:220px;flex:1 1 220px">
+                                                <label class="field-label" for="kuHutangInput">Hutang Beban Periode Ini (Rp)</label>
+                                                <input id="kuHutangInput" type="number" min="0" step="1" class="receive-input" placeholder="0">
+                                            </div>
+                                            <button type="button" onclick="kuHutangCatat()" id="kuHutangBtn"
+                                                    class="receive-submit-btn">
+                                                <i class="fa-solid fa-pen-to-square"></i> Catat Hutang Beban
+                                            </button>
+                                        </div>
+                                        <p class="ku-sub mt-2" id="kuHutangHint"></p>
+                                    </div>
                                     <button type="button" onclick="kuDebtLunas()" class="receive-submit-btn">
                                         <i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan dari Kas Aset
                                     </button>

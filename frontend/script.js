@@ -4294,19 +4294,99 @@ async function loadKuDebt() {
             <td class="numeric-r">${kuRupiah(p.hutang_baru || 0)}</td></tr>`).join('')
             : `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada proses defisit Beban.</div></td></tr>`;
     }
+    kuRenderHutangManual();
     applyRoleUI(document.body);
 }
 
-async function kuDebtProses() {
-    if (!can('EXPENSE_DEBT_WRITE')) { toast('Aksi ditolak: hanya Admin.'); return; }
+// OD-LOCK-12: padanan Conditions Kas Operasional (baris terakhir tabel).
+// Dihitung backend di `dashboard._kondisi_kas_akhir` dan dikirim sebagai
+// `finance.kondisi_kas_akhir`, jadi angka di sini sama persis dengan yang
+// dibaca Admin di tabel - bukan hasil hitung ulang di frontend.
+function kuKondisiKasAkhir() {
+    const fin = _kuFin || {};
+    const v = Number(fin.kondisi_kas_akhir);
+    return isFinite(v) ? v : 0;
+}
+
+function kuRenderHutangManual() {
+    const wrap = document.getElementById('kuHutangManualWrap');
+    const input = document.getElementById('kuHutangInput');
+    const btn = document.getElementById('kuHutangBtn');
+    const hint = document.getElementById('kuHutangHint');
+    if (!wrap || !input || !hint) return;
+    const boleh = can('EXPENSE_DEBT_WRITE') || can('KAS_CLOSE');
+    const akhir = kuKondisiKasAkhir();
+    const minus = akhir < 0 ? -akhir : 0;
+
+    if (!boleh) {
+        wrap.classList.add('hidden');
+        return;
+    }
+    wrap.classList.remove('hidden');
+
+    if (minus > 0) {
+        // Isi otomatis dengan nilai minus; Admin boleh menyesuaikan selama
+        // tidak melebihi minus (server juga memeriksanya).
+        if (document.activeElement !== input) input.value = Math.round(minus);
+        hint.textContent = 'Conditions Kas Operasional berakhir MINUS '
+            + kuRupiah(minus) + '. Isi nominal (tidak boleh melebihi angka itu), '
+            + 'lalu tekan Catat. Satu periode hanya boleh satu kali.';
+        if (btn) btn.disabled = false;
+    } else {
+        input.value = '';
+        hint.textContent = 'Conditions Kas Operasional berakhir PLUS '
+            + kuRupiah(akhir) + '. Tidak ada Hutang Beban yang perlu dicatat '
+            + 'pada periode ini.';
+        if (btn) btn.disabled = true;
+    }
+}
+
+function kuPeriodeAktifId() {
+    // `finance.periode` = `kas_period:<id>` (lihat `finance.period_key`).
+    const fin = _kuFin || {};
+    const raw = String(fin.periode || '');
+    const cocok = raw.match(/(\d+)\s*$/);
+    return cocok ? Number(cocok[1]) : null;
+}
+
+async function kuHutangCatat() {
+    if (!can('EXPENSE_DEBT_WRITE') && !can('KAS_CLOSE')) {
+        toast('Aksi ditolak: hanya Admin / Super Admin.');
+        return;
+    }
+    const input = document.getElementById('kuHutangInput');
+    const nominal = Number((input && input.value) || 0);
+    const minus = -kuKondisiKasAkhir();
+    if (!(minus > 0)) {
+        _kuFb('kuDebtFeedback', 'Conditions Kas Operasional tidak minus, jadi tidak ada Hutang Beban.', 'error');
+        return;
+    }
+    if (!(nominal > 0)) {
+        _kuFb('kuDebtFeedback', 'Isi nominal lebih besar dari nol.', 'error');
+        return;
+    }
+    if (nominal > minus) {
+        _kuFb('kuDebtFeedback', 'Nominal ' + kuRupiah(nominal) + ' melebihi nilai minus '
+            + kuRupiah(minus) + '.', 'error');
+        return;
+    }
+    const pid = kuPeriodeAktifId();
+    if (!pid) {
+        _kuFb('kuDebtFeedback', 'Periode kas aktif tidak ditemukan.', 'error');
+        return;
+    }
+    if (!confirm('Catat Hutang Beban ' + kuRupiah(nominal)
+        + ' untuk periode ini?\n\nTindakan ini hanya bisa satu kali per periode.')) return;
     try {
-        const res = await apiPost('/beban-hutang/proses', {}, { idempotencyKey: newIdemKey() });
-        _kuFb('kuDebtFeedback', 'Defisit diproses. Cover Kas Aset ' + _kuMoney(res.cover_kas_aset)
-            + ', hutang baru ' + _kuMoney(res.hutang_baru) + '.', 'success');
-        toast('Proses defisit selesai.', 'success');
+        const res = await apiPost('/beban-hutang/catat',
+            { kas_period_id: pid, nominal: nominal },
+            { idempotencyKey: newIdemKey() });
+        _kuFb('kuDebtFeedback', 'Hutang Beban ' + kuRupiah(res.hutang_baru)
+            + ' tercatat. Sisa hutang ' + kuRupiah(res.saldo_hutang) + '.', 'success');
+        toast('Hutang Beban tercatat.', 'success');
         await loadKuDebt();
     } catch (err) {
-        _kuFb('kuDebtFeedback', err.message || 'Gagal memproses defisit.', 'error');
+        _kuFb('kuDebtFeedback', err.message || 'Gagal mencatat Hutang Beban.', 'error');
     }
 }
 
