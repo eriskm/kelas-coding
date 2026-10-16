@@ -456,6 +456,11 @@ tutup kas."*
 
 ### 7.2 Hutang Beban dihitung dari Laba Kotor
 
+> **SUPERSEDED oleh OD-LOCK-12 (2026-10-16).** Hutang Beban tidak lagi
+> dihitung otomatis dari `Beban - Laba Kotor`. Sekarang hanya masuk kalau
+> Admin menginput manual saat Tutup Kas, sebesar nilai minus di akhir
+> Kondisi Kas Operasional. Bagian ini disimpan sebagai riwayat keputusan.
+
 Owner: *"dalam setiap periode jika Laba Kotor tidak dapat menutup Beban maka
 akan menjadi Hutang Beban"* dan *"kalau Laba Kotor cukup untuk menutup beban,
 sama dengan Target CTO tercapai."*
@@ -643,6 +648,105 @@ Yang dibekukan: logika "Kas Aset ikut terpakai untuk menutup pembayaran Beban" â
 yaitu `beban_bayar.bisa_ditutup_manual` (`beban_bayar.py:109-113`) dan
 `expense_debt.cover` (`expense_debt.py:102-103`). Perubahan konsep dagegen
 menunggu instruksi Owner.
+
+---
+
+---
+
+## OD-LOCK-12 - Hutang Beban: Input Manual oleh Admin (MENGGANTIKAN OD-LOCK-07)
+
+> **Status: LOCKED (Owner, 2026-10-16).** Supersedes bagian "Hutang Beban =
+> max(0, Total Beban - Laba Kotor)" pada OD-LOCK-07.
+
+### 12.1 Aturan Owner
+
+```
+Hutang Beban TIDAK PERNAH terbentuk otomatis.
+
+Saat periode baru dibuka:
+  Beban muncul -> Kondisi Kas Operasional minus
+  TIDAK ada apa pun yang masuk ke Hutang Beban
+
+Saat Tutup Kas (oleh Admin):
+  cek nilai AKHIR di Conditions Kas Operasional (kolom Saldo baris terakhir)
+    MINUS -> Admin INPUT MANUAL ke BEBAN HUTANG sebesar nilai minus itu
+    PLUS  -> tidak ada penambahan
+```
+
+Sistem hanya **menawarkan** angkanya; keputusan dan pencatatan ada di Admin.
+
+### 12.2 Angka yang dipakai
+
+```
+kondisi_kas_akhir = Kas Kecil/Laci (operasional, bebas DP)
+                  + Omzet
+                  - Total Modal (Part+Jasa+Lain)
+                  - Total Beban (Gaji & OPS)
+                  - Bagi Hasil 100%   (hanya kalau distribusi sudah TERBENTUK)
+```
+
+Sumber tunggal: `backend/routers/dashboard.py::_kondisi_kas_akhir()`, diekspos
+sebagai `finance.kondisi_kas_akhir`. Fungsi ini meniru PERSIS urutan baris tabel
+"Kondisi Kas Operasional" di `frontend/script.js`, sehingga angka yang dibaca
+Admin = angka yang ditawarkan ke form input = angka yang masuk database.
+
+Baris "Kas Besar (Pengelola)" adalah baris POSISI dan tidak ikut dihitung.
+
+### 12.3 Validasi input manual
+
+```
+Nominal            > 0
+Nominal            <= nilai minus yang diukur  (lebih besar = salah baca)
+Kondisi Kas        harus minus                  (kalau plus, tolak)
+Sudah pernah       satu periode = satu kali     (ExpenseDebtPeriod.periode UNIQUE)
+```
+
+Endpoint : `POST /api/beban-hutang/catat` - `Action.KAS_CLOSE` (Super Admin + Admin)
+Fungsi   : `backend/expense_debt.py::catat_hutang_manual()`
+
+### 12.4 Yang TIDAK berubah
+
+```
+OD-LOCK-06  Beban tetap dibayar dari Laci, Laci tidak pernah negatif
+OD-LOCK-06  Kas Aset tetap TIDAK tersentuh otomatis
+OD-LOCK-03  CASH tetap final
+OD-LOCK-04  DP tidak boleh melebihi estimasi
+OD-LOCK-05  Refund garansi tetap manual dari Kas Aset
+```
+
+### 12.5 ATURAN PERIODE - TIDAK ADA PENGARUH DARI PERIODE LAMA
+
+Owner (tegas): **jangan membawa-bawa data periode lama ke periode baru.**
+
+```
+Yang BOLEH menyeber periode  : 1. DP  (titipan pelanggan yang belum jadi transaksi)
+                               2. Beban Hutang (sisa kewajiban periode lama)
+Yang TIDAK BOLEH menyeber   : Omzet, Modal, Laba, Beban periode lama,
+                              Cash-out distribusi periode lama, dan lain-lain
+```
+
+Konsekuensi:
+
+- Omzet, Modal, Laba Kotor, Laba Bersih, Baban periode = **KHUSUS periode itu
+  sendiri**, dibaca dari `service_orders` / `expense_periods` yang keyed
+  `kas_period:<id>` milik periode tersebut.
+- Hutang Beban lama tetap utuh lalu bertambah, bukan direset.
+- `expense_periods` dibaca **hanya** lewat kunci `kas_period:<id>` milik periode
+  yang sedang dihitung. Kunci lama berbasis tanggal (`YYYY-MM-DD`) tidak lagi
+  dipakai untuk menghitung periode baru.
+
+### Contoh pengujian (wajib jadi test)
+
+Periode kosong, Beban 605.000, tidak ada transaksi:
+
+```
+Sebelum Tutup Kas  : Hutang Beban  = 0        (tidak ada yang otomatis)
+Setelah Tutup Kas  : Hutang Beban  = 0        (Tutup Kas tidak membuat apa pun)
+Admin input manual: Conditions Kas minus -> Admin catat sebesar minus itu
+Admin input 2x    : ditolak (satu periode satu kali)
+Nominal > minus   : ditolak
+Conditions plus   : ditolak
+```
 
 ---
 
