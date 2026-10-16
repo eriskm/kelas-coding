@@ -503,6 +503,275 @@ Dua periode berturutan tanpa penjualan: `500.000 + 500.000 = Rp1.000.000` hutang
 
 ---
 
+## OD-LOCK-11 - Aturan Dasar Uang BOSS SF
+
+> **Status: LOCKED (Owner, 2026-10-15).** Bagian berlabel *(perlu konfirmasi)*
+> BELUM terkunci dan tidak boleh dieksekusi sampai Owner memutuskan.
+
+### 11.1 Istilah uang yang dikunci Owner
+
+| Istilah | Aturan Owner |
+|---|---|
+| **Omzet** | Uang masuk total transaksi Penjualan Servis = **keseluruhan Harga Final** dalam satu periode bisnis. |
+| **DP** | Uang masuk sifatnya **titipan**. Saat terjadi pelunasan, DP berubah menjadi **Transaksi Penjualan**. |
+| **Modal** | Terdiri dari **Modal Barang/Part** dan **Modal Jasa**. Komponen opsional (lihat 11.4). |
+| **Laba (per transaksi)** | Harga Final − Modal Barang (jika ada) − Modal Jasa (jika ada) − Lain-lain (input manual jika ada). |
+| **Laba Kotor** | Omzet (total Penjualan Servis) − Total Modal (Part + Jasa + Lain). |
+| **Laba Bersih** | Laba Kotor − Total Beban (Gaji & OPS). |
+| **Beban** | Uang yang harus dikeluarkan untuk **Gaji** dan **Operasional**. |
+| **Kas Aset** | Hasil dari **Distribusi 30% Laba Bersih**. |
+| **MASTER KAS** | Gabungan **Kas Kecil** (uang di laci kasir) + **Kas Besar** (uang di Pengelola). |
+
+### 11.2 Rumus inti
+
+```
+Omzet      = Σ final_price  (unit CASH + LUNAS, satu periode)
+Total Modal= Modal Part + Modal Jasa + Modal Lain
+Laba Kotor = Omzet − Total Modal
+Beban      = Beban Gaji + Beban OPS
+Laba Bersih= Laba Kotor − Beban
+```
+
+CTS / CTO (target distribusi):
+
+```
+CTS tercapai : Laba Kotor > Beban Gaji
+CTO tercapai : Laba Kotor > Beban Gaji + Beban OPS  (= Total Beban)
+```
+
+### 11.3 Status Progres Servisan (9 status)
+
+```
+DITERIMA   unit dititipkan, belum dianalisa
+ANALISA    sedang dianalisa / dicek kerusakannya
+KONFIRMASI sudah didiagnosa, menunggu persetujuan konsumen
+WAIT PART  menunggu sparepart datang / sedang order part
+REPAIR     sedang dikerjakan
+DONE       selesai diperbaiki
+CASH       selesai, sudah diambil & dibayar konsumen  (FINAL - OD-LOCK-03)
+FAILED     gagal konfirmasi (tidak deal harga) / gagal pengerjaan / part tidak ada
+CANCEL     unit FAILED yang diambil konsumen
+```
+
+### 11.4 Modal — tiga kombinasi sah, GERBANG TETAP SESUAI KEADAAN SEKARANG
+
+> **Owner: "11.4 tetap pakai aturan yang berlaku saat ini saja."**
+> Artinya gerbang modal **TIDAK** dilonggarkan. Kode tidak berubah di bagian ini.
+
+Tiga kombinasi Modal yang sah:
+
+```
+(1) Modal Part  + Modal Jasa
+(2) Modal Part saja  (tanpa Modal Jasa)
+(3) Modal Jasa saja  (tanpa Modal Part)
+```
+
+Ketiganya **sudah berlaku di kode saat ini** dan tidak perlu diubah.
+
+Gerbang yang **dipertahankan** — `finance.py:127-155`:
+
+```
+modal_sudah_diisi(order)  → unit MASUK Omzet
+   = part_cost + modal_jasa + modal_lainnya > 0
+tanpa_modal == True        → unit MASUK Omzet  (jalur keluar yang sudah disetujui Owner)
+selain itu                 → unit TIDAK masuk Omzet sama sekali
+```
+
+Konsekuensi yang **tidak berubah**:
+
+- Unit CASH + LUNAS dengan Modal 0 dan **tanpa** centang "Tanpa Modal" tetap
+  **tidak masuk Omzet** (Omzet, Laba Kotor, dan Distribusi 0).
+- Unit tersebut tetap muncul di peringatan keras Tutup Kas sampai Modal-nya diisi.
+- Penanda `service_orders.tanya_modal` → `tanpa_modal` (`models.py:106`) tetap
+  berfungsi sebagai gerbang.
+
+> Contoh pengujian di bagian bawah **tidak lagi berlaku untuk kasus Modal 0**;
+> lihat catatan pada `### 11.P1`.
+
+### 11.5 Timing Distribusi Kas Aset (MENGGANTIKAN perilaku lama)
+
+```
+70%  cash-out  → LANGSUNG keluar saat target tercapai, TANPA menunggu Tutup Kas
+30%  Hak Kas Aset → baru pindah ke MASTER KAS saat TUTUP KAS
+```
+
+Jadi **dua waktu berbeda**, bukan satu. Kode lama
+(`distribution.py:191-192`) menjalankan kedua kaki **bersamaan** saat
+distribusi terbentuk — itu yang harus dipecah.
+
+### 11.6 Syarat periode tidak boleh dicampur
+
+```
+Konsep periode: JANGAN campur periode lama dengan periode baru.
+Beban adalah Beban per periode.
+```
+
+- Saat periode baru dibuka, **Beban langsung muncul** pada periode itu.
+- Nilai minus = nilai Beban, lalu **"terkikis"** seiring transaksi yang terjadi
+  sampai akhir periode.
+- Hanya angka unit, modal, DP, dan beban **periode itu sendiri** yang dipakai.
+- DP, Kas Aset, dan Hutang Beban tetap satu-satunya yang boleh menyeber
+  (OD-LOCK-07).
+
+### 11.7 Tutup Kas / Buka Periode
+
+```
+- Semua status CASH periode lama hilang dari halaman Transaksi/Servis.
+  Tersisa: halaman Garansi (bila ada garansi); bila tidak ada, arsip
+  History Transaksi Servis.
+- Semua status CANCEL periode lama hilang juga; hanya arsip History.
+- Saldo Kas kembali NOL.
+- Total Beban (Gaji & OPS) otomatis muncul untuk Periode Baru.
+```
+
+Kondisi akhir periode:
+
+```
+UNTUNG  : Laba Bersih positif → LANGSUNG didistribusikan (10/30/30/30)
+          tanpa menunggu Tutup Kas; 30% Hak Kas Aset masuk MASTER KAS
+          setelah Tutup Kas → nilai akhirnya NOL
+RUGI    : Laba Kotor tidak dapat menutup Beban → setelah Tutup Kas,
+          nilai minus itu MASUK KE BEBAN HUTANG
+```
+
+### 11.8 BEKU — Kas Aset untuk pembayaran Beban
+
+> ⚠️ **BEKU. Jangan disentuh sampai Owner memberi instruksi eksplisit.**
+> Owner sedang mengubah konseptinya.
+
+Yang dibekukan: logika "Kas Aset ikut terpakai untuk menutup pembayaran Beban" —
+yaitu `beban_bayar.bisa_ditutup_manual` (`beban_bayar.py:109-113`) dan
+`expense_debt.cover` (`expense_debt.py:102-103`). Perubahan konsep dagegen
+menunggu instruksi Owner.
+
+---
+
+## OD-LOCK-11 (Lanjutan) - CARA HITUNG MODAL JASA (SUDAH ADA, TIDAK BERUBAH)
+
+> **Owner: "udah gw setuju seperti sekarang aja ga usah diubah lagi."**
+> Aturan ini **sudah ada di kode** dan **sudah sesuai**. Tidak ada perubahan kode.
+
+### 11.P1 - Modal Jasa: metode Manual / 40% / 50%
+
+Owner: *"hitungannya persentase dari Nilai Final transaksi dikurangi Modal Part
+(jika ada modal, jika tidak ada berarti NOL), lalu sisanya dibagi sesuai Porsi
+persentase 40% dan 50% pilih manual."*
+
+Implementasi aktual — **sudah ada, tidak diubah**:
+
+```
+frontend/index.html:2192-2197   dropdown "Modal Jasa - Metode"
+                                   Manual  |  40%  |  50%
+
+frontend/script.js:2590          const mode = usVal('usFinJasaMode');
+frontend/script.js:2593-2599
+    // Modal Jasa persentase dihitung dari laba kotor SETELAH Modal Part:
+    // jasa = (Harga Final - Modal Part) x persen
+    const brutoJasa = Math.max(0, final - part);
+    if (mode === '40' || mode === '50') {
+        const auto = Math.round(brutoJasa * Number(mode) / 100);
+        if (jasaEl) jasaEl.value = auto;
+    }
+```
+
+Rumus yang berlaku:
+
+```
+Modal Jasa = (Harga Final - Modal Part) x persen      persen = 40% atau 50%
+           = (Harga Final - Modal Part) x Manual      kalau pilih Manual
+```
+
+Penjelasan keempat pertanyaan Owner:
+
+| Pertanyaan Owner | Jawaban kode |
+|---|---|
+| Persentase Modal Jasa? | **Pilihan 40% atau 50%**, diambil manual dari dropdown |
+| "Sisanya dibagi 40% dan 50%" | Bukan dibagi — **dipilih salah satu**: 40% **atau** 50% |
+| "Pilih manual" di mana? | **Saat input unit** (`usFinJasaMode`), bukan saat Tutup Kas |
+| "Jika tidak ada Modal Part berarti NOL" | `Math.max(0, final - part)` → tanpa Modal Part, dasar = `Final - 0 = Final` |
+
+Contoh:
+
+```
+Harga Final 500.000, Modal Part 200.000, metode 40%
+  dasar = 500.000 - 200.000 = 300.000
+  Modal Jasa = 300.000 x 40% = 120.000
+  Total Modal = 200.000 + 120.000 = 320.000
+  Laba Kotor  = 500.000 - 320.000 = 180.000
+
+Harga Final 500.000, Modal Part 0, metode 50%
+  dasar = 500.000 - 0 = 500.000
+  Modal Jasa = 500.000 x 50% = 250.000
+```
+
+### 11.P1-CATATAN - Fakta Implementasi (bukan perubahan)
+
+```
+(1) Perhitungan persen HANYA di frontend (script.js:2593). Backend tidak punya
+    logika persen sama sekali - grep `persen` di backend = 0 hasil. Backend
+    menerima angka jadi di service_orders.modal_jasa (models.py:100).
+    Konsekuensi: pemanggil API atau penulisan langsung ke DB melewati perhitungan
+    ini. Untuk pemakaian lewat UI, tidak masalah.
+
+(2) Pembulatan memakai Math.round() JavaScript, bukan money.quantize()
+    (ROUND_HALF_UP, money.py:50-52). Nilai hasil persen belum tentu 2 desimal
+    sebelum masuk perhitungan laba.
+
+(3) Kolom Modal Jasa tidak boleh NULL saat status DONE
+    (orders.py:698-707) - kosong dari form berarti "tidak ada modal" = 0.
+
+(4) Input "Modal Jasa (Rp)" tetap bisa diketik manual setelah terisi otomatis;
+    nilai berikutnya hanya tertimpa bila salah satu pemicu usFinUpdate berubah.
+```
+
+### 11.P2 - Dampak "Laci Kembali NOL"
+
+OD-LOCK-11.7 menyatakan saldo Kas kembali NOL dan Beban periode baru langsung
+muncul. Jika periode baru ditutup **tanpa ada transaksi**, maka periode itu
+menutup pada Laba Bersih = −Beban, sehingga **Hutang Beban bertambah sebesar
+Beban**. Owner sudah menyatakan ini sebagai aturan yang memang begitu
+(11.6), sehingga **tidak ada yang perlu diputuskan** — hanya dicatat agar
+tidak dianggap bug.
+
+---
+
+### Contoh pengujian (wajib jadi test)
+
+Unit CASH + LUNAS, Harga Final 500.000, Modal Part 200.000, Modal Jasa 50.000:
+
+```
+Omzet       = 500.000
+Total Modal = 200.000 + 50.000 = 250.000
+Laba Kotor  = 250.000
+Beban       = 605.000   (Gaji 400.000 + OPS 205.000)
+CTO         = 250.000 > 605.000 ? TIDAK
+Laba Bersih = 250.000 - 605.000 = -355.000
+Hutang Beban= 605.000 - 250.000 = 355.000
+```
+
+Unit Modal 0 **tanpa** centang "Tanpa Modal" (tidak masuk Omzet — 11.4):
+
+```
+Omzet       = 0            ← unit tidak masuk kohort Omzet sama sekali
+Laba Kotor  = 0
+CTO         = TIDAK
+Laba Bersih = -605.000
+Hutang Beban= 605.000
+```
+
+Unit Modal 0 **dengan** centang "Tanpa Modal" (masuk Omzet):
+
+```
+Omzet       = 500.000
+Total Modal = 0
+Laba Kotor  = 500.000
+CTO         = 500.000 > 605.000 ? TIDAK
+Laba Bersih = -105.000
+Hutang Beban= 105.000
+```
+
+---
+
 # Ketidaksesuaian Implementasi
 
 > Dicatat sesuai instruksi: **jangan mengubah keputusan bisnis untuk

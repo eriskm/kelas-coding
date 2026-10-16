@@ -469,15 +469,23 @@ def test_kondisi_kas_rekonsiliasi_dengan_saldo_laci(client, db):
                 - to_decimal(fin["total_modal"]) - to_decimal(fin["total_beban"])
                 - dist)
 
-    def cek(label):
+    def cek(label, tertunda=to_decimal(0)):
         # PENTING: hitung DULU. `calc()` bisa memicu beku periode + pembayaran
         # Beban otomatis (OD-LOCK-06). Kalau saldo dibaca lebih dulu, yang
         # dibandingkan adalah kondisi SEBELUM pembayaran.
+        #
+        # `tertunda` = porsi Hak Kas Aset yang SAAT INI masih tertahan di Laci
+        # karena OD-LOCK-11.5 (30% baru pindah ke Saldo Aset saat Tutup Kas).
+        # Selama periode masih berjalan, Kondisi Kas (akrual) sudah mengurangi
+        # 100% Laba Bersih sementara Laci fisik baru mengurangi 70% -- jadi
+        # selisihnya harus PERSIS sebesar 30% yang tertunda, bukan nol.
         nilai_kondisi = calc()
         s.expire_all()
         laci = to_decimal(cash_mod.saldo_laci(s))
-        assert abs(laci - nilai_kondisi) < to_decimal("1"), (
-            "Selisih Conditions Kas vs Saldo Laci setelah %s: %s" % (label, laci - nilai_kondisi))
+        selisih = laci - nilai_kondisi
+        assert abs(selisih - tertunda) < to_decimal("1"), (
+            "Selisih Conditions Kas vs Saldo Laci setelah %s: %s "
+            "(harus = Hak Kas Aset yang tertunda %s)" % (label, selisih, tertunda))
         return laci
 
     # 0. Kondisi awal: laci kosong.
@@ -543,11 +551,11 @@ def test_kondisi_kas_rekonsiliasi_dengan_saldo_laci(client, db):
     s.commit()
     assert res["dibentuk"] is True, "CTO tercapai -> distribusi harus terbentuk"
     al = res["alokasi"]
-    assert to_decimal(cash_mod.saldo_laci(s)) == laci_sebelum - to_decimal(al["total"]), \
-        "Seluruh porsi (70% + 30%) harus keluar dari Laci"
+    assert to_decimal(cash_mod.saldo_laci(s)) == laci_sebelum - to_decimal(al["cash_out"]), \
+        "OD-LOCK-11.5: yang keluar dari Laci saat distro terbentuk HANYA 70%"
     assert to_decimal(cash_mod.master_kas(s)) == master_sebelum - to_decimal(al["cash_out"]), \
         "Master Kas hanya turun 70% (Hak Kas Aset pindah lokasi, bukan keluar)"
-    cek("setelah distribusi")
+    cek("setelah distribusi", tertunda=to_decimal(al["kas_aset"]))
     s.close()
 
 

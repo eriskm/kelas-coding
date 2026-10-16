@@ -189,7 +189,10 @@ def test_event_cash_lengkap(client, db, auth):
     d_akhir = dist_mod.sudah_ada(db, _kunci, _p.id)
     tergakar = ZERO_SAFE
     if d_akhir is not None and d_akhir.id != _id_awal:
-        tergakar = to_decimal(d_akhir.cash_out) + to_decimal(d_akhir.hak_kas_aset)
+        # OD-LOCK-11.5: saat CASH yang keluar dari Laci HANYA 70% (cash_out).
+        # 30% Hak Kas Aset masih di Laci sampai Tutup Kas, jadi tidak ikut
+        # dihitung sebagai yang tergakar sekarang.
+        tergakar = to_decimal(d_akhir.cash_out)
 
     assert _saldo_laci(db) - before_laci == to_decimal(500000 - 420000) - tergakar
     # DP punya tepat satu entri kas "Penerimaan Pembayaran" — tidak dobel.

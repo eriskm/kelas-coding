@@ -96,6 +96,7 @@ def test_1_topup_menambah_alokasi_bukan_baris_baru(db):
     """CTO sudah tercapai, lalu ada transaksi baru -> selisihnya ikut dibagi."""
     from models import Distribution, KasEntry
     p, key = _siapkan(db)
+    aset_awal = cash.saldo_kas_aset(db)
 
     id_entri_awal = _id_entri(db)
 
@@ -131,17 +132,30 @@ def test_1_topup_menambah_alokasi_bukan_baris_baru(db):
     assert b["alokasi_topup"]["kas_aset"] == to_decimal("37500")
     assert b["trigger"] == "CTO tercapai (top-up laba baru)"
 
-    # Saldo Aset WAJIB naik sebesar porsi top-up. Ini yang paling mudah
-    # terlewat: `cash.transfer` punya guard idempoten pada
-    # (layer, sumber, ref_type, ref_id), dan transfer kedua untuk Distribution
-    # yang sama punya ref_id yang sama -- sehingga tanpa `idempoten=False`
-    # porsinya tidak pernah benar-benar berpindah ke Saldo Aset.
-    dari_aset = cash.saldo_kas_aset(db) - to_decimal("37500")
-    assert dari_aset >= 0
+    # OD-LOCK-11.5: top-up TIDAK lagi memindahkan 30% Hak Kas Aset.
+    # Saat distro terbentuk maupun saat top-up, yang keluar dari Laci HANYA 70%.
+    # 30% baru berpindah ke Saldo Aset saat Tutup Kas.
     n_transfer_baru = db.query(KasEntry).filter(
         KasEntry.id > id_entri_awal,
         KasEntry.sumber == cash.SUMBER_DISTRIBUSI_ASET).count()
-    assert n_transfer_baru == 2, "Top-up harus menambah satu pasangan transfer baru"
+    assert n_transfer_baru == 0, \
+        "Top-up tidak boleh memindahkan Hak Kas Aset sebelum Tutup Kas"
+    assert cash.saldo_kas_aset(db) == aset_awal, \
+        "Saldo Aset tidak boleh bergerak sebelum Tutup Kas"
+
+    # Tutup Kas memindahkan SELURUH akumulasi 30% (13.500 + 37.500 = 51.000)
+    # dalam satu kali transfer.
+    pgl = dist.pindahkan_hak_kas_aset(db, row, oleh="pytest")
+    db.commit()
+    assert pgl["created"] is True
+    assert pgl["nominal"] == to_decimal("51000"), \
+        "Tutup Kas memindahkan seluruh akumulasi Hak Kas Aset"
+    assert cash.saldo_kas_aset(db) == aset_awal + to_decimal("51000")
+    # Idempoten: Tutup Kas kedua tidak menambah apa pun.
+    pgl2 = dist.pindahkan_hak_kas_aset(db, row, oleh="pytest")
+    db.commit()
+    assert pgl2["created"] is False
+    assert cash.saldo_kas_aset(db) == aset_awal + to_decimal("51000")
 
 
 def test_2_tanpa_laba_baru_tidak_terjadi_apa_apa(db):
@@ -190,7 +204,10 @@ def test_4_laci_kurang_ditunda_bukan_keluar_sebagian(db):
     _panggil(db, key, p.id, "45000", cto=True)
     db.commit()
     row = dist.sudah_ada(db, key, p.id)
-    assert cash.saldo_laci(db) == to_decimal("0")
+    # OD-LOCK-11.5: yang keluar dari Laci hanya 70% (31.500). Sisa 13.500 =
+    # 30% Hak Kas Aset masih di Laci sampai Tutup Kas.
+    assert cash.saldo_laci(db) == to_decimal("13500"), \
+        "hanya 70% yang keluar; 30% Hak Kas Aset menunggu Tutup Kas"
     id_awal = db.query(KasEntry.id).order_by(KasEntry.id.desc()).first()[0] or 0
 
     # Laba naik lagi tapi Laci sudah kosong -> harus ditunda.
@@ -202,7 +219,9 @@ def test_4_laci_kurang_ditunda_bukan_keluar_sebagian(db):
     # Tidak ada Distribution kedua, tidak ada entri parsial, tidak ada Laci minus.
     assert _jumlah_baris(db, p.id) == 1
     assert db.query(KasEntry).filter(KasEntry.id > id_awal).count() == 0
-    assert cash.saldo_laci(db) == to_decimal("0")
+    # Saldo Laci tetap 13.500 (30% yang masih menunggu Tutup Kas), tidak berubah
+    # dan tidak jadi minus.
+    assert cash.saldo_laci(db) == to_decimal("13500")
     assert row.laba_bersih == to_decimal("45000")
 
     # Begitu uangnya cukup, top-up langsung tertangkap.

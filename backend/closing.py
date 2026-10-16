@@ -168,6 +168,25 @@ def selesaikan_periode(db: Session, period, fin: dict, oleh: str = None) -> dict
         kas_period_id=period.id, oleh=oleh)
     out["distribusi"] = res
     db.flush()
+
+    # ---- (4) OD-LOCK-11.5: pindahkan 30% Hak Kas Aset Laci -> Saldo Aset -----
+    # Distribution terbentuk lebih awal (saat CTO tercapai) dan 70%-nya langsung
+    # keluar dari Laci. Menurut Owner, 30% Hak Kas Aset TIDAK ikut waktu itu:
+    # ia baru pindah posisi ke Saldo Aset di Tutup Kas ini.
+    #
+    # Idempotent: `pindahkan_hak_kas_aset` memindah hanya sisa yang belum
+    # berpindah, jadi dipanggil lagi (mis. rekap) tidak menggeser uang dua kali.
+    try:
+        _row_dist = res.get("distribution") if isinstance(res, dict) else None
+        if _row_dist is None:
+            _row_dist = distribution_mod.sudah_ada(
+                db, period.start_at.date().isoformat(), kas_period_id=period.id)
+        out["hak_kas_aset"] = distribution_mod.pindahkan_hak_kas_aset(
+            db, _row_dist, oleh=oleh)
+    except Exception as _exc:  # noqa: BLE001
+        # Gagal memindahkan Hak Kas Aset TIDAK boleh menggagalkan Tutup Kas:
+        # 70% sudah keluar, dan sisa periode harus tetap bisa diselesaikan.
+        out["hak_kas_aset"] = {"created": False, "error": str(_exc)}
     return out
 
 

@@ -11,7 +11,7 @@ import pytest
 
 import cash
 import distribution as dist
-from money import to_decimal
+from money import quantize, to_decimal
 
 
 def _aktif(db):
@@ -90,11 +90,12 @@ def test_injeksi_memilih_posisi(db):
 
 
 def test_alokasi_30_dipindahkan_ke_kas_aset(db):
-    """Hak Kas Aset 30% DIPINDAHKAN Laci -> Saldo Aset (keputusan Owner).
+    """OD-LOCK-11.5: 70% keluar saat terbentuk, 30% menunggu Tutup Kas.
 
-    Dulu posisinya hanya "alokasi" (designation) dan uangnya tetap di Laci.
-    Sekarang saat distribusi terbentuk, 30% benar-benar keluar dari Laci dan
-    masuk Saldo Aset — jadi Master Kas turun hanya sebesar 70%.
+    WAKTU 30% Hak Kas Aset DIPISAH dari 70%:
+      - saat distribusi terbentuk -> HANYA 70% keluar dari Laci;
+      - 30% Hak Kas Aset MASIH DI LACI;
+      - baru saat Tutup Kas (`pindahkan_hak_kas_aset`) 30% pindah ke Saldo Aset.
     """
     import distribution as dist_mod
     key = "PY-ALOKASI-V4"
@@ -107,14 +108,37 @@ def test_alokasi_30_dipindahkan_ke_kas_aset(db):
     assert hasil["created"] is True
 
     al = hasil["alokasi"]
-    # 30% Hak Kas Aset benar-benar menambah Saldo Aset.
-    assert cash.saldo_kas_aset(db) == aset_awal + to_decimal(al["kas_aset"])
-    # 70% cash-out keluar permanen dari Laci.
-    assert cash.saldo_laci(db) == laci_awal - to_decimal(al["total"])
-    # Master Kas turun HANYA 70% (uang Hak Kas Aset hanya pindah lokasi).
+    # 30% BELUM pindah: Saldo Aset masih sama seperti sebelumnya.
+    assert cash.saldo_kas_aset(db) == aset_awal, \
+        "30% Hak Kas Aset tidak boleh pindah sebelum Tutup Kas"
+    # Semua 100% masih posisi di Laci - baru 70% yang keluar permanen.
+    assert cash.saldo_laci(db) == laci_awal - to_decimal(al["cash_out"]), \
+        "hanya 70% yang boleh keluar saat distribusi terbentuk"
+    # Master Kas turun 70%; 30% belum digeser ke posisi lain.
     assert cash.master_kas(db) == master_awal - to_decimal(al["cash_out"])
 
-    # Idempoten: membentuk ulang tidak menggerakkan uang lagi.
+    # --- Tutup Kas memindahkan 30% --------------------------------------
+    row = hasil["distribution"]
+    assert row.laci_adjust_entry_id is None, \
+        "laci_adjust_entry_id harus kosong sebelum Tutup Kas"
+    pgl = dist_mod.pindahkan_hak_kas_aset(db, row, oleh="pytest")
+    db.commit()
+    assert pgl["created"] is True
+    assert pgl["nominal"] == to_decimal(al["kas_aset"])
+    assert cash.saldo_kas_aset(db) == aset_awal + to_decimal(al["kas_aset"])
+    # Transfer hanya pindah posisi: Master Kas TIDAK berubah lagi.
+    assert cash.master_kas(db) == master_awal - to_decimal(al["cash_out"])
+    assert row.laci_adjust_entry_id is not None
+
+    # Idempoten: Tutup Kas kedua tidak menggeser uang dua kali.
+    lagi2 = dist_mod.pindahkan_hak_kas_aset(db, row, oleh="pytest")
+    db.commit()
+    assert lagi2["created"] is False
+    assert lagi2["sisa"] == to_decimal(0)
+    assert cash.saldo_kas_aset(db) == aset_awal + to_decimal(al["kas_aset"])
+    assert cash.master_kas(db) == master_awal - to_decimal(al["cash_out"])
+
+    # Idempoten: membentuk ulang distribution tidak menggerakkan uang lagi.
     lagi = dist_mod.terapkan(db, key, "1000000", oleh="pytest")
     db.commit()
     assert lagi["created"] is False
@@ -148,7 +172,12 @@ def test_pengelola_melihat_laci_aset_dan_master(client, db):
     r = client.get("/api/kas/saldo", headers=h)
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["master_kas"] == body["laci"] + body["aset"]
+    # Bandingkan pada presisi uang (2 desimal). Nilai JSON.float, jadi penjumlahan
+    # di sisi Python bisa meleset di digit ke-15; yang diuji IDENTITAS Master Kas.
+    assert (quantize(to_decimal(body["master_kas"]))
+            == quantize(to_decimal(body["laci"])) + quantize(to_decimal(body["aset"]))), \
+        "Master Kas harus = Laci + Aset: %s vs %s + %s" % (
+            body["master_kas"], body["laci"], body["aset"])
     assert client.get("/api/kas/aset/riwayat", headers=h).status_code == 200
 
 

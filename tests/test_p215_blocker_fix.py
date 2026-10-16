@@ -103,9 +103,23 @@ def test_b1_replay_kas_period_yang_sama_tidak_menggandakan(db):
         KasEntry.id > maks_id_awal,
         KasEntry.layer == cash.LAYER_LACI,
         KasEntry.sumber == cash.SUMBER_CASH_OUT).count() == 1
-    # Dan Hak Kas Aset juga tercatat tepat satu kali (Keluar Laci + Masuk Aset).
+    # OD-LOCK-11.5: 30% Hak Kas Aset TIDAK lagi bergerak saat Distribution terbentuk
+    # maupun saat Tutup Kas. Jadi setelah replay, BELUM ADA entri
+    # DISTRIBUSI_ASET sama sekali -- justru itulah bukti tidak ada yang digandakan.
     assert db.query(KasEntry).filter(
         KasEntry.id > maks_id_awal,
+        KasEntry.sumber == cash.SUMBER_DISTRIBUSI_ASET).count() == 0
+    # Dan saat Tutup Kas memindahkan 30%, transferencia pun TEPAT SATU --
+    # dipanggil berulang tetap satu pasang baris.
+    row_dist = db.query(Distribution).first()
+    import distribution as _dist
+    pgl = _dist.pindahkan_hak_kas_aset(db, row_dist, oleh="pytest")
+    db.commit()
+    assert pgl["created"] is True
+    pgl2 = _dist.pindahkan_hak_kas_aset(db, row_dist, oleh="pytest")
+    db.commit()
+    assert pgl2["created"] is False
+    assert db.query(KasEntry).filter(
         KasEntry.sumber == cash.SUMBER_DISTRIBUSI_ASET).count() == 2
 
 
