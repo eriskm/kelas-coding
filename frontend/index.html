@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=13">
+    <link rel="stylesheet" href="/static/style.css?v=14">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1339,7 +1339,7 @@
                                 </form>
                             </div>
 
-                            <div class="panel">
+                            <div class="panel ku-hutang-panel">
                                 <h3 class="panel-title"><i class="fa-solid fa-file-circle-exclamation"></i> Hutang Beban</h3>
                                 <p class="ku-sub">Terpisah dari Buku Kas &mdash; defisit ditutup Kas Aset, sisanya menjadi hutang (carry forward).</p>
                                 <div class="ku-summary mt-2" id="kuDebtSummary"></div>
@@ -1429,7 +1429,7 @@
                              (1) Ringkasan Kas Laci, (2) Mutasi Kas,
                              (3) Rekonsiliasi Tutup Kas. Hanya dirender saat
                              tombol Riwayat Transaksi ditekan. -->
-                        <div id="kuRiwayatView" class="hidden">
+                        <div id="kuRiwayatView" class="hidden ku-riwayat-panel">
                             <div class="panel">
                                 <div class="flex items-start justify-between gap-3 flex-wrap">
                                     <div>

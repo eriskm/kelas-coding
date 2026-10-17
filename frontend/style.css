@@ -3739,3 +3739,247 @@ select.range-pill.range-select option { color: #0f172a; }
     .us-savebar-btn { flex: 1 1 100%; }
     .us-savebar-keys { flex: 1 1 100%; text-align: center; }
 }
+﻿
+/* =====================================================================
+   POLISH UI HALAMAN KEUANGAN (2026-10-17)
+   ---------------------------------------------------------------------
+   UI ONLY. Tidak menyentuh business logic, API, endpoint, query, skema,
+   hak akses, event handler, maupun teks yang dibaca mesin. Semua aturan
+   di bawah hanya mengatur tampil (spasi,对齐, ukuran, warna, border).
+
+   Area yang dicakup (sesuai instruksi Owner):
+     1. Laporan Titipan DP
+     2. Panel Kas Aset (Master Kas)
+     3. Panel Hutang Beban
+     4. Riwayat Transaksi + Notifikasi
+     5. Konsistensi status/kaki tabel
+
+   Area atas halaman Keuangan (form transaksi utama + slot Distribusi
+   Laba/CTO) SENGAJA TIDAK disentuh.
+   ===================================================================== */
+
+/* ---------- 1. Laporan Titipan DP ---------- */
+.ku-titipan-panel { padding-bottom: 14px; }
+.ku-titipan-panel .ku-tp-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap; margin-bottom: 9px;
+}
+.ku-titipan-panel .ku-tp-head > span:first-child {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; letter-spacing: -0.01em;
+}
+.ku-titipan-panel .ku-tp-head > span:first-child i {
+    font-size: 13px; color: #0369a1; width: 15px; text-align: center;
+}
+.ku-titipan-panel .ku-tp-note {
+    font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em;
+    padding: 2px 8px; border-radius: 999px;
+    background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0;
+    white-space: nowrap;
+}
+.ku-titipan-panel .ku-tp-grid {
+    display: grid; gap: 8px; margin-bottom: 12px;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+}
+.ku-titipan-panel .ku-tp-cell {
+    padding: 8px 11px; border-radius: 10px;
+    border: 1px solid #e2e8f0; background: #fff;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+.ku-titipan-panel .ku-tp-label {
+    font-size: 9.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: #64748b; margin-bottom: 2px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ku-titipan-panel .ku-tp-val { font-size: 15px; line-height: 1.15; }
+/* Tabel: header rapat + kolom angka benar-benar rata kanan */
+.ku-titipan-panel .tx-table thead th {
+    font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase;
+    color: #64748b; white-space: nowrap;
+    padding: 7px 9px; background: #f8fafc;
+    border-bottom: 1px solid #e2e8f0;
+}
+.ku-titipan-panel .tx-table tbody td {
+    padding: 7px 9px; font-size: 12px; vertical-align: middle;
+    border-bottom: 1px solid #f1f5f9;
+}
+.ku-titipan-panel .tx-table tbody tr:hover td { background: #f8fafc; }
+.ku-titipan-panel .cash-num { font-variant-numeric: tabular-nums; }
+
+/* ---------- 2 & 3. Panel Kas Aset + Hutang Beban ---------- */
+.ku-kas-panel > .panel-title,
+.ku-hutang-panel > .panel-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13.5px; letter-spacing: -0.01em;
+}
+.ku-kas-panel > .panel-title i,
+.ku-hutang-panel > .panel-title i { width: 15px; text-align: center; font-size: 13px; }
+.ku-kas-panel > .ku-sub,
+.ku-hutang-panel > .ku-sub {
+    margin-top: 2px; margin-bottom: 10px;
+    font-size: 11px; line-height: 1.45; color: #64748b;
+}
+
+/* Kartu saldo: tinggi seragam, angka tidak meltemEH */
+.ku-kas-panel .ku-summary,
+.ku-hutang-panel .ku-summary {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(122px, 1fr));
+}
+.ku-kas-panel .ku-summary .sm-card,
+.ku-hutang-panel .ku-summary .sm-card {
+    display: flex; flex-direction: column; justify-content: center;
+    min-height: 56px; padding: 8px 11px; border-radius: 10px;
+}
+.ku-kas-panel .ku-summary .sm-top,
+.ku-hutang-panel .ku-summary .sm-top {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 9.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.04em; line-height: 1.2;
+}
+.ku-kas-panel .ku-summary .sm-top i,
+.ku-hutang-panel .ku-summary .sm-top i { font-size: 10px; width: 12px; text-align: center; }
+.ku-kas-panel .ku-summary .sm-bot,
+.ku-hutang-panel .ku-summary .sm-bot { margin-top: 3px; }
+.ku-kas-panel .ku-summary .sm-num.ku-num,
+.ku-hutang-panel .ku-summary .sm-num.ku-num {
+    font-size: 14px; font-weight: 800; line-height: 1.15;
+    font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+
+/* Tabel mutasi kas: rapat, mudah dipindai */
+.ku-mutasi-scroll { max-height: 340px; border-radius: 10px; border: 1px solid #e2e8f0; }
+.ku-mutasi-scroll thead th {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 7px 9px; white-space: nowrap;
+}
+.ku-mutasi-scroll tbody td { padding: 6px 9px; font-size: 12px; vertical-align: middle; }
+.ku-mutasi-scroll tbody tr:hover td { background: #f8fafc; }
+
+/* Baris form manual Hutang Beban: satu blok rapi */
+.ku-hutang-panel #kuHutangManualWrap {
+    padding: 11px; border-radius: 10px;
+    background: #f8fafc; border: 1px dashed #cbd5e1;
+}
+.ku-hutang-panel #kuHutangManualWrap .field-label {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    font-weight: 600; color: #475569; margin-bottom: 4px;
+}
+.ku-hutang-panel #kuHutangManualWrap .receive-input { height: 34px; font-size: 13px; }
+.ku-hutang-panel #kuHutangManualWrap .receive-submit-btn { height: 34px; font-size: 12px; }
+.ku-hutang-panel #kuHutangHint {
+    margin: 7px 0 0; font-size: 10.5px; line-height: 1.45; color: #64748b;
+}
+.ku-hutang-panel .tx-table thead th {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 7px 9px; white-space: nowrap;
+}
+.ku-hutang-panel .tx-table tbody td { padding: 7px 9px; font-size: 12px; vertical-align: middle; }
+
+/* ---------- 4. Riwayat Transaksi + Notifikasi ---------- */
+.ku-riwayat-toggle-wrap {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; flex-wrap: wrap;
+}
+.ku-riwayat-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 9px 16px; border-radius: 10px; font-size: 12.5px; font-weight: 600;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+.ku-riwayat-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(15,23,42,0.08); }
+.ku-riwayat-btn i { font-size: 13px; }
+
+.ku-notif-btn { width: 38px; height: 38px; border-radius: 10px; }
+.ku-notif-btn i { font-size: 14px; }
+.ku-notif-pop { border-radius: 12px; }
+.ku-notif-pop-head {
+    font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    font-weight: 700; padding: 9px 12px;
+}
+.ku-notif-pop-body .tx-table thead th {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.04em;
+    padding: 6px 9px; white-space: nowrap;
+}
+.ku-notif-pop-body .tx-table tbody td { padding: 6px 9px; font-size: 11.5px; }
+
+.ku-riwayat-panel .ku-block { margin-top: 14px; }
+.ku-riwayat-panel .ku-block:first-of-type { margin-top: 12px; }
+.ku-riwayat-panel .ku-summary {
+    display: grid; gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+}
+.ku-riwayat-panel .ku-summary .sm-card {
+    display: flex; flex-direction: column; justify-content: center;
+    min-height: 54px; padding: 8px 11px; border-radius: 10px;
+}
+.ku-riwayat-panel .ku-summary .sm-top {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 9.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+}
+.ku-riwayat-panel .ku-summary .sm-num.ku-num {
+    font-size: 14px; font-weight: 800; font-variant-numeric: tabular-nums;
+}
+
+/* ---------- 5. Empty state seragam di area ini ---------- */
+.ku-titipan-panel td > div,
+.ku-hutang-panel td > div,
+.ku-riwayat-panel td > div,
+.ku-notif-pop-body td > div {
+    padding: 22px 12px !important;
+    font-size: 12px !important;
+    line-height: 1.5;
+    color: #94a3b8 !important;
+    text-align: center;
+    border: 1px dashed #e2e8f0;
+    border-radius: 10px;
+    background: #fbfdff;
+}
+.ku-titipan-panel td > div i,
+.ku-hutang-panel td > div i,
+.ku-riwayat-panel td > div i,
+.ku-notif-pop-body td > div i {
+    display: block; font-size: 18px; margin: 0 auto 7px; color: #cbd5e1;
+}
+
+/* ---------- Dark mode ---------- */
+.dark .ku-titipan-panel .ku-tp-cell,
+.dark .ku-mutasi-scroll,
+.dark .ku-hutang-panel #kuHutangManualWrap { background: #0f172a; border-color: rgba(255,255,255,0.10); }
+.dark .ku-titipan-panel .ku-tp-note { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.10); color: #94a3b8; }
+.dark .ku-titipan-panel .tx-table thead th,
+.dark .ku-mutasi-scroll thead th,
+.dark .ku-hutang-panel .tx-table thead th,
+.dark .ku-notif-pop-body .tx-table thead th { background: rgba(255,255,255,0.04); color: #94a3b8; border-bottom-color: rgba(255,255,255,0.10); }
+.dark .ku-titipan-panel .tx-table tbody tr:hover td,
+.dark .ku-mutasi-scroll tbody tr:hover td { background: rgba(255,255,255,0.03); }
+.dark .ku-titipan-panel .ku-tp-label,
+.dark .ku-kas-panel > .ku-sub,
+.dark .ku-hutang-panel > .ku-sub,
+.dark .ku-hutang-panel #kuHutangHint { color: #94a3b8; }
+.dark .ku-hutang-panel #kuHutangManualWrap .field-label { color: #cbd5e1; }
+.dark .ku-titipan-panel td > div,
+.dark .ku-hutang-panel td > div,
+.dark .ku-riwayat-panel td > div,
+.dark .ku-notif-pop-body td > div { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.10); color: #64748b !important; }
+.dark .ku-titipan-panel td > div i,
+.dark .ku-hutang-panel td > div i,
+.dark .ku-riwayat-panel td > div i,
+.dark .ku-notif-pop-body td > div i { color: #475569; }
+
+/* ---------- Responsif ---------- */
+@media (max-width: 1024px) {
+    .ku-titipan-panel .ku-tp-grid,
+    .ku-kas-panel .ku-summary,
+    .ku-hutang-panel .ku-summary,
+    .ku-riwayat-panel .ku-summary { grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); }
+}
+@media (max-width: 640px) {
+    .ku-titipan-panel .ku-tp-head { gap: 6px; }
+    .ku-titipan-panel .ku-tp-note { font-size: 9.5px; padding: 2px 6px; }
+    .ku-titipan-panel .ku-tp-val,
+    .ku-kas-panel .ku-summary .sm-num.ku-num,
+    .ku-hutang-panel .ku-summary .sm-num.ku-num,
+    .ku-riwayat-panel .ku-summary .sm-num.ku-num { font-size: 13px; }
+    .ku-riwayat-toggle-wrap { gap: 8px; }
+    .ku-riwayat-btn { flex: 1 1 auto; justify-content: center; padding: 9px 12px; }
+}
