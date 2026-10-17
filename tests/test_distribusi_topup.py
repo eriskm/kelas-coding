@@ -178,22 +178,40 @@ def test_2_tanpa_laba_baru_tidak_terjadi_apa_apa(db):
     assert db.query(KasEntry).filter(KasEntry.id > id_awal).count() == 0
 
 
-def test_3_laba_turun_tidak_mengurangi_alokasi(db):
-    """Koreksi modal/beban membuat laba turun -> Distribution lama utuh."""
+def test_3_laba_turun_menurunkan_alokasi(db):
+    """Owner (2026-10-16): alokasi WAJIB mengikuti Laba Bersih, termasuk turun.
+
+    Sebelumnya kalau Owner memperbaiki data transaksi sehingga laba turun,
+    alokasi dibekukan di angka lama. Akibatnya baris Bagi Hasil di tabel
+    Kondisi Kas tetap mengurangi 70.000 padahal Laba Bersih tinggal 45.000,
+    dan kolom Saldo berakhir negatif.
+    """
     from models import Distribution, KasEntry
     p, key = _siapkan(db)
-    _panggil(db, key, p.id, "45000", cto=True)
+    a = _panggil(db, key, p.id, "45000", cto=True)
     db.commit()
+    assert a["dibentuk"] is True
     uang_diterima = cash.saldo_laci(db)
 
+    # Data transaksi diperbaiki -> Laba Bersih turun ke 10.000.
     r = _panggil(db, key, p.id, "10000", cto=True)
     db.commit()
 
-    assert r["dibentuk"] is False and r.get("topup") is not True
-    assert _jumlah_baris(db, p.id) == 1
-    assert r["distribution"].laba_bersih == to_decimal("45000")
-    # Tidak ada uang yang FLOW BALIK.
-    assert cash.saldo_laci(db) == uang_diterima
+    assert r.get("topdown") is True, "alokasi harus diturunkan"
+    assert _jumlah_baris(db, p.id) == 1, "tetap SATU baris Distribution"
+    row = r["distribution"]
+    assert row.laba_bersih == to_decimal("10000")
+    # 10/30/30/30 dari 10.000
+    assert row.bonus_karyawan == to_decimal("1000")
+    assert row.pengelola == to_decimal("3000")
+    assert row.investor == to_decimal("3000")
+    assert row.hak_kas_aset == to_decimal("3000")
+    assert row.cash_out == to_decimal("7000")
+
+    # Kelebihan cash-out 70% (31.500 -> 7.000 = 24.500) dikembalikan ke Laci.
+    # Itu jurnal koreksi berpasangan, bukan uang fiktif: posisinya kembali
+    # sesuai Laba Bersih yang benar.
+    assert cash.saldo_laci(db) == uang_diterima + to_decimal("24500")
 
 
 def test_4_laci_kurang_ditunda_bukan_keluar_sebagian(db):

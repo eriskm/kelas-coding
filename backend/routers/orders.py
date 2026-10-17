@@ -593,6 +593,19 @@ def create_order(data: schemas.ServiceOrderCreate, db: Session = Depends(get_db_
         db.commit()
         db.refresh(order)
     _log_transition(db, order.id, None, st, _actor(user), "dibuat via API")
+    # BUG (ditemukan 2026-10-16, Order SV-20261016-7981): order yang dibuat
+    # LANGSUNG dengan status CASH tidak pernah lewat jalur transisi
+    # "ubah status jadi CASH", jadi `cash.catat_modal` di `update_order` tidak
+    # pernah terpanggil. Akibatnya Modal masuk Conditions Kas (akrual) tapi uangnya
+    # TIDAK keluar dari Laci -> Saldo Laci lebih besar dari Conditions Kas
+    # sebanyak nilai Modal, dan tidak ada yang mengoreksinya sampai Tutup Kas.
+    #
+    # `catat_modal` idempotent per komponen, jadi aman dipanggil di sini.
+    if (order.status or "") == "CASH":
+        try:
+            cash.catat_modal(db, order, actor=_actor(user))
+        except Exception:  # noqa: BLE001
+            db.rollback()
     db.commit()
     db.refresh(order)
     _attach_summary(db, order)

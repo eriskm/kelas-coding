@@ -373,6 +373,97 @@ def pindahkan_hak_kas_aset(db: Session, row, oleh: str = None) -> dict:
             "alasan": "dipindahkan saat Tutup Kas"}
 
 
+
+def laba_baru_muatan(row, selisih):
+    """Laba Bersih target setelah penurunan."""
+    return quantize(to_decimal(row.laba_bersih) - quantize(to_decimal(selisih)))
+
+def topdown(db: Session, row, selisih, oleh: str = None) -> dict:
+    """Turunkan Distribution yang SUDAH terbentuk karena Laba Bersih turun.
+
+    Owner (2026-10-16): baris Bagi Hasil di tabel "Kondisi Kas Operasional"
+    harus mengikuti baris di atasnya. Kalau Owner memperbaiki data transaksi
+    sehingga Laba Kotor turun, alokasi 10/30/30/30 WAJIB ikut turun --
+    kalau tidak, tabel Conditions Kas berakhir dengan saldo negatif karena
+    mengurangi Laba Bersih yang lebih besar dari yang ada.
+
+    Dua yang diperbaiki:
+
+      - 30% Hak Kas Aset: kalau belum dipindahkan (OD-LOCK-11.5), angkanya
+        tinggal dikurangi -- uangnya masih utuh di Laci.
+      - 70% cash-out: SUDAH keluar dari Laci, jadi kelebihan dicatat
+        sebagai jurnal MASUK berpasangan (sumber DISTRIBUSI_ASET, kategori
+        "Koreksi Bagi Hasil"). Itu bukan uang fiktif: uang yang terlalu banyak
+        keluar dikembalikan ke Laci supaya posisinya kembali sesuai Laba
+        Bersih yang benar.
+
+    Kalau 30% sudah dipindahkan ke Saldo Aset (Tutup Kas berjalan), penurunannya
+    DITOLAK supaya tidak mengacaukan Kas Besar yang sudah final.
+    """
+    selisih = quantize(to_decimal(selisih))
+    if selisih <= ZERO:
+        return {"created": False, "alasan": ALASAN_LABA_NOL}
+    if selisih > quantize(to_decimal(row.laba_bersih)):
+        return {"created": False, "alasan": "Penurunan melebihi Laba Bersih tercatat"}
+
+    sudah_pindah = sudah_terpindah_hak_kas_aset(db, row)
+    if sudah_pindah > ZERO:
+        return {"created": False, "alasan": (
+            "30%% Hak Kas Aset sudah dipindahkan ke Saldo Aset saat Tutup Kas; "
+            "alokasi periode ini final dan tidak bisa diturunkan.")}
+
+    # Bandingkan dengan alokasi recorded, bukan dengan `hitung(selisih)`:
+    # yang diturunkan harus PERSIS sebesar penurunan Laba Bersih.
+    sebelum = alokasi_dari(row)
+    baru = hitung(quantize(to_decimal(laba_baru_muatan(row, selisih))))
+    if not baru["eligible"]:
+        return {"created": False, "alasan": baru.get("alasan") or ALASAN_LABA_NOL}
+
+    row.laba_bersih = quantize(to_decimal(row.laba_bersih) - selisih)
+    row.bonus_karyawan = baru["karyawan"]
+    row.pengelola = baru["pengelola"]
+    row.investor = baru["investor"]
+    row.hak_kas_aset = baru["kas_aset"]
+    row.cash_out = baru["cash_out"]
+    db.flush()
+
+    # Kembalikan kelebihan cash-out 70% ke Laci (jurnal koreksi berpasangan).
+    balik = quantize(to_decimal(sebelum["cash_out"]) - baru["cash_out"])
+    if balik > ZERO:
+        cash.catat_mutasi(
+            db, cash.LAYER_LACI, "Masuk", "Koreksi Bagi Hasil",
+            "Pengembalian kelebihan cash-out distribusi periode %s" % row.periode,
+            balik, sumber=cash.SUMBER_DISTRIBUSI_ASET,
+            ref_type="distribusi_koreksi", ref_id=row.id,
+            check_saldo=False, oleh=oleh)
+        journal.record(
+            db, journal.DOMAIN_FINANCE, EVENT_DISTRIBUSI,
+            entity_type="distribution", entity_id=row.id,
+            amount=balik, actor=oleh, ref_type="periode", ref_code=row.periode,
+            details={"alokasi_diturunkan": str(selisih),
+                     "cash_out_dikembalikan": str(balik),
+                     "laba_bersih_baru": str(row.laba_bersih),
+                     "trigger": "koreksi: Laba Bersih turun"})
+
+    journal.record(
+        db, journal.DOMAIN_FINANCE, EVENT_DISTRIBUSI,
+        entity_type="distribution", entity_id=row.id,
+        amount=selisih, actor=oleh, ref_type="periode", ref_code=row.periode,
+        details={"alokasi_diturunkan": str(selisih),
+                 "laba_bersih_baru": str(row.laba_bersih),
+                 "karyawan": str(row.bonus_karyawan),
+                 "pengelola": str(row.pengelola),
+                 "investor": str(row.investor),
+                 "kas_aset": str(row.hak_kas_aset),
+                 "cash_out": str(row.cash_out),
+                 "trigger": "koreksi: alokasi mengikuti Laba Bersih"})
+    db.flush()
+    db.refresh(row)
+    return {"created": True, "distribution": row, "alokasi": baru,
+            "dikembalikan_ke_laci": balik,
+            "alasan": None, "trigger": "koreksi: Laba Bersih turun"}
+
+
 def topup(db: Session, row, selisih, oleh: str = None) -> dict:
     """Tambahi Distribution yang SUDAH ada dengan laba baru (CTO masih tercapai).
 
@@ -477,6 +568,25 @@ def pastikan_otomatis(db: Session, periode: str, laba_bersih, cto_tercapai,
                             "trigger": top["trigger"]})
                 return res
             res["alasan"] = top.get("alasan") or ALASAN_LABA_NOL
+        elif cto_tercapai and selisih < ZERO:
+            # Owner (2026-10-16): baris "Bagi Hasil" di tabel Kondisi Kas
+            # harus MENGIKUTI data di atasnya. Kalau data transaksi diperbaiki
+            # sehingga Laba Bersih turun, alokasi wajib turun juga.
+            #
+            # Sebelumnya blok ini jatuh ke `else` dan membekukan alokasi lama,
+            # sehingga tabel Conditions Kasodersudut negatif: alokasi tetap
+            # 70.000 padahal Laba Bersih tinggal 45.000.
+            down = topdown(db, existing, -selisih, oleh=oleh)
+            if down.get("created"):
+                res.update({"dibentuk": True, "topdown": True,
+                            "alasan": None,
+                            "alokasi_turun": down["alokasi"],
+                            "alokasi": alokasi_dari(existing),
+                            "cash_out": to_decimal(existing.cash_out),
+                            "hak_kas_aset": to_decimal(existing.hak_kas_aset),
+                            "trigger": down["trigger"]})
+                return res
+            res["alasan"] = down.get("alasan") or "Alokasi tidak bisa diturunkan"
         else:
             res["alasan"] = "Sudah pernah terbentuk di periode ini"
         res["alokasi"] = alokasi_dari(existing)
