@@ -4101,8 +4101,7 @@ async function loadKuFinance() {
         loadKuAset().catch(() => {});
         loadKuDebt().catch(() => {});
         loadKuNotif().catch(() => {});
-        renderBukuKas();
-        renderKondisiKas();
+            renderKondisiKas();
         renderKuTitipan();
         renderAlloc();
         // Tabel Rincian Arus Kas = detail Kondisi Kas. Karena panelnya disembunyikan
@@ -4800,78 +4799,11 @@ function renderKondisiKas() {
 body.innerHTML = rows.join('');
 }
 
-// Kartu ringkasan (Total Masuk / Keluar / Saldo Laci / Kas Aset).
-// Isi tabel "Rincian Arus Kas" TIDAK digambar di sini — tabel itu punya
-// pencarian + filter + pagination sendiri (lihat renderRiwayat), dan
-// pemanggilannya selalu berpasangan denganConditions Kas di atasnya.
-function renderBukuKas() {
-    const fin = _kuFin || {};
-    const sum = document.getElementById('kuKasSummary');
-    if (!sum) return;
-
-    const laci = (_kuSaldoLapisan && _kuSaldoLapisan.LACI) || null;
-    const aset = (_kuSaldoLapisan && _kuSaldoLapisan.KAS_ASET) || null;
-
-    // Angka FISIK posisi uang sekarang, dibaca dari /api/kas/saldo (ledger).
-    const saldoLaci = Number(laci ? laci.saldo : (fin.saldo || 0)) || 0;
-    const saldoAset = Number(aset ? aset.saldo : (fin.saldo_aset || 0)) || 0;
-    const master = saldoLaci + saldoAset;
-
-    // Angka SETELAH Tutup Kas, dari satu sumber backend:
-    // finance.kondisi_kas_akhir = kolom Saldo baris terakhir tabel
-    // "Kondisi Kas Operasional". Jadi proyeksi ini BUKAN tebakan.
-    const setelah = Number(fin.kondisi_kas_akhir);
-    const adaProyeksi = isFinite(setelah);
-    // 30% Hak Kas Aset menunggu Tutup Kas -> berpindah Laci -> Kas Besar.
-    const hakTertunda = Number((fin.alokasi || {}).kas_aset) || 0;
-
-    const lihatAset = canViewAset();
-    const cards = [];
-    cards.push({
-        label: 'Kas Kecil (Laci Kasir)',
-        value: kuRupiah(saldoLaci),
-        icon: 'fa-cash-coin', cls: 'sm-green',
-    });
-    if (lihatAset) {
-        cards.push({
-            label: 'Kas Besar (Pengelola)',
-            value: kuRupiah(saldoAset),
-            icon: 'fa-vault', cls: 'sm-blue',
-        });
-    }
-    cards.push({
-        label: 'MASTER KAS',
-        value: kuRupiah(master),
-        icon: 'fa-layer-group', cls: 'sm-red',
-    });
-
-    sum.innerHTML = cards.map(c => `
-        <div class="sm-card ${c.cls}">
-            <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
-            <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
-        </div>
-    `).join('');
-
-    // Catatan proyeksi Tutup Kas - supaya angka tidak mengejutkan.
-    const note = document.getElementById('kuMasterKasNote');
-    if (!note) return;
-    if (!adaProyeksi) {
-        note.classList.add('hidden');
-        note.innerHTML = '';
-        return;
-    }
-    const bagian = [];
-    bagian.push('<strong>MASTER KAS</strong> = Kas Kecil (Laci Kasir) + Kas Besar (Pengelola). '
-        + 'Angka di atas adalah uang yang benar-benar ada sekarang.');
-    bagian.push('<br>Setelah <strong>Tutup Kas</strong>: '
-        + 'Kondisi Kas Operasional berakhir <strong>' + kuRupiah(setelah) + '</strong>'
-        + (hakTertunda > 0
-            ? ', dan <strong>' + kuRupiah(hakTertunda)
-              + '</strong> Hak Kas Aset (30%) pindah dari Laci ke Kas Besar.'
-            : '.'));
-    note.innerHTML = '<i class="fa-solid fa-circle-info"></i> ' + bagian.join('');
-    note.classList.remove('hidden');
-}
+// CATATAN (2026-10-17, Owner): kartu ringkasan Kas di panel "Kas Operasional"
+// (Kas Kecil / Kas Besar / MASTER KAS) SUDAH DIHAPUS karena isinya mengulang
+// tabel "Kondisi Kas Operasional" yang ada tepat di bawahnya. Fungsi
+// renderBukuKas() ikut dihapus. Posisi uang sekarang dibaca langsung dari
+// tabel itu.
 
 // Distribusi Laba — otomatis begitu CTO tercapai (Laba Kotor >= Total Beban).
 // Uangnya LANGSUNG bergerak saat baris distribusi terbentuk, tidak menunggu

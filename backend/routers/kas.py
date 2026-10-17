@@ -121,25 +121,45 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
             "ref_id": p.id,
         })
 
-    for e in db.query(Expense).all():
-        m = _moment(getattr(e, "created_at", None), getattr(e, "tanggal", None))
-        if m is None:
-            continue
-        rows.append({
-            "moment": m,
-            "tgl": (e.tanggal.isoformat() if e.tanggal
-                    else (m.date().isoformat() if hasattr(m, "date") else None)),
-            "jenis": "Keluar",
-            "kategori": e.kategori,
-            "ket": e.uraian,
-            "nominal": _num(e.nilai),
-            "source": "expense",
-            "ref_id": e.id,
-        })
+    # BUG (ditemukan 2026-10-17 saat UJI): loop di bawah membaca KATALOG
+    # `expenses` seolah-olah itu arus kas. Padahal `expenses` cuma daftar
+    # reciting (Gaji, Sewa, Listrik, ...) — bukan uang yang bergerak. Akibatnya:
+    #   - baris "Keluar" muncul mencurigakan (atau tidak muncul sama sekali
+    #     tergantung tanggal katalog), dan
+    #   - pembayaran Beban yang SEBENARNYA sudah keluar dari Laci
+    #     (satu entri `sumber=BEBAN, ref_type='beban_periode'`) tidak pernah
+    #     muncul, karena BEBAN sengaja dikeluarkan dari `SUMBER_BARIS_KAS`.
+    # Hasilnya saldo berjalan di Riwayat Mutasi Kas TIDAK sama dengan
+    # Saldo Laci -- di UJI selisihnya tepat sebesar Beban (605.000).
+    #
+    # Yang benar: Mutasi Kas memakai KAS_ENTRIES sebagai satu-satunya sumber
+    # arus, termasuk entri BEBAN. Katalog `expenses` hanya boleh ditampilkan
+    # sebagai rincian di dalam keterangan baris BEBAN, bukan sebagai baris
+    # tersendiri.
+    if False:  # sengaja dinonaktifkan - lihat catatan di atas
+        for e in db.query(Expense).all():
+            m = _moment(getattr(e, "created_at", None), getattr(e, "tanggal", None))
+            if m is None:
+                continue
+            rows.append({
+                "moment": m,
+                "tgl": (e.tanggal.isoformat() if e.tanggal
+                        else (m.date().isoformat() if hasattr(m, "date") else None)),
+                "jenis": "Keluar",
+                "kategori": e.kategori,
+                "ket": e.uraian,
+                "nominal": _num(e.nilai),
+                "source": "expense",
+                "ref_id": e.id,
+            })
 
     # Buku Kas (Laci) hanya memuat layer LACI — mutasi Kas Aset tidak boleh
     # muncul sebagai arus kas Laci. Cukup sisi LACI dari sepasang entri transfer,
     # karena sisi KAS_ASET terfilter di sini: Master Kas tetap utuh, tidak dobel.
+    #
+    # BEBAN ikut termasuk di sini (SUMBER_BARIS_KAS) supaya pembayaran Beban
+    # periode terlihat sebagai arus Keluar yang sungguhan. Tanpa ini saldo
+    # berjalan Mutasi Kas tidak akan sama dengan Saldo Laci.
     for k in db.query(KasEntry).filter(KasEntry.kategori != SALDO_AWAL_KATEGORI,
                                       KasEntry.layer == cash.LAYER_LACI).all():
         if (getattr(k, "sumber", None) or cash.SUMBER_MANUAL) not in cash.SUMBER_BARIS_KAS:

@@ -85,20 +85,28 @@ SUMBER_BUKU_KAS = frozenset({
 #: `saldo_laci()` dan bisa dipakai merekonsiliasi uang fisik saat Tutup Kas.
 #:
 #: Prinsip penyusunannya: semua sumber yang bisa menulis ke layer LACI, KECUALI
-#: `PAYMENT` dan `BEBAN` — keduanya sudah diambil langsung dari tabel aslinya
-#: (`payments` / `expenses`) oleh loop terpisah di `period_rows`, jadi ikutkan
-#: di sini akan menghitung dua kali.
+#: `PAYMENT` — karena `PAYMENT` sudah diambil langsung dari tabel `payments`
+#: oleh loop terpisah di `period_rows`, jadi ikutkan di sini akan menghitung dua
+#: kali.
 #:
 #: Yang TIDAK ikut dan alasannya:
-#:   - `PAYMENT`, `BEBAN`  : sudah di loop payments/expenses (cegah dobel).
+#:   - `PAYMENT`   : sudah di loop `payments` (cegah dobel).
 #:   - lapisan `KAS_ASET`  : bukan uang di laci; `period_rows` sudah memfilter
 #:                           `layer == LACI`, jadi pasangan transfer tidak pernah
 #:                           terhitung dua kali dan Master Kas tetap utuh.
+#:
+#: `BEBAN` sekarang DIKUTIPKAN (sebelumnya tidak, 2026-10-17). Alasannya:
+#: pembayarannya yang sungguhan dicatat sebagai SATU entri agregat
+#: `sumber=BEBAN, ref_type='beban_periode'` -- bukan satu baris per katalog.
+#: Kalau `BEBAN` dikecualikan, Mutasi Kas tidak pernah menampilkan pembayaran
+#: Beban dan saldo berjalan-nya meleset sebesar nilai Beban (605.000 di UJI).
+#: Yang tidak boleh masuk bukan `BEBAN`, melainkan KATALOG `expenses` dibaca
+#: sebagai arus -- itu sudah dinonaktifkan di `period_rows`.
 SUMBER_BARIS_KAS = frozenset({
     SUMBER_MANUAL, SUMBER_MODAL, SUMBER_CASH_OUT, SUMBER_REFUND_DP,
     SUMBER_REFUND_GARANSI, SUMBER_FAILED_CANCEL, SUMBER_TRANSFER,
     SUMBER_INJEKSI, SUMBER_REKONSILIASI, SUMBER_PENYESUAIAN,
-    SUMBER_HUTANG_BEBAN, SUMBER_DISTRIBUSI_ASET,
+    SUMBER_HUTANG_BEBAN, SUMBER_DISTRIBUSI_ASET, SUMBER_BEBAN,
 })
 
 KATEGORI = {
