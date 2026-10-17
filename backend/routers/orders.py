@@ -92,6 +92,49 @@ def _attach_summary(db: Session, order):
     return s
 
 
+def _bayar_beban_periode_di_cash(db: Session, order, actor: str = None) -> dict:
+    """Bayar Beban periode ini dari Laci, dipanggil setiap event CASH.
+
+    Owner (2026-10-17): Beban tidak lagi hanya dibayar sekali saat beku
+    pertama dibuat. Setiap ada transaksi CASH, sistem mencoba melunasi Beban
+    periode dari Laci.
+
+    Yang dijaga:
+      - Modal Part/Jasa/Lain SELALU keluar lebih dulu di CASH (OD-LOCK-01),
+        jadi Beban tidak pernah mendahului modal.
+      - Laci tidak pernah minus: `bayar_beban_periode` menarik
+        `min(sisa_beban, saldo_laci)`, tidak pernah lebih.
+      - Idempoten: pembayarannya dihitung dari total yang SUDAH ada di ledger,
+        jadi replay CASH tidak pernah membayar dua kali.
+      - Gagal tidak boleh menggagalkan CASH: transaksi sudah terealisasi,
+        jadi pembayaran Beban cukup dicatat sebagai catatan.
+    """
+    try:
+        import finance as _finance
+        import beban_bayar as _beb
+        from routers.dashboard import batas_periode, get_active_period
+
+        period = get_active_period(db)
+        if period is None:
+            return {"dibayar": False, "alasan": "tidak ada periode OPEN"}
+        start, end = batas_periode(period)
+        key = _finance.period_key(db, start, end)
+
+        # Bekukan dulu supaya total_beban periode pasti ada.
+        _finance.freeze_expenses_for_period(db, start, end, commit=False)
+        core = _finance.compute_finance_core(db, start, end)
+        total_beban = to_decimal(core["total_beban"])
+        if total_beban <= ZERO:
+            return {"dibayar": False, "alasan": "Beban periode masih nol"}
+
+        return _beb.bayar_beban_periode(
+            db, start, end, key, total_beban, oleh=actor,
+            kas_period_id=period.id,
+            laba_kotor=to_decimal(core["laba_kotor"]))
+    except Exception:  # noqa: BLE001
+        return {"dibayar": False, "alasan": "pembayaran Beban dilewati"}
+
+
 def _refresh_money(db: Session, order):
     """Hitung ulang laba_bersih per-order dari sumbernya (bukan input user).
 
@@ -873,6 +916,24 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             # bukan saat pekerjaan selesai (DONE). Idempoten per komponen lewat
             # ref_type+ref_id di cash.catat_modal, jadi replay tidak dobel.
             cash.catat_modal(db, order, actor=_actor(user))
+            # (2c) PEMBAYARAN BEBAN (Owner, 2026-10-17, pilihan B).
+            #
+            # Sebelumnya Beban hanya dibayar SEKALI, saat beku periode pertama
+            # dibuat (`finance._bayar_began_langsung`). Akibatnya kalau Laci
+            # belum cukup waktu itu, sisanya menggantung sampai Tutup Kas -
+            # pada UJI hanya 125.000 dari 605.000 yang terbayar padahal
+            # transaksi berikutnya sudah menambah danaenough.
+            #
+            # Sekarang setiap event CASH mencoba membayar Beban periode dari
+            # Laci. Dua hal yang DIPERTAHANKAN:
+            #   - OD-LOCK-01: Modal Part/Jasa/Lain tetap keluar lebih dulu di
+            #     CASH (langkah 2b), jadi Beban tidak pernah mendahului modal.
+            #   - Laci tidak pernah minus: `bayar_beban_periode` menarik
+            #     `min(sisa_beban, saldo_laci)` saja.
+            # Idempoten: `bayar_began_periode` menghitung total yang SUDAH
+            # dibayar dari ledger (ref_type='beban_periode', ref_id=period_key),
+            # jadi replay CASH tidak pernah bayar dua kali.
+            _bayar_beban_periode_di_cash(db, order, actor=_actor(user))
             # (3) Serah-terima unit (CASH otomatis berarti customer mengambil).
             order.unit_status = "DIAMBIL"
             order.taken_at = _now_cash

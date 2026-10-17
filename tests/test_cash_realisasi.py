@@ -171,6 +171,13 @@ def test_event_cash_lengkap(client, db, auth):
     d_awal = dist_mod.sudah_ada(db, _kunci, _p.id)
     _id_awal = d_awal.id if d_awal is not None else None
 
+    import finance as _fin
+    import beban_bayar as _beb
+    from routers.dashboard import batas_periode as _bp, get_active_period as _gap
+    _st, _en = _bp(_gap(db))
+    _kunci = _fin.period_key(db, _st, _en)
+    beban_terbayar_sblm = _beb._total_dibayar(db, _kunci)
+
     r = client.put("/api/orders/%d" % o.id, headers=auth, json={"status": "CASH"})
     assert r.status_code == 200, r.text
     db.expire_all()
@@ -194,7 +201,16 @@ def test_event_cash_lengkap(client, db, auth):
         # dihitung sebagai yang tergakar sekarang.
         tergakar = to_decimal(d_akhir.cash_out)
 
-    assert _saldo_laci(db) - before_laci == to_decimal(500000 - 420000) - tergakar
+    # Owner (2026-10-17): setiap event CASH juga mencoba membayar Beban
+    # periode dari Laci, SETELAH Modal keluar (OD-LOCK-01 tetap dijaga). Jadi
+    # delta Laci = pelunasan - modal - beban_terbayar - bagi_hasil. Yang dipakai
+    # adalah SELISIH beban yang dibayar selama aksi ini, karena DB test dipakai
+    # bersama antar-test.
+    _beban_terbayar = _beb._total_dibayar(db, _kunci)
+    delta_beban = to_decimal(_beban_terbayar - beban_terbayar_sblm)
+    assert _saldo_laci(db) - before_laci == (
+        to_decimal(500000 - 420000) - delta_beban - tergakar), (
+        "delta Laci = pelunasan - modal - beban_terbayar - bagi hasil")
     # DP punya tepat satu entri kas "Penerimaan Pembayaran" — tidak dobel.
     import cash as cash_mod
     dp_pay = db.query(models.Payment).filter(
