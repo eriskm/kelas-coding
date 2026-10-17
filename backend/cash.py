@@ -75,8 +75,16 @@ SUMBER_DISTRIBUSI_ASET = "DISTRIBUSI_ASET"
 #: Sumber yang boleh masuk ARUS KAS AKRUAL (`compute_finance` -> total_masuk /
 #: total_keluar). Harus SEMPIT: apa pun yang sudah tercakup di `omset`,
 #: `total_modal`, atau `total_beban` akan terhitung dua kali kalau ikut di sini.
+#: `DISTRIBUSI_ASET` ikut dihitung (2026-10-17). Dua gerak Laci nyata yang
+#: sebelumnya hilang dari Buku Kas accrual:
+#:   - sisi Keluar Laci saat Hak Kas Aset dipindahkan ke Saldo Aset;
+#:   - jurnal "Koreksi Bagi Hasil" saat topdown mengembalikan kelebihan cash-out.
+#: Tanpa keduanya, `total_keluar` Arsip Tutup Kas lebih besar dari Laba Bersih
+#: yang sebenarnya dan `saldo` berakhir negatif (-4.000 di UJI, padahal tabel
+#: Kondisi Kas Operasional berakhir 0).
 SUMBER_BUKU_KAS = frozenset({
     SUMBER_MANUAL, SUMBER_CASH_OUT, SUMBER_REFUND_DP, SUMBER_FAILED_CANCEL,
+    SUMBER_DISTRIBUSI_ASET,
 })
 
 #: Sumber entri kas yang ditampilkan sebagai BARIS di Mutasi Kas
