@@ -16,7 +16,7 @@ from sqlalchemy import or_
 from dependencies import get_db_session
 from models import Payment, ServiceOrder, Customer, WarrantyClaim, User, KasPeriod
 from authority import Action, require_authority
-from routers.auth import require_admin
+from routers.auth import get_authenticated_user
 from statusflow import kewajiban, payment_summary
 import schemas
 
@@ -540,7 +540,7 @@ def update_claim(claim_id: int, data: schemas.ClaimUpdate, db: Session = Depends
 
 @router.delete("/{claim_id}")
 def delete_claim(claim_id: int, db: Session = Depends(get_db_session),
-                 admin=Depends(require_admin)):
+                 admin=Depends(require_authority(Action.CLAIM_WRITE))):
     """Hapus claim — khusus Admin. Claim SELESAI/DITUTUP tidak dapat dihapus."""
     c = db.query(WarrantyClaim).filter(WarrantyClaim.id == claim_id).first()
     if not c:

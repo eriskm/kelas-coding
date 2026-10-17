@@ -180,10 +180,39 @@ def change_passcode(
             "pesan": "Passcode diubah. Silakan login ulang dengan passcode baru."}
 
 
-def require_admin(user: User = Depends(get_authenticated_user)) -> User:
-    if (user.role or "").upper() not in ("SUPERADMIN", "ADMIN"):
-        raise HTTPException(status_code=403, detail="Hanya Admin yang boleh mengelola akun.")
-    return user
+USER_MANAGE = "USER_MANAGE"
+
+
+def _matrix_user(action: str):
+    """Dependency penjaga yang SELLALU membaca `AUTHORITY_MATRIX`.
+
+    `authority` mengimpor modul ini (untuk `get_authenticated_user`), jadi
+    modul ini TIDAK bisa meng-import `authority` di level modul tanpa circular
+    import. Karena itu import-nya dilakukan di dalam fungsi. Yang dijaga hanya
+    satu: 판단 wewenang SELALU datang dari matriks, tidak pernah dari daftar
+    role yang ditulis manual seperti penjaga lama sebelum audit ini.
+    """
+
+    def _dep(user: User = Depends(get_authenticated_user)) -> User:
+        import authority as auth_mod
+        if not auth_mod.can(user, action):
+            raise HTTPException(
+                status_code=403,
+                detail=auth_mod.DEFAULT_MESSAGES.get(
+                    action, "Aksi ini tidak diizinkan untuk akun Anda."))
+        return user
+
+    _dep.__name__ = "butuh_%s" % action.lower()
+    return _dep
+
+
+# CATATAN (2026-10-16, audit permission): penjaga role lama (penjaga-lama) DIHAPUS.
+# Semuanya sekarang lewat `require_authority(Action.X)` supaya hanya ada
+# SATU sumber kebenaran, yaitu `AUTHORITY_MATRIX`.
+# Alasannya dihapus: (1) tidak membaca matriks sama sekali, jadi aturan
+# bisa berbeda antara matriks dan penjaga; (2) ceknya memakai `.upper()`
+# langsung sehingga alias sah seperti DEV / SUPER_ADMIN justru DITOLAK,
+# padahal `canonical_role()` menge|Oct sebagai Super Admin.
 
 
 DOMAIN_AKUN = "AKUN"
@@ -250,7 +279,7 @@ def _catat_jurnal_akun(db: Session, event: str, user: User, actor: User,
 
 
 @router.get("/roles")
-def list_roles(user: User = Depends(require_admin)):
+def list_roles(user: User = Depends(_matrix_user(USER_MANAGE))):
     """Daftar role + hak aksesnya, untuk form Kelola Akun.
 
     Disumber dari `AUTHORITY_MATRIX` yang sama dengan penjaga di setiap endpoint.
@@ -356,13 +385,13 @@ class UserUpdate(BaseModel):
 
 
 @router.get("/users", response_model=list[UserAdminOut])
-def list_users(admin: User = Depends(require_admin),
+def list_users(admin: User = Depends(_matrix_user(USER_MANAGE)),
                db: Session = Depends(get_db_session)):
     return db.query(User).order_by(User.id.asc()).all()
 
 
 @router.post("/users", response_model=UserAdminOut, status_code=201)
-def create_user(payload: UserCreate, admin: User = Depends(require_admin),
+def create_user(payload: UserCreate, admin: User = Depends(_matrix_user(USER_MANAGE)),
                 db: Session = Depends(get_db_session)):
     username = (payload.username or "").strip()
     nama = (payload.display_name or "").strip()
@@ -394,7 +423,7 @@ def create_user(payload: UserCreate, admin: User = Depends(require_admin),
 
 @router.put("/users/{user_id}", response_model=UserAdminOut)
 def update_user(user_id: int, payload: UserUpdate,
-                admin: User = Depends(require_admin),
+                admin: User = Depends(_matrix_user(USER_MANAGE)),
                 db: Session = Depends(get_db_session)):
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
@@ -404,7 +433,7 @@ def update_user(user_id: int, payload: UserUpdate,
     if _apakah_superadmin(user.role) and not _apakah_superadmin(admin.role):
         raise HTTPException(status_code=403, detail="Hanya Superadmin yang boleh mengubah Superadmin")
     # OD-LOCK-10: menaikkan role jadi SUPER ADMIN butuh ROLE_CONFIG, bukan
-    # sekadar `require_admin`. Kalau tidak, Admin bisa meng_eskalasi dirinya
+    # sekadar `USER_MANAGE`. Kalau tidak, Admin bisa meng_eskalasi dirinya
     # sendiri lewat edit akun.
     if payload.role is not None:
         _tolak_bila_bikin_superadmin(admin, payload.role)

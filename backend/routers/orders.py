@@ -15,7 +15,7 @@ from routers import payments as payments_mod
 from money import ZERO, to_decimal
 from authority import (Action, check, is_closing_status, require_authority,
                       sanitize_finance_payload)
-from routers.auth import can_edit_finance, get_authenticated_user, require_admin
+from routers.auth import can_edit_finance, get_authenticated_user
 from statusflow import (
     INITIAL_PATHS,
     SERVICE_STATUSES,
@@ -975,7 +975,7 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
 
 @router.delete("/{order_id}")
 def delete_order(order_id: int, db: Session = Depends(get_db_session),
-                 admin: User = Depends(require_admin)):
+                 admin: User = Depends(require_authority(Action.ORDER_DELETE))):
     """Hapus order — khusus Admin. Diblokir bila sudah ada uang/klaim/status
     status terminal (DONE/CASH/FAILED/CANCEL) — gunakan alur riwayat/arsip, bukan hapus, agar jurnal aman)."""
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()

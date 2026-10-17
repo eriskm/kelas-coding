@@ -332,5 +332,11 @@ def test_tidak_ada_endpoint_tulis_tanpa_penjaga_role():
 
 def re_search_guard(kode: str) -> bool:
     import re
+    # `_matrix_user` adalah penjaga role milik routers/auth.py. Ia dipakai di
+    # situ karena modul auth tidak boleh meng-import `authority` di level modul
+    # (circular import: authority meng-import routers.auth). Penegakannya
+    # tetap membaca AUTHORITY_MATRIX lewat `auth_mod.can(...)` - satu sumber
+    # kebenaran, sama seperti `require_authority`.
     return bool(re.search(r"require_admin|require_authority|require_finance"
-                          r"|_boleh_|is_monitoring|canonical_role", kode))
+                          r"|_matrix_user|_boleh_|is_monitoring|canonical_role",
+                          kode))

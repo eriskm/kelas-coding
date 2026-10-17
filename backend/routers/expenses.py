@@ -12,7 +12,7 @@ from dependencies import get_db_session
 import cash
 from models import Expense, User
 from authority import Action, require_authority
-from routers.auth import require_admin
+from routers.auth import get_authenticated_user
 import schemas
 
 router = APIRouter(prefix="/api/expenses", tags=["expenses"])
@@ -102,7 +102,7 @@ def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = D
 
 @router.delete("/{expense_id}")
 def delete_expense(expense_id: int, db: Session = Depends(get_db_session),
-                   admin=Depends(require_admin)):
+                   admin=Depends(require_authority(Action.EXPENSE_WRITE))):
     """Hapus beban — khusus Admin (beban masuk hitungan periode berjalan)."""
     row = db.query(Expense).filter(Expense.id == expense_id).first()
     if not row:

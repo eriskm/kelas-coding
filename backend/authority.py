@@ -135,6 +135,7 @@ class Action:
     REFUND_GARANSI = "REFUND_GARANSI"
     FAILED_CANCEL = "FAILED_CANCEL"
     SPAREPART_WRITE = "SPAREPART_WRITE"
+    SPAREPART_DELETE = "SPAREPART_DELETE"
     CLAIM_WRITE = "CLAIM_WRITE"
     USER_MANAGE = "USER_MANAGE"
     CUSTOMER_WRITE = "CUSTOMER_WRITE"
@@ -182,6 +183,11 @@ AUTHORITY_MATRIX = {
     # Sparepart: khusus ADMIN SPAREPART. Kasir dan Teknisi dicabut dari sini
     # sesuai pembagian tugas; Teknisi hanya melihat kebutuhan sparepart.
     Action.SPAREPART_WRITE: {ROLE_SUPER, ROLE_ADMIN, ROLE_ADMIN_SPAREPART},
+    # Hapus sparepart TIDAK ikut Admin Sparepart. Akses lama tidak berubah:
+    # sebelumnya endpoint ini dijaga penjaga (Super Admin + Admin saja),
+    # dan SPAREPART_WRITE tidak boleh dipakai untuk hapus karena role itu
+    # punya SPAREPART_WRITE.
+    Action.SPAREPART_DELETE: {ROLE_SUPER, ROLE_ADMIN},
     Action.CLAIM_WRITE: {ROLE_SUPER, ROLE_ADMIN},
     # -- akun & konfigurasi -------------------------------------------------
     Action.USER_MANAGE: {ROLE_SUPER, ROLE_ADMIN},
@@ -244,7 +250,8 @@ DEFAULT_MESSAGES = {
     Action.REFUND_DP: "Hanya Admin/Kasir yang boleh memproses refund DP.",
     Action.REFUND_GARANSI: "Refund klaim garansi adalah keputusan Admin.",
     Action.FAILED_CANCEL: "Hanya Admin/Kasir yang boleh membatalkan unit.",
-    Action.SPAREPART_WRITE: "Hanya Admin/Kasir/Teknisi yang boleh mengelola sparepart.",
+    Action.SPAREPART_WRITE: "Hanya Super Admin/Admin/Admin Sparepart yang boleh mengelola sparepart.",
+    Action.SPAREPART_DELETE: "Hanya Super Admin/Admin yang boleh menghapus sparepart.",
     Action.CLAIM_WRITE: "Hanya Admin/Kasir yang boleh mengelola klaim garansi.",
     Action.USER_MANAGE: "Hanya Admin yang boleh mengelola akun.",
 }

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from dependencies import get_db_session
 from models import Sparepart, User
 from authority import Action, require_authority
-from routers.auth import require_admin
+from routers.auth import get_authenticated_user
 import schemas
 
 router = APIRouter(prefix="/api/spareparts", tags=["spareparts"])
@@ -83,7 +83,7 @@ def update_sparepart(sparepart_id: int, data: schemas.SparepartUpdate,
 
 @router.delete("/{sparepart_id}")
 def delete_sparepart(sparepart_id: int, db: Session = Depends(get_db_session),
-                     admin=Depends(require_admin)):
+                     admin=Depends(require_authority(Action.SPAREPART_DELETE))):
     """Hapus sparepart — khusus Admin."""
     row = db.query(Sparepart).filter(Sparepart.id == sparepart_id).first()
     if not row:

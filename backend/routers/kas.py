@@ -28,7 +28,7 @@ from authority import Action, require_authority
 from dependencies import get_db_session
 from money import ZERO, json_default, to_decimal
 from models import Expense, KasEntry, KasPeriod, Payment, ServiceOrder, User
-from routers.auth import get_authenticated_user, require_admin
+from routers.auth import get_authenticated_user
 from routers.dashboard import (_period_bounds, batas_periode, compute_finance,
                                 get_active_period)
 import schemas
@@ -322,7 +322,7 @@ def update_entry(entry_id: int, data: schemas.KasEntryUpdate, db: Session = Depe
 
 @router.delete("/entries/{entry_id}")
 def delete_entry(entry_id: int, db: Session = Depends(get_db_session),
-                 admin: User = Depends(require_admin)):
+                 admin: User = Depends(require_authority(Action.KAS_ENTRY_WRITE))):
     """Hapus entri manual — khusus Admin. Saldo Awal tidak dapat dihapus
     (buat entri penyeimbang bila salah input) agar opening tidak berubah
     retroaktif."""
