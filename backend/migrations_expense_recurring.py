@@ -22,8 +22,20 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 
 COLUMNS = (
-    ("recurring", "BOOLEAN NOT NULL DEFAULT 1"),
+    ("recurring", "BOOLEAN NOT NULL DEFAULT %s"),  # literal diisi per-dialek
 )
+
+
+def _bool_literal(engine, value: bool) -> str:
+    """SQLite menerima 0/1, PostgreSQL menuntut true/false.
+
+    Tanpa ini `ADD COLUMN ... BOOLEAN DEFAULT 1` gagal di PostgreSQL dengan
+    DatatypeMismatch, kolom tidak pernah terbentuk, dan query mirror beban
+    permanen jadi 500.
+    """
+    if engine.dialect.name == "postgresql":
+        return "true" if value else "false"
+    return "1" if value else "0"
 
 
 def _cols(engine, table="expenses"):
@@ -44,7 +56,8 @@ def migrate_expense_recurring(engine) -> dict:
             if name in existing:
                 report["skipped"].append("expenses.%s: sudah ada" % name)
                 continue
+            ddl = sql_type % _bool_literal(engine, True)
             conn.execute(text('ALTER TABLE "expenses" ADD COLUMN "%s" %s'
-                              % (name, sql_type)))
-            report["changed"].append("expenses.%s %s" % (name, sql_type))
+                              % (name, ddl)))
+            report["changed"].append("expenses.%s %s" % (name, ddl))
     return report

@@ -28,8 +28,20 @@ from __future__ import annotations
 from sqlalchemy import inspect, text
 
 COLUMNS = (
-    ("tanpa_modal", "BOOLEAN NOT NULL DEFAULT 0"),
+    ("tanpa_modal", "BOOLEAN NOT NULL DEFAULT %s"),  # literal diisi per-dialek
 )
+
+
+def _bool_literal(engine, value: bool) -> str:
+    """SQLite menerima 0/1, PostgreSQL menuntut true/false.
+
+    Tanpa ini `ADD COLUMN ... BOOLEAN DEFAULT 0` gagal di PostgreSQL dengan
+    DatatypeMismatch, kolom tidak pernah terbentuk, dan seluruh query yang
+    memakainya jadi 500.
+    """
+    if engine.dialect.name == "postgresql":
+        return "true" if value else "false"
+    return "1" if value else "0"
 
 
 def _cols(engine, table="service_orders"):
@@ -51,7 +63,8 @@ def migrate_service_orders_tanpa_modal(engine) -> dict:
             if name in existing:
                 report["skipped"].append("service_orders.%s: sudah ada" % name)
                 continue
+            ddl = sql_type % _bool_literal(engine, False)
             conn.execute(text('ALTER TABLE "service_orders" ADD COLUMN "%s" %s'
-                              % (name, sql_type)))
-            report["changed"].append("service_orders.%s %s" % (name, sql_type))
+                              % (name, ddl)))
+            report["changed"].append("service_orders.%s %s" % (name, ddl))
     return report
