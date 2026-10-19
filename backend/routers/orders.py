@@ -11,6 +11,7 @@ from models import Payment, ServiceOrder, Customer, StatusHistory, User, Warrant
 import cash
 import journal
 import notifications as notif_mod
+from finance import order_sisa
 from routers import payments as payments_mod
 from money import ZERO, to_decimal
 from authority import (Action, check, is_closing_status, require_authority,
@@ -446,6 +447,9 @@ def _to_list_schema(o, summ=None):
         modal_lainnya=o.modal_lainnya,
         tanpa_modal=bool(getattr(o, "tanpa_modal", False)),
         laba_bersih=getattr(o, "laba_bersih", 0) or 0,
+        # None = belum boleh dihitung (bukan CASH / modal belum diisi).
+        # Dihitung di finance.py supaya gerbang modal tidak diduplikasi.
+        sisa_modal=order_sisa(o),
         lunas_date=o.lunas_date,
         lunas_at=o.lunas_at,
         warranty_months=o.warranty_months,

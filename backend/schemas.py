@@ -169,6 +169,9 @@ class ServiceOrderList(BaseModel):
     modal_lainnya: Optional[MoneyOut] = None
     tanpa_modal: Optional[bool] = None
     laba_bersih: Optional[MoneyOut] = None
+    # Sisa per unit = Harga Final - (Part + Jasa + Lain). Berbeda dengan
+    # `sisa` di bawah yang berarti SISA TAGIHAN (belum dibayar).
+    sisa_modal: Optional[MoneyOut] = None
     lunas_date: Optional[date] = None
     lunas_at: Optional[datetime] = None
     warranty_months: Optional[int] = None

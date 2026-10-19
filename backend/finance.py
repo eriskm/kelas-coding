@@ -511,6 +511,36 @@ def snapshot_laba_bersih(db: Session, start: datetime, end: datetime) -> Decimal
     return compute_finance_core(db, start, end)["laba_bersih"]
 
 
+def order_sisa(order) -> Decimal | None:
+    """Sisa per unit: Harga Final - (Modal Part + Jasa + Lain-lain).
+
+    Berbeda dari Laba Kotor periode, angka ini milik SATU unit, jadi
+    tidak ada alokasi Beban - Beban itu per periode kas dan tidak bisa
+    dibelah ke satu baris tabel.
+
+    Gate (keputusan Owner): hanya tampil kalau unit sudah CASH **dan**
+    Modal-nya sudah diisi. `boleh_masuk_omzet()` dipakai langsung supaya
+    gerbangnya tidak diduplikasi di tempat lain.
+
+    `None` berarti "belum boleh dihitung" - sengaja BUKAN `0`. Unit yang
+    belum CASH atau modalnya belum diisi harus tampil berbeda dari unit
+    yang benar-benar zeroes.
+
+    Catatan: `statusflow.order_profit` tidak dipakai di sini karena gate
+   -nya cuma CASH tanpa syarat modal terisi. Order CASH yang modalnya
+    kosong akan terlihat " untung penuh" di sana - persis jebakan yang
+    `settled_orders` sudah mendokumentasikan.
+    """
+    if (getattr(order, "status", "") or "") != "CASH":
+        return None
+    if not boleh_masuk_omzet(order):
+        return None
+    return (kewajiban(order)
+            - to_decimal(getattr(order, "part_cost", 0) or 0)
+            - to_decimal(getattr(order, "modal_jasa", 0) or 0)
+            - to_decimal(getattr(order, "modal_lainnya", 0) or 0))
+
+
 __all__ = [
     "BEBAN_KATEGORI",
     "beban_frozen",

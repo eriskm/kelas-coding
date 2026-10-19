@@ -1637,6 +1637,16 @@ function txLaba(o) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(val);
 }
 
+// Sisa per unit = Harga Final - (Part + Jasa + Lain).
+// Backend (finance.order_sisa) sudah menolak unit yang belum CASH atau
+// modalnya belum diisi, jadi nilai null di sini berarti "belum boleh
+// dihitung" - ditampilkan '-', bukan Rp 0 yang menyesatkan.
+function txSisaModal(o) {
+    const v = (o && o.sisa_modal);
+    if (v === null || v === undefined) return '-';
+    return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(v) || 0);
+}
+
 async function renderTransaksi() {
     try { txMenuClose(); } catch (_) {}
     initTxToolbar();
@@ -1673,6 +1683,7 @@ function txRowHtml(o, num) {
         </td>
         <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.technician || '-')}">${escapeHtml(o.technician || '-')}</td>
         <td class="tx-laba tx-nowrap">${txLaba(o)}</td>
+        <td class="tx-sisa tx-nowrap" title="Harga Final - (Modal Part + Jasa + Lain). Tampil hanya setelah status CASH dan modal diisi.">${txSisaModal(o)}</td>
         <td class="tx-aksi">
             <button type="button" class="tx-view-btn" data-txmenu-btn title="Menu" onclick="txMenuToggle(${o.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
         </td>
