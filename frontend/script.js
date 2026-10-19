@@ -2459,34 +2459,65 @@ async function usHistoryLoad(orderId) {
     }
 }
 
-// ── Konfirmasi WA otomatis saat unit berubah ke DONE ──
+// ── Konfirmasi WhatsApp saat transisi status Servis ──
+//
+// Dua kejadian berbeda, jadi dua pesan terpisah:
+//
+//   DONE -> pekerjaan selesai dikerjakan. Unit siap diambil.
+//   CASH -> transaksi terealisasi. Di sinilah garansi berlaku, jadi
+//           pesannya pengantar untuk melengkapi Nota Garansi.
+//
+// Sebelumnya popup ini hanya dipicu saat CASH, padahal komentar di
+// kode sama-sama menyebut DONE. DONE tidak pernah memberi konfirmasi.
 let _doneWaData = null;
+let _doneWaJenis = 'DONE';
 
 function doneWaMessage(d) {
     const L = [];
     L.push('Halo ' + (d.nama || 'Kak') + ' 🙏');
-    L.push('Kabar baik! Servis Anda sudah SELESAI ✅');
+    L.push('Kabar baik! Servis unit Anda sudah selesai dikerjakan ✅');
     L.push('');
     L.push('No. Servis: ' + (d.no || '-'));
     L.push('Device: ' + (d.device || '-'));
     if (d.damage) L.push('Kerusakan: ' + d.damage);
     if (d.plan) L.push('Tindakan: ' + d.plan);
-    L.push('Biaya: ' + usRupiah(d.final));
-    const _sisaWa = (d.sisa !== undefined && d.sisa !== null) ? Number(d.sisa) || 0
-        : Math.max(0, (Number(d.final) || 0) - (Number(d.dp) || 0));
-    if ((Number(d.dp) || 0) > 0 || _sisaWa > 0) L.push('DP masuk: ' + usRupiah(d.dp) + ' • Sisa: ' + usRupiah(_sisaWa));
+    if (d.final) L.push('Biaya perbaikan: ' + usRupiah(d.final));
     L.push('');
-    L.push('Silakan ambil unit Anda di SUKABUMI FLASHER.');
+    L.push('Unit siap diambil di SUKABUMI FLASHER.');
     L.push('Terima kasih atas kepercayaan Anda 🙏');
     return L.join('\n');
 }
 
-function doneWaShow(d) {
+function cashWaMessage(d) {
+    const L = [];
+    L.push('Halo ' + (d.nama || 'Kak') + ' 🙏');
+    L.push('Unit Anda sudah selesai dan telah kami terima.');
+    L.push('');
+    L.push('No. Servis: ' + (d.no || '-'));
+    L.push('Device: ' + (d.device || '-'));
+    L.push('Biaya: ' + usRupiah(d.final));
+    const _sisaWa = (d.sisa !== undefined && d.sisa !== null) ? Number(d.sisa) || 0
+        : Math.max(0, (Number(d.final) || 0) - (Number(d.dp) || 0));
+    if ((Number(d.dp) || 0) > 0 || _sisaWa > 0) L.push('DP masuk: ' + usRupiah(d.dp) + ' • Sisa: ' + usRupiah(_sisaWa));
+    if (d.garansi) L.push('Garansi: ' + d.garansi);
+    L.push('');
+    L.push('Berikut ini ringkasan unit dan masa garansinya.');
+    L.push('Simpan pesan ini sebagai bukti. Terima kasih 🙏');
+    return L.join('\n');
+}
+
+function doneWaShow(d, jenis) {
     _doneWaData = d || null;
+    _doneWaJenis = (jenis === 'CASH') ? 'CASH' : 'DONE';
+    const isCash = _doneWaJenis === 'CASH';
+    const judul = document.getElementById('doneWaTitle');
+    const sub = document.getElementById('doneWaSub');
+    if (judul) judul.textContent = isCash ? 'Lengkapi Nota Garansi 🛡️' : 'Unit Selesai ✅';
+    if (sub) sub.textContent = isCash ? 'Kirim pengantar garansi ke pelanggan?' : 'Kirim konfirmasi ke pelanggan?';
     const to = document.getElementById('doneWaTo');
     if (to) to.textContent = 'Ke: ' + ((d && d.nama) || '-') + ' • ' + ((d && d.phone) || '(no. WA kosong)');
     const pv = document.getElementById('doneWaPreview');
-    if (pv) pv.textContent = doneWaMessage(d || {});
+    if (pv) pv.textContent = isCash ? cashWaMessage(d || {}) : doneWaMessage(d || {});
     const num = notaWaNumber(d && d.phone);
     const warn = document.getElementById('doneWaWarn');
     if (warn) {
@@ -2501,6 +2532,10 @@ function doneWaShow(d) {
     if (ov) ov.classList.remove('hidden');
 }
 
+function cashWaShow(d) {
+    doneWaShow(d, 'CASH');
+}
+
 function doneWaClose() {
     const ov = document.getElementById('doneWaPopup');
     if (ov) ov.classList.add('hidden');
@@ -2510,7 +2545,8 @@ function doneWaClose() {
 function doneWaSend() {
     const d = _doneWaData;
     if (!d) return;
-    const msg = doneWaMessage(d);
+    const isCash = _doneWaJenis === 'CASH';
+    const msg = isCash ? cashWaMessage(d) : doneWaMessage(d);
     try {
         if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(msg);
     } catch (_) {}
@@ -2878,26 +2914,36 @@ function initUpdateServis() {
                     fb.innerHTML = `<i class="fa-solid fa-circle-check"></i> Data servis tersimpan di server. Rincian kas di panel kanan masih hitungan lokal (belum masuk KAS).`;
                 }
                 renderTransaksi();
-                // Transisi ke SELESAI → tawarkan kirim konfirmasi WA ke pelanggan.
-                const _wasDone = (_usStatusInit === 'CASH');
+                // DONE = pekerjaan selesai -> konfirmasi ke pelanggan.
+                // CASH = transaksi terealisasi -> pengantar lengkapi nota garansi.
+                // Dua pesan berbeda; keduanya pakai _usStatusInit sebagai
+                // pengaman supaya popup tidak muncul ulang saat status tidak berubah.
+                const _sebelumnya = _usStatusInit;
                 _usStatusInit = _usSt;
-                if (_usSt === 'CASH' && !_wasDone) {
-                    let _sisa = 0;
+                const _baruKe = (target) => (_usSt === target && _sebelumnya !== target);
+                let _sisa = 0;
+                if (_baruKe('DONE') || _baruKe('CASH')) {
                     try {
                         const _pay = await apiGet('/payments/by-order/' + _txEditId);
                         _sisa = _pay.sisa || 0;
                     } catch (_) {}
-                    doneWaShow({
-                        nama: usVal('usNama').trim(),
-                        phone: usVal('usPhone').trim(),
-                        device: usVal('usDevice').trim(),
-                        no: _usNo,
-                        damage: usVal('usDamage').trim(),
-                        plan: usVal('usPlan').trim(),
-                        final: usNum('usFinFinal'),
-                        dp: usNum('usDp'),
-                        sisa: _sisa,
-                    });
+                }
+                const _pesanWa = {
+                    nama: usVal('usNama').trim(),
+                    phone: usVal('usPhone').trim(),
+                    device: usVal('usDevice').trim(),
+                    no: _usNo,
+                    damage: usVal('usDamage').trim(),
+                    plan: usVal('usPlan').trim(),
+                    final: usNum('usFinFinal'),
+                    dp: usNum('usDp'),
+                    sisa: _sisa,
+                    garansi: usWarrantyText(),
+                };
+                if (_baruKe('DONE')) {
+                    doneWaShow(_pesanWa, 'DONE');
+                } else if (_baruKe('CASH')) {
+                    cashWaShow(_pesanWa);
                 }
             } catch (err) {
                 if (fb) {
@@ -7187,6 +7233,15 @@ function warrantyEndFor(cash, m) {
     if (m === null || m === undefined || m === '') return warrantyEndOf(cash, WARRANTY_DAYS);
     if (Number(m) === 0) return '';
     return addMonths(cash, Number(m));
+}
+
+// Label garansi untuk pesan WhatsApp, dibaca dari kontrol Update Data Servis
+// (nilainya baru berlaku setelah status CASH).
+function usWarrantyText() {
+    try {
+        const m = (document.getElementById('usWarrantyMonths') || {}).value;
+        return warrantyLabel(m === undefined ? null : m);
+    } catch (_) { return ''; }
 }
 
 function usWarrantyMonths() {
