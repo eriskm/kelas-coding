@@ -1,254 +1,404 @@
-# Aturan Kerja — BOSS SF Servis
+# AGENTS.md — Pedoman Kerja AI Agent BOSS SF
 
-Dokumen ini adalah pengingat yang WAJIB dibaca sebelum melakukan apa pun di repo ini.
+Dokumen ini **wajib** dibaca sebelum mengubah apa pun di repo ini.
+
+Semua aturan bisnis berasal dari
+[`docs/OWNER_DECISIONS.md`](docs/OWNER_DECISIONS.md) — dokumen itu kanonik.
+Pedoman ini mengatur **cara kerja**, bukan aturan bisnisnya.
 
 ---
 
-## 0. ATURAN BISNIS TERKUNCI — WAJIB DIBACA DAHULU
+## A. PROSEDUR AWAL
 
-> ### 🔒 `docs/OWNER_DECISIONS.md` adalah **sumber kebenaran bisnis** BOSS SF.
->
-> Sebelum melakukan audit, pengembangan, validasi, pengujian, atau perubahan kode,
-> **WAJIB** membaca dokumen itu lebih dulu.
+### A1. Baca dulu, ubah kemudian
 
-Isinya:
+Sebelum menyentuh kode:
 
-| ID | Isi | Status |
+1. Baca `AGENTS.md` ini.
+2. Baca `docs/OWNER_DECISIONS.md` bila menyangkut uang, permission, atau status.
+3. Baca dokumen detail yang relevan (`docs/`).
+4. Baca **implementasi aktual** — bukan hanya komentar dan bukan hanya dokumentasi.
+
+### A2. Audit sebelum menyimpulkan
+
+Jangan menyimpulkan sebuah fitur aktif karena ada file, route, tabel, atau
+tombolnya. Telusuri implementasinya sampai ketemu fungsi yang benar-benar
+memanggilnya.
+
+> Contoh nyata: `Action.AUDIT_READ` ada di matriks wewenang, tapi **tidak ada**
+> endpoint yang memakainya. Ada action ≠ ada fitur.
+
+Kalau dokumen dan kode berbeda: **kode adalah fakta.** Selisihnya catat sebagai
+temuan — jangan diperbaiki sepihak dan jangan didiamkan.
+
+### A3. Petakan ruang lingkup sebelum eksekusi
+
+Sebelum menulis perubahan, tentukan dan sebutkan:
+
+- File mana yang terdampak.
+- Dependensi apa yang ikut berubah.
+- Risiko terhadap bisnis, permission, database, dan API.
+- Test mana yang membuktikan perubahan ini benar.
+
+### A4. Bukti harus bisa ditelusuri
+
+Setiap angka atau klaim wajib punya sumber: `file:line`, atau output perintah
+yang benar-benar dijalankan. Kalau tidak bisa ditelusuri, itu asumsi — tulis
+sebagai asumsi, bukan fakta.
+
+---
+
+## B. PERLINDUNGAN ATURAN BISNIS
+
+### B1. Aturan terkunci tidak bisa diubah sendiri
+
+🔒 Aturan `OD-LOCK-*` dan `FR-*` di `docs/OWNER_DECISIONS.md` bersifat **TERKUNCI**.
+
+- ❌ Jangan mengubah, melemahkan, atau menginterpretasi ulang aturan terkunci.
+- ❌ Jangan mengubah **kode** supaya cocok dengan interpretasi rulesmu.
+- ✅ Kalau kode bertentangan dengan aturan → **perbaiki kodenya**.
+- ✅ Kalau kamu ragu → catat sebagai temuan, tunggu keputusan Owner.
+
+### B2. Jangan menebak angka
+
+Gunakan **fungsi aplikasi** untuk menghitung, bukan SQL karangan.
+
+Query mentah bisa meleset karena ada kolom legacy yang sengaja disimpan
+(arsip UI) dan yang harus dikecualikan dari hitungan resmi. Contoh: DP tercatat
+ganda di `service_orders.payment` (arsip) **dan** di tabel `payments`
+(ledger). Angka resmi selalu dari ledger.
+
+### B3. Source of truth per domain
+
+| Domain | Sumber tunggal | Larangan |
 |---|---|---|
-| **FR-01** | Payment Ledger & Financial Core | 🔒 LOCKED |
-| **FR-02** | Mekanisme Tutup Kas | 🔒 LOCKED |
-| **OD-LOCK-01** | Modal Part & Jasa keluar dari Laci saat CASH | 🔒 LOCKED |
-| **OD-LOCK-02** | Distribusi Bagi Hasil 10/30/30/30 | 🔒 LOCKED |
-| **OD-LOCK-03** | Status CASH bersifat FINAL | 🔒 LOCKED |
-| **OD-LOCK-04** | DP tidak boleh melebihi estimasi | 🔒 LOCKED |
-| **OD-LOCK-05** | Refund klaim garansi dilakukan MANUAL | 🔒 LOCKED |
-| **OD-LOCK-06** | Pembayaran Beban: Laci → Kas Aset → Hutang Beban | 🔒 LOCKED |
-| **OD-LOCK-07** | Periode kas per-id, Hutang Beban dari Laba Kotor, hanya DP/Hutang/Kas Aset yang menyeber | 🔒 LOCKED |
-| **OD-LOCK-08** | Kelola Akun: Nonaktifkan, bukan hapus. Koreksi technisi wajib tercatat | 🔒 LOCKED |
+| Omzet / Modal / Laba | `backend/finance.py` | Jangan hitung ulang di router/laporan |
+| Kewajiban & status bayar | `backend/statusflow.py` | Jangan karang ulang |
+| Pembayaran Beban | `backend/beban_bayar.py` | **Jangan tambah jalur bayar kedua** |
+| Wewenang | `backend/authority.py` | Jangan bikin daftar role terpisah |
+| Aturan bisnis | `docs/OWNER_DECISIONS.md` | Jangan tulis ulang di tempat lain |
 
-| **OD-LOCK-09** | PENGELOLA/PEMILIK/INVESTOR read-only: nol wewenang mengubah | 🔒 LOCKED |
-Yang WAJIB dipatuhi:
+Kecilkan sumber di modul lain **hanya dengan tautan**, jangan dengan
+penyalinan teks — supaya tidak ada dua versi yang bisa berbeda.
 
-- ❌ **Jangan mengubah, menghapus, atau melemahkan aturan terkunci** tanpa
-  keputusan eksplisit dari Owner.
-- ❌ **Jangan mengubah keputusan bisnis untuk menyesuaikan kode.** Kalau kode
-  bertentangan, perbaiki **kodenya**.
-- ❌ **Jangan menafsirkan ulang** aturan terkunci berdasarkan asumsi teknis.
-- ✅ Catat ketidaksesuaian sebagai temuan, lalu tunggu keputusan Owner.
-- ✅ Keputusan Owner adalah acuan; **implementasi wajib mengikuti keputusan
-  yang terkunci, bukan sebaliknya.**
+### B4. Jangan perluas scope
 
-Dokumen `OWNER_DECISIONS.md` juga punya bagian **Ketidaksesuaian Implementasi**
-yang mencatat aturan mana yang belum berjalan di kode. Itu daftar pekerjaan
-yang menunggu perintah Owner — **bukan** daftar untuk dikerjakan sendiri.
+Jangan menambah baris, kolom, endpoint, atau tombol UI karena "kira-kira akan
+membantu". Kalau kamu punya ide bagus, tulis sebagai usulan — **lalu tunggu**.
 
----
+### B5. Jangan samarkan asumsi
 
-## 1. KONFIRMASI DULU — TANPA KECUALI
+Setiap laporan wajib membedakan:
 
-**Jangan pernah melakukan sesuatu berdasarkan asumsi sendiri.**
-
-Sebelum melakukan TINDAKAN APA SAJA, konfirmasi dulu ke Owner:
-
-| Jenis tindakan | Wajib konfirmasi |
+| Penanda | Arti |
 |---|---|
-| Mengubah kode atau tampilan | Ya |
-| Mengubah perhitungan / rumus | Ya |
-| Mengubah data atau DB | Ya |
-| Commit / push | Ya |
-| Menjalankan migrasi | Ya |
-| Membuat file baru | Ya |
-| Memberi angka / laporan | Ya, kalau belum pasti |
-
-Kalau tidak yakin, **berhenti dan tanya**. Jangan conducting sendiri.
-
-Yang TIDAK boleh dilakukan tanpa izin:
-- Menambahkan baris, kolom, atau bagian di UI karena "kiranya akan membantu"
-- Mengubah label supaya "lebih jelas" tanpa diminta
-- Memberi usul perubahan lalu langsung mengerjakannya
-- Menyatakan sesuatu "sudah diperbaiki" tanpa bukti
-
-Kalau memberi usul, sebutkan lengkap:
-1. Apa persis yang akan berubah
-2. Apa risikonya
-3. Apakah itu benar yang diminta Owner atau inisiatif sendiri
-
-Lalu **tunggu**. Jangan eksekusi sebelum Owner bilang ya.
+| `[FAKTA]` | Terverifikasi dari kode / test / output |
+| `[TERKUNCI]` | Keputusan Owner di `OWNER_DECISIONS.md` |
+| `[TEMUAN]` | Hasil audit — belum tentu bug |
+| `[BELUM DIPUTUSKAN]` | Tidak ada keputusan; jangan diasumsikan |
 
 ---
 
-## 2. CARA BEKERJA
+## C. KEAMANAN DAN PERMISSION
 
-- **Angka dulu, baru kesimpulan.** Setiap angka yang dilaporkan harus bisa
-  ditelusuri ke sumbernya (file:line, atau query yang dijalankan).
-- **Bukti negatif.** Setelah mengubahsomething, uji dulu: kalau dikembalikan
-  ke kondisi buruk, apakah test benar-benar menjadi merah? Test yang selalu
-  hijau tanpa uji negatif belum tentu berguna.
-- **Jangan menebak angka.** Gunakan fungsi aplikasi, bukan SQL karangan.
-  Kolom legacy bisa membuat hitungan karangan meleset.
-- **Cek dulu sebelum-usul.** Jangan mengusulkan perubahan yang secara
-  matematis tidak mungkin dilakukan.
-- **Koreksi diri.** Kalau salah, akui langsung di depan Owner.
+### C1. Satu mekanisme saja
 
----
+Semua penjaga role **wajib** membaca `AUTHORITY_MATRIX` lewat
+`require_authority(Action.X)`.
 
-## 3. KESALAHAN YANG SUDAH TERJADI — JANGAN DIULANG
+❌ Jangan menambah pemeriksaan role ad hoc seperti:
 
-1. **Menyajikan angka lintas periode seolah-olah angka periode berjalan.**
-   Aggregat beberapa periode tidak boleh muncul sebagai angka satu periode.
-2. **Mengusulkan "pengersingan" fungsi yang tidak mungkin digengersingkan.**
-   Posisi kas harus punya saldo awal. Memaksa nol merusak Declare.
-3. **Menambah baris / mengganti label UI tanpa diminta.**
-   Owner hanya menjelaskan, bukan meminta perubahan. Jangan langsung eksekusi.
-4. **Salah membaca penjelasan Owner sebagai permintaan perubahan.**
-5. **Menghitung dengan SQL mentah** sehingga mengabaikan kolom legacy dan
-   melaporkan angka yang salah.
+```python
+if user.role.upper() in ("ADMIN", "SUPERADMIN", "MANAGER"):   # JANGAN
+```
 
----
+✅ Yang benar:
 
-## 4. ATURAN BISNIS OWNER (sumber kebenaran)
+```python
+def create_user(..., admin=Depends(require_authority(Action.USER_MANAGE))):
+```
 
-### Pengakuan pendapatan
-- **Omzet** = unit **CASH + LUNAS** saja. DP **bukan** Omzet.
-- **Modal** = Modal Part + Modal Jasa + Modal Lain — tiga komponen **terpisah**,
-  tidak digabung, tidak boleh dihitung dua kali.
-- **Laba Kotor** = Omzet − Total Modal
-- **Laba Bersih** = Laba Kotor − Total Beban
-- **Transaksi kas manual (jurnal `sumber=MANUAL`) tidak masuk laba**, di mana pun.
-  Bukan Omzet, bukan Modal, bukan Beban. Cuma pergerakan uang di laci.
-- **Beban** = Gaji + Operasional saja. Kategori lain bukan Beban.
-- **Distribusi Laba** = 100% dibagi 10% Karyawan / 30% Pengelola /
-  30% Investor / 30% Kas Aset.
+`require_admin` pernah ada dan **sudah dihapus** karena ia bypass matriks dan
+tidak mengenali alias. Jangan menghidupkannya kembali.
 
-### Periode kas
-- **Omzet dan Beban itu KHUSUS per periode.** Dilarang keras menghubungkan
-  hitungan periode sekarang ke periode berikutnya.
-- Hanya **tiga hal** yang boleh menyeber periode: **UANG DP, KAS ASET, dan
-  HUTANG BEBAN**.
-- Periode yang **sudah ditutup lewat Tutup Kas itu final** — tidak diubah,
-  tidak dibahas lagi.
+### C2. Lindungi pemisahan SUPERADMIN / ADMIN
 
-### Uang DP / Titipan
-- DP adalah **titipan customer**, bukan kas toko.
-- **DP tidak boleh muncul di Kondisi Kas Operasional.** Satu-satunya tempat DP
-  dilacak adalah **Laporan Titipan DP**.
-- **Declare saat Tutup Kas memakai angka FISIK penuh** (DP ikut dihitung),
-  karena uang DP benar-benar ada di dalam laci.
-- DP hanya dianggap terpakai **sebesar kewajiban unit**. Kelebihan bayar tetap
-  ditahan sampai dikembalikan — jangan diserap habis-habisnya.
+`SUPERADMIN` **bukan** alias `ADMIN`.
 
-### Tutup Kas
-- Tutup Kas = **menyelesaikan kewajiban kas periode**, bukan sekadar potong buku.
-- Urutan: catat modal terlewat → bayar Beban periode → pastikan distribusi.
-- Setelah itu Laci kembali ke titik awal secara matematis.
-- **Jangan pernah** memakai DP titipan, memaksa distribusi, atau membuat saldo
-  nol artifisial. Defisit ditutup Kas Aset + Hutang Beban.
+- Super Admin = Developer aplikasi (role, permission, konfigurasi, audit).
+- Admin = Manager toko (operasional + Tutup Kas).
+- Alias sah: `DEV`, `DEVELOPER`, `SUPER_ADMIN`, `SUPER ADMIN` → `SUPERADMIN`.
 
-### Pembayaran Beban (OD-LOCK-06)
-- Pembayaran **langsung** saat periode dibekukan — **tidak** menunggu Tutup Kas.
-- Urutan dana: **Laci → Kas Aset → Hutang Beban**.
-- **Kas Aset TIDAK boleh tersentuh otomatis.** Kalau Laci minus, yang
-  **keputusan menutup dari Kas Aset adalah user**, dicatat manual lewat
-  `POST /api/kas/aset/keluar`. Sistem hanya memberi tahu `bisa_ditutup_manual`.
-- **Jangan pernah** membuat Laci negatif.
-- **Jangan** memakai Hutang Beban seumpama uang yang sudah dibayar.
-- Satu-satunya pencatatatan pembayaran adalah
-  `beban_bayar.bayar_beban_periode()`. **Jangan** menambah jalur pembayaran
-  baru di tempat lain — dua jalur dengan penanda idempotensi berbeda adalah
-  penyebab Beban dibayar dua kali (lihat `KETIDAKS-SUAIAN-03`).
-- `ref_type` untuk Beban periode selalu `"beban_periode"` dengan
-  `ref_id = <periode>`. Penanda inilah yang membuat Tutup Kas tidak membayar
-  ulang.
-- Beban tetap **beku sekali per periode** (FR-01).
+### C3. Lindungi anti-eskalasi
 
-### Periode Kas & Hutang Beban (OD-LOCK-07)
-- `finance.period_key()` memakai **`kas_periods.id`**. ❌ Jangan pernah
-  mengembalikan kunci berbasis tanggal — Tutup Kas bisa diulang beberapa kali
-  sehari dan kuncinya akan bentrok, sehingga Beban periode berikutnya terlihat
-  "sudah bayar" dan tidak pernah keluar dari Laci.
-- `Hutang Beban = max(0, Total Beban − Laba Kotor)`. Penentunya **Laba Kotor**,
-  bukan sisa yang tidak kebayar dari Laci. Laba Kotor cukup = target CTO
-  tercapai = **tidak ada** hutang.
-- Hutang lama **dibiarkan**; periode berikutnya masih minus maka hutang **terus
-  nambah**.
-- **Hanya tiga hal** yang boleh menyeber antar periode: **uang DP yang belum
-  lunas**, **Hutang Beban**, dan **Kas Aset**. Payment masuk, Modal keluar, dan
-  Beban keluar hanya dibaca untuk periode miliknya sendiri.
+Admin **tidak boleh** membuat atau menaikkan akun menjadi Super Admin.
+Penjaganya `_tolak_bila_bikin_superadmin()` di `backend/routers/auth.py`.
+Jangan mengubahnya, dan jangan mengalahkannya dengan penyesuaian lain.
 
-### Kelola Akun (OD-LOCK-08)
-- ❌ **Jangan pernah** menambah endpoint hapus akun atau tombol hapus di UI.
-  Satu-satunya cara mencabut akses adalah **Nonaktifkan**; datanya tetap dan
-  bisa diaktifkan lagi.
-- Teknisi nonaktif **tidak boleh** menerima penugasan baru. Pakai
-  `orders._pastikan_teknisi_aktif`, dan saring namanya di
-  `GET /api/orders/technicians`.
-- Riwayat servis, garansi, laporan, dan audit **tidak boleh** ikut terhapus.
-- Setiap koreksi akun (nama/role/status/passcode) **wajib** masuk journal lewat
-  `auth._catat_jurnal_akun`, lengkap dengan nilai sebelum + sesudah dan pelaku.
-  Koreksi diam-diam dilarang.
-- Catatan: `SUPERADMIN` itu **alias** dari `ADMIN` (`authority.ROLE_ALIASES`).
-  Jangan pernah menjaganya dengan string polos — tidak ada akun ber-role
-  `SUPERADMIN` di DB, jadi penjaganya jadi tidak bisa dipakai siapa pun.
+Setiap perubahan akun (nama / role / status / passcode) **wajib** masuk journal
+lewat `_catat_jurnal_akun`, lengkap nilai sebelum & sesudah. Koreksi diam-diam
+dilarang.
 
-### Role Read-Only (OD-LOCK-09)
-- **PENGELOLA**, alias **PEMILIK**, dan **INVESTOR** **tidak boleh mengubah
-  apa pun** — nol wewenang di seluruh aplikasi, bukan cuma halaman kas.
-- ❌ Jangan pernah mendaftarkan role read-only di `AUTHORITY_MATRIX`. Aturan
-  read-only di `authority.can()` yang menahannya; matriks hanya lapisan kedua.
-- Setiap endpoint **tulis** wajib punya penjaga role. `customers.py` pernah
-  bocor total karena tidak punya penjaga apa pun — semua role bisa menghapus
-  pelanggan. Sebelum menambah router, pastikan tiap `post/put/delete` punya
-  `require_authority(...)` atau penjaga setara.
-- Hak customer: tambah/ubah = Admin + Kasir, hapus = Admin saja.
+### C4. Role read-only
+
+`PENGELOLA` (alias `PEMILIK`) dan `INVESTOR` **read-only blanketsatu**.
+Jangan mendaftarkan mereka di `AUTHORITY_MATRIX` untuk aksi tulis —
+`authority.can()` sudah menolaknya secara blanket.
+
+### C5. Jangan mengorbankan keamanan demi test hijau
+
+Assertion yang gagal karena suatu guard **adalah informasi**, bukan hambatan.
+Yang benar: perbaiki implementasi atau laporkan sebagai temuan.
+Yang salah: melonggarkan assertion.
+
+Pengecekan wajib dilakukan terhadap **endpoint aktual**, bukan hanya keberadaan
+guard di kode.
+
+> ⚠️ Kalau sebuah endpoint mengembalikan `404` padahal seharusnya `403`,
+> kemungkinan besar **path-nya salah** dan guard tidak pernah dievaluasi.
+> `404` bukan bukti penolakan akses.
+
+### C6. Verifikasi laporan yang menyangkut security
+
+Dibilang "selesai" hanya kalau:
+
+- Grep/scan benar-benar dijalankan dan hasilnya dilaporkan.
+- Test dieksekusi dan output-nya dip pasting.
+- Tidak ada asumsi yang tersisa.
 
 ---
 
-## 5. PETA TEKNIS
+## D. DATABASE DAN DATA
 
-- **Backend** : FastAPI + SQLAlchemy, di `backend/`
-- **Frontend** : HTML + JS vanilla, di `frontend/`
-- **Test** : pytest, di `tests/` — jalankan `python -m pytest tests -q`
-- **DB produksi** : `servisku.db` di root project
-- **Backup otomatis** : `backup-servisku-*.db`, dipangkas 10 terbaru per start
+### D1. Identifikasi database aktif dulu
 
-### Titik penting
+| Situasi | DB yang dipakai |
+|---|---|
+| Runtime lokal | `servisku.db` di root — **ini produksi** |
+| Test | Salinan di direktori temp (`tests/conftest.py`) |
+| Server Ubuntu | Salinan di server — **tidak selalu sama dengan lokal** |
+
+`deploy-ubuntu.ps1` **tidak** mengirim DB kecuali dipanggil `-WithDb`.
+
+Jangan menganggap DB development = DB produksi. Kalau tidak yakin, cek.
+
+### D2. Lindungi data produksi
+
+❌ Dilarang tanpa otorisasi eksplisit:
+
+- Menghapus / mereset / mengimpor ulang data produksi.
+- Menjalankan migrasi data terhadap DB yang tidak diminta.
+- Menjalankan `tools/reset_keuangan_nol.py` (menghapus operasional + auth tokens).
+
+### D3. Jangan bocorkan data sensitif
+
+- Jangan masukkan password, token, passcode, atau hash ke dalam kode,
+  komentar, log, atau dokumentasi.
+- Jangan masukkan data pelanggan asli ke dokumentasi atau test.
+- Dokumentasi hanya boleh memuat **nama field dan struktur**, bukan isi.
+
+> ⚠️ `setup-online.bat` memuat kredensial Cloudflare Tunnel dalam bentuk
+> base64 dan file itu **ter-track di git**. Ini sudah tercatat di
+> `docs/AUDIT_FINDINGS.md`. **Jangan pernah menyalin nilai secret itu** ke
+> dokumen mana pun. Penyelesaiannya rotasi kredensial + purge history —
+> keputusan Owner.
+
+### D4. Migrasi
+
+- **Tidak ada Alembic.** Migrasi = script kustom di `on_startup` + `create_all`.
+- Semua skrip migrasi **wajib idempotent** (aman dijalankan berulang).
+- Menambah kolom baru → buat skrip migrasi idempotent, **jangan** andalkan
+  `create_all` saja (tabel sudah ada tidak akan di-update).
+- Bungkus migrasi baru dengan `try/except` supaya kegagalan tidak mematikan
+  start aplikasi.
+
+### D5. Jangan ubah skema tanpa kebutuhan
+
+Perubahan skema berdampak ke data produksi. Kalau memang diperlukan: buat
+backup, buat migrasi idempotent, jalankan test migrasi, laporkan.
+
+---
+
+## E. ALUR KERJA PERUBAHAN
+
+Ikuti urutan ini:
+
+```
+Audit → Rencana singkat → Test relevan → Implementasi → Validasi → Laporan
+```
+
+### E1. Test pengaman dulu untuk perubahan berisiko
+
+Untuk perbaikan bug, tulis **test yang gagal dulu** (TDD), buktikan ia merah,
+lalu perbaiki sampai hijau. Ini memastikan test-nya benar-benar mengukur
+perilaku yang dimaksud — bukan selalu hijau tanpa ada artinya.
+
+Test yang selalu hijau tanpa bukti negatif belum tentu berguna.
+
+### E2. Jangan longgarkan assertion
+
+Kalau test gagal, **cari akar masalahnya**. Jangan:
+- Melonggarkan `assert` supaya hijau.
+- Menghapus test.
+- Menambah `skip` tanpa alasan yang jelas dan tercatat.
+
+Satu-satunya jalan yang benar: perbaiki kode atau laporkan sebagai temuan.
+
+### E3. Pertahankan kompatibilitas
+
+Perubahan tidak boleh merusak perilaku bisnis yang sudah benar. Bila ada
+konflik antara permintaan baru dan aturan terkunci — **dokumentasikan
+konflik itu, jangan dipaksakan.**
+
+### E4. Jangan nyatakan berhasil sebelum selesai
+
+"Lolos", "selesai", "aman" hanya sah kalau:
+
+- Perintahnya benar-benar dijalankan.
+- Test-nya benar-benar dijalankan, dan hasilnya dip pasting.
+- Validasi (compile, lint, syntax) sudah dijalankan.
+
+Kalau ada bagian yang gagal, katakan gagal. Jangan menutupinya.
+
+---
+
+## F. BATAS OTONOMI
+
+### F1. Agent boleh bekerja sampai tuntas untuk hal yang secara teknis sudah jelas
+
+Tidak perlu izin berulang untuk:
+
+- Membaca kode, menjalankan test, menjalankan validasi.
+- Memperbaiki bug yang jelas dan sudah tercakup aturan.
+- Menulis test, dokumentasi, refactor internal tanpa mengubah perilaku.
+- Menambah endpoint/field yang **sudah diminta** secara eksplisit.
+
+### F2. Agent WAJIB berhenti dan melapor bila:
+
+| Situasi | Tindakan |
+|---|---|
+| Butuh keputusan bisnis baru | Tulis opsi + rekomendasi, **tunggu** |
+| Mengubah hak akses / role | Tunggu keputusan Owner |
+| Tindakan destruktif pada data | Tunggu otorisasi eksplisit |
+| Perubahan di luar otorisasi | Tunggu |
+| Menemukan konflik kode ↔ aturan terkunci | Laporkan, jangan perbaiki sepihak |
+|- Secret bocor / risiko keamanan | Laporkan segera, jangan diam |
+
+Usulan harus menyebut: **apa yang berubah**, **risikonya**, dan **apakah itu
+memang diminta Owner atau inisiatif sendiri**.
+
+### F3. Jangan tinggalkan perubahan setengah jalan
+
+Kalau berhenti di tengah, pastikan working tree jelas: apa yang sudah jadi,
+apa yang belum, dan apa langkah berikutnya.
+
+---
+
+## G. LAPORAN AKHIR
+
+Setiap pekerjaan wajib melaporkan:
+
+```markdown
+## Ringkasan
+<apa yang terjadi, 1-3 kalimat>
+
+## Perubahan
+- <perubahan konkret>
+
+## File
+- <file> — <apa yang berubah>
+
+## Test
+- Perintah: <command>
+- Hasil: <output nyata>
+
+## Dampak
+- Bisnis: <...>
+- Permission: <...>
+- Database: <...>
+- API: <...>
+
+## Risiko / Belum Selesai
+- <...>
+```
+
+Kalau ada bagian yang tidak dijalankan atau gagal, tulis **"tidak
+dijalankan"** atau **"gagal"** beserta alasannya. Jangan menuliskan hasil
+yang tidak benar-benar diperoleh.
+
+---
+
+## PETA TEKNIS
+
 | File | Isi |
 |---|---|
-| `backend/finance.py` | **SATU-SATUNYA tempat** Laba Kotor & Laba Bersih dihitung |
-| `backend/beban_bayar.py` | **SATU-SATUNYA tempat** pembayaran Beban (OD-LOCK-06) |
-| `backend/routers/dashboard.py` |.endpoint `/api/overview`; **membaca** laba dari core, jangan hitung ulang |
+| `backend/main.py` | Entry point, startup, mount router |
+| `backend/authority.py` | **MATRIKS WEWENANG** — sumber kebenaran |
+| `backend/models.py` | 21 model / tabel |
+| `backend/statusflow.py` | `kewajiban()`, `payment_summary()`, transisi |
+| `backend/finance.py` | **CORE** — Omzet / Modal / Laba |
+| `backend/cash.py` | Ledger kas 2 layer, Declare |
 | `backend/closing.py` | Tutup Kas |
-| `backend/cash.py` | Ledger kas, `saldo_laci`, Declare/rekonsiliasi |
-| `backend/statusflow.py` | `kewajiban()` dan `payment_summary()` — pakai ini, jangan karang ulang |
-| `frontend/script.js` | `renderKondisiKas()` dan `renderKuTitipan()` |
+| `backend/beban_bayar.py` | **SATU-SATUNYA** jalur bayar Beban |
+| `backend/distribution.py` | Bagi hasil 10/30/30/30 |
+| `backend/journal.py` | Audit append-only |
+| `backend/routers/auth.py` | Auth, token, anti-eskalasi |
+| `frontend/script.js` | `renderKondisiKas()`, `renderKuTitipan()` |
+| `docs/OWNER_DECISIONS.md` | **KANONIK** aturan bisnis |
 
-### Cara cek cepat
-```
-python -m pytest tests -q
-node --check frontend/script.js
+---
+
+## CEK CEPAT
+
+```powershell
+python -m pytest tests -q                  # harus semua hijau (tidak boleh ada failure)
+python -m compileall -q backend            # kompilasi Python
+node --check frontend\script.js           # sintaks JS
 git status --short
+Select-String -Path backend\**\*.py -Pattern 'require_admin'  # harus kosong
 ```
 
 ---
 
-## 6. YANG INI BELUM PERLU DIPERBAIKI
+## ATURAN BISNIS INTI (ringkas — kanonik ada di docs/OWNER_DECISIONS.md)
 
-- `script.js` punya fungsi `txdRefundDP` dan `txdFailedCancel` yang **terdefinisi
-  tapi tidak terpakai** dari HTML mana pun (dead code).
-- Commit masih **belum di-push** ke remote.
-- `saldo_laci()` sengaja menjumlah seluruh entri (opening + semua mutasi) —
-  itu memang benar untuk Declare. Yang menjaga agar tidak menumpuk adalah
-  **Tutup Kas yang selalu menyelesaikan periode**, bukan bentuk fungsinya.
+**Pengakuan pendapatan**
+- Omzet = unit `CASH` **dan** `LUNAS`. DP bukan Omzet.
+- Modal = Part + Jasa + Lain, tiga komponen **terpisah**.
+- Laba Kotor = Omzet − Total Modal. Laba Bersih = Laba Kotor − Total Beban.
+- Beban = Gaji + Operasional saja.
+- Transaksi `MANUAL` tidak masuk laba di mana pun.
+- Bagi hasil 10% / 30% / 30% / 30%.
 
-### Struktur 7 Role (OD-LOCK-10)
-- Tujuh role: SUPER ADMIN (Developer), ADMIN (Manager Toko), PENGELOLA (Pemilik),
-  INVESTOR, KASIR/CS, TEKNISI, ADMIN SPAREPART. Jangan pernah menambah role
-  tanpa keputusan Owner, dan jangan samarkan role dengan alias.
-- `SUPERADMIN` **bukan** alias `ADMIN`. `ROLE_CONFIG` (role, permission,
-  konfigurasi, audit log) hanya Super Admin.
-- `MODAL_FIELDS` dijaga `ORDER_UPDATE_MODAL`: Kasir boleh ubah harga,
-  TIDAK boleh ubah modal.
-- Role monitoring hanya boleh `MONITORING_READ_ACTIONS`. Semua fallback di
-  frontend harus `custom`, **tidak pernah** `admin`.
-- `navigateTo()` wajib lewat penjaga `PAGE_CAP`; menu yang disembunyikan saja
-  tidak cukup karena halaman bisa dibuka lewat hash URL.
+**Periode kas**
+- Omzet dan Beban **khusus per periode** — dilarang menghubungkan periode.
+- Hanya **tiga** yang boleh menyeber: **DP**, **Hutang Beban**, **Kas Aset**.
+- Periode yang sudah ditutup = final.
+- `CASH` = final, tidak bisa diubah.
+
+**Tutup Kas**
+- Menyelesaikan kewajiban kas periode: catat modal terlewat → bayar Beban →
+  pastikan distribusi → pindahkan 30% Hak Kas Aset → Declare.
+- **Jangan pernah** memakai DP titipan atau memaksa distribusi.
+- Kas Aset **tidak pernah** tersentuh otomatis.
+- `finance.period_key()` memakai `kas_periods.id`, **bukan** tanggal.
+
+**DP**
+- DP = titipan customer, bukan kas toko.
+- DP tidak boleh melebihi estimasi.
+- DP hanya dianggap terpakai sebesar kewajiban unit, dan hanya bila LUNAS.
+
+Lihat `docs/OWNER_DECISIONS.md` untuk teks lengkap dan status hukumnya.
+
+---
+
+## YANG INI SENGAJA TIDAK DIPERBAIKI
+
+- `frontend/script.js` punya `txdRefundDP` dan `txdFailedCancel` yang
+  terdefinisi tapi tidak terpakai (dead code).
+- Notifikasi adalah **outbox saja** — tidak ada pengiriman ke Telegram/WA.
+- `Action.ROLE_CONFIG` dan `Action.AUDIT_READ` ada di matriks tapi belum ada
+  endpoint yang memakainya.
+- `app.py` di root adalah proyek Flask lama, tidak dijalankan.
+
+Daftar lengkap: `docs/AUDIT_FINDINGS.md`.
