@@ -6181,19 +6181,24 @@ function shopWaDisplay() {
 function notaSnapshotStatus(status) {
     const s = String(status || '').toUpperCase().replace(/\s+/g, '_');
     const map = {
-        DITERIMA:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
-        RECEIVED:  { label: 'DITERIMA',  cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
-        ANALISA:   { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
-        DIAGNOSA:  { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
-        DIAGNOSIS: { label: 'ANALISA',   cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
-        KONFIRMASI:{ label: 'KONFIRMASI', cls: 'nps-amber',  stage: 3, sub: 'Menunggu persetujuan pelanggan.' },
-        'WAIT PART':   { label: 'WAIT PART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
-        WAIT_PART:     { label: 'WAIT PART', cls: 'nps-amber', stage: 4, sub: 'Menunggu sparepart datang.' },
-        REPAIR:        { label: 'REPAIR',     cls: 'nps-blue',  stage: 5, sub: 'Unit sedang dikerjakan teknisi.' },
-        DONE:          { label: 'DONE',       cls: 'nps-green', stage: 6, sub: 'Pekerjaan selesai — unit dapat diambil.' },
-        CASH:          { label: 'CASH',       cls: 'nps-emerald', stage: 7, sub: 'Transaksi terealisasi — unit sudah diambil & dibayar.' },
-        FAILED:        { label: 'FAILED',     cls: 'nps-red',   stage: -1, sub: 'Perbaikan tidak berhasil.' },
-        CANCEL:        { label: 'CANCEL',     cls: 'nps-red',   stage: -1, sub: 'Perbaikan dibatalkan.' },
+        DITERIMA:   { label: 'DITERIMA',   cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
+        RECEIVED:   { label: 'DITERIMA',   cls: 'nps-red',     stage: 0, sub: 'Unit baru diterima — belum masuk analisa.' },
+        ANALISA:    { label: 'ANALISA',    cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
+        DIAGNOSA:   { label: 'ANALISA',    cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
+        DIAGNOSIS:  { label: 'ANALISA',    cls: 'nps-amber',   stage: 1, sub: 'Unit dalam pemeriksaan teknisi.' },
+        KONFIRMASI: { label: 'KONFIRMASI', cls: 'nps-amber',   stage: 2, sub: 'Menunggu persetujuan pelanggan.' },
+        'WAIT PART':{ label: 'WAIT PART',  cls: 'nps-amber',   stage: 3, sub: 'Menunggu sparepart datang.' },
+        WAIT_PART:  { label: 'WAIT PART',  cls: 'nps-amber',   stage: 3, sub: 'Menunggu sparepart datang.' },
+        REPAIR:     { label: 'REPAIR',     cls: 'nps-blue',    stage: 4, sub: 'Unit sedang dikerjakan teknisi.' },
+        PERBAIKAN:  { label: 'REPAIR',     cls: 'nps-blue',    stage: 4, sub: 'Unit sedang dikerjakan teknisi.' },
+        DONE:       { label: 'DONE',       cls: 'nps-green',   stage: 5, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        SELESAI:    { label: 'DONE',       cls: 'nps-green',   stage: 5, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        COMPLETED:  { label: 'DONE',       cls: 'nps-green',   stage: 5, sub: 'Pekerjaan selesai — unit dapat diambil.' },
+        CASH:       { label: 'CASH',       cls: 'nps-emerald', stage: 6, sub: 'Transaksi terealisasi — unit sudah diambil & dibayar.' },
+        FAILED:     { label: 'FAILED',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan tidak berhasil.' },
+        GAGAL:      { label: 'FAILED',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan tidak berhasil.' },
+        CANCEL:     { label: 'CANCEL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan dibatalkan.' },
+        BATAL:      { label: 'CANCEL',     cls: 'nps-red',     stage: -1, sub: 'Perbaikan dibatalkan.' },
     };
     if (map[s]) return map[s];
     return { label: String(status || '-'), cls: 'nps-neutral', stage: -1, sub: 'Kondisi unit saat nota dibuat.' };
