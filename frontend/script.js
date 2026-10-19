@@ -7405,14 +7405,18 @@ function notaWarrantyParts(d) {
         const list = Array.isArray(d && d.parts) ? d.parts : [];
         if (!list.length) return '';
         const baris = list.map((p) => {
-            const nama = escapeHtml(p.nama || p.device || p.jenis || '-');
-            const qty = Number(p.qty) || 0;
-            const ket = qty > 1 ? nama + ' x' + qty : nama;
-            return '<li class="ndr-part"><i class="fa-solid fa-check"></i><span>' + ket + '</span></li>';
+            // Nama komponen bisa datang sebagai nama / name / device / jenis
+            // tergantung sumber datanya.
+            const nama = escapeHtml(p.nama || p.name || p.device || p.jenis || '-');
+            const qty = Number(p.qty || p.jumlah) || 0;
+            const ket = qty > 1
+                ? '<span>' + nama + ' <span class="ng-pqty">x' + qty + '</span></span>'
+                : '<span>' + nama + '</span>';
+            return '<li><i class="fa-solid fa-check"></i>' + ket + '</li>';
         }).join('');
-        return '<div class="ndr-card">'
-            + '<div class="ndr-cap"><i class="fa-solid fa-screwdriver-wrench"></i>KOMPONEN DIGANTI</div>'
-            + '<ul class="ndr-parts">' + baris + '</ul>'
+        return '<div class="ng-card">'
+            + '<div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>KOMPONEN DIGANTI</div>'
+            + '<ul class="ng-parts">' + baris + '</ul>'
             + '</div>';
     } catch (_) {
         return '';
@@ -7510,7 +7514,7 @@ function renderWarrantyNotaDigital(d) {
                     </div>
                     <div class="ng-card">
                         <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>KELUHAN / PERBAIKAN</div>
-                        <div class="ng-sub" style="margin-top:10px;font-size:16px;color:#111">${escapeHtml(d.plan || '-')}</div>
+                        <div class="ng-plan">${escapeHtml(d.plan || '-')}</div>
                     </div>
                     <div class="ng-card">
                         <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-coins"></i></span>BIAYA SERVIS FINAL</div>
@@ -7520,7 +7524,7 @@ function renderWarrantyNotaDigital(d) {
                     <div class="ng-card">
                         <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>GARANSI SERVIS</div>
                         <div class="ng-val" style="color:#d31111">${escapeHtml(label)}</div>
-                        <div class="ng-pill"><span><i class="fa-regular fa-calendar"></i><span>Mulai: ${escapeHtml(tgl)} </span><span style="color:#94a3b8">| </span><span>Berakhir: ${escapeHtml(sampai || '-')}</span></span></div>
+                        ${d.warranty_end ? `<div class="ng-pill"><span><i class="fa-regular fa-calendar"></i><span>Mulai: ${escapeHtml(tgl)} </span><span class="ng-sep">| </span><span>Berakhir: ${escapeHtml(sampai)}</span></span></div>` : ''}
                     </div>
                     ${partsHtml}
                 </div>
@@ -7544,7 +7548,7 @@ function renderWarrantyNotaDigital(d) {
                             </div>
                             <div class="ng-qrtext">Pindai QR untuk melihat detail dan status garansi unit Anda.</div>
                         </div>
-                        <div class="ng-link"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+                        <div class="ng-link"><i class="fa-solid fa-globe"></i><span><b>Cek Status Garansi Online</b><em>boss-sf.id/lacak/<br><span class="ng-link-no">${escapeHtml(d.no || '-')}</span></em></span></div>
                     </div>
                 </div>
             </div>

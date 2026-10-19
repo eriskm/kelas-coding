@@ -244,3 +244,66 @@ def test_gaya_komponen_ada_di_css():
         "gaya status pembayaran nota garansi belum ada di style.css"
     assert re.search(r"\.ndr-wstatus\b", css), \
         "gaya panel status garansi belum ada di style.css"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 8. Blok komponen harus memakai kelas .ng-*, bukan .ndr-*
+# ─────────────────────────────────────────────────────────────────
+
+def test_blok_komponen_memakai_kelas_ng():
+    """Blok komponen dirender DI DALAM .ng-main.
+
+    Kalau masih pakai .ndr-card/.ndr-cap, kartu itu tidak dapat styling
+    Nota Garansi sama sekali - dulu tampil polos dan tidak konsisten.
+    """
+    bad = _js_fungsi(_src(SCRIPT), "notaWarrantyParts")
+    assert bad, "notaWarrantyParts tidak terbaca"
+    assert "ng-card" in bad, "kartu komponen harus memakai .ng-card"
+    assert "ng-cap" in bad, "judul komponen harus memakai .ng-cap"
+    assert "ng-parts" in bad, "daftar komponen harus memakai .ng-parts"
+    for salah in ("ndr-card", "ndr-cap", "ndr-part"):
+        assert salah not in bad, \
+            "kartu komponen masih memakai kelas %s (milik nota lain)" % salah
+
+
+def test_blok_komponen_menerima_beberapa_nama_field():
+    """Sumber data bisa pakai nama atau name; keduanya harus diterima."""
+    bad = _js_fungsi(_src(SCRIPT), "notaWarrantyParts")
+    assert bad, "notaWarrantyParts tidak terbaca"
+    assert "p.nama" in bad and "p.name" in bad, \
+        "harus menerima nama komponen sebagai nama maupun name"
+
+
+def test_qty_komponen_ditampilkan_bila_lebih_dari_satu():
+    bad = _js_fungsi(_src(SCRIPT), "notaWarrantyParts")
+    assert bad, "notaWarrantyParts tidak terbaca"
+    assert re.search(r"x.*qty|qty.*x", bad), \
+        "jumlah komponen >1 harus ditulis di sebelah nama"
+
+
+# ─────────────────────────────────────────────────────────────────
+# 9. Rentang tanggal garansi hanya tampil bila ada masa garansi
+# ─────────────────────────────────────────────────────────────────
+
+def test_rentang_tanggal_hanya_saat_ada_masa_garansi():
+    """Unit tanpa garansi tidak boleh menampilkan 'Berakhir: -'."""
+    bad = _js_fungsi(_src(SCRIPT), "renderWarrantyNotaDigital")
+    assert bad, "renderWarrantyNotaDigital tidak terbaca"
+    m = re.search(r"\$\{(d\.warranty_end[^}]*)\?\s*`?", bad)
+    assert m, "syarat pil rentang tanggal harus berbasis d.warranty_end"
+    blok = bad[m.start():m.start() + 700]
+    assert "Mulai:" in blok and "Berakhir:" in blok, \
+        "blok yang bersyarat harus berisi Mulai/Berakhir"
+
+
+def test_tidak_menampilkan_tanggal_kosong_sebagai_dash():
+    """notaTglSlash('') menghasilkan '-', bukan string kosong.
+
+    Karena '-' itu truthy di JS, syarat harus basing pada d.warranty_end,
+    bukan hasil format. Kalau dibalik ke hasil format, 'Berakhir: -'
+    akan muncul lagi untuk unit tanpa garansi.
+    """
+    bad = _js_fungsi(_src(SCRIPT), "renderWarrantyNotaDigital")
+    assert bad, "renderWarrantyNotaDigital tidak terbaca"
+    assert not re.search(r"\$\{(sampai|sampai\s*\|\|[^}]*)\s*\?", bad), \
+        "syarat tidak boleh berbasis hasil format (notaTglSlash('' -> '-')"
