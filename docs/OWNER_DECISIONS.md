@@ -593,6 +593,82 @@ Konsekuensi yang **tidak berubah**:
 > Contoh pengujian di bagian bawah **tidak lagi berlaku untuk kasus Modal 0**;
 > lihat catatan pada `### 11.P1`.
 
+### 11.4b - Modal yang Diisi SETELAH CASH, dan Tutup Kas yang Diblokir
+
+**Status: LOCKED** — Owner 2026-10-19
+
+#### (1) Alur yang dibenetulkan
+
+Kasir **tidak boleh** mengisi Modal (OD-LOCK-10, `Action.ORDER_UPDATE_MODAL` —
+Admin + Super Admin). Karena itu alur yang sering terjadi di lapangan:
+
+```
+1. Kasir ubah status ke CASH   -> supaya bisa cepat cetak Nota Garansi
+   (Modal masih 0, belum ada yang bisa diisi kasir)
+2. cash.catat_modal           -> tiap komponen masih 0, TIDAK ada entri ditulis
+3. Admin mengisi Modal        -> SETELAH unit sudah CASH
+```
+
+Langkah 3 tadinya **tidak pernah tercatat**. `catat_modal` idempoten
+berdasarkan KEHADIRAN entri per komponen, jadi setelah langkah 2 ia melihat
+"sudah pernah" lalu **melewatinya**. Akibatnya Mutasi Kas menampilkan:
+
+```
++350.000  Penerimaan Pembayaran (unit SV-20261019-2550)
+          ...tidak ada baris -200.000 Modal Part/Jasa
+```
+
+Laci terlihat untung 350.000, padahal sebenarnya 150.000.
+
+#### (2) Aturan yang berlaku
+
+| # | Aturan |
+|---|---|
+| 1 | **Uang masuk (Payment PELUNASAN) tetap dicatat** saat CASH. Ini tidak diubah. Alasannya: Nota Garansi mensyaratkan `payment_status == LUNAS` (`frontend/script.js` `usWarrantyPrint`), jadi menahan payment akan memblokir Kasir. |
+| 2 | **Modal yang diisi/koreksi setelah CASH harus langsung tercatat keluar dari Laci.** Dipanggil dari `routers/orders.py` `update_order`, memakai `cash.catat_modal_selisih` — jadi **bukan** `catat_modal` (yang idempoten dan akan melewati). |
+| 3 | Arah entri mengikuti selisihnya: modal naik / belum tercatat → **Keluar**; modal dikoreksi turun → **Masuk** (pengembalian). |
+| 4 | Pemanggilan berulang aman: yang ditulis hanya **selisihnya**, jadi tidak pernah menggandakan. |
+| 5 | **Tutup Kas DITOLAK (HTTP 400)** selama ada unit CASH bermodal kosong tanpa centang "Tanpa Modal" di periode yang ditutup. |
+| 6 | Unit bertanda **"Tanpa Modal (sengaja 0)"** tetap boleh lewat — itu jalan keluar yang sudah disetujui di 11.4. |
+
+> Sebelumnya aturan 5 hanya PERINGATAN: `GET /api/kas/modal-kosong`
+> disebut "bukan pemblokiran", dan tidak pernah dipanggil dari
+> `POST /api/kas/close`. Owner mengira sudah memblokir. Sekarang
+> `_tutup_periode_impl` memanggil helper yang **sama persis** dengan yang
+> dipakai endpoint itu (`routers/kas.py` `_modal_kosong_items`), jadi yang
+> ditampilkan ke user dan yang jadi penentu tidak mungkin berbeda pendapat.
+
+#### (3) Yang SENGAJA tidak diubah
+
+- **Omzet / Laba / Distribusi** sudah benar sejak awal: `finance.compute_finance_core`
+  membaca Modal dari kolom `service_orders`, yang sudah terisi. Unit modal-kosong
+  sudah dikecualikan oleh `boleh_masuk_omzet` (11.4). Yang rusak hanya **entri
+  ledger kas**, bukan angkanya.
+- `POST /api/kas/close` tetap memakai `closing_mod.tutup_periode`; tidak ada
+  jalur Tutup Kas kedua.
+
+#### (4) Bug turunan yang ditemukan & diperbaiki
+
+`cash.catat_modal_selisih` menulis `"Masuk"` untuk selisih **positif** dan
+`"Keluar"` untuk negatif — **terbalik**. Akibatnya catch-up modal justru
+MENAMBAHKAN saldo Laci, persis kebalikan dari OD-LOCK-01. Tidak pernah terlihat
+di data karena jalur ini baru terpakai saat Tutup Kas dan `tercatalog` ==
+`pristine` pada pemanggilan normal. Diperbaiki 2026-10-19; produksi saat itu
+masih bersih (23 entri MODAL, seluruhnya `Keluar`).
+
+#### (5) Pelaksanaan pada data yang sudah ada
+
+Backup: `servisku.db.bak_modal_20261019_165716`.
+
+`SV-20261019-2550` (modal 200.000) dan `SV-20261019-6923` (modal 300.000)
+ dicatat lewat `cash.catat_modal_selisih` — entri #62–#65, semuanya `Keluar`.
+Saldo Laci turun dari 806.000 menjadi **306.000**, dan cocok dengan
+`saldo_setelah` entri terakhir. **Distribusi tidak perlu dihitung ulang**:
+`laba_bersih` periode 4 tetap 20.000 karena tidak bergantung pada `kas_entries`.
+
+Test: `tests/test_modal_kosong_blokir.py` (10 test, termasuk pengunci arah
+entri Keluar/Masuk).
+
 ### 11.5 Timing Distribusi Kas Aset (MENGGANTIKAN perilaku lama)
 
 ```

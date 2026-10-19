@@ -15,6 +15,11 @@ venv/
 # Backup resmi tetap ada di server & di luar repo.
 backup-*.sql
 *.sql.gz
+# Backup DB lokal yang dinamai ulang, mis. "servisku.db.bak_modal_20261019_165716".
+# Namanya tidak berakhiran .db, jadi aturan di atas TIDAK menutupnya - padahal
+# isinya tetap data pelanggan. Jangan pernah di-commit.
+*.db.bak*
+*.db.*.bak*
 
 # Env
 .env

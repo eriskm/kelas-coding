@@ -42,6 +42,18 @@ def _bersihkan(db):
     db.commit(); db.expunge_all()
 
 
+@pytest.fixture(autouse=True)
+def _bersihkan_setelah_test(db):
+    """Hapus order test ini setelah tiap test.
+
+    Order CASH bermodal kosong yang tertinggal akan memblokir Tutup Kas di
+    test lain (`test_periode_kas`), karena Tutup Kas memang DITOLAK selama
+    unit bermodal kosong masih ada di periode berjalan.
+    """
+    yield
+    _bersihkan(db)
+
+
 def _order(db, no, status="CASH", part=0, jasa=0, lain=0, harga=500000, lunas=None):
     import models
     c = db.query(models.Customer).filter(

@@ -953,6 +953,44 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                                   "laba": str(order.laba_bersih),
                                   "sisa_dilunasi": str(_sisa)},
                             actor=_actor(user))
+
+    # (5b) KEJAR MODAL KETINGGALAN (Owner, 2026-10-19).
+    #
+    # Peluang holes ini nyata di produksi. Urutannya:
+    #   1. Kasir ubah status ke CASH supaya bisa cepat cetak Nota Garansi.
+    #      Modal belum diisi (Kasir memang tidak boleh mengisi modal -
+    #      OD-LOCK-10 / Action.ORDER_UPDATE_MODAL).
+    #   2. `cash.catat_modal` berjalan, tapi tiap komponen masih 0 sehingga
+    #      TIDAK ada entri yang ditulis.
+    #   3. Admin mengisi modal SETELAHNYA.
+    #
+    # `catat_modal` idempoten berdasarkan KEHADIRAN entri per komponen, jadi
+    # langkah 3 melihat "sudah pernah" lalu MELewatkannya -- modalnya tidak
+    # pernah masuk ledger, Laci tidak pernah tergerus, dan Mutasi Kas
+    # menampilkan unit itu seolah seluruh Harga Final-nya laba.
+    # `closing.catat_modal_selisih` sudah menutup lubang ini, tapi dari
+    # `closing.py:140` -- HANYA saat Tutup Kas. Selama periode berjalan,
+    # angka di Mutasi Kas dan Distribusi tetap keliru.
+    #
+    # Yang dipanggil di sini adalah `catat_modal_selisih`, bukan `catat_modal`:
+    # ia membandingkan modal SAAT INI dengan yang SUDAH tercatat per komponen
+    # lalu hanya menulis bedanya. Jadi aman dipanggil pada setiap update unit
+    # CASH - termasuk tepat setelah transisi CASH, di mana selisihnya nol
+    # karena langkah (2b) sudah mencatat semuanya.
+    if (order.status or "").strip().upper() == "CASH":
+        try:
+            _koreksi = cash.catat_modal_selisih(db, order, actor=_actor(user))
+            if _koreksi:
+                # Modal berubah setelah CASH -> laba per unit harus dihitung
+                # ulang, kalau tidak `service_orders.laba_bersih` jadi basi.
+                _pays_ulang = db.query(Payment).filter(
+                    Payment.service_order_id == order.id).all()
+                order.laba_bersih = order_profit(order, _pays_ulang)
+        except Exception as _exc:  # noqa: BLE001
+            db.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail="Gagal mencatat pelunasan modal setelah CASH: %s" % _exc)
     # (6) DISTRIBUSI OTOMATIS: event CASH menaikkan Laba Kotor, jadi ini salah
     #     satu jalur yang bisa membuat CTO tercapai. Idempoten per periode kas.
     try:

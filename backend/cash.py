@@ -478,7 +478,20 @@ def catat_modal_selisih(db: Session, order, actor: str = None) -> list:
         selisih = quantize(pristine - tercatat)
         if selisih == ZERO:
             continue
-        mut = catat_mutasi(db, LAYER_LACI, "Masuk" if selisih > ZERO else "Keluar",
+        # Arah entri mengikuti selisihnya:
+        #   selisih > 0  -> modal NYATA lebih besar dari yang tercatat, jadi
+        #                   biaya tambahan itu harus KELUAR dari Laci ("Keluar").
+        #   selisih < 0  -> modal tercatat terlalu besar (mis. dikoreksi
+        #                   turun), jadi bagian yang kelewat itu kembali ke
+        #                   Laci ("Masuk").
+        #
+        # INI SEBELUMNYA TERBALIK: selisih positif ditulis "Masuk" dan negatif
+        # ditulis "Keluar". Akibatnya catch-up modal justru MENAMBAHKAN saldo
+        # Laci -- persis kebalikan dari OD-LOCK-01, yang menyatakan Modal keluar
+        # dari Laci saat transaksi terealisasi. Tidak pernah terlihat di data
+        # karena jalur ini baru terpakai saat Tutup Kas (`closing.py:140`), dan
+        # `tercatat` == `pristine` pada pemanggilan normal.
+        mut = catat_mutasi(db, LAYER_LACI, "Keluar" if selisih > ZERO else "Masuk",
                            KATEGORI[SUMBER_MODAL],
                            "%s unit %s (koreksi modal setelah CASH)"
                            % (kode.replace("_", " ").title(), order.no_servis or order.id),

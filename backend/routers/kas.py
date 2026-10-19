@@ -639,6 +639,64 @@ def get_distribusi(db: Session = Depends(get_db_session),
     return out
 
 
+def _modal_kosong_items(db, start, end):
+    """Unit CASH di periode (start, end) yang Modalnya belum terisi.
+
+    SATU-SATUNYA sumber daftar ini dipakai dua tempat:
+      1. `GET /api/kas/modal-kosong` - percoleng yang ditampilkan ke user.
+      2. `_tutup_periode_impl` - gerbang keras: Tutup Kas DITOLAK selama
+         daftar ini tidak kosong.
+
+    Dipisah jadi fungsi supaya keduanya tidak pernah berbeda pendapat --
+    kalau dua-duanya menulis filternya sendiri, cepat atau lambat
+    perilakunya beda dan user melihat "tidak ada masalah" lalu ditolak
+    saat menekan tombol Tutup Kas.
+
+    Conditions:
+    - Hanya status CASH. DONE belum menarik modal dari Laci sama sekali,
+      jadi bukan urusan Tutup Kas.
+    - Hanya di dalam batas periodenya, memakai rantai momen yang sama
+      dengan filter arsip di router orders (lihat docstring di bawah).
+    - `tanpa_modal` = jalur keluar yang sudah disetujui Owner
+      (OWNER_DECISIONS 11.4), jadi TIDAK dihitung sebagai kelalaian.
+    """
+    import models as _models
+    from sqlalchemy import func
+    from models import StatusHistory
+    sub = (
+        select(func.max(StatusHistory.waktu))
+        .where(StatusHistory.service_order_id == _models.ServiceOrder.id,
+               StatusHistory.ke_status == _models.ServiceOrder.status)
+        .correlate(_models.ServiceOrder)
+        .scalar_subquery()
+    )
+    momen = func.coalesce(_models.ServiceOrder.lunas_at, sub,
+                          _models.ServiceOrder.taken_at,
+                          _models.ServiceOrder.created_at)
+
+    q = db.query(_models.ServiceOrder).filter(
+        _models.ServiceOrder.status == "CASH")
+    if start is not None:
+        q = q.filter(momen >= start)
+    if end is not None:
+        q = q.filter(momen <= end)
+    rows = q.all()
+
+    kosong = []
+    for o in rows:
+        total = (to_decimal(o.part_cost or 0) + to_decimal(o.modal_jasa or 0)
+                 + to_decimal(o.modal_lainnya or 0))
+        # Unit yang Owner tandai "Tanpa Modal (sengaja 0)" BUKAN kelalaian --
+        # jangan diblokir. Itu memang sudah disahkan.
+        if total <= ZERO and not (o.tanpa_modal or False):
+            kosong.append({
+                "id": o.id, "no_servis": o.no_servis,
+                "harga": str(o.final_price or 0),
+                "lunas_at": o.lunas_at.isoformat() if o.lunas_at else None,
+            })
+    return kosong, len(rows)
+
+
 @router.get("/modal-kosong")
 def modal_kosong(
     db: Session = Depends(get_db_session),
@@ -668,8 +726,6 @@ def modal_kosong(
     Karena itu dipakai rantai yang sama dengan filter arsip di router orders.
     """
     import models as _models
-    from sqlalchemy import func
-    from models import StatusHistory
     if period == "current":
         p = get_active_period(db)
         start, end = batas_periode(p)
@@ -681,47 +737,18 @@ def modal_kosong(
         start, end = batas_periode(p)
         pid = p.id if p is not None else None
 
-    sub = (
-        select(func.max(StatusHistory.waktu))
-        .where(StatusHistory.service_order_id == _models.ServiceOrder.id,
-               StatusHistory.ke_status == _models.ServiceOrder.status)
-        .correlate(_models.ServiceOrder)
-        .scalar_subquery()
-    )
-    momen = func.coalesce(_models.ServiceOrder.lunas_at, sub,
-                          _models.ServiceOrder.taken_at,
-                          _models.ServiceOrder.created_at)
-
-    q = db.query(_models.ServiceOrder).filter(
-        _models.ServiceOrder.status == "CASH")
-    if start is not None:
-        q = q.filter(momen >= start)
-    if end is not None:
-        q = q.filter(momen <= end)
-    rows = q.all()
-
-    kosong = []
-    for o in rows:
-        total = (to_decimal(o.part_cost or 0) + to_decimal(o.modal_jasa or 0)
-                 + to_decimal(o.modal_lainnya or 0))
-        # Unit yang Owner tandai "Tanpa Modal (sengaja 0)" BUKAN kelalaian --
-        # jangan diperingatkan. Itu memang sudah disahkan.
-        if total <= ZERO and not (o.tanpa_modal or False):
-            kosong.append({
-                "id": o.id, "no_servis": o.no_servis,
-                "harga": str(o.final_price or 0),
-                "lunas_at": o.lunas_at.isoformat() if o.lunas_at else None,
-            })
+    kosong, total_cash = _modal_kosong_items(db, start, end)
     return {
         "jumlah": len(kosong),
-        "total_cash": len(rows),
+        "total_cash": total_cash,
         "items": kosong,
         "keterangan": "Modal kosong berarti unit ini BELUM masuk Omzet/Transaksi: "
                       "tanpa modal tidak ada biaya yang tercatat, sehingga "
                       "Harga Final-nya akan salah dianggap seluruhnya sebagai "
                       "laba. Isi Modal Part & Modal Jasa -- atau, kalau memang "
                       "tidak ada modal, centang 'Tanpa Modal (sengaja 0)' di "
-                      "form unit supaya tidak ikut disaring.",
+                      "form unit supaya tidak ikut disaring. "
+                      "Tutup Kas DITOLAK selama masih ada unit seperti ini.",
     }
 
 
@@ -839,6 +866,43 @@ def _tutup_periode_impl(data, db, user):
                             detail="Periode baru saja dibuka, tutup kas belum dapat dilakukan lagi")
 
     oleh = user.display_name or user.username
+
+    # ── GERBANG MODAL KOSONG (Owner, 2026-10-19) ──────────────────────
+    # Tutup Kas DITOLAK selama masih ada unit CASH di periode ini yang
+    # Modalnya belum terisi dan juga tidak ditandai "Tanpa Modal".
+    #
+    # Sebelumnya ini hanya PERINGATAN (lihat docstring modal_kosong yang
+    # ditulis "bukan pemblokiran"). Owner justru mengira sudah memblokir.
+    # Akibatnya unit modal-kosong tetap bisa ditutup periodenya, dan
+    # Distribution dihitung dari Laba yang terlalu besar -- bagian modal
+    # yang belum dibayar ikut dibagi ke karyawan/pengelola/investor.
+    #
+    # Yang diperiksa lewat `_modal_kosong_items` -- fungsi yang sama dengan
+    # yang dipakai endpoint GET /api/kas/modal-kosong, jadi yang ditampilkan
+    # ke user dan yang jadi penentu benar-benar sama.
+    #
+    # Urutan penting: pemeriksaan ini SEBELUM `closing_mod.tutup_periode`,
+    # sehingga tidak ada efek samping sama sekali saat ditolak.
+    try:
+        _start, _end = batas_periode(target)
+        _kosong, _total_cash = _modal_kosong_items(db, _start, _end)
+    except Exception:  # noqa: BLE001
+        # Jaga-jaga: kalau filternya sendiri bermasalah, Tutup Kas TIDAK
+        # diblokir diam-diam. Ini pemeriksaan tambahan, bukan sumber
+        # kebenaran angka.
+        _kosong = []
+    if _kosong:
+        _no = ", ".join(x["no_servis"] for x in _kosong[:8])
+        if len(_kosong) > 8:
+            _no += ", ... (+%d lagi)" % (len(_kosong) - 8)
+        raise HTTPException(
+            status_code=400,
+            detail="Tutup Kas diblokir: %d unit CASH belum punya Modal "
+                   "(%s). Isi Modal Part/Jasa/Lain, atau centang "
+                   "'Tanpa Modal (sengaja 0)' kalau memang tidak ada modal. "
+                   "Modal kosong membuat Omzet dan Distribution ikut salah."
+                   % (len(_kosong), _no))
+
     try:
         result = closing_mod.tutup_periode(
             db, target, counted=data.cash_counted, oleh=oleh,

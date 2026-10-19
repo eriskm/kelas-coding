@@ -112,3 +112,83 @@ def db(app_env, client):
 def auth(db):
     """Header Authorization untuk akun admin."""
     return {"Authorization": "Bearer pytest-token-admin"}
+
+
+@pytest.fixture(scope="session")
+def _id_order_produksi(app_env):
+    """ID order yang sudah ADA sebelum test berjalan (data produksi nyata).
+
+    Dipakai fixture `_buang_order_test_bermodal_kosong` supaya cleanup
+    tidak mungkin menyentuh unit asli.
+    """
+    from database import SessionLocal
+    import models
+    s = SessionLocal()
+    try:
+        return {row[0] for row in s.query(models.ServiceOrder.id).all()}
+    finally:
+        s.close()
+
+
+@pytest.fixture(autouse=True)
+def _buang_order_test_bermodal_kosong(app_env, _id_order_produksi):
+    """Setelah tiap test: hapus order CASH bermodal kosong BUATAN TEST.
+
+    Tutup Kas sejak 2026-10-19 DITOLAK selama ada unit CASH bermodal kosong
+    tanpa centang "Tanpa Modal" (keputusan Owner; lihat `_tutup_periode_impl`
+    di `routers/kas.py`). Test yang membuat order semacam itu tidak bisa lagi
+    sekadar menyisakan peringatan - sekarang ia memblokir `test_periode_kas`
+    yang memanggil `POST /api/kas/close`.
+
+    Sandbox DB dipakai bersama seluruh file test dalam satu sesi, jadi satu
+    order yang bocor saja sudah cukup menggagalkan test lain. Di produksi
+    sendiri TIDAK ADA satu pun order CASH bermodal kosong (dicek 2026-10-19),
+    jadi ini murni artefak test.
+
+    Pengaman: hanya order yang id-nya TIDAK ada di data produksi awal yang
+    dihapus. Unit asli tidak mungkin tersentuh.
+    """
+    yield
+    from database import SessionLocal
+    import models
+    s = SessionLocal()
+    try:
+        bocor = []
+        for row in s.query(
+                models.ServiceOrder.id,
+                models.ServiceOrder.part_cost,
+                models.ServiceOrder.modal_jasa,
+                models.ServiceOrder.modal_lainnya,
+                models.ServiceOrder.tanpa_modal).filter(
+                models.ServiceOrder.status == "CASH").all():
+            oid, part, jasa, lain, tm = row
+            if oid in _id_order_produksi:
+                continue
+            if (part or 0) + (jasa or 0) + (lain or 0) > 0:
+                continue
+            if tm:
+                continue
+            # Order yang punya Payment (DP/PELUNASAN) TIDAK disentuh: baris
+            # itu jadi fixture bagi test lain (mis. Laporan Titipan DP yang
+            # menghitung 'live' dari payment yang masih ditahan). Menghapus
+            # payment di sini merusak test yang tidak ada hubungannya.
+            if s.query(models.Payment).filter(
+                    models.Payment.service_order_id == oid).count():
+                continue
+            bocor.append(oid)
+        if bocor:
+            s.query(models.KasEntry).filter(
+                models.KasEntry.ref_id.in_(bocor),
+                models.KasEntry.sumber == "MODAL").delete(
+                synchronize_session=False)
+            s.query(models.ServiceOrder).filter(
+                models.ServiceOrder.id.in_(bocor)).delete(
+                synchronize_session=False)
+            s.commit()
+    except Exception:  # noqa: BLE001
+        try:
+            s.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+    finally:
+        s.close()

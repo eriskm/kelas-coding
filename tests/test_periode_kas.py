@@ -13,7 +13,53 @@ segera menutup kas.
 """
 from datetime import datetime, timedelta
 
+import pytest
+
 from money import to_decimal
+
+
+@pytest.fixture(autouse=True)
+def _isolate_modal_kosong(db, _id_order_produksi):
+    """Buang order CASH bermodal kosong BUATAN TEST sebelum test di file ini.
+
+    Tutup Kas (keputusan Owner 2026-10-19) DITOLAK selama ada unit CASH
+    bermodal kosong tanpa centang "Tanpa Modal" di periode yang ditutup.
+    Sandbox DB dipakai bersama seluruh file test dalam satu sesi, dan
+    beberapa file lain menyisakan order semacam itu -- sehingga test tutup
+    kas di sini gagal karena data milik file lain, bukan karena bug.
+
+    Yang dibersihkan hanya order yang id-nya tidak ada di data produksi
+    awal. Unit asli tidak pernah tersentuh.
+    """
+    import models
+    bocor = []
+    for row in db.query(
+            models.ServiceOrder.id,
+            models.ServiceOrder.part_cost,
+            models.ServiceOrder.modal_jasa,
+            models.ServiceOrder.modal_lainnya,
+            models.ServiceOrder.tanpa_modal).filter(
+            models.ServiceOrder.status == "CASH").all():
+        oid, part, jasa, lain, tm = row
+        if oid in _id_order_produksi:
+            continue
+        if (part or 0) + (jasa or 0) + (lain or 0) > 0:
+            continue
+        if tm:
+            continue
+        bocor.append(oid)
+    if bocor:
+        db.query(models.KasEntry).filter(
+            models.KasEntry.ref_id.in_(bocor),
+            models.KasEntry.sumber == "MODAL").delete(synchronize_session=False)
+        db.query(models.Payment).filter(
+            models.Payment.service_order_id.in_(bocor)).delete(
+            synchronize_session=False)
+        db.query(models.ServiceOrder).filter(
+            models.ServiceOrder.id.in_(bocor)).delete(synchronize_session=False)
+        db.commit()
+        db.expunge_all()
+    return
 
 
 def _buat_periode(db, start, end=None, status="OPEN"):
