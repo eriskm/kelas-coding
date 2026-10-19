@@ -3336,6 +3336,151 @@ select.range-pill.range-select option { color: #0f172a; }
 .nd-actions { grid-template-columns: 1fr 1fr; }
 
 /* ============================================
+   NOTA GARANSI SERVIS - mengikuti referensi
+   frontend/assets/Nota-garansi.png (961x1636)
+
+   Prefix .ng- dipakai sendiri supaya TIDAK menyentuh
+   .ndr-* yang dipakai Nota Digital (penerimaan) dan
+   Nota Klaim Garansi.
+
+   Tata letak: header merah -> judul + kartu bukti -> dua kolom
+   (kiri data unit, kanan ketentuan/status/QR) -> strip 3 kolom
+   -> footer merah/hitam.
+   ============================================ */
+.ng-sheet {
+    width: 961px; max-width: none; background: #ffffff; color: #111;
+    font-family: Inter, system-ui, "Segoe UI", sans-serif;
+    font-size: 15px; line-height: 1.5;
+}
+.ng-head {
+    background: linear-gradient(135deg, #d31111, #7f0d0d); color: #fff;
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 18px; padding: 32px 32px 30px;
+}
+.ng-logo {
+    width: 88px; height: 88px; border-radius: 14px; background: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    overflow: hidden; flex-shrink: 0;
+}
+.ng-logo img { width: 100%; height: 100%; object-fit: cover; }
+.ng-brand { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.ng-brand > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.ng-brand b { font-size: 27px; font-style: italic; font-weight: 800;
+    letter-spacing: 1px; line-height: 1.1; }
+.ng-brand span { font-size: 12px; letter-spacing: 3px; opacity: .9; }
+.ng-contact { text-align: right; font-size: 15px; font-weight: 700; flex-shrink: 0; }
+.ng-contact > div { display: flex; align-items: center; justify-content: flex-end;
+    gap: 9px; margin-top: 6px; }
+.ng-contact > div:first-child { margin-top: 0; }
+.ng-contact i { font-size: 15px; opacity: .95; }
+
+.ng-body { padding: 26px 32px 22px; }
+.ng-intro { display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; }
+.ng-title { flex: 1 1 auto; min-width: 0; }
+.ng-title h3 { margin: 0; font-size: 34px; font-weight: 800; letter-spacing: .5px;
+    display: flex; align-items: center; gap: 12px; }
+.ng-title h3 > i { color: #d31111; font-size: 30px; }
+.ng-title h3 em { font-style: normal; color: #d31111; }
+.ng-idlabel { display: flex; align-items: center; gap: 10px; margin-top: 12px;
+    font-size: 13px; font-weight: 800; letter-spacing: 1px; }
+.ng-idlabel i { color: #d31111; font-size: 12px; }
+.ng-rule { flex: 1; height: 2px; background: #d31111; }
+.ng-id { font-size: 40px; font-weight: 800; color: #2563eb;
+    letter-spacing: .5px; margin-top: 4px; word-break: break-all; }
+
+.ng-proof {
+    width: 322px; flex-shrink: 0; border: 1.5px solid #d31111; border-radius: 10px;
+    padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start;
+}
+.ng-proof-ico { width: 30px; height: 30px; border-radius: 7px; background: #d31111;
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    flex-shrink: 0; }
+.ng-proof b { display: block; font-size: 15px; font-weight: 800; line-height: 1.35; }
+.ng-proof b em { font-style: normal; color: #d31111; }
+.ng-proof span { display: block; font-size: 12.5px; color: #64748b;
+    margin-top: 7px; line-height: 1.5; }
+
+.ng-cols { display: grid; grid-template-columns: 1fr 337px; gap: 22px; align-items: start; }
+.ng-main { display: flex; flex-direction: column; gap: 14px; }
+.ng-side { display: flex; flex-direction: column; gap: 14px; }
+
+.ng-card { border: 1px solid #e5e7eb; border-radius: 10px; padding: 14px 16px; background: #fff; }
+.ng-cap { display: flex; align-items: center; gap: 11px; font-size: 12.5px;
+    font-weight: 800; letter-spacing: 1px; color: #6b7280; text-transform: uppercase; }
+.ng-ico { width: 34px; height: 34px; border-radius: 9px; background: #d31111; color: #fff;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0; }
+.ng-val { font-size: 22px; font-weight: 800; color: #111; margin-top: 10px;
+    word-break: break-word; }
+.ng-sub { font-size: 14px; color: #374151; margin-top: 8px; word-break: break-word; }
+.ng-sub b { color: #111; }
+
+.ng-pill { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px;
+    background: #fef2f2; border: 1px solid #fecaca; border-radius: 999px;
+    padding: 6px 14px; font-size: 13px; color: #b91c1c; font-weight: 700; }
+.ng-pill i { font-size: 12px; }
+/* Ikon + teks dibungkus elemen ( bukan text node polos ) karena html2canvas
+  .drop salah satu kalau teks polos dan elemen inline jadi saudara flex item. */
+.ng-pill > span > i { margin-right: 7px; }
+.ng-pill b { font-weight: 800; }
+.ng-pill i.fa-check { color: #16a34a; }
+
+.ng-term { list-style: none; margin: 12px 0 0; padding: 0; }
+.ng-term li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0;
+    font-size: 13px; color: #374151; line-height: 1.5; }
+.ng-term li > i { color: #d31111; margin-top: 3px; flex-shrink: 0; }
+
+.ng-status { margin-top: 12px; border-radius: 9px; padding: 13px 14px;
+    display: flex; gap: 12px; align-items: flex-start; background: #f0fdf4;
+    border: 1px solid #bbf7d0; }
+.ng-status.is-gray { background: #f3f4f6; border-color: #d1d5db; }
+.ng-status-ico { width: 34px; height: 34px; border-radius: 50%; background: #16a34a;
+    color: #fff; display: inline-flex; align-items: center; justify-content: center;
+    font-size: 16px; flex-shrink: 0; }
+.ng-status.is-gray .ng-status-ico { background: #9ca3af; }
+.ng-status b { display: block; font-size: 20px; font-weight: 800; color: #15803d;
+    letter-spacing: .5px; }
+.ng-status.is-gray b { color: #4b5563; }
+.ng-status span { display: block; font-size: 13px; color: #4b5563; margin-top: 3px; }
+.ng-status u { display: block; text-decoration: none; font-size: 15px;
+    font-weight: 700; color: #111; margin-top: 3px; }
+
+.ng-qr { display: flex; gap: 14px; align-items: flex-start; margin-top: 12px; }
+.ng-qrwrap { width: 118px; height: 118px; flex-shrink: 0; border: 1px solid #e5e7eb;
+    border-radius: 8px; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; background: #fff; }
+.ng-qrwrap img { width: 100%; height: 100%; object-fit: contain; }
+.ng-qrtext { font-size: 13px; color: #4b5563; line-height: 1.55; }
+.ng-link { display: inline-flex; align-items: center; gap: 9px; margin-top: 12px;
+    width: 100%; background: #d31111; color: #fff; border-radius: 999px;
+    padding: 9px 14px; font-size: 12.5px; font-weight: 700; word-break: break-all; }
+
+.ng-parts { list-style: none; margin: 10px 0 0; padding: 0; }
+.ng-parts li { display: flex; gap: 9px; align-items: flex-start; padding: 5px 0;
+    font-size: 14px; color: #111; }
+.ng-parts li > i { color: #16a34a; margin-top: 4px; flex-shrink: 0; }
+
+.ng-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+    background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 10px;
+    padding: 16px 20px; margin-top: 20px; }
+.ng-sitem { display: flex; gap: 12px; align-items: flex-start; }
+.ng-sitem > i { color: #d31111; font-size: 19px; margin-top: 2px; flex-shrink: 0; }
+.ng-sitem b { display: block; font-size: 13px; font-weight: 800; letter-spacing: .5px;
+    color: #111; }
+.ng-sitem span { display: block; font-size: 12.5px; color: #64748b;
+    margin-top: 4px; line-height: 1.5; }
+
+.ng-foot { display: flex; align-items: stretch; }
+.ng-foot-l { flex: 1 1 auto; background: #d31111; color: #fff; display: flex;
+    align-items: center; gap: 13px; font-size: 15px; font-weight: 700; padding: 22px 28px; }
+.ng-foot-l i { font-size: 24px; flex-shrink: 0; }
+.ng-foot-r { background: #0a0a0a; color: #fff; display: flex; flex-direction: column;
+    justify-content: center; gap: 3px; padding: 22px 28px; flex-shrink: 0; text-align: right; }
+.ng-foot-r b { font-size: 17px; font-weight: 800; }
+.ng-foot-r b em { font-style: normal; color: #ef4444; }
+.ng-foot-r span { font-size: 10px; letter-spacing: 1.5px; opacity: .8; }
+
+/* ============================================
    NOTA DIGITAL - recreate visual reference
    (header merah, kartu putih, footer hitam)
    ============================================ */

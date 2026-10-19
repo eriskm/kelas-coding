@@ -7077,7 +7077,7 @@ function renderClaimNotaDigital(d) {
         <div class="ndr-title-row">
             <div class="ndr-title">
                 <h3>NOTA <em>PENERIMAAN</em> CLAIM GARANSI</h3>
-                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><b>PG</b><span>NOTA PENERIMAAN CLAIM GARANSI</span></div>
+                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><span><b>PG</b><span> NOTA PENERIMAAN CLAIM GARANSI</span></span></div>
                 <div class="ndr-state ndr-amber">
                     <i class="fa-solid fa-shield-halved"></i>
                     <div><b>GARANSI: ${escapeHtml(d.warranty_status || '-')}</b><span>Claim mengacu ke servis ${escapeHtml(d.origin_no || '-')} — histori servis tidak berubah.</span></div>
@@ -7437,129 +7437,109 @@ function renderWarrantyNotaDigital(d) {
     if (!el) return;
     const tgl = notaTglSlash(d.tgl);
     const sampai = notaTglSlash(d.warranty_end);
-    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
-        + encodeURIComponent('SUKABUMI FLASHER GARANSI ' + (d.no || ''));
+    const jam = notaJam();
     const gst = notaWarrantyStatus(d);
     const waToko = shopWaDisplay();
+    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data='
+        + encodeURIComponent('SUKABUMI FLASHER GARANSI ' + (d.no || ''));
     const statusBayar = String(d.bayar_status || '').toUpperCase();
-    const adaBayar = !!statusBayar;
-    // Komponen hanya ada kalau sparepart tercatat; kalau tidak, blok dihilangkan.
+    const label = warrantyLabel(d.warranty_months);
+    // Kartu komponen hanya ada kalau sparepart tercatat; kalau tidak, hilang.
     const partsHtml = notaWarrantyParts(d);
+    const rules = [
+        'Garansi berlaku selama <b>' + escapeHtml(label) + '</b> sejak tanggal serah terima unit.',
+        'Garansi mencakup kerusakan yang sama dengan perbaikan yang dilakukan.',
+        'Tidak mencakup kerusakan akibat benturan, cairan, modifikasi, atau kesalahan pengguna.',
+        'Garansi tidak berlaku jika segel rusak atau unit telah dibongkar oleh pihak lain.',
+        'Untuk klaim garansi, harap membawa nota ini dan unit ke toko kami.',
+    ].map((t) => '<li><i class="fa-solid fa-circle-check"></i><span>' + t + '</span></li>').join('');
+
     el.innerHTML = `
-    <div class="ndr-sheet ndr-doc-warranty">
-        <div class="ndr-head">
-            <div class="ndr-brand">
-                <span class="ndr-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
+    <div class="ng-sheet">
+        <div class="ng-head">
+            <div class="ng-brand">
+                <span class="ng-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"></span>
                 <div><b>SUKABUMI FLASHER</b><span>SMARTPHONE SERVICE LAB</span></div>
             </div>
-            <div class="ndr-contact">
+            <div class="ng-contact">
                 <div><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waToko)}</div>
                 <div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
+                <div><i class="fa-regular fa-clock"></i>Jam: ${escapeHtml(jam)}</div>
             </div>
         </div>
-        <div class="ndr-title-row">
-            <div class="ndr-title">
-                <h3>NOTA <em>GARANSI</em> SERVIS</h3>
-                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><b>NG</b><span>NOTA GARANSI SERVIS</span></div>
-                <div class="ndr-state ndr-wstatus ${escapeHtml(gst.cls)}">
-                    <i class="fa-solid fa-shield-halved"></i>
-                    <div><b>${escapeHtml(gst.label)}</b><span>${escapeHtml(gst.note)}</span></div>
+        <div class="ng-body">
+            <div class="ng-intro">
+                <div class="ng-title">
+                    <h3><i class="fa-solid fa-shield-halved"></i>NOTA <em>GARANSI</em> SERVIS</h3>
+                    <div class="ng-idlabel"><span class="ng-rule"></span><i class="fa-solid fa-caret-right"></i>NOMOR SERVIS<span class="ng-rule"></span></div>
+                    <div class="ng-id">${escapeHtml(d.no || '-')}</div>
+                </div>
+                <div class="ng-proof">
+                    <span class="ng-proof-ico"><i class="fa-solid fa-shield-halved"></i></span>
+                    <div><b>BUKTI GARANSI SERVIS<br><em>UNTUK PERBAIKAN</em></b><span>Harap simpan nota ini untuk pengambilan unit dan klaim garansi jika diperlukan.</span></div>
                 </div>
             </div>
-            <div class="ndr-nonum">
-                <span>NO. SERVIS</span>
-                <b>${escapeHtml(d.no || '-')}</b>
-                <div class="ndr-strip"><i class="fa-solid fa-shield-halved"></i>Simpan nota ini sebagai bukti garansi</div>
-            </div>
-        </div>
-        <div class="ndr-grid3">
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-user"></i>PELANGGAN</div>
-                <div class="ndr-name">${escapeHtml(d.nama)}</div>
-                <div class="ndr-line"><i class="fa-solid fa-phone"></i>${escapeHtml(d.phone)}</div>
-            </div>
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>PERANGKAT</div>
-                <div class="ndr-name">${escapeHtml(d.device)}</div>
-                <div class="ndr-kv">IMEI <span>${escapeHtml(d.imei)}</span></div>
-                <div class="ndr-kv">Diserahkan <span>${escapeHtml(tgl)}</span></div>
-            </div>
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>GARANSI</div>
-                <div class="ndr-name">${escapeHtml(d.warranty_label)}</div>
-                <div class="ndr-line"><i class="fa-regular fa-calendar-check"></i>${escapeHtml(d.warranty_end ? 's/d ' + sampai : 'tanpa garansi')}</div>
-                <div class="ndr-line"><i class="fa-solid fa-screwdriver-wrench"></i>${escapeHtml(d.technician || '-')}</div>
-            </div>
-        </div>
-        <div class="ndr-grid3">
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>PEKERJAAN</div>
-                <div class="ndr-sec"><span>Tindakan perbaikan</span><p class="ndr-check"><i class="fa-solid fa-check"></i>${escapeHtml(d.plan)}</p></div>
-                <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(d.technician || '-')}</p></div>
-                <div class="ndr-sec"><span>Biaya final</span><p class="ndr-price">${escapeHtml(notaRupiah(d.final))}</p></div>
-            </div>
-            ${partsHtml || ''}
-            <div class="ndr-card is-green">
-                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>MASA GARANSI</div>
-                <div class="ndr-sched">
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar-check"></i></span><div><span>Mulai</span><b>${escapeHtml(tgl)}</b></div></div>
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar"></i></span><div><span>Berakhir</span><b>${escapeHtml(sampai || '-')}</b></div></div>
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-shield-halved"></i></span><div><span>Cakupan</span><b>Pekerjaan yang sama</b></div></div>
+            <div class="ng-cols">
+                <div class="ng-main">
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-user"></i></span>PELANGGAN</div>
+                        <div class="ng-val">${escapeHtml(d.nama || '-')}</div>
+                        <div class="ng-sub"><i class="fa-brands fa-whatsapp"></i> ${escapeHtml(d.phone || '-')}</div>
+                    </div>
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>PERANGKAT</div>
+                        <div class="ng-val">${escapeHtml(d.device || '-')}</div>
+                        <div class="ng-sub">IMEI : ${escapeHtml(d.imei || '-')}</div>
+                    </div>
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>KELUHAN / PERBAIKAN</div>
+                        <div class="ng-sub" style="margin-top:10px;font-size:16px;color:#111">${escapeHtml(d.plan || '-')}</div>
+                    </div>
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-coins"></i></span>BIAYA SERVIS FINAL</div>
+                        <div class="ng-val" style="color:#d31111">${escapeHtml(notaRupiah(d.final))}</div>
+                        ${statusBayar ? `<div class="ng-pill"><span><span>Status Pembayaran : </span><b>${escapeHtml(statusBayar)}</b></span><i class="fa-solid fa-check"></i></div>` : ''}
+                    </div>
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>GARANSI SERVIS</div>
+                        <div class="ng-val" style="color:#d31111">${escapeHtml(label)}</div>
+                        <div class="ng-pill"><span><i class="fa-regular fa-calendar"></i><span>Mulai: ${escapeHtml(tgl)} </span><span style="color:#94a3b8">| </span><span>Berakhir: ${escapeHtml(sampai || '-')}</span></span></div>
+                    </div>
+                    ${partsHtml}
                 </div>
-                <div class="ndr-note"><i class="fa-solid fa-circle-info"></i><span>Garansi tidak mencakup kerusakan jatuh, cairan, atau pengerjaan pihak lain.</span></div>
+                <div class="ng-side">
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>KETENTUAN GARANSI</div>
+                        <ul class="ng-term">${rules}</ul>
+                    </div>
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>STATUS GARANSI</div>
+                        <div class="ng-status${gst.cls === 'is-green' ? '' : ' is-gray'}">
+                            <span class="ng-status-ico"><i class="fa-solid fa-check"></i></span>
+                            <div><b>${escapeHtml(gst.label)}</b><span>${escapeHtml(d.warranty_end ? 'Garansi berlaku hingga' : 'Tidak ada masa garansi')}</span>${d.warranty_end ? `<u>${escapeHtml(sampai)}</u>` : ''}</div>
+                        </div>
+                    </div>
+                    <div class="ng-card">
+                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-qrcode"></i></span>CEK GARANSI DIGITAL</div>
+                        <div class="ng-qr">
+                            <div class="ng-qrwrap">
+                                <img src="${qrUrl}" alt="QR garansi" onerror="this.style.display='none';var f=this.parentNode;var s=f.nextElementSibling;if(s)s.style.display='block';">
+                            </div>
+                            <div class="ng-qrtext">Pindai QR untuk melihat detail dan status garansi unit Anda.</div>
+                        </div>
+                        <div class="ng-link"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="ng-strip">
+                <div class="ng-sitem"><i class="fa-solid fa-file-circle-check"></i><div><b>DATA UNIT AMAN</b><span>Kami menjaga data dan privasi perangkat Anda.</span></div></div>
+                <div class="ng-sitem"><i class="fa-regular fa-clock"></i><div><b>ESTIMASI LAYANAN</b><span>Proses perbaikan dilakukan dengan profesional dan transparan.</span></div></div>
+                <div class="ng-sitem"><i class="fa-solid fa-phone"></i><div><b>BUTUH BANTUAN?</b><span>Hubungi kami di ${escapeHtml(waToko)}</span></div></div>
             </div>
         </div>
-        <div class="ndr-grid3">
-            <div class="ndr-card ndr-paystate">
-                <div class="ndr-cap"><i class="fa-solid fa-receipt"></i>STATUS PEMBAYARAN</div>
-                ${adaBayar ? `
-                <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-circle-check"></i></span><div><span>Status</span><b>${escapeHtml(statusBayar)}</b></div></div>
-                <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-coins"></i></span><div><span>Dibayar</span><b>${escapeHtml(notaRupiah(d.bayar_total))}</b></div></div>
-                <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-hand-holding-dollar"></i></span><div><span>Sisa</span><b>${escapeHtml(notaRupiah(d.bayar_sisa))}</b></div></div>
-                ` : '<div class="ndr-desc">Data pembayaran tidak tersedia saat nota ini diterbitkan.</div>'}
-            </div>
-            <div class="ndr-card">
-                <div class="ndr-cap is-green-t"><i class="fa-solid fa-file-circle-check"></i>KLAIM GARANSI</div>
-                <ul class="ndr-yes">
-                    <li><i class="fa-solid fa-check"></i><span>Tunjukkan nota garansi ini</span></li>
-                    <li><i class="fa-solid fa-check"></i><span>Datang sebelum masa berakhir</span></li>
-                    <li><i class="fa-solid fa-check"></i><span>Keluhan sama dengan pekerjaan</span></li>
-                </ul>
-                <div class="ndr-nohead"><i class="fa-solid fa-triangle-exclamation"></i>TIDAK DITANGGUNG</div>
-                <ul class="ndr-no">
-                    <li><i class="fa-regular fa-circle-xmark"></i><span>Rusak jatuh / benturan</span></li>
-                    <li><i class="fa-regular fa-circle-xmark"></i><span>Kena cairan</span></li>
-                    <li><i class="fa-regular fa-circle-xmark"></i><span>Dikerjakan pihak lain</span></li>
-                </ul>
-            </div>
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-headset"></i>BUTUH BANTUAN?</div>
-                <div class="ndr-desc">Hubungi toko kami saat jam operasional.</div>
-                <div class="ndr-pill"><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waToko)}</div>
-                <div class="ndr-cap" style="margin-top:16px"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI</div>
-                <p class="ndr-desc">Simpan No. Servis di bawah ini untuk pengecekan.</p>
-                <div class="ndr-pill"><i class="fa-solid fa-hashtag"></i>${escapeHtml(d.no || '-')}</div>
-            </div>
-        </div>
-        <div class="ndr-grid3 ndr-row3">
-            <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-receipt"></i>BUKTI PENERIMAAN BARANG</div>
-                <p class="ndr-desc">Unit telah diservis dan diserahkan kepada pelanggan pada tanggal di atas.</p>
-                <div class="ndr-desc">Biaya final <b>${escapeHtml(notaRupiah(d.final))}</b>${adaBayar ? ' &middot; status <b>' + escapeHtml(statusBayar) + '</b>' : ''}.</div>
-            </div>
-            <div class="ndr-qrwrap">
-                <img src="${qrUrl}" alt="QR servis" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
-                <div class="ndr-kode-fallback" style="display:none"><span>NO. SERVIS</span><b>${escapeHtml(d.no || '-')}</b></div>
-            </div>
-            <div class="ndr-pink">
-                <span class="ndr-shield"><i class="fa-solid fa-shield-halved"></i></span>
-                <p>Nota garansi hanya berlaku di<br><b>SUKABUMI FLASHER<br>BUSINESS OPERATING SYSTEM</b></p>
-                <div class="ndr-thanks">Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</div>
-            </div>
-        </div>
-        <div class="ndr-foot">
-            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>${escapeHtml(gst.note)}</span></div>
-            <div class="ndr-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+        <div class="ng-foot">
+            <div class="ng-foot-l"><i class="fa-regular fa-circle-check"></i><span>Terima kasih telah mempercayakan servis perangkat Anda kepada kami.</span></div>
+            <div class="ng-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
         </div>
     </div>`;
 }

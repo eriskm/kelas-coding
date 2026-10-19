@@ -120,14 +120,11 @@ def test_biaya_wajib_final_bukan_estimate():
 def test_teks_pembayaran_di_escape():
     """Nilai dari server wajib escapeHtml (anti XSS)."""
     bad = _js_fungsi(_src(SCRIPT), "renderWarrantyNotaDigital")
-    for f in ("bayar_total", "bayar_sisa"):
-        pola = r"(?:escapeHtml|notaRupiah)\([^)]*\bd\.%s\b" % f
-        assert re.search(pola, bad), \
-            "%s tidak di-escape - risiko XSS" % f
-    # status bayar masuk lewat variabel lokal; yang wajib dijaga nilai yang
-    # ditampilkan sudah escapeHtml.
     assert re.search(r"escapeHtml\(statusBayar\)", bad), \
         "status pembayaran harus di-escape saat ditampilkan"
+    # Biaya final wajib lewat notaRupiah + escapeHtml
+    assert re.search(r"escapeHtml\(notaRupiah\(d\.final\)\)", bad), \
+        "biaya final harus di-escape lewat notaRupiah(d.final)"
 
 
 # ─────────────────────────────────────────────────────────────────
