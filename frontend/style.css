@@ -3401,6 +3401,24 @@ select.range-pill.range-select option { color: #0f172a; }
 .ndr-doc-service .ndr-doctype { background: #dbeafe; color: #1d4ed8; }
 .ndr-doc-claim .ndr-doctype { background: #ffedd5; color: #c2410c; }
 .ndr-doc-warranty .ndr-doctype { background: #d1fae5; color: #047857; }
+
+/* Status garansi AKTIF / BERAKHIR - dihitung dari tanggal, bukan warna tetap */
+.ndr-wstatus.ndr-green { color: #10b981; }
+.ndr-wstatus.is-green { color: #059669; }
+.ndr-wstatus.is-green b { color: #047857; }
+.ndr-wstatus.is-gray { color: #6b7280; }
+.ndr-wstatus.is-gray b { color: #4b5563; }
+
+/* Kartu status pembayaran nota garansi */
+.ndr-paystate .ndr-sec > span { font-size: 13px; color: #777; }
+.ndr-paystate .ndr-sec p { font-size: 16px; font-weight: 700; color: #111; }
+
+/* Daftar komponen yang diganti - hanya dirender bila datanya ada */
+.ndr-parts { list-style: none; margin: 8px 0 0; padding: 0; }
+.ndr-part { display: flex; align-items: flex-start; gap: 9px; padding: 7px 0;
+    border-bottom: 1px dashed #e7e5e4; font-size: 15px; color: #1f2937; }
+.ndr-part:last-child { border-bottom: none; }
+.ndr-part > i { color: #059669; margin-top: 2px; flex-shrink: 0; }
 .ndr-doc-service .ndr-head { background: linear-gradient(180deg, #2563eb, #1d4ed8); }
 .ndr-doc-claim .ndr-head { background: linear-gradient(180deg, #f97316, #c2410c); }
 .ndr-doc-warranty .ndr-head { background: linear-gradient(180deg, #10b981, #047857); }

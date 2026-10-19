@@ -2501,19 +2501,18 @@ function doneWaMessage(d) {
 
 function cashWaMessage(d) {
     const L = [];
-    L.push('Halo ' + (d.nama || 'Kak') + ' 🙏');
-    L.push('Unit Anda sudah selesai dan telah kami terima.');
+    L.push('Halo ' + (d.nama || 'Kak') + ',');
+    L.push('Unit Anda telah selesai diservis dan diserahkan kepada Anda.');
     L.push('');
     L.push('No. Servis: ' + (d.no || '-'));
-    L.push('Device: ' + (d.device || '-'));
-    L.push('Biaya: ' + usRupiah(d.final));
-    const _sisaWa = (d.sisa !== undefined && d.sisa !== null) ? Number(d.sisa) || 0
-        : Math.max(0, (Number(d.final) || 0) - (Number(d.dp) || 0));
-    if ((Number(d.dp) || 0) > 0 || _sisaWa > 0) L.push('DP masuk: ' + usRupiah(d.dp) + ' • Sisa: ' + usRupiah(_sisaWa));
+    L.push('Perangkat: ' + (d.device || '-'));
+    L.push('Biaya Servis: ' + usRupiah(d.final));
     if (d.garansi) L.push('Garansi: ' + d.garansi);
     L.push('');
-    L.push('Berikut ini ringkasan unit dan masa garansinya.');
-    L.push('Simpan pesan ini sebagai bukti. Terima kasih 🙏');
+    L.push('Berikut kami lampirkan Nota Garansi sebagai bukti servis dan informasi masa garansi perangkat Anda.');
+    L.push('Silakan simpan nota ini sebagai bukti garansi apabila diperlukan di kemudian hari.');
+    L.push('');
+    L.push('Terima kasih telah mempercayakan servis perangkat Anda kepada Sukabumi Flasher. 🙏');
     return L.join('\n');
 }
 
@@ -7286,9 +7285,10 @@ function warrantyEndOf(cashDate, days) {
 async function usWarrantyPrint() {
     if (usGetStatus() !== 'CASH') return;
     // Nota garansi syarat SELESAI + LUNAS (FINAL LOCK).
+    let _pay = null;
     if (_txEditId) {
         try {
-            const _pay = await apiGet('/payments/by-order/' + _txEditId);
+            _pay = await apiGet('/payments/by-order/' + _txEditId);
             if (_pay.payment_status !== 'LUNAS') {
                 toast('Nota garansi butuh pembayaran LUNAS (sisa ' + usPayRupiah(_pay.sisa) + ').');
                 return;
@@ -7319,6 +7319,15 @@ async function usWarrantyPrint() {
         warranty_days: WARRANTY_DAYS,
         warranty_end: warrantyEndFor(cash, mths),
         status: 'CASH',
+        // Status pembayaran dari ledger, bukan asumsi. Kosong kalau data
+        // pembayaran tidak sempat ditarik (mis. nota dibuka tanpa form).
+        bayar_status: _pay ? (_pay.payment_status || '') : '',
+        bayar_total: _pay ? (Number(_pay.total_bayar) || 0) : 0,
+        bayar_sisa: _pay ? (Number(_pay.sisa) || 0) : 0,
+        dp: usNum('usDp'),
+        // Komponen diganti. Diisi hanya kalau sparepart benar dipakai unit ini;
+        // daftar kosong = blok tidak dirender sama sekali (tidak dikarang).
+        parts: usWarrantyParts(),
     };
     _lastWarranty = d;
     _notaMode = 'WARRANTY';
@@ -7330,6 +7339,67 @@ async function usWarrantyPrint() {
     try { document.body.appendChild(win); } catch (_) {}
     win.style.zIndex = '9600';
     win.classList.add('open');
+}
+
+// Komponen yang diganti unit ini, dari pemakaian sparepart yang tercatat
+// (`service_order_parts`, models.py).
+//
+// CATATAN: tabel itu belum pernah diisi dan belum ada endpoint yang
+// membacanya, jadi hasilnya selalu kosong dan blok "KOMPONEN DIGANTI"
+// tidak pernah tampil. Sengaja TIDAK memanggil endpoint yang belum ada
+// supaya tidak ada request 404 sia-sia setiap kali nota dicetak.
+//
+//Begitu fitur pencatatan sparepart dikerjakan, cukup isi di sini -
+// sisanya (render + escaping) sudah siap.
+function usWarrantyParts() {
+    return [];
+}
+
+// Status garansi dihitung dari TANGGAL BERAKHIRNYA, bukan dari teks statis.
+// Sumber tanggal = `warranty_end` yang sudah dihitung sistem
+// (`warrantyEndFor`), jadi tidak ada angka yang dikarang di sini.
+function notaWarrantyStatus(d) {
+    const bulan = d ? d.warranty_months : null;
+    if (bulan === 0) return { label: 'TANPA GARANSI', cls: 'is-gray', note: 'Servis ini tidak bergaransi toko.' };
+    const end = (d && d.warranty_end) ? new Date(d.warranty_end) : null;
+    if (!end || isNaN(end.getTime())) {
+        return { label: 'BERAKHIR', cls: 'is-gray', note: 'Masa garansi sudah lewat.' };
+    }
+    const hariIni = new Date();
+    const mulaiHariIni = new Date(hariIni.getFullYear(), hariIni.getMonth(), hariIni.getDate());
+    const selesaiHariIni = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+    if (selesaiHariIni < mulaiHariIni) {
+        return { label: 'BERAKHIR', cls: 'is-gray', note: 'Berakhir ' + notaTglSlash(d.warranty_end) + '.' };
+    }
+    const sisaHari = Math.round((selesaiHariIni - mulaiHariIni) / 86400000);
+    return {
+        label: 'AKTIF',
+        cls: 'is-green',
+        note: sisaHari === 0
+            ? 'Berakhir hari ini (' + notaTglSlash(d.warranty_end) + ').'
+            : 'Berlaku ' + sisaHari + ' hari lagi, s/d ' + notaTglSlash(d.warranty_end) + '.'
+    };
+}
+
+// Blok "Komponen Diganti". Kalau tidak ada sparepart yang tercatat, hasilnya
+// string kosong dan pemanggil tidak merender kartunya sama sekali.
+function notaWarrantyParts(d) {
+    try {
+        const list = Array.isArray(d && d.parts) ? d.parts : [];
+        if (!list.length) return '';
+        const baris = list.map((p) => {
+            const nama = escapeHtml(p.nama || p.device || p.jenis || '-');
+            const qty = Number(p.qty) || 0;
+            const ket = qty > 1 ? nama + ' x' + qty : nama;
+            return '<li class="ndr-part"><i class="fa-solid fa-check"></i><span>' + ket + '</span></li>';
+        }).join('');
+        return '<div class="ndr-card">'
+            + '<div class="ndr-cap"><i class="fa-solid fa-screwdriver-wrench"></i>KOMPONEN DIGANTI</div>'
+            + '<ul class="ndr-parts">' + baris + '</ul>'
+            + '</div>';
+    } catch (_) {
+        return '';
+    }
 }
 
 function renderWarrantyNotaPreview(d) {
@@ -7369,22 +7439,31 @@ function renderWarrantyNotaDigital(d) {
     const sampai = notaTglSlash(d.warranty_end);
     const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
         + encodeURIComponent('SUKABUMI FLASHER GARANSI ' + (d.no || ''));
+    const gst = notaWarrantyStatus(d);
+    const waToko = shopWaDisplay();
+    const statusBayar = String(d.bayar_status || '').toUpperCase();
+    const adaBayar = !!statusBayar;
+    // Komponen hanya ada kalau sparepart tercatat; kalau tidak, blok dihilangkan.
+    const partsHtml = notaWarrantyParts(d);
     el.innerHTML = `
     <div class="ndr-sheet ndr-doc-warranty">
         <div class="ndr-head">
             <div class="ndr-brand">
                 <span class="ndr-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
-                <div><b>SUKABUMI FLASHER</b><span>BUSINESS OPERATING SYSTEM</span></div>
+                <div><b>SUKABUMI FLASHER</b><span>SMARTPHONE SERVICE LAB</span></div>
             </div>
-            <div class="ndr-contact"><div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div></div>
+            <div class="ndr-contact">
+                <div><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waToko)}</div>
+                <div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
+            </div>
         </div>
         <div class="ndr-title-row">
             <div class="ndr-title">
-                <h3>NOTA <em>GARANSI</em> SERVICE</h3>
-                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><b>NG</b><span>NOTA GARANSI SERVICE</span></div>
-                <div class="ndr-state ndr-green">
+                <h3>NOTA <em>GARANSI</em> SERVIS</h3>
+                <div class="ndr-doctype"><i class="fa-solid fa-shield-halved"></i><b>NG</b><span>NOTA GARANSI SERVIS</span></div>
+                <div class="ndr-state ndr-wstatus ${escapeHtml(gst.cls)}">
                     <i class="fa-solid fa-shield-halved"></i>
-                    <div><b>${escapeHtml(d.warranty_months === 0 ? 'TANPA GARANSI' : 'GARANSI ' + String(d.warranty_label).toUpperCase())}</b><span>${escapeHtml(d.warranty_end ? 'Berlaku s/d ' + notaTglSlash(d.warranty_end) + ' untuk pekerjaan yang sama.' : 'Servis ini tidak bergaransi toko.')}</span></div>
+                    <div><b>${escapeHtml(gst.label)}</b><span>${escapeHtml(gst.note)}</span></div>
                 </div>
             </div>
             <div class="ndr-nonum">
@@ -7400,10 +7479,10 @@ function renderWarrantyNotaDigital(d) {
                 <div class="ndr-line"><i class="fa-solid fa-phone"></i>${escapeHtml(d.phone)}</div>
             </div>
             <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>DEVICE</div>
+                <div class="ndr-cap"><i class="fa-solid fa-mobile-screen-button"></i>PERANGKAT</div>
                 <div class="ndr-name">${escapeHtml(d.device)}</div>
                 <div class="ndr-kv">IMEI <span>${escapeHtml(d.imei)}</span></div>
-                <div class="ndr-kv">Selesai <span>${escapeHtml(tgl)}</span></div>
+                <div class="ndr-kv">Diserahkan <span>${escapeHtml(tgl)}</span></div>
             </div>
             <div class="ndr-card">
                 <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>GARANSI</div>
@@ -7414,19 +7493,30 @@ function renderWarrantyNotaDigital(d) {
         </div>
         <div class="ndr-grid3">
             <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>PEKERJAAN GARANSI</div>
+                <div class="ndr-cap"><i class="fa-solid fa-wrench"></i>PEKERJAAN</div>
                 <div class="ndr-sec"><span>Tindakan perbaikan</span><p class="ndr-check"><i class="fa-solid fa-check"></i>${escapeHtml(d.plan)}</p></div>
                 <div class="ndr-sec"><span>Teknisi</span><p>${escapeHtml(d.technician || '-')}</p></div>
                 <div class="ndr-sec"><span>Biaya final</span><p class="ndr-price">${escapeHtml(notaRupiah(d.final))}</p></div>
             </div>
+            ${partsHtml || ''}
             <div class="ndr-card is-green">
                 <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>MASA GARANSI</div>
                 <div class="ndr-sched">
                     <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar-check"></i></span><div><span>Mulai</span><b>${escapeHtml(tgl)}</b></div></div>
-                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar"></i></span><div><span>Berakhir</span><b>${escapeHtml(sampai)}</b></div></div>
+                    <div class="ndr-srow"><span class="ndr-ico"><i class="fa-regular fa-calendar"></i></span><div><span>Berakhir</span><b>${escapeHtml(sampai || '-')}</b></div></div>
                     <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-shield-halved"></i></span><div><span>Cakupan</span><b>Pekerjaan yang sama</b></div></div>
                 </div>
                 <div class="ndr-note"><i class="fa-solid fa-circle-info"></i><span>Garansi tidak mencakup kerusakan jatuh, cairan, atau pengerjaan pihak lain.</span></div>
+            </div>
+        </div>
+        <div class="ndr-grid3">
+            <div class="ndr-card ndr-paystate">
+                <div class="ndr-cap"><i class="fa-solid fa-receipt"></i>STATUS PEMBAYARAN</div>
+                ${adaBayar ? `
+                <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-circle-check"></i></span><div><span>Status</span><b>${escapeHtml(statusBayar)}</b></div></div>
+                <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-coins"></i></span><div><span>Dibayar</span><b>${escapeHtml(notaRupiah(d.bayar_total))}</b></div></div>
+                <div class="ndr-srow"><span class="ndr-ico"><i class="fa-solid fa-hand-holding-dollar"></i></span><div><span>Sisa</span><b>${escapeHtml(notaRupiah(d.bayar_sisa))}</b></div></div>
+                ` : '<div class="ndr-desc">Data pembayaran tidak tersedia saat nota ini diterbitkan.</div>'}
             </div>
             <div class="ndr-card">
                 <div class="ndr-cap is-green-t"><i class="fa-solid fa-file-circle-check"></i>KLAIM GARANSI</div>
@@ -7442,16 +7532,24 @@ function renderWarrantyNotaDigital(d) {
                     <li><i class="fa-regular fa-circle-xmark"></i><span>Dikerjakan pihak lain</span></li>
                 </ul>
             </div>
+            <div class="ndr-card">
+                <div class="ndr-cap"><i class="fa-solid fa-headset"></i>BUTUH BANTUAN?</div>
+                <div class="ndr-desc">Hubungi toko kami saat jam operasional.</div>
+                <div class="ndr-pill"><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waToko)}</div>
+                <div class="ndr-cap" style="margin-top:16px"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI</div>
+                <p class="ndr-desc">Simpan No. Servis di bawah ini untuk pengecekan.</p>
+                <div class="ndr-pill"><i class="fa-solid fa-hashtag"></i>${escapeHtml(d.no || '-')}</div>
+            </div>
         </div>
         <div class="ndr-grid3 ndr-row3">
             <div class="ndr-card">
-                <div class="ndr-cap"><i class="fa-solid fa-shield-halved"></i>VERIFIKASI GARANSI</div>
-                <p class="ndr-desc">Scan QR untuk verifikasi garansi servis Anda.</p>
-                <div class="ndr-pill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+                <div class="ndr-cap"><i class="fa-solid fa-receipt"></i>BUKTI PENERIMAAN BARANG</div>
+                <p class="ndr-desc">Unit telah diservis dan diserahkan kepada pelanggan pada tanggal di atas.</p>
+                <div class="ndr-desc">Biaya final <b>${escapeHtml(notaRupiah(d.final))}</b>${adaBayar ? ' &middot; status <b>' + escapeHtml(statusBayar) + '</b>' : ''}.</div>
             </div>
             <div class="ndr-qrwrap">
-                <img src="${qrUrl}" alt="QR garansi" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
-                <div class="ndr-kode-fallback" style="display:none"><span>GARANSI</span><b>${escapeHtml(d.no || '-')}</b></div>
+                <img src="${qrUrl}" alt="QR servis" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.ndr-kode-fallback');if(f)f.style.display='flex';">
+                <div class="ndr-kode-fallback" style="display:none"><span>NO. SERVIS</span><b>${escapeHtml(d.no || '-')}</b></div>
             </div>
             <div class="ndr-pink">
                 <span class="ndr-shield"><i class="fa-solid fa-shield-halved"></i></span>
@@ -7460,7 +7558,7 @@ function renderWarrantyNotaDigital(d) {
             </div>
         </div>
         <div class="ndr-foot">
-            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>${escapeHtml(d.warranty_months === 0 ? 'Servis ini tidak bergaransi toko.' : 'Garansi ' + d.warranty_label + ' untuk pekerjaan yang sama.')}</span></div>
+            <div class="ndr-foot-l"><i class="fa-regular fa-circle-check"></i><span>${escapeHtml(gst.note)}</span></div>
             <div class="ndr-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
         </div>
     </div>`;
