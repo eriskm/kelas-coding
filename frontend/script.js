@@ -6440,11 +6440,28 @@ function notaCanvasWrap(ctx, text, maxW) {
     return lines.length ? lines : ['-'];
 }
 
-async function notaSaveDigitalImage() {
-    const d = notaData();
-    if (!d) { notaFlash('Belum ada data nota.', true); return; }
+// Data nota sesuai mode aktif. Tanpa ini, Nota Garansi / Klaim akan
+// membaca `_lastNota` (data penerimaan) yang bisa null saat nota dibuka
+// dari unit yang sudah ada - gejalanya "Belum ada data nota".
+function notaModeData() {
+    const isClaim = (_notaMode === 'CLAIM' && _lastClaim);
+    const isWarranty = (_notaMode === 'WARRANTY' && _lastWarranty);
+    return isClaim ? _lastClaim : isWarranty ? _lastWarranty : notaData();
+}
+
+// Selector sheet sesuai mode: tiap jenis nota punya elemen sendiri.
+function notaModeSheet() {
     const node = document.getElementById('notaDigital');
-    const sheet = node ? node.querySelector('.nps-sheet') : null;
+    if (!node) return null;
+    if (_notaMode === 'WARRANTY') return node.querySelector('.ng-sheet');
+    if (_notaMode === 'CLAIM') return node.querySelector('.ndr-sheet');
+    return node.querySelector('.nps-sheet');
+}
+
+async function notaSaveDigitalImage() {
+    const d = notaModeData();
+    if (!d) { notaFlash('Belum ada data nota.', true); return; }
+    const sheet = notaModeSheet();
     if (sheet && typeof html2canvas !== 'undefined') {
         const prevT = sheet.style.transform;
         const prevO = sheet.style.transformOrigin;
