@@ -6458,6 +6458,23 @@ function notaModeSheet() {
     return node.querySelector('.nps-sheet');
 }
 
+// Resolusi ekspor gambar nota.
+//
+// Sheet Nota Garansi 961px. Kalau diekspor 1:1 (scale 1) lalu dibuka
+// fullscreen / di-zoom di HP, gambar pecah - sheet 961px lebih kecil
+// dari lebar layar HP (1080-1440px). Diperbesar jadi 1922px (scale 2),
+// teks tetap tajam saat di-zoom.
+//
+// Format PNG dipakai, bukan JPEG/WebP, karena nota ini memuat QR.
+// Artefak kompresi JPEG di tepi QR bisa bikin kode tidak terbaca -
+// dan QR itu yang dipakai untuk cek garansi.
+//
+// Diukur pada Nota Garansi 961x1606:
+//   scale 1 ->  961px   348 KB
+//   scale 2 -> 1922px   863 KB
+//   scale 3 -> 2883px  1556 KB
+const NOTA_EXPORT_SCALE = 2;
+
 async function notaSaveDigitalImage() {
     const d = notaModeData();
     if (!d) { notaFlash('Belum ada data nota.', true); return; }
@@ -6467,10 +6484,11 @@ async function notaSaveDigitalImage() {
         const prevO = sheet.style.transformOrigin;
         try {
             notaFlash('Menyiapkan gambar nota...');
-            // Export exact 1:1 dari kanvas fix 1066px (lepas skala preview dulu).
+            // Lepas skala preview dulu supaya yang di-capture ukuran aslinya,
+            // lalu render pada NOTA_EXPORT_SCALE supaya hasil zoom tetap tajam.
             sheet.style.transform = '';
             sheet.style.transformOrigin = '';
-            const canvas = await html2canvas(sheet, { backgroundColor: '#ffffff', scale: 1, useCORS: true, logging: false });
+            const canvas = await html2canvas(sheet, { backgroundColor: '#ffffff', scale: NOTA_EXPORT_SCALE, useCORS: true, logging: false });
             const fname = 'nota-digital-' + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.png';
             if (canvas.toBlob) {
                 const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
