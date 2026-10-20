@@ -24,6 +24,8 @@ import cash
 import closing as closing_mod
 import idempotency as idem
 import distribution as distribution_mod
+import journal
+import models
 from authority import Action, require_authority
 from dependencies import get_db_session
 from money import ZERO, json_default, to_decimal
@@ -40,6 +42,27 @@ SALDO_AWAL_KATEGORI = cash.SALDO_AWAL_KATEGORI
 #: Kategori baris DP di Mutasi Kas. Labelnya menegaskan DP bukan Omzet supaya
 #: tidak salah baca saat membandingkan tabel ini dengan kartu Conditions Kas.
 KATEGORI_DP = "DP / Uang Titipan (bukan Omzet)"
+
+#: Kategori untuk pelunasan yang BELUM memenuhi syarat OMSET (modal belum diisi).
+KATEGORI_PENDING_MODAL = "Pelunasan (Pending Modal)"
+
+
+def _modal_sudah_diisi(order: models.ServiceOrder) -> bool:
+    """Cek apakah order sudah punya modal (Part/Jasa/Lain > 0)."""
+    return (to_decimal(getattr(order, "part_cost", 0) or 0)
+            + to_decimal(getattr(order, "modal_jasa", 0) or 0)
+            + to_decimal(getattr(order, "modal_lainnya", 0) or 0)) > ZERO
+
+
+def _modal_ditandai_sengaja_nol(order: models.ServiceOrder) -> bool:
+    """Cek apakah order ditandai 'Tanpa Modal'."""
+    return bool(getattr(order, "tanpa_modal", False))
+
+
+def _boleh_masuk_omzet(order: models.ServiceOrder) -> bool:
+    """Gerbang OMSET: modal terisi ATAU ditandai 'Tanpa Modal'."""
+    return _modal_sudah_diisi(order) or _modal_ditandai_sengaja_nol(order)
+
 
 DEFAULT_PAGE = 1
 DEFAULT_LIMIT = 50
@@ -102,20 +125,35 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
         kind = (p.kind or "PELUNASAN").strip().upper()
         # DP = UANG TITIPAN yang benar-benar diterima kasir, jadi tetap menjadi
         # baris Masuk (uangnya ada di laci & wajib direkonsiliasi). Yang berbeda
-        # hanya LKALANYA: DP tidak pernah menambah Omzet/Laba — itu ditangani di
+# hanya LKALANYA: DP tidak pernah menambah Omzet/Laba — itu ditangani di
         # `compute_finance`, bukan di sini. Pelunasan atas unit yang sama hanya
         # sebesar SISA, jadi DP + sisa = kewajiban, tanpa dobel.
         is_dp = kind == "DP"
+        # Non-DP (PELUNASAN) hanya dianggap Pelunasan sah jika order memenuhi syarat OMSET:
+        # - Modal Part/Jasa/Lain > 0, ATAU
+        # - Dicentang "Tanpa Modal"
+        # Jika tidak memenuhi, label sebagai "Pelunasan (Pending Modal)".
+        if is_dp:
+            kategori = KATEGORI_DP
+            ket = ("DP / Uang Titipan (bukan Omzet) — %s • %s"
+                   % ((o.device if o else None) or "-",
+                      (o.no_servis if o else None) or "-"))
+        else:
+            if o and _boleh_masuk_omzet(o):
+                kategori = "Pelunasan"
+                ket = "%s • %s" % ((o.device if o else None) or "-",
+                                    (o.no_servis if o else None) or "-")
+            else:
+                kategori = KATEGORI_PENDING_MODAL
+                ket = "Pelunasan (Pending Modal) — %s • %s" % (
+                    (o.device if o else None) or "-",
+                    (o.no_servis if o else None) or "-")
         rows.append({
             "moment": m,
             "tgl": m.date().isoformat() if hasattr(m, "date") else None,
             "jenis": "Masuk",
-            "kategori": KATEGORI_DP if is_dp else "Pelunasan",
-            "ket": ("%s • %s" % ((o.device if o else None) or "-",
-                                 (o.no_servis if o else None) or "-")) if not is_dp
-                   else ("DP / Uang Titipan (bukan Omzet) — %s • %s"
-                         % ((o.device if o else None) or "-",
-                            (o.no_servis if o else None) or "-")),
+            "kategori": kategori,
+            "ket": ket,
             "nominal": _num(p.amount),
             "source": "dp" if is_dp else "order",
             "ref_id": p.id,
@@ -323,18 +361,75 @@ def update_entry(entry_id: int, data: schemas.KasEntryUpdate, db: Session = Depe
 @router.delete("/entries/{entry_id}")
 def delete_entry(entry_id: int, db: Session = Depends(get_db_session),
                  admin: User = Depends(require_authority(Action.KAS_ENTRY_WRITE))):
-    """Hapus entri manual — khusus Admin. Saldo Awal tidak dapat dihapus
-    (buat entri penyeimbang bila salah input) agar opening tidak berubah
-    retroaktif."""
+    """Hapus entri MANUAL - khusus Admin.
+
+    Yang TIDAK boleh dihapus (perbaikan 2026-10-19):
+
+      - Entri SALDO AWAL. Opening tidak boleh berubah retroaktif.
+      - Entri SISTEM (sumber != MANUAL). Entri modal / beban / penerimaan /
+        distribusi / rekonsiliasi adalah BUKTI perpindahan uang. Menghapus
+        modal berarti Laci bertambah diam-diam tanpa ada transaksi yang
+        tercatat - dan `distributions.laci_adjust_entry_id` bisa jadi menunjuk
+        ke entri yang sudah tidak ada.
+      - Entri dari periode yang SUDAH DITUTUP. Periode tertutup bersifat final
+        (OD-LOCK-11); menghapus isinya mengubah snapshot yang sudah dibekuan.
+
+    Setiap penghapusan dicatat di jurnal (append-only) supaya jejaknya ada,
+    dan rantai `saldo_setelah` dihitung ulang supaya Jurnal Kas tidak
+    menampilkan saldo berjalan yang melompat.
+    """
     row = db.query(KasEntry).filter(KasEntry.id == entry_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Entri kas tidak ditemukan")
     if (row.kategori or "") == SALDO_AWAL_KATEGORI:
         raise HTTPException(status_code=400,
                             detail="Entri Saldo Awal tidak dapat dihapus")
+    sumber = (getattr(row, "sumber", None) or cash.SUMBER_MANUAL)
+    if sumber != cash.SUMBER_MANUAL:
+        raise HTTPException(
+            status_code=400,
+            detail="Entri kas sistem (sumber %s) tidak dapat dihapus. "
+                   "Entri ini bukti perpindahan uang - untuk koreksi, catat "
+                   "entri MANUAL pembalik, jangan dihapus." % sumber)
+    _periode = _periode_sudah_ditutup(db, row)
+    if _periode is not None:
+        raise HTTPException(
+            status_code=400,
+            detail="Entri ini milik periode kas #%s yang sudah DITUTUP "
+                   "(%s). Periode tertutup bersifat final - penghapusan di "
+                   "dalamnya mengubah snapshot yang sudah dibekukan."
+                   % (_periode.id, (_periode.closed_at or _periode.end_at)))
+    journal.record(
+        db, journal.DOMAIN_KAS, "ENTRI_KAS_DIHAPUS",
+        entity_type="kas_entry", entity_id=row.id, amount=row.nominal,
+        actor=(admin.display_name or admin.username), source=journal.SOURCE_API,
+        details={"jenis": row.jenis, "kategori": row.kategori,
+                 "nominal": str(row.nominal), "layer": row.layer,
+                 "keterangan": row.keterangan})
     db.delete(row)
+    db.flush()
+    # Rantai saldo berjalan harus dihitung ulang: baris sesudah entri yang
+    # dihapus masih menyimpan angka lama.
+    cash.recompute_saldo_setelah(db)
     db.commit()
     return {"ok": True}
+
+
+def _periode_sudah_ditutup(db, row):
+    """Periode kas Closed yang memuat entri ini (atau None)."""
+    momen = cash._moment(row)
+    if momen is None:
+        return None
+    for p in db.query(models.KasPeriod).all():
+        if (p.status or "").strip().upper() != "CLOSED":
+            continue
+        try:
+            start, end = batas_periode(p)
+        except Exception:  # noqa: BLE001
+            continue
+        if start is not None and end is not None and start <= momen < end:
+            return p
+    return None
 
 
 # ---------- Riwayat / Mutasi Kas ----------
