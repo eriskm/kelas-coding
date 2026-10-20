@@ -388,11 +388,15 @@ def test_teknisi_tidak_bisa_ubah_pembayaran(client, db):
 
 # ─────────────────────── (5) Histori aman ───────────────────────
 def test_histori_teknisi_nonaktif_tetap_utuh(client, db):
-    """OD-LOCK-08: nonaktif bukan hapus, dan penugasan barunya ditolak."""
+    """OD-LOCK-08: nonaktif bukan hapus, dan penugasan barunya ditolak.
+    
+    User management (edit/nonaktifkan) hanya SUPERADMIN. ADMIN hanya operasi.
+    """
     import models
     from money import to_decimal
 
     admin = _tok(db, "hist_admin", "ADMIN")
+    superadmin = _tok(db, "hist_super", "SUPERADMIN")
     # `service_orders.technician` diisi dari `users.display_name`, jadi nama
     # teknisi di order harus PERSIS sama dengan display_name akunnya.
     _tok(db, "hist_teknisi", "TEKNISI")
@@ -416,7 +420,7 @@ def test_histori_teknisi_nonaktif_tetap_utuh(client, db):
 
     tech = db.query(models.User).filter(
         models.User.username == "hist_teknisi").one()
-    client.put("/api/auth/users/%d" % tech.id, headers=admin, json={"active": 0})
+    client.put("/api/auth/users/%d" % tech.id, headers=superadmin, json={"active": 0})
     db.expire_all()
 
     o = db.query(models.ServiceOrder).filter(models.ServiceOrder.id == oid).one()

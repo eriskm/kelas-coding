@@ -140,8 +140,11 @@ def test_admin_masih_boleh_semua():
     from authority import Action, can
 
     for aksi in (Action.CUSTOMER_WRITE, Action.CUSTOMER_DELETE,
-                 Action.KAS_ASET_INJEKSI, Action.KAS_CLOSE, Action.USER_MANAGE):
+                 Action.KAS_ASET_INJEKSI, Action.KAS_CLOSE):
         assert can(_u("ADMIN"), aksi) is True
+    # USER_MANAGE hanya SUPERADMIN
+    assert can(_u("ADMIN"), Action.USER_MANAGE) is False
+    assert can(_u("SUPERADMIN"), Action.USER_MANAGE) is True
 
 
 def test_kasir_tetap_boleh_kerja_unit_dan_tambah_customer():

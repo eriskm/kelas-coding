@@ -79,17 +79,18 @@ def test_nonaktifkan_tetap_ada_dan_bisa_dibalik(client, db):
     import models
 
     admin, hdr = _akun(db, "akun_admin", "Admin Toko", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_super", "Super Admin", "SUPERADMIN")
     target, _ = _akun(db, "akun_target", "Teknisi Satu")
     uid, uname = target.id, target.username
 
-    r = client.put("/api/auth/users/%d" % uid, headers=hdr, json={"active": 0})
+    r = client.put("/api/auth/users/%d" % uid, headers=super_hdr, json={"active": 0})
     assert r.status_code == 200, r.text
     db.expire_all()
     row = db.query(models.User).filter(models.User.username == uname).one()
     assert row.active == 0, "harus nonaktif"
     assert row.display_name == "Teknisi Satu", "histori data harus utuh"
 
-    r = client.put("/api/auth/users/%d" % uid, headers=hdr, json={"active": 1})
+    r = client.put("/api/auth/users/%d" % uid, headers=super_hdr, json={"active": 1})
     assert r.status_code == 200, r.text
     db.expire_all()
     assert db.query(models.User).filter(
@@ -126,6 +127,7 @@ def test_unit_lama_tidak_ikut_terhapus(client, db):
     _akun(db, "akun_historis_admin", "Admin Historis", "ADMIN")
     tech, _ = _akun(db, "akun_historis", "Teknisi Historis", "TEKNISI", aktif=1)
     admin, hdr = _akun(db, "akun_historis_admin", "Admin Historis", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_historis_super", "Super Admin", "SUPERADMIN")
     tech, _ = _akun(db, "akun_historis", "Teknisi Historis", "TEKNISI", aktif=1)
     oid = _unit_baru(client, hdr, "08000000777")
     r = client.put("/api/orders/%d" % oid, headers=hdr,
@@ -134,7 +136,7 @@ def test_unit_lama_tidak_ikut_terhapus(client, db):
     assert r.status_code == 200, r.text
 
     uid = tech.id
-    client.put("/api/auth/users/%d" % uid, headers=hdr, json={"active": 0})
+    client.put("/api/auth/users/%d" % uid, headers=super_hdr, json={"active": 0})
     db.expire_all()
     o = db.query(models.ServiceOrder).filter(models.ServiceOrder.id == oid).one()
     assert o.technician == "Teknisi Historis", \
@@ -142,10 +144,14 @@ def test_unit_lama_tidak_ikut_terhapus(client, db):
 
 
 def test_penugasan_baru_ke_teknisi_nonaktif_ditolak(client, db):
-    """Aturan (2): penugasan BARU ke teknisi nonaktif harus ditolak."""
+    """Aturan (2): penugasan BARU ke teknisi nonaktif harus ditolak.
+    
+    User management (nonaktifkan) hanya SUPERADMIN.
+    """
     import models
 
     admin, hdr = _akun(db, "akun_penugasan_admin", "Admin Penugasan", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_penugasan_super", "Super Admin", "SUPERADMIN")
     _akun(db, "akun_penugasan", "Teknisi Di Liburkan", "TEKNISI", aktif=1)
 
     oid = _unit_baru(client, hdr, "08000000778")
@@ -154,7 +160,7 @@ def test_penugasan_baru_ke_teknisi_nonaktif_ditolak(client, db):
     client.put("/api/auth/users/%d" %
                db.query(models.User).filter(
                    models.User.username == "akun_penugasan").one().id,
-               headers=hdr, json={"active": 0})
+               headers=super_hdr, json={"active": 0})
     db.expire_all()
 
     r = client.put("/api/orders/%d" % oid, headers=hdr,
@@ -199,15 +205,19 @@ def _jurnal(db, event):
 
 
 def test_menonaktifkan_akun_tercatat_di_jurnal(client, db):
-    """Owner: koreksi tidak boleh diam-diam."""
+    """Owner: koreksi tidak boleh diam-diam.
+    
+    User management hanya SUPERADMIN.
+    """
     import models
 
     admin, hdr = _akun(db, "akun_jurnal_admin", "Admin Jurnal", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_jurnal_super", "Super Admin", "SUPERADMIN")
     target, _ = _akun(db, "akun_jurnal", "Teknisi Jurnal", "TEKNISI", aktif=1)
     uid, uname = target.id, target.username
 
     before = len(_jurnal(db, "AKUN_DIUBAH"))
-    r = client.put("/api/auth/users/%d" % uid, headers=hdr, json={"active": 0})
+    r = client.put("/api/auth/users/%d" % uid, headers=super_hdr, json={"active": 0})
     assert r.status_code == 200, r.text
     db.expire_all()
 
@@ -223,9 +233,11 @@ def test_menonaktifkan_akun_tercatat_di_jurnal(client, db):
 
 
 def test_membuat_akun_tercatat_di_jurnal(client, db):
+    """User management hanya SUPERADMIN."""
     admin, hdr = _akun(db, "akun_buat_admin", "Admin Buat", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_buat_super", "Super Admin", "SUPERADMIN")
     before = len(_jurnal(db, "AKUN_DIBUAT"))
-    r = client.post("/api/auth/users", headers=hdr,
+    r = client.post("/api/auth/users", headers=super_hdr,
                     json={"username": "akun_baru", "display_name": "Akun Baru",
                           "passcode": "1234", "role": "TEKNISI", "active": 1})
     assert r.status_code == 201, r.text
@@ -234,25 +246,29 @@ def test_membuat_akun_tercatat_di_jurnal(client, db):
 
 
 def test_jurnal_akun_menyimpan_aktor(client, db):
+    """User management hanya SUPERADMIN. Actor di jurnal adalah SUPERADMIN."""
     import models
 
     admin, hdr = _akun(db, "akun_aktor", "Admin Aktor", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_aktor_super", "Super Admin", "SUPERADMIN")
     target, _ = _akun(db, "akun_aktor_t", "Teknisi Aktor", "TEKNISI", aktif=1)
     uid = target.id
-    client.put("/api/auth/users/%d" % uid, headers=hdr, json={"active": 0})
+    client.put("/api/auth/users/%d" % uid, headers=super_hdr, json={"active": 0})
     db.expire_all()
     entry = _jurnal(db, "AKUN_DIUBAH")[-1]
-    assert entry.actor == "akun_aktor", \
-        "jurnal harus tahu siapa yang mengubah, got %r" % entry.actor
+    assert entry.actor == "akun_aktor_super", \
+        "jurnal harus tahu siapa yang mengubah (SUPERADMIN), got %r" % entry.actor
 
 
 def test_perubahan_nama_tercatat(client, db):
+    """User management hanya SUPERADMIN."""
     import models
 
     admin, hdr = _akun(db, "akun_nama_admin", "Admin Nama", "ADMIN")
+    superadmin, super_hdr = _akun(db, "akun_nama_super", "Super Admin", "SUPERADMIN")
     target, _ = _akun(db, "akun_nama", "Nama Lama", "TEKNISI", aktif=1)
     uid = target.id
-    r = client.put("/api/auth/users/%d" % uid, headers=hdr,
+    r = client.put("/api/auth/users/%d" % uid, headers=super_hdr,
                    json={"display_name": "Nama Baru"})
     assert r.status_code == 200, r.text
     db.expire_all()

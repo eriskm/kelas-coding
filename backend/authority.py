@@ -190,7 +190,7 @@ AUTHORITY_MATRIX = {
     Action.SPAREPART_DELETE: {ROLE_SUPER, ROLE_ADMIN},
     Action.CLAIM_WRITE: {ROLE_SUPER, ROLE_ADMIN},
     # -- akun & konfigurasi -------------------------------------------------
-    Action.USER_MANAGE: {ROLE_SUPER, ROLE_ADMIN},
+    Action.USER_MANAGE: {ROLE_SUPER},
     # Role, permission, konfigurasi teknis, dan audit log: Super Admin saja.
     # Admin (Manager Toko) managing operasional, TIDAK konfigurasi sistem.
     Action.ROLE_CONFIG: {ROLE_SUPER},
