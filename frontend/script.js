@@ -512,6 +512,9 @@ async function renderAkun() {
                 ${a.status === 'Aktif'
                     ? `<button class="tx-view-btn tx-del-btn" title="Nonaktifkan Akun (tidak bisa login, bisa diaktifkan lagi)" onclick="akDeactivate(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-user-slash"></i></button>`
                     : `<button class="tx-view-btn tx-edit-btn" title="Aktifkan Lagi" onclick="akReactivate(${a.id})"><i class="fa-solid fa-rotate-left"></i></button>`}
+                ${window._bssfRoleKey === 'superadmin' && a.id !== window._currentUserId
+                    ? `<button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors" title="Hapus Permanen (TIDAK BISA DIBATALKAN)" onclick="akDelete(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-trash"></i></button>`
+                    : ''}
             </td>
         </tr>`;
     }).join('');
@@ -553,6 +556,17 @@ async function akReactivate(id) {
         renderAkun();
     } catch (err) {
         toast(err.message || 'Gagal mengaktifkan akun.');
+    }
+}
+
+async function akDelete(id, username) {
+    if (!confirm('HAPUS PERMANEN akun "' + username + '"?\n\n\u26A0\uFE0F Tindakan ini TIDAK BISA DIBATALKAN.\nData akun, histori login, dan journal akan dihapus permanen.')) return;
+    try {
+        await apiDel('/auth/users/' + id);
+        toast('Akun "' + username + '" dihapus permanen.');
+        renderAkun();
+    } catch (err) {
+        toast(err.message || 'Gagal menghapus akun.');
     }
 }
 
@@ -1524,6 +1538,8 @@ function setAdminUI(user) {
         el.style.display = isAdmin ? '' : 'none';
     });
     try { window._isAdmin = isAdmin; } catch (_) {}
+    // Simpan ID user login untuk proteksi hapus akun sendiri
+    window._currentUserId = user.id;
     // P2-15: capability per role (cermin authority matrix backend).
     setRoleCapabilities(user.role);
 }

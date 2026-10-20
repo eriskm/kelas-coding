@@ -84,6 +84,9 @@ def test_superadmin_bisa_hapus_akun_lain(client, db):
     target, _ = _akun(db, "del_target", "Teknisi Target", "TEKNISI", aktif=1)
     uid, uname = target.id, target.username
 
+    # Journal AKUN_DIHAPUS tercatat (pakai delta karena DB shared antar test)
+    before = len(_jurnal(db, "AKUN_DIHAPUS"))
+
     r = client.delete("/api/auth/users/%d" % uid, headers=super_hdr)
     assert r.status_code == 200, r.text
     db.expire_all()
@@ -91,10 +94,10 @@ def test_superadmin_bisa_hapus_akun_lain(client, db):
     # Akun terhapus permanen
     assert db.query(models.User).filter(models.User.username == uname).first() is None
 
-    # Journal AKUN_DIHAPUS tercatat
+    # Journal AKUN_DIHAPUS tercatat (pakai delta karena DB shared antar test)
     rows = _jurnal(db, "AKUN_DIHAPUS")
-    assert len(rows) == 1
-    entry = rows[0]
+    assert len(rows) >= before + 1
+    entry = rows[-1]
     assert entry.actor == "del_super"
     assert entry.entity_id == uid
     detail = entry.details or {}
