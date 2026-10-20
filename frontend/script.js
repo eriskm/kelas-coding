@@ -962,6 +962,23 @@ async function apiPut(path, body) {
     return res.json();
 }
 
+async function apiDel(path) {
+    const headers = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE + path, {
+        method: 'DELETE',
+        headers,
+    });
+    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
+    if (!res.ok) {
+        let detail = 'Gagal menghapus (HTTP ' + res.status + ')';
+        try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
+        throw new Error(detail);
+    }
+    return res.json();
+}
+
 // Warna semantik KPI (ref: warna-reference.png):
 // hijau=pemasukan, biru=finansial utama, amber=beban,
 // dinamis=bersih (hijau/merah), target=kartu putih netral + progress bar
@@ -7875,7 +7892,8 @@ function bebanAdd() {
         return;
     }
     if (_bebanEditIdx >= 0 && _bebanList[_bebanEditIdx]) {
-        _bebanList[_bebanEditIdx] = { kategori: kat, nama: nama, nilai: nilai };
+        const existing = _bebanList[_bebanEditIdx];
+        _bebanList[_bebanEditIdx] = { ...existing, kategori: kat, nama: nama, nilai: nilai };
         _bebanEditIdx = -1;
         const addTxt = document.getElementById('bebanAddText');
         if (addTxt) addTxt.textContent = 'Tambah';
@@ -7916,6 +7934,21 @@ function bebanDel(i) {
 }
 
 async function bebanSave() {
+    // Validasi form sebelum simpan
+    if (!_bebanList.length) {
+        bebanFeedback('Tidak ada beban untuk disimpan.', true);
+        return;
+    }
+    for (const b of _bebanList) {
+        if (!b.nama || !b.nama.trim()) {
+            bebanFeedback('Ada beban tanpa nama.', true);
+            return;
+        }
+        if (!(Number(b.nilai) >= 0)) {
+            bebanFeedback('Nilai beban tidak valid.', true);
+            return;
+        }
+    }
     const total = _bebanList.reduce((a, b) => a + (Number(b.nilai) || 0), 0);
     if (!confirm('Simpan ' + _bebanList.length + ' beban dengan total ' + bebanRupiah(total) + '?')) return;
     const btn = document.getElementById('bebanSaveBtn');
@@ -7926,17 +7959,17 @@ async function bebanSave() {
     try {
         if (_bebanOnline) {
             for (const id of _bebanDeleted) {
-                try { await apiDel('/expenses/' + id); } catch (_) {}
+                try { await apiDel('/expenses/' + id); } catch (e) { console.error('DELETE expense error:', e); bebanFeedback('Gagal hapus ID ' + id + ': ' + e.message, true); }
             }
             _bebanDeleted = [];
             for (const b of _bebanList) {
                 if (b.id) {
-                    try { await apiPut('/expenses/' + b.id, { kategori: b.kategori, uraian: b.nama, nilai: b.nilai }); } catch (_) {}
+                    try { await apiPut('/expenses/' + b.id, { kategori: b.kategori, uraian: b.nama, nilai: b.nilai }); } catch (e) { console.error('PUT expense error:', e); bebanFeedback('Gagal update ID ' + b.id + ': ' + e.message, true); }
                 } else {
                     try {
                         const created = await apiPost('/expenses', { kategori: b.kategori, uraian: b.nama, nilai: b.nilai });
                         b.id = created.id;
-                    } catch (_) {}
+                    } catch (e) { console.error('POST expense error:', e); bebanFeedback('Gagal tambah ' + b.nama + ': ' + e.message, true); }
                 }
             }
         } else {
