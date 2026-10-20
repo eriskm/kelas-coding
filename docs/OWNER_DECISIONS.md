@@ -418,6 +418,13 @@ Belum dikerjakan karena tidak boleh ditebak:
    Super Admin, Admin, Pengelola), tapi spec minta "ringkasan Kas Aset". Endpoint
    ringkasan untuk Investor belum dibuat.
 5. **Unduh laporan** untuk Pengelola/Investor belum ada endpoint khusus.
+6. **SUPERADMIN hapus akun lain (non-superadmin).** Proposal dari Developer:
+   - Butuh: `DELETE /api/auth/users/{id}` guard `ROLE_CONFIG` (hanya SUPERADMIN)
+   - Proteksi: tidak bisa hapus akun sendiri (`user_id != current_user.id`)
+   - Audit: masuk journal `AKUN_DIHAPUS` dengan detail sebelum/sesudah + actor
+   - Alasan: masa pengembangan butuh bersihkan data test/akun dummy permanen
+   - Catatan: OD-LOCK-08 saat ini "Nonaktifkan, bukan hapus" — perlu keputusan Owner
+     apakah buka eksepsi untuk SUPERADMIN di dev, atau tetap nonaktifkan saja.
 
 ### Contoh pengujian (wajib jadi test)
 
