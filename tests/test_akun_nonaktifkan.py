@@ -53,26 +53,89 @@ def _unit_baru(client, hdr, telepon, estimate=100000):
     return r.json()["id"]
 
 
-# ────────────── (1) TIDAK ADA HAPUS PERMANEN ──────────────
-def test_backend_tidak_punya_endpoint_hapus_akun():
-    """Owner: "Nonaktifkan, bukan hapus." tidak boleh ada route DELETE."""
+# ────────────── (1) HAPUS PERMANEN HANYA SUPERADMIN ──────────────
+def test_backend_punya_endpoint_hapus_akun_superadmin():
+    """Owner: SUPERADMIN boleh hapus akun lain (non-superadmin)."""
     import inspect
 
     import routers.auth as auth_router
 
-    assert not hasattr(auth_router, "delete_user"), \
-        "fungsi hapus akun tidak boleh ada"
+    assert hasattr(auth_router, "delete_user"), \
+        "fungsi hapus akun harus ada untuk SUPERADMIN"
     src = inspect.getsource(auth_router)
-    assert "@router.delete(\"/users" not in src, \
-        "tidak boleh ada DELETE /users/{id}"
+    assert "@router.delete(\"/users" in src, \
+        "harus ada DELETE /users/{id}"
 
 
-def test_frontend_tidak_punya_tombol_hapus():
+def test_frontend_tidak_punya_tombol_hapus_untuk_non_superadmin():
     src = open(r"D:\PRAKTEK MJPRO\frontend\script.js", encoding="utf-8").read()
+    # Frontend tetap tidak punya tombol hapus untuk non-superadmin
     assert "function akHapus" not in src
     assert "akBolehHapus" not in src
     assert "Hapus Akun permanen" not in src
     assert "fa-trash-can" not in src
+
+
+def test_superadmin_bisa_hapus_akun_lain(client, db):
+    """SUPERADMIN boleh hapus akun non-superadmin."""
+    import models
+
+    superadmin, super_hdr = _akun(db, "del_super", "Super Admin", "SUPERADMIN")
+    target, _ = _akun(db, "del_target", "Teknisi Target", "TEKNISI", aktif=1)
+    uid, uname = target.id, target.username
+
+    r = client.delete("/api/auth/users/%d" % uid, headers=super_hdr)
+    assert r.status_code == 200, r.text
+    db.expire_all()
+
+    # Akun terhapus permanen
+    assert db.query(models.User).filter(models.User.username == uname).first() is None
+
+    # Journal AKUN_DIHAPUS tercatat
+    rows = _jurnal(db, "AKUN_DIHAPUS")
+    assert len(rows) == 1
+    entry = rows[0]
+    assert entry.actor == "del_super"
+    assert entry.entity_id == uid
+    detail = entry.details or {}
+    assert "perubahan" in detail
+    # Journal mencatat field yang berubah: username/display_name/role/active -> None
+    assert "username" in detail["perubahan"]
+    assert detail["perubahan"]["username"][0] == uname
+    assert detail["perubahan"]["username"][1] is None
+
+
+def test_superadmin_tidak_boleh_hapus_sendiri(client, db):
+    """SUPERADMIN tidak boleh hapus akun sendiri."""
+    import models
+
+    superadmin, super_hdr = _akun(db, "del_self", "Super Admin Self", "SUPERADMIN")
+    uid = superadmin.id
+
+    r = client.delete("/api/auth/users/%d" % uid, headers=super_hdr)
+    assert r.status_code == 400, r.text
+    assert "sendiri" in (r.json().get("detail") or "").lower()
+
+    # Akun masih ada
+    db.expire_all()
+    assert db.query(models.User).filter(models.User.id == uid).first() is not None
+
+
+def test_admin_tidak_boleh_hapus_akun(client, db):
+    """ADMIN tidak punya ROLE_CONFIG, tidak boleh hapus."""
+    import models
+
+    admin, hdr = _akun(db, "del_admin", "Admin Toko", "ADMIN")
+    superadmin, super_hdr = _akun(db, "del_admin_super", "Super Admin", "SUPERADMIN")
+    target, _ = _akun(db, "del_target2", "Teknisi Target 2", "TEKNISI", aktif=1)
+    uid = target.id
+
+    r = client.delete("/api/auth/users/%d" % uid, headers=hdr)
+    assert r.status_code == 403, r.text
+
+    # Akun masih ada
+    db.expire_all()
+    assert db.query(models.User).filter(models.User.id == uid).first() is not None
 
 
 def test_nonaktifkan_tetap_ada_dan_bisa_dibalik(client, db):

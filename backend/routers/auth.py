@@ -467,3 +467,48 @@ def update_user(user_id: int, payload: UserUpdate,
     return user
 
 
+EVENT_AKUN_DIHAPUS = "AKUN_DIHAPUS"
+
+
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int,
+                admin: User = Depends(_matrix_user(USER_MANAGE)),
+                db: Session = Depends(get_db_session)):
+    """Hapus akun permanen — HANYA SUPERADMIN (ROLE_CONFIG).
+    
+    OD-LOCK-08 (revisi): SUPERADMIN boleh hapus akun lain untuk bersihkan
+    data test/akun dummy. Proteksi: tidak bisa hapus akun sendiri.
+    """
+    import authority as auth_mod
+    
+    # Hanya SUPERADMIN (punya ROLE_CONFIG) yang boleh hapus
+    if not auth_mod.can(admin, auth_mod.Action.ROLE_CONFIG):
+        raise HTTPException(
+            status_code=403,
+            detail="Hanya Super Admin yang boleh menghapus akun permanen.")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Akun tidak ditemukan")
+    
+    # Tidak boleh hapus akun sendiri
+    if user.id == admin.id:
+        raise HTTPException(
+            status_code=400,
+            detail="Tidak dapat menghapus akun sendiri.")
+    
+    # Snapshot sebelum hapus
+    sebelum = {"username": user.username, "display_name": user.display_name,
+               "role": user.role, "active": user.active}
+    
+    db.delete(user)
+    db.flush()
+    
+    # Catat journal AKUN_DIHAPUS
+    _catat_jurnal_akun(db, EVENT_AKUN_DIHAPUS, user, admin,
+                       sebelum, {"deleted": True})
+    db.commit()
+    
+    return {"ok": True, "deleted": user.username}
+
+

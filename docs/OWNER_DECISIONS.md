@@ -267,16 +267,16 @@ manual. Hutang Beban tetap Rp330.000 dan menunggu tindakan user.
 
 ---
 
-## OD-LOCK-08 — Kelola Akun: Nonaktifkan, Bukan Hapus
+## OD-LOCK-08 — Kelola Akun: Nonaktifkan, Bukan Hapus (SUPERADMIN boleh hapus)
 
 **Status: LOCKED**
 
 Owner: *"Nonaktifkan, bukan hapus."* Kelola Akun **tidak boleh** punya aksi
-hapus permanen.
+hapus permanen **untuk role non-SUPERADMIN**.
 
 Aturan Operasional:
 
-1. **Nonaktifkan adalah satu-satunya cara** mencabut akses. Datanya tetap dan
+1. **Nonaktifkan adalah cara standar** mencabut akses. Datanya tetap dan
    bisa diaktifkan lagi.
 2. **Teknisi nonaktif tidak bisa login** dan **tidak bisa menerima penugasan
    baru**.
@@ -285,25 +285,28 @@ Aturan Operasional:
 4. **Koreksi data teknisi harus tercatat.** Perubahan nama, role, status, atau
    passcode masuk journal sebagai `AKUN_DIBUAT` / `AKUN_DIUBAH`, lengkap dengan
    nilai **sebelum** dan **sesudah** beserta pelaku (`actor`).
-5. **Penghapusan permanen hanya boleh dipertimbangkan** bila tidak melanggar
-   audit, retensi data, dan aturan yang berlaku. Selama belum ada keputusan
-   Owner bahwa suatu kelas data boleh dihapus, **aksinya tidak ada sama sekali**
-   di backend maupun frontend.
+5. **Penghapusan permanen HANYA untuk SUPERADMIN** (role `ROLE_CONFIG`), dengan
+   ketentuan:
+   - Hanya bisa hapus akun **lain** (tidak bisa hapus akun sendiri)
+   - Masuk journal `AKUN_DIHAPUS` dengan detail sebelum/sesudah + actor
+   - Hanya untuk bersihkan data test/akun dummy di masa pengembangan
+   - Role non-SUPERADMIN (ADMIN, KASIR, dll) **tidak boleh** hapus permanen
 
 ### Catatan penting soal role
 
-`SUPERADMIN` adalah **alias** dari `ADMIN` (`authority.ROLE_ALIASES`). Di DB
-tidak ada akun ber-role literal `SUPERADMIN`, jadi penjaga tidak boleh memakai
-string polos — kalau begitu **tidak ada yang bisa managing akun sama sekali**.
+`SUPERADMIN` (alias `DEV`, `DEVELOPER`, `SUPER_ADMIN`) memiliki `ROLE_CONFIG`
+dan **bisa** menghapus akun lain. `ADMIN` (Manager Toko) **tidak boleh**.
 
 ### Contoh pengujian (wajib jadi test)
 
 ```
 Nonaktifkan -> akun tidak bisa login, unit lama tetap utuh, bisa diaktifkan lagi
 Teknisi nonaktif -> tidak muncul di /api/orders/technicians,
-                    penugasan baru ditolak 400, unit lama tidak ikut berubah
+                     penugasan baru ditolak 400, unit lama tidak ikut berubah
 Koreksi akun    -> AKUN_DIUBAH tercatat di journal, actor + nilai sebelum/sesudah
-Hapus akun      -> tidak ada DELETE /api/auth/users/{id}, tidak ada tombol hapus
+SUPERADMIN hapus akun lain -> DELETE /api/auth/users/{id} OK, journal AKUN_DIHAPUS
+SUPERADMIN hapus sendiri   -> 400 (tidak boleh hapus sendiri)
+ADMIN hapus akun         -> 403 (tidak punya ROLE_CONFIG)
 ```
 
 ## OD-LOCK-09 - Role Pengelola dan Investor Read-Only
