@@ -125,39 +125,48 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
         kind = (p.kind or "PELUNASAN").strip().upper()
         # DP = UANG TITIPAN yang benar-benar diterima kasir, jadi tetap menjadi
         # baris Masuk (uangnya ada di laci & wajib direkonsiliasi). Yang berbeda
-# hanya LKALANYA: DP tidak pernah menambah Omzet/Laba — itu ditangani di
+        # hanya LKALANYA: DP tidak pernah menambah Omzet/Laba — itu ditangani di
         # `compute_finance`, bukan di sini. Pelunasan atas unit yang sama hanya
         # sebesar SISA, jadi DP + sisa = kewajiban, tanpa dobel.
         is_dp = kind == "DP"
-        # Non-DP (PELUNASAN) hanya dianggap Pelunasan sah jika order memenuhi syarat OMSET:
+        # Non-DP (PELUNASAN) hanya dicatat di Mutasi Kas jika order memenuhi syarat OMSET:
         # - Modal Part/Jasa/Lain > 0, ATAU
         # - Dicentang "Tanpa Modal"
-        # Jika tidak memenuhi, label sebagai "Pelunasan (Pending Modal)".
+        # Jika TIDAK memenuhi (Pending Modal), JANGAN masukkan ke Mutasi Kas.
+        # Uang fisik ada di laci, tapi belum diakui sebagai OMSET/pendapatan.
         if is_dp:
             kategori = KATEGORI_DP
             ket = ("DP / Uang Titipan (bukan Omzet) — %s • %s"
                    % ((o.device if o else None) or "-",
                       (o.no_servis if o else None) or "-"))
+            rows.append({
+                "moment": m,
+                "tgl": m.date().isoformat() if hasattr(m, "date") else None,
+                "jenis": "Masuk",
+                "kategori": kategori,
+                "ket": ket,
+                "nominal": _num(p.amount),
+                "source": "dp",
+                "ref_id": p.id,
+            })
         else:
+            # PELUNASAN: hanya masuk Mutasi Kalau OMSET-eligible
             if o and _boleh_masuk_omzet(o):
                 kategori = "Pelunasan"
                 ket = "%s • %s" % ((o.device if o else None) or "-",
                                     (o.no_servis if o else None) or "-")
-            else:
-                kategori = KATEGORI_PENDING_MODAL
-                ket = "Pelunasan (Pending Modal) — %s • %s" % (
-                    (o.device if o else None) or "-",
-                    (o.no_servis if o else None) or "-")
-        rows.append({
-            "moment": m,
-            "tgl": m.date().isoformat() if hasattr(m, "date") else None,
-            "jenis": "Masuk",
-            "kategori": kategori,
-            "ket": ket,
-            "nominal": _num(p.amount),
-            "source": "dp" if is_dp else "order",
-            "ref_id": p.id,
-        })
+                rows.append({
+                    "moment": m,
+                    "tgl": m.date().isoformat() if hasattr(m, "date") else None,
+                    "jenis": "Masuk",
+                    "kategori": kategori,
+                    "ket": ket,
+                    "nominal": _num(p.amount),
+                    "source": "order",
+                    "ref_id": p.id,
+                })
+            # else: Pending Modal -> JANGAN masuk Mutasi Kas (belum OMSET)
+            # Uang fisik ada di laci, tapi belum diakui sebagai pendapatan.
 
     # BUG (ditemukan 2026-10-17 saat UJI): loop di bawah membaca KATALOG
     # `expenses` seolah-olah itu arus kas. Padahal `expenses` cuma daftar
