@@ -895,10 +895,15 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                 Payment.service_order_id == order.id).all()
             _sisa = to_decimal(payment_summary(order, _pays_pre).get("sisa") or 0)
             if _sisa > 0:
+                # Jika modal belum diisi (modal=0 DAN tidak "Tanpa Modal"), catat sebagai DP (titipan)
+                # Bukan PELUNASAN. Nanti bisa dikonversi saat modal diisi.
+                from finance import boleh_masuk_omzet
+                _kind = "PELUNASAN" if boleh_masuk_omzet(order) else "DP"
                 payments_mod.catat_payment(
-                    db, order, "PELUNASAN", _sisa, method="CASH",
-                    note="Pelunasan otomatis saat status Cash", actor=_actor(user),
-                    when=_cash_when, allow_settled=True)
+                    db, order, _kind, _sisa, method="CASH",
+                    note=("Pelunasan otomatis saat status Cash" if _kind == "PELUNASAN" 
+                          else "DP otomatis (modal belum diisi) saat status Cash"),
+                    actor=_actor(user), when=_cash_when, allow_settled=True)
             else:
                 # Sudah ada pelunasan di ledger (replay CASH / koreksi): JANGAN
                 # tulis baris baru. `statusflow.payment_summary` menjumlahkan
@@ -985,6 +990,13 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                 # ulang, kalau tidak `service_orders.laba_bersih` jadi basi.
                 _pays_ulang = db.query(Payment).filter(
                     Payment.service_order_id == order.id).all()
+                # Jika ada DP yang sekarang jadi PELUNASAN (karena modal sudah diisi),
+                # konversi kind DP -> PELUNASAN
+                from finance import boleh_masuk_omzet
+                if boleh_masuk_omzet(order):
+                    for p in _pays_ulang:
+                        if (p.kind or "").strip().upper() == "DP":
+                            p.kind = "PELUNASAN"
                 order.laba_bersih = order_profit(order, _pays_ulang)
         except Exception as _exc:  # noqa: BLE001
             db.rollback()
