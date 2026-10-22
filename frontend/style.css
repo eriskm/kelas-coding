@@ -4214,3 +4214,36 @@ select.range-pill.range-select option { color: #0f172a; }
     .ku-riwayat-toggle-wrap { gap: 8px; }
     .ku-riwayat-btn { flex: 1 1 auto; justify-content: center; padding: 9px 12px; }
 }
+
+
+/* KPI Transaksi Modernized */
+#txKpi .sm-card {
+    padding: 9px 12px;
+    border-radius: 11px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all .18s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    border: 1px solid transparent;
+}
+#txKpi .sm-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+}
+#txKpi .sm-card.is-active {
+    border-color: #b91c1c;
+    box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.25);
+}
+.dark #txKpi .sm-card.is-active {
+    border-color: #f87171;
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.3);
+}
+#txKpi .sm-top { font-size: 11px; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#txKpi .sm-top i { flex-shrink: 0; }
+#txKpi .sm-num { font-size: 19px; font-weight: 800; }
+#txKpi .sm-pct { font-size: 10.5px; padding: 1px 8px; border-radius: 999px; }
+#pageTransaksi .tx-table { min-width: 860px; width: 100%; table-layout: auto; }

@@ -1798,6 +1798,9 @@ let _txTotalPages = 1;
 let _txReq = 0;
 let _txQuery = '';
 let _txDate = '';
+let _txStatusFilter = '';
+let _txTechFilter = '';
+let _txAllOrdersCache = [];
 
 function txLaba(o) {
     const val = Number(o.estimate) || 0;
@@ -1814,45 +1817,189 @@ function txSisaModal(o) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(v) || 0);
 }
 
+async function renderTxKpi() {
+    const el = document.getElementById('txKpi');
+    if (!el) return;
+    let orders = [];
+    try {
+        orders = (await apiGet('/orders/latest?limit=100')) || [];
+    } catch (_) { orders = []; }
+    _txAllOrdersCache = orders;
+
+    const total = orders.length;
+    const proses = orders.filter(o => ['DITERIMA', 'ANALISA', 'KONFIRMASI', 'REPAIR'].includes((o.status || '').toUpperCase().replace(/\s+/g, '_'))).length;
+    const waitPart = orders.filter(o => ['WAIT_PART', 'WAITING_PART', 'MENUNGGU_SPAREPART'].includes((o.status || '').toUpperCase().replace(/\s+/g, '_'))).length;
+    const done = orders.filter(o => (o.status || '').toUpperCase() === 'DONE').length;
+    const cash = orders.filter(o => (o.status || '').toUpperCase() === 'CASH').length;
+
+    const cards = [
+        { key: '', label: 'Total Servis', value: total, unit: 'unit aktif', icon: 'fa-list-check', cls: 'sm-slate' },
+        { key: 'PROSES', label: 'Dalam Pengerjaan', value: proses, unit: 'sedang dikerjakan', icon: 'fa-screwdriver-wrench', cls: 'sm-amber' },
+        { key: 'WAIT PART', label: 'Menunggu Part', value: waitPart, unit: 'antre sparepart', icon: 'fa-hourglass-half', cls: 'sm-cyan' },
+        { key: 'DONE', label: 'Siap Diambil', value: done, unit: 'selesai servis', icon: 'fa-circle-check', cls: 'sm-green' },
+        { key: 'CASH', label: 'Cash / Lunas', value: cash, unit: 'lunas periode ini', icon: 'fa-sack-dollar', cls: 'sm-purple' },
+    ];
+
+    el.innerHTML = cards.map(c => {
+        const isActive = _txStatusFilter === c.key ? ' is-active' : '';
+        return `
+        <div class="sm-card tx-kpi-card ${c.cls}${isActive}" onclick="txKpiClick('${c.key}')" role="button" tabindex="0" title="Klik untuk memfilter: ${c.label}">
+            <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
+            <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">${c.unit}</span></div>
+        </div>`;
+    }).join('');
+}
+
+function txKpiClick(key) {
+    if (_txStatusFilter === key) {
+        _txStatusFilter = '';
+    } else {
+        _txStatusFilter = key;
+    }
+    const sel = document.getElementById('txStatusFilter');
+    if (sel) sel.value = _txStatusFilter;
+    renderTransaksi();
+}
+
+function txResetFilters() {
+    _txQuery = '';
+    _txDate = '';
+    _txStatusFilter = '';
+    _txTechFilter = '';
+    const q = document.getElementById('txSearch');
+    if (q) q.value = '';
+    const d = document.getElementById('txDateFilter');
+    if (d) d.value = '';
+    const st = document.getElementById('txStatusFilter');
+    if (st) st.value = '';
+    const tc = document.getElementById('txTechFilter');
+    if (tc) tc.value = '';
+    renderTransaksi();
+}
+
+async function loadTxTechnicians() {
+    const sel = document.getElementById('txTechFilter');
+    if (!sel || sel.options.length > 1) return;
+    try {
+        const techs = await apiGet('/orders/technicians');
+        if (Array.isArray(techs) && techs.length) {
+            sel.innerHTML = '<option value="">Semua Teknisi</option>' +
+                techs.map(t => `<option value="${escapeHtml(t)}">${escapeHtml(t)}</option>`).join('');
+        }
+    } catch (_) {}
+}
+
+async function txDirectPrint(id) {
+    try {
+        const o = await apiGet('/orders/' + id);
+        if (!o) return;
+        const cust = o.customer || {};
+        _lastNota = {
+            no: o.no_servis || '-',
+            tgl: (o.service_date || '').slice(0, 10) || new Date().toISOString().slice(0, 10),
+            nama: cust.name || '',
+            phone: cust.phone || '',
+            device: o.device || '',
+            damage: o.damagetype || '',
+            plan: o.repair_plan || '',
+            estimate: Number(o.estimate) || 0,
+            dp: Number(o.payment) || 0,
+            technician: o.technician || '',
+            status: o.status || '',
+            imei: o.imei || '',
+            password: o.device_password || '',
+        };
+        try { _lastNota.checklist = { fisik: o.check_fisik || [], len: o.check_len || ['unit_saja'] }; } catch (_) {}
+        openNota();
+    } catch (err) {
+        toast('Gagal mencetak nota: ' + (err.message || 'error'));
+    }
+}
+
 async function renderTransaksi() {
     try { txMenuClose(); } catch (_) {}
     initTxToolbar();
-    if (_txQuery.trim() || _txDate) await loadTxFiltered();
+    loadTxTechnicians();
+    renderTxKpi();
+    if (_txQuery.trim() || _txDate || _txStatusFilter || _txTechFilter) await loadTxFiltered();
     else await loadTxPage(1);
 }
 
 function initTxToolbar() {
     const s = document.getElementById('txSearch');
     const d = document.getElementById('txDateFilter');
-    if (!s || !d || s.dataset.bound) return;
-    s.dataset.bound = '1';
-    let t = null;
-    s.addEventListener('input', () => {
-        clearTimeout(t);
-        t = setTimeout(() => { _txQuery = s.value; renderTransaksi(); }, 300);
-    });
-    d.addEventListener('change', () => { _txDate = d.value; renderTransaksi(); });
+    const st = document.getElementById('txStatusFilter');
+    const tc = document.getElementById('txTechFilter');
+    if (s && !s.dataset.bound) {
+        s.dataset.bound = '1';
+        let t = null;
+        s.addEventListener('input', () => {
+            clearTimeout(t);
+            t = setTimeout(() => { _txQuery = s.value; renderTransaksi(); }, 300);
+        });
+    }
+    if (d && !d.dataset.bound) {
+        d.dataset.bound = '1';
+        d.addEventListener('change', () => { _txDate = d.value; renderTransaksi(); });
+    }
+    if (st && !st.dataset.bound) {
+        st.dataset.bound = '1';
+        st.addEventListener('change', () => { _txStatusFilter = st.value; renderTransaksi(); });
+    }
+    if (tc && !tc.dataset.bound) {
+        tc.dataset.bound = '1';
+        tc.addEventListener('change', () => { _txTechFilter = tc.value; renderTransaksi(); });
+    }
 }
 
 function txRowHtml(o, num) {
+    const cleanPhone = (o.customer_phone || '').replace(/[^0-9]/g, '');
+    let waLink = '';
+    if (cleanPhone) {
+        let intlPhone = cleanPhone;
+        if (intlPhone.startsWith('0')) intlPhone = '62' + intlPhone.slice(1);
+        const waMsg = encodeURIComponent(`Halo Kak ${o.customer_name || ''}, info servis perangkat ${o.device || ''} (No. Servis: #${o.no_servis || o.id}) di Sukabumi Flasher.`);
+        waLink = `<a href="https://wa.me/${intlPhone}?text=${waMsg}" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 hover:text-emerald-700 dark:text-emerald-400 mt-0.5" title="Chat WhatsApp"><i class="fa-brands fa-whatsapp"></i> ${escapeHtml(o.customer_phone)}</a>`;
+    }
+
     return `<tr>
         <td class="tx-num">${num}</td>
         <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.service_date || '')}">${txDate(o.service_date)}</td>
-        <td><span class="tx-device tx-ellipsis" title="${escapeHtml(o.device || '-')}">${escapeHtml(o.device || '-')}</span></td>
+        <td>
+            <div class="flex items-center gap-1.5">
+                <span class="font-extrabold text-xs text-brand-600 dark:text-brand-400 font-mono">#${escapeHtml(o.no_servis || String(o.id))}</span>
+                <span class="tx-device tx-ellipsis font-bold text-gray-900 dark:text-white" title="${escapeHtml(o.device || '-')}">${escapeHtml(o.device || '-')}</span>
+            </div>
+        </td>
         <td class="tx-cust">
-            <div class="tx-line-main tx-user tx-ellipsis" title="${escapeHtml(o.customer_name || '-')}">${escapeHtml(o.customer_name || '-')}</div>
-            <div class="tx-line-sub tx-cell-muted tx-ellipsis" title="${escapeHtml(o.customer_phone || '-')}">${escapeHtml(o.customer_phone || '-')}</div>
+            <div class="tx-line-main tx-user tx-ellipsis font-bold text-gray-800 dark:text-gray-200" title="${escapeHtml(o.customer_name || '-')}">${escapeHtml(o.customer_name || 'Pelanggan Umum')}</div>
+            <div class="tx-line-sub tx-cell-muted tx-ellipsis">${waLink || (escapeHtml(o.customer_phone || '-'))}</div>
         </td>
         <td class="tx-statuscell">${txStatusBadge(o.status)}</td>
         <td class="tx-work">
-            <div class="tx-line-main tx-user tx-ellipsis" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</div>
-            <div class="tx-line-sub tx-cell-muted tx-ellipsis" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</div>
+            <div class="tx-line-main tx-user tx-ellipsis font-medium text-gray-800 dark:text-gray-200" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</div>
+            <div class="tx-line-sub tx-cell-muted tx-ellipsis text-xs text-gray-400" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</div>
         </td>
-        <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.technician || '-')}">${escapeHtml(o.technician || '-')}</td>
-        <td class="tx-laba tx-nowrap">${txLaba(o)}</td>
+        <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.technician || '-')}">
+            <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300"><i class="fa-solid fa-user-gear text-[10px] text-brand-500"></i> ${escapeHtml(o.technician || '-')}</span>
+        </td>
+        <td class="tx-laba tx-nowrap font-bold text-emerald-600 dark:text-emerald-400">${txLaba(o)}</td>
         <td class="tx-sisa tx-nowrap" title="Harga Final - (Modal Part + Jasa + Lain). Tampil hanya setelah status CASH dan modal diisi.">${txSisaModal(o)}</td>
-        <td class="tx-aksi">
-            <button type="button" class="tx-view-btn" data-txmenu-btn title="Menu" onclick="txMenuToggle(${o.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+        <td class="tx-aksi text-center">
+            <div class="flex items-center justify-center gap-1">
+                <button type="button" class="sp-action-btn hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50" onclick="txDetail(${o.id})" title="Lihat Detail Transaksi">
+                    <i class="fa-solid fa-eye text-xs"></i>
+                </button>
+                <button type="button" class="sp-action-btn hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50" onclick="txEdit(${o.id})" title="Update Data Servis & Status">
+                    <i class="fa-solid fa-pen-to-square text-xs"></i>
+                </button>
+                <button type="button" class="sp-action-btn hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-950/50" onclick="txDirectPrint(${o.id})" title="Cetak Nota">
+                    <i class="fa-solid fa-print text-xs"></i>
+                </button>
+                <button type="button" class="sp-action-btn hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50" onclick="txDel(${o.id})" title="Hapus Transaksi" data-cap="ORDER_DELETE">
+                    <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+            </div>
         </td>
     </tr>`;
 }
@@ -1879,6 +2026,17 @@ async function loadTxFiltered() {
                 const d = String(o.service_date || (o.created_at || '').slice(0, 10) || '').slice(0, 10);
                 if (d !== _txDate) return false;
             }
+            if (_txStatusFilter) {
+                const st = (o.status || '').toUpperCase().replace(/\s+/g, '_');
+                if (_txStatusFilter === 'PROSES') {
+                    if (!['DITERIMA', 'ANALISA', 'KONFIRMASI', 'REPAIR'].includes(st)) return false;
+                } else if (_txStatusFilter.replace(/\s+/g, '_') !== st) {
+                    return false;
+                }
+            }
+            if (_txTechFilter) {
+                if ((o.technician || '').toLowerCase() !== _txTechFilter.toLowerCase()) return false;
+            }
             if (q) {
                 const hay = [o.no_servis, o.device, o.brand, o.model, o.customer_name, o.customer_phone, o.status, o.damagetype, o.repair_plan, o.technician]
                     .map(v => (v || '').toLowerCase()).join(' ');
@@ -1900,6 +2058,7 @@ async function loadTxFiltered() {
         if (document.getElementById('txPageBtns')) document.getElementById('txPageBtns').innerHTML = '';
         const info = document.getElementById('txInfo');
         if (info) info.textContent = hit.length + ' hasil filter';
+        applyRoleUI(document.getElementById('pageTransaksi') || document);
     } catch (err) {
         loading.classList.add('hidden');
         empty.classList.remove('hidden');
@@ -1968,6 +2127,7 @@ async function loadTxPage(page) {
             }
             pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _txPage + 1, _txPage === _txTotalPages, false, 'Berikutnya'));
         }
+        applyRoleUI(document.getElementById('pageTransaksi') || document);
     } catch (err) {
         loading.classList.add('hidden');
         empty.classList.remove('hidden');

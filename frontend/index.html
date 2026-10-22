@@ -296,24 +296,19 @@
                     </div><!-- /pageDashboard -->
 
                     <!-- ===== PAGE: TRANSAKSI ===== -->
-                    <section id="pageTransaksi" class="hidden px-3 sm:px-5 py-3 sm:py-4 space-y-3">
+                    <section id="pageTransaksi" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
 
+                        <!-- Header & Call To Action -->
                         <div class="flex items-center justify-between flex-wrap gap-3">
                             <div>
                                 <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
                                     <i class="fa-solid fa-money-bill-transfer text-brand-500"></i>
-                                    Transaksi
+                                    Daftar Transaksi Servis
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftar seluruh transaksi servis</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Monitoring alur pengerjaan unit, teknisi penanggung jawab, dan status kas</p>
                             </div>
-                            <div class="tx-toolbar">
-                                <div class="tx-search-wrap">
-                                    <i class="fa-solid fa-magnifying-glass"></i>
-                                    <input type="text" id="txSearch" class="receive-input" placeholder="Cari perangkat, pelanggan, WA, keluhan, teknisi..." autocomplete="off">
-                                </div>
-                                <label class="tx-filter-label" for="txDateFilter">Tgl Terima</label>
-                                <input type="date" id="txDateFilter" class="receive-input" aria-label="Filter tanggal terima" title="Filter tanggal terima">
-                                <button type="button" onclick="showServisBaru()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
+                            <div class="flex items-center gap-2 flex-wrap">
+                                <button type="button" onclick="showServisBaru()" class="receive-submit-btn bg-brand-500 hover:bg-brand-600 text-white font-semibold">
                                     <i class="fa-solid fa-plus"></i> Servis Baru
                                 </button>
                                 <button type="button" onclick="openClaimReceive()" class="receive-back-btn" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
@@ -322,6 +317,46 @@
                             </div>
                         </div>
 
+                        <!-- KPI Summary Cards (5 Cards Interactive) -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="txKpi"></div>
+
+                        <!-- Search & Filter Toolbar -->
+                        <div class="panel p-3">
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+                                <div class="relative flex-1">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                                    <input type="text" id="txSearch" class="receive-input pl-9 w-full" placeholder="Cari No. Servis, Perangkat, Pelanggan, No WA, Keluhan, atau Teknisi..." autocomplete="off">
+                                </div>
+                                <div class="w-full sm:w-44">
+                                    <select id="txStatusFilter" class="receive-input w-full" aria-label="Filter Status">
+                                        <option value="">Semua Status</option>
+                                        <option value="PROSES">Dalam Proses</option>
+                                        <option value="DITERIMA">Diterima</option>
+                                        <option value="ANALISA">Analisa</option>
+                                        <option value="KONFIRMASI">Konfirmasi</option>
+                                        <option value="WAIT PART">Wait Part</option>
+                                        <option value="REPAIR">Repair</option>
+                                        <option value="DONE">Done (Siap Ambil)</option>
+                                        <option value="CASH">Cash (Lunas)</option>
+                                        <option value="CANCEL">Cancel</option>
+                                        <option value="FAILED">Failed</option>
+                                    </select>
+                                </div>
+                                <div class="w-full sm:w-40">
+                                    <select id="txTechFilter" class="receive-input w-full" aria-label="Filter Teknisi">
+                                        <option value="">Semua Teknisi</option>
+                                    </select>
+                                </div>
+                                <div class="w-full sm:w-36">
+                                    <input type="date" id="txDateFilter" class="receive-input w-full" aria-label="Filter tanggal terima" title="Filter tanggal terima">
+                                </div>
+                                <button type="button" onclick="txResetFilters()" class="receive-back-btn whitespace-nowrap text-xs" title="Reset semua filter">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Main Table Panel (10 Kolom Kanonik Sesuai Aturan Pemilik) -->
                         <div class="panel overflow-hidden">
                             <div class="overflow-x-auto">
                                 <table class="tx-table w-full text-sm">
@@ -342,15 +377,15 @@
                                     <tbody id="txBody"></tbody>
                                 </table>
                             </div>
-                            <div id="txEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                            <div id="txEmpty" class="hidden text-center py-12 text-sm text-gray-400">
                                 <i class="fa-solid fa-inbox text-3xl mb-2 block opacity-40"></i>
-                                Belum ada transaksi.
+                                <span>Belum ada transaksi.</span>
                             </div>
-                            <div id="txLoading" class="text-center py-10 text-sm text-gray-400">
-                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
+                            <div id="txLoading" class="text-center py-12 text-sm text-gray-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl mb-2 block"></i> Memuat data transaksi...
                             </div>
-                            <div id="txPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 py-2 border-t border-gray-100 dark:border-white/5">
-                                <div id="txInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
+                            <div id="txPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div id="txInfo" class="text-xs text-gray-500 dark:text-gray-400 font-medium"></div>
                                 <div id="txPageBtns" class="flex items-center gap-1.5"></div>
                             </div>
                         </div>
@@ -2750,6 +2785,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=23"></script>
+    <script src="/static/script.js?v=24"></script>
 </body>
 </html>
