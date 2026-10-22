@@ -3190,23 +3190,60 @@ function grState(g) {
 
 function grStatusBadge(g) {
     const st = grState(g);
-    const cls = st.key === 'aktif' ? 'gr-aktif' : st.key === 'expired' ? 'gr-berakhir' : st.key === 'klaim' ? 'gr-klaim' : 'gr-segera';
     let extra = '';
     if (st.days !== null && st.days !== undefined) {
-        extra = st.days < 0 ? ' · ' + Math.abs(st.days) + ' hari lalu' : ' · ' + st.days + ' hari lagi';
+        if (st.key === 'aktif') extra = ` (${st.days} hr lagi)`;
+        else if (st.key === 'segera') extra = ` (${st.days} hr lagi)`;
+        else if (st.key === 'expired') extra = ` (${Math.abs(st.days)} hr lalu)`;
     }
-    return '<span class="tx-status ' + cls + '"><i class="fa-solid fa-circle"></i>' + escapeHtml(st.label) + escapeHtml(extra) + '</span>';
+    if (st.key === 'aktif') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Aktif${escapeHtml(extra)}</span>`;
+    }
+    if (st.key === 'segera') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/40"><i class="fa-solid fa-hourglass-half text-[10px]"></i>Akan Berakhir${escapeHtml(extra)}</span>`;
+    }
+    if (st.key === 'expired') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200/60 dark:border-rose-800/40"><i class="fa-solid fa-circle-xmark text-[10px]"></i>Expired${escapeHtml(extra)}</span>`;
+    }
+    if (st.key === 'klaim') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/40"><i class="fa-solid fa-file-circle-check text-[10px]"></i>Sedang Klaim</span>`;
+    }
+    return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700">${escapeHtml(st.label)}</span>`;
 }
 
 function grFiltered() {
     const q = _grQuery.trim().toLowerCase();
     return (_grAll || []).filter(g => {
-        if (q && ![g.nama, g.phone, g.device].some(f => (f || '').toLowerCase().includes(q))) return false;
+        if (q && ![g.nama, g.phone, g.device, g.no, g.imei, g.brand, g.model].some(f => (f || '').toLowerCase().includes(q))) return false;
         if (_grDate && !(g.mulai <= _grDate && _grDate <= g.akhir)) return false;
         if (_grStatus && grState(g).key !== _grStatus) return false;
         return true;
     });
 }
+
+function grSetFilterStatus(status) {
+    const sel = document.getElementById('grStatusFilter');
+    if (sel) sel.value = status;
+    _grStatus = status;
+    _grPage = 1;
+    renderGaransi();
+}
+window.grSetFilterStatus = grSetFilterStatus;
+
+function grResetFilter() {
+    const s = document.getElementById('grSearch');
+    const d = document.getElementById('grDateFilter');
+    const f = document.getElementById('grStatusFilter');
+    if (s) s.value = '';
+    if (d) d.value = '';
+    if (f) f.value = '';
+    _grQuery = '';
+    _grDate = '';
+    _grStatus = '';
+    _grPage = 1;
+    renderGaransi();
+}
+window.grResetFilter = grResetFilter;
 
 function initGrToolbar() {
     const s = document.getElementById('grSearch');
@@ -3235,16 +3272,16 @@ function renderGrKpi() {
         else if (k === 'klaim') n.klaim++;
     });
     const cards = [
-        { label: 'Total Garansi', value: n.total, icon: 'fa-shield-halved', cls: 'sm-slate' },
-        { label: 'Aktif', value: n.aktif, icon: 'fa-circle-check', cls: 'sm-green' },
-        { label: 'Akan Berakhir', value: n.segera, icon: 'fa-hourglass-half', cls: 'sm-amber' },
-        { label: 'Expired', value: n.expired, icon: 'fa-circle-xmark', cls: 'sm-red' },
-        { label: 'Klaim', value: n.klaim, icon: 'fa-file-circle-plus', cls: 'sm-blue' },
+        { label: 'Total Garansi', value: n.total, icon: 'fa-shield-halved', cls: 'sm-slate', filter: '' },
+        { label: 'Garansi Aktif', value: n.aktif, icon: 'fa-circle-check', cls: 'sm-green', filter: 'aktif' },
+        { label: 'Akan Berakhir', value: n.segera, icon: 'fa-hourglass-half', cls: 'sm-amber', filter: 'segera' },
+        { label: 'Expired', value: n.expired, icon: 'fa-circle-xmark', cls: 'sm-red', filter: 'expired' },
+        { label: 'Sedang Klaim', value: n.klaim, icon: 'fa-file-circle-plus', cls: 'sm-blue', filter: 'klaim' },
     ];
     el.innerHTML = cards.map(c => `
-        <div class="sm-card ${c.cls}">
-            <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
-            <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">unit</span></div>
+        <div class="sm-card ${c.cls} cursor-pointer hover:shadow-md transition-all p-3 sm:p-3.5" onclick="grSetFilterStatus('${c.filter}')" title="Klik untuk filter: ${c.label}">
+            <div class="sm-top text-xs sm:text-[11.5px]"><i class="fa-solid ${c.icon}"></i> ${c.label}</div>
+            <div class="sm-bot mt-1.5"><span class="sm-num text-xl sm:text-2xl font-extrabold">${c.value}</span><span class="sm-pct font-bold text-[10px]">unit</span></div>
         </div>
     `).join('');
 }
@@ -3255,11 +3292,24 @@ function grDetail(idx) {
     const st = grState(g);
     document.getElementById('warrantyTitle').textContent = 'Garansi — ' + g.nama;
     document.getElementById('warrantySub').textContent = g.device + ' • ' + st.label;
-    const initial = (g.nama.trim().charAt(0) || '?').toUpperCase();
-    document.getElementById('warrantySummary').innerHTML = `<div class="rc-cust" style="margin-bottom:12px">
-        <div class="rc-cust-top"><span class="rc-cust-ava">${escapeHtml(initial)}</span>
-        <div class="rc-cust-id"><b>${escapeHtml(g.nama)}</b><span>${escapeHtml(g.phone || '-')}</span></div>
-        ${grStatusBadge(g)}</div></div>`;
+    const av = akAvatar(g.nama, g.service_order_id || idx);
+    document.getElementById('warrantySummary').innerHTML = `
+        <div class="panel p-3.5 mb-3 flex items-center justify-between gap-3 flex-wrap bg-gradient-to-r from-gray-50 to-white dark:from-white/5 dark:to-transparent rounded-xl border border-gray-100 dark:border-white/5">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-sm flex-shrink-0 ${av.bg}">
+                    ${escapeHtml(av.initials)}
+                </div>
+                <div>
+                    <div class="font-bold text-base text-gray-800 dark:text-gray-100">${escapeHtml(g.nama)}</div>
+                    <div class="text-xs text-gray-400 font-mono flex items-center gap-1.5 mt-0.5">
+                        <i class="fa-brands fa-whatsapp text-emerald-500"></i> ${escapeHtml(g.phone || '-')}
+                        <span class="text-gray-300 dark:text-gray-600">•</span>
+                        <span>${escapeHtml(g.device || '-')}</span>
+                    </div>
+                </div>
+            </div>
+            <div>${grStatusBadge(g)}</div>
+        </div>`;
     document.getElementById('warrantyDetail').innerHTML = `
         <div><span>No. Servis</span><b>${escapeHtml(g.no || '-')}</b></div>
         <div><span>Tgl Mulai</span><b>${txDate(g.mulai)}</b></div>
@@ -3466,16 +3516,48 @@ async function renderGaransi() {
     const rows = data.slice(start, start + GR_PER_PAGE);
     rows.forEach((g, i) => {
         const idx = start + i;
+        const av = akAvatar(g.nama, g.service_order_id || idx);
         const tr = document.createElement('tr');
+        tr.className = 'tx-row';
         tr.innerHTML = `
-            <td class="tx-num">${idx + 1}</td>
-            <td><span class="tx-device tx-ellipsis" title="${escapeHtml(g.nama)}">${escapeHtml(g.nama)}</span></td>
-            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(g.device)}">${escapeHtml(g.device)}</span></td>
-            <td class="tx-cell-muted tx-nowrap">${txDate(g.mulai)}</td>
-            <td class="tx-cell-muted tx-nowrap">${txDate(g.akhir)}</td>
-            <td>${grStatusBadge(g)}</td>
-            <td class="tx-aksi">
-                <button type="button" class="tx-view-btn" data-grmenu-btn title="Menu" onclick="grMenuToggle(${g.service_order_id}, ${idx}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <td class="text-center text-xs text-gray-400 font-mono">${idx + 1}</td>
+            <td>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-sm flex-shrink-0 ${av.bg}">
+                        ${escapeHtml(av.initials)}
+                    </div>
+                    <div class="min-w-0">
+                        <div class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate" title="${escapeHtml(g.nama)}">${escapeHtml(g.nama)}</div>
+                        <div class="text-xs text-gray-400 dark:text-gray-500 font-mono flex items-center gap-1">
+                            <i class="fa-brands fa-whatsapp text-emerald-500 text-[11px]"></i>
+                            <span>${escapeHtml(g.phone || '-')}</span>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            <td>
+                <div class="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate" title="${escapeHtml(g.device || '-')}">
+                    ${escapeHtml(g.device || '-')}
+                </div>
+                <div class="text-[11px] text-gray-400 flex items-center gap-1.5 flex-wrap mt-0.5">
+                    <span class="px-1.5 py-0.2 rounded text-[10px] bg-gray-100 dark:bg-white/5 font-mono text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-white/5">#${escapeHtml(g.no || '-')}</span>
+                    ${g.imei ? `<span class="text-[10px] text-gray-400 truncate max-w-[130px]">IMEI: ${escapeHtml(g.imei)}</span>` : ''}
+                </div>
+            </td>
+            <td class="text-center">
+                <div class="text-xs font-semibold text-gray-700 dark:text-gray-200">${txDate(g.mulai)} &rarr; ${txDate(g.akhir)}</div>
+                ${g.teknisi ? `<div class="text-[10.5px] text-gray-400 mt-0.5"><i class="fa-solid fa-user-gear text-[9.5px]"></i> ${escapeHtml(g.teknisi)}</div>` : ''}
+            </td>
+            <td class="text-center">${grStatusBadge(g)}</td>
+            <td class="text-center">
+                <div class="inline-flex items-center justify-center gap-1">
+                    <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-white/5 dark:hover:bg-brand-500/20 dark:hover:text-brand-300 text-gray-500 transition-colors" title="Lihat Detail Garansi" onclick="grDetail(${idx})">
+                        <i class="fa-solid fa-eye text-xs"></i>
+                    </button>
+                    <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-amber-50 hover:text-amber-600 dark:bg-white/5 dark:hover:bg-amber-500/20 dark:hover:text-amber-300 text-gray-500 transition-colors" title="Ajukan Klaim Garansi" onclick="grClaim(${idx})">
+                        <i class="fa-solid fa-file-circle-plus text-xs"></i>
+                    </button>
+                </div>
             </td>
         `;
         body.appendChild(tr);

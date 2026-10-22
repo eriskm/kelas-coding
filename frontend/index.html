@@ -513,47 +513,55 @@
                             <div>
                                 <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
                                     <i class="fa-solid fa-shield-halved text-brand-500"></i>
-                                    Garansi
+                                    Garansi Servis
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Daftar garansi servis pelanggan</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Monitoring masa berlaku garansi & penanganan klaim pelanggan</p>
                             </div>
-                            <button type="button" onclick="openClaimReceive()" class="receive-back-btn" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
-                                <i class="fa-solid fa-shield-halved"></i> Terima Klaim Garansi
+                            <button type="button" onclick="openClaimReceive()" class="receive-submit-btn" style="background:#dc2626; color:#fff;" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
+                                <i class="fa-solid fa-file-circle-plus"></i>
+                                <span>Terima Klaim Garansi</span>
                             </button>
                         </div>
 
-                        <div class="gr-top-row">
-                            <div class="gr-kpi-grid" id="grKpi"></div>
-                            <div class="tx-toolbar gr-tools">
-                                <div class="tx-search-wrap gr-search">
-                                    <i class="fa-solid fa-magnifying-glass"></i>
-                                    <input type="text" id="grSearch" class="receive-input" placeholder="Cari Nama User, No. WA, atau Device..." autocomplete="off">
+                        <!-- KPI Metrics: 5 Cards Grid Full-Width -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="grKpi"></div>
+
+                        <!-- Search & Filter Bar -->
+                        <div class="panel p-3">
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+                                <div class="relative flex-1">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                                    <input type="text" id="grSearch" class="receive-input pl-9 w-full" placeholder="Cari Nama Pelanggan, No. WhatsApp, Device, atau IMEI..." autocomplete="off">
                                 </div>
-                                <input type="date" id="grDateFilter" class="receive-input" aria-label="Filter tanggal" title="Garansi berlaku pada tanggal">
-                                <select id="grStatusFilter" class="receive-input" aria-label="Filter status">
-                                    <option value="">Semua Status</option>
-                                    <option value="aktif">Aktif</option>
-                                    <option value="segera">Akan Berakhir</option>
-                                    <option value="expired">Expired</option>
-                                    <option value="klaim">Klaim</option>
-                                </select>
+                                <div class="flex items-center gap-2 w-full sm:w-auto">
+                                    <div class="relative flex-1 sm:w-44" title="Filter garansi yang aktif pada tanggal tertentu">
+                                        <input type="date" id="grDateFilter" class="receive-input w-full text-xs">
+                                    </div>
+                                    <select id="grStatusFilter" class="receive-input flex-1 sm:w-44 text-xs" aria-label="Filter status">
+                                        <option value="">Semua Status</option>
+                                        <option value="aktif">Aktif</option>
+                                        <option value="segera">Akan Berakhir (≤30 hr)</option>
+                                        <option value="expired">Expired</option>
+                                        <option value="klaim">Sedang Klaim</option>
+                                    </select>
+                                    <button type="button" onclick="grResetFilter()" class="w-8 h-8 rounded-lg flex items-center justify-center border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors flex-shrink-0" title="Reset Filter">
+                                        <i class="fa-solid fa-rotate-left text-xs"></i>
+                                    </button>
+                                </div>
                             </div>
                         </div>
-
-                        <p class="gr-filter-hint">Filter tanggal menampilkan garansi yang aktif pada tanggal tersebut.</p>
 
                         <div class="panel overflow-hidden">
                             <div class="overflow-x-auto">
                                 <table class="tx-table gr-table w-full text-sm">
                                     <thead>
                                         <tr>
-                                            <th>No</th>
-                                            <th>Nama User</th>
-                                            <th>Device</th>
-                                            <th>Tgl Mulai</th>
-                                            <th>Tgl Akhir</th>
-                                            <th>Status</th>
-                                            <th class="text-center">Aksi</th>
+                                            <th class="w-10 text-center">No</th>
+                                            <th>Pelanggan</th>
+                                            <th>Unit / Perangkat</th>
+                                            <th class="text-center">Masa Garansi</th>
+                                            <th class="text-center">Status</th>
+                                            <th class="text-center w-28">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody id="grBody"></tbody>
@@ -2680,6 +2688,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=20"></script>
+    <script src="/static/script.js?v=21"></script>
 </body>
 </html>
