@@ -4359,15 +4359,20 @@ async function kuAsetTransfer() {
 // Hutang Beban (P2-11): status, ledger, proses defisit, pelunasan.
 async function loadKuDebt() {
     const sum = document.getElementById('kuDebtSummary');
+    const banner = document.getElementById('kuDebtStatusBanner');
     const body = document.getElementById('kuDebtBody');
+    const lunasBtn = document.getElementById('kuDebtLunasBtn');
+    const lunasHint = document.getElementById('kuDebtLunasHint');
     if (!sum && !body) return;
     let d = null;
     try { d = await apiGet('/beban-hutang'); } catch (_) {}
-    const hutang = (d && d.saldo_hutang) || 0;
+    const hutang = (d && Number(d.saldo_hutang)) || 0;
+    const aset = (d && Number(d.saldo_kas_aset)) || 0;
+
     if (sum) {
         const cards = [
             { label: 'Sisa Hutang Beban', value: kuRupiah(hutang), icon: 'fa-file-circle-exclamation', cls: 'sm-red' },
-            { label: 'Saldo Kas Aset', value: kuRupiah((d && d.saldo_kas_aset) || 0), icon: 'fa-vault', cls: 'sm-blue' },
+            { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: 'sm-blue' },
         ];
         sum.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
@@ -4375,14 +4380,71 @@ async function loadKuDebt() {
                 <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
             </div>`).join('');
     }
+
+    // Status Banner & Smart Pelunasan Button
+    if (banner) {
+        if (hutang <= 0) {
+            banner.innerHTML = `
+                <div class="flex items-center gap-2 p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 border border-emerald-200 dark:border-emerald-800/40 text-emerald-700 dark:text-emerald-400 text-xs font-medium">
+                    <i class="fa-solid fa-circle-check text-emerald-500 text-sm"></i>
+                    <span><b>Bebas Tanggungan:</b> Toko saat ini tidak memiliki tanggungan Hutang Beban.</span>
+                </div>`;
+            if (lunasBtn) {
+                lunasBtn.disabled = true;
+                lunasBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                lunasBtn.innerHTML = '<i class="fa-solid fa-check"></i> Tidak Ada Hutang';
+            }
+            if (lunasHint) lunasHint.textContent = 'Tidak ada kewajiban hutang yang perlu dilunasi.';
+        } else if (aset >= hutang) {
+            banner.innerHTML = `
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 text-blue-700 dark:text-blue-300 text-xs">
+                    <span class="flex items-center gap-2 font-medium">
+                        <i class="fa-solid fa-circle-check text-blue-500 text-sm"></i>
+                        <span><b>Siap Dilunasi:</b> Saldo Kas Aset mencukupi untuk melunasi seluruh hutang toko.</span>
+                    </span>
+                    <span class="font-bold text-[11px] bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded text-blue-800 dark:text-blue-200">Dana Cukup</span>
+                </div>`;
+            if (lunasBtn) {
+                lunasBtn.disabled = false;
+                lunasBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                lunasBtn.innerHTML = `<i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan Seluruh Hutang (${kuRupiah(hutang)}) dari Kas Aset`;
+            }
+            if (lunasHint) lunasHint.textContent = 'Pelunasan akan menutup seluruh tanggungan hutang ini.';
+        } else {
+            const kurang = hutang - aset;
+            banner.innerHTML = `
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 text-xs">
+                    <span class="flex items-center gap-2 font-medium">
+                        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-sm"></i>
+                        <span><b>Kas Aset Belum Cukup:</b> Tersedia ${kuRupiah(aset)}, masih kurang <b>${kuRupiah(kurang)}</b>.</span>
+                    </span>
+                    <span class="font-bold text-[11px] bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded text-amber-900 dark:text-amber-200">Kurang Dana</span>
+                </div>`;
+            if (lunasBtn) {
+                lunasBtn.disabled = true;
+                lunasBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                lunasBtn.innerHTML = `<i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan dari Kas Aset (Kurang ${kuRupiah(kurang)})`;
+            }
+            if (lunasHint) lunasHint.textContent = 'Tambah modal Kas Aset atau tunggu akumulasi bagi hasil Tutup Kas berikutnya.';
+        }
+    }
+
     if (body) {
         const per = (d && d.periode) || [];
-        body.innerHTML = per.length ? per.map(p => `<tr>
-            <td>${escapeHtml(p.periode || '-')}</td>
-            <td class="numeric-r">${kuRupiah(p.defisit || 0)}</td>
-            <td class="numeric-r">${kuRupiah(p.cover_kas_aset || 0)}</td>
-            <td class="numeric-r">${kuRupiah(p.hutang_baru || 0)}</td></tr>`).join('')
-            : `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada proses defisit Beban.</div></td></tr>`;
+        body.innerHTML = per.length ? per.map(p => {
+            const isLunas = hutang <= 0;
+            const badge = isLunas
+                ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-check text-[10px]"></i> Lunas</span>`
+                : `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock text-[10px]"></i> Belum Lunas</span>`;
+            return `<tr>
+                <td class="font-medium">${escapeHtml(p.periode || '-')}</td>
+                <td class="numeric-r">${kuRupiah(p.defisit || 0)}</td>
+                <td class="numeric-r">${kuRupiah(p.cover_kas_aset || 0)}</td>
+                <td class="numeric-r font-semibold text-red-600 dark:text-red-400">${kuRupiah(p.hutang_baru || 0)}</td>
+                <td class="text-center">${badge}</td>
+            </tr>`;
+        }).join('')
+        : `<tr><td colspan="5"><div class="text-center text-sm text-gray-400 py-6">Belum ada proses defisit Beban.</div></td></tr>`;
     }
     kuRenderHutangManual();
     applyRoleUI(document.body);
