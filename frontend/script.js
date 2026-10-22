@@ -3620,6 +3620,17 @@ function initPlToolbar() {
     }
 }
 
+function plResetFilter() {
+    const s = document.getElementById('plSearch');
+    const d = document.getElementById('plDateFilter');
+    if (s) s.value = '';
+    if (d) d.value = '';
+    _plQuery = '';
+    _plDate = '';
+    loadPlPage(1);
+}
+window.plResetFilter = plResetFilter;
+
 // Menu aksi pelanggan — ID-based (bukan index tabel).
 let _plMenuId = null;
 
@@ -3710,17 +3721,32 @@ async function plDetailOpen(id, toHistory) {
         if (title) title.textContent = 'Detail — ' + (c.name || '-');
         if (sub) sub.textContent = (c.phone || '-') + ' • ' + d.total_servis + '× servis';
         if (summary) {
-            const initial = ((c.name || '?').trim().charAt(0) || '?').toUpperCase();
-            summary.innerHTML = `<div class="rc-cust">
-                <div class="rc-cust-top"><span class="rc-cust-ava">${escapeHtml(initial)}</span>
-                <div class="rc-cust-id"><b>${escapeHtml(c.name || '-')}</b><span>${escapeHtml(c.phone || '-')}</span></div>
-                <span class="rc-cust-total">${d.total_servis}× servis</span></div>
-                <div class="rc-cust-grid pl-agg">
-                <div><span>Jumlah Device</span><b>${d.device_count} device</b></div>
-                <div><span>Total Servis</span><b>${d.total_servis}×</b></div>
-                <div><span>Total Transaksi</span><b>${plRupiah(d.total_nilai)}</b></div>
-                <div><span>Terakhir Servis</span><b>${d.last_at ? txDate(d.last_at) : '-'}</b></div>
-                </div></div>`;
+            const av = akAvatar(c.name || '?', c.id || id);
+            summary.innerHTML = `
+                <div class="panel p-3.5 mb-3 flex items-center justify-between gap-3 flex-wrap bg-gradient-to-r from-gray-50 to-white dark:from-white/5 dark:to-transparent rounded-xl border border-gray-100 dark:border-white/5">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm text-white shadow-sm flex-shrink-0 ${av.bg}">
+                            ${escapeHtml(av.initials)}
+                        </div>
+                        <div>
+                            <div class="font-bold text-base text-gray-800 dark:text-gray-100">${escapeHtml(c.name || '-')}</div>
+                            <div class="text-xs text-gray-400 font-mono flex items-center gap-1.5 mt-0.5">
+                                <i class="fa-brands fa-whatsapp text-emerald-500"></i> ${escapeHtml(c.phone || '-')}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/5">
+                            <i class="fa-solid fa-mobile-screen text-brand-500 text-[11px]"></i> ${d.device_count} device
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40">
+                            <i class="fa-solid fa-receipt text-[11px]"></i> ${d.total_servis}× servis
+                        </span>
+                        <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/40">
+                            ${plRupiah(d.total_nilai)}
+                        </span>
+                    </div>
+                </div>`;
         }
         if (tbody) {
             const rows = d.orders || [];
@@ -3885,20 +3911,66 @@ async function loadPlPage(page) {
         }
         const start = (_plPage - 1) * PL_PER_PAGE;
         items.forEach((c, i) => {
+            const av = akAvatar(c.name || '?', c.id || (start + i));
             const tr = document.createElement('tr');
+            tr.className = 'tx-row';
+            const totalSrv = Number(c.total_servis) || 0;
+            const loyaltyBadge = totalSrv > 1
+                ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40" title="Pelanggan setia (${totalSrv}x servis)"><i class="fa-solid fa-star text-amber-500 text-[10px]"></i> ${totalSrv}x Servis</span>`
+                : (totalSrv === 1
+                    ? `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-300 border border-gray-200 dark:border-white/5">1x Servis</span>`
+                    : `<span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-50 text-gray-400 dark:bg-white/5 dark:text-gray-500 border border-gray-100 dark:border-white/5">Baru</span>`);
+
             tr.innerHTML = `
-            <td class="tx-num">${start + i + 1}</td>
-            <td><span class="tx-device tx-ellipsis" title="${escapeHtml(c.name)}">${escapeHtml(c.name)}</span></td>
-            <td class="tx-cell-muted pl-c-phone" title="${escapeHtml(c.phone || '')}">${escapeHtml(c.phone || '-')}</td>
-            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(c.last_device || '')}">${escapeHtml(c.last_device || '-')}</span></td>
-            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(c.last_action || '')}">${escapeHtml(c.last_action || '-')}</span></td>
-            <td class="tx-laba">${c.last_price ? plRupiah(c.last_price) : '-'}</td>
-            <td class="tx-cell-muted text-center pl-c-total">${c.total_servis} servis</td>
-            <td class="tx-cell-muted pl-c-date">${c.last_at ? txDate(c.last_at) : '-'}</td>
-            <td class="tx-aksi"><div class="pl-aksi">
-                <button type="button" class="tx-view-btn" data-plmenu-btn title="Menu" onclick="plMenuToggle(${c.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
-            </div></td>
-        `;
+                <td class="text-center text-xs text-gray-400 font-mono">${start + i + 1}</td>
+                <td>
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-sm flex-shrink-0 ${av.bg}">
+                            ${escapeHtml(av.initials)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-semibold text-sm text-gray-800 dark:text-gray-100 truncate" title="${escapeHtml(c.name || '-')}">${escapeHtml(c.name || '-')}</div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500 font-mono flex items-center gap-1 mt-0.5">
+                                <i class="fa-brands fa-whatsapp text-emerald-500 text-[11px]"></i>
+                                <span>${escapeHtml(c.phone || '-')}</span>
+                            </div>
+                        </div>
+                    </div>
+                </td>
+                <td>
+                    <div class="font-semibold text-sm text-gray-800 dark:text-gray-200 truncate" title="${escapeHtml(c.last_device || '-')}">
+                        ${escapeHtml(c.last_device || '-')}
+                    </div>
+                    <div class="text-xs text-gray-400 dark:text-gray-500 truncate max-w-xs mt-0.5" title="${escapeHtml(c.last_action || '-')}">
+                        ${escapeHtml(c.last_action || 'Belum ada servis')}
+                    </div>
+                </td>
+                <td class="text-right">
+                    <div class="font-semibold text-sm text-gray-800 dark:text-gray-100">${c.last_price ? plRupiah(c.last_price) : '-'}</div>
+                    <div class="text-[11px] text-gray-400 dark:text-gray-500 flex items-center justify-end gap-1 mt-0.5">
+                        <i class="fa-regular fa-calendar text-[10px]"></i>
+                        <span>${c.last_at ? txDate(c.last_at) : '-'}</span>
+                    </div>
+                </td>
+                <td class="text-center">${loyaltyBadge}</td>
+                <td class="text-center">
+                    <div class="inline-flex items-center justify-center gap-1">
+                        <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-white/5 dark:hover:bg-brand-500/20 dark:hover:text-brand-300 text-gray-500 transition-colors" title="Riwayat Servis Pelanggan" onclick="plDetailOpen(${c.id}, true)">
+                            <i class="fa-solid fa-clock-rotate-left text-xs"></i>
+                        </button>
+                        <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-white/5 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-300 text-gray-500 transition-colors" title="Servis Baru untuk Pelanggan ini" onclick="plServisBaru(${c.id})">
+                            <i class="fa-solid fa-plus text-xs"></i>
+                        </button>
+                        <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-amber-50 hover:text-amber-600 dark:bg-white/5 dark:hover:bg-amber-500/20 dark:hover:text-amber-300 text-gray-500 transition-colors" title="Edit Data Pelanggan" onclick="plEditOpen(${c.id})">
+                            <i class="fa-solid fa-pen-to-square text-xs"></i>
+                        </button>
+                        ${totalSrv === 0 ? `
+                        <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-rose-50 hover:text-rose-600 dark:bg-white/5 dark:hover:bg-rose-500/20 dark:hover:text-rose-300 text-gray-500 transition-colors" title="Hapus Pelanggan" onclick="plDelete(${c.id})">
+                            <i class="fa-solid fa-trash text-xs"></i>
+                        </button>` : ''}
+                    </div>
+                </td>
+            `;
             body.appendChild(tr);
         });
 
