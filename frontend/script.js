@@ -1130,12 +1130,12 @@ async function apiDel(path) {
 // hijau=pemasukan, biru=finansial utama, amber=beban,
 // dinamis=bersih (hijau/merah), target=kartu putih netral + progress bar
 const STAR_META = {
-    omset: { emoji: '💰', tint: 'kpi-green' },
-    laba_kotor: { emoji: '⚡', tint: 'kpi-blue' },
-    beban: { emoji: '💸', tint: 'kpi-amber' },
-    laba_bersih: { emoji: '🏆', tint: 'kpi-green' },
-    cts: { emoji: '🎯' },
-    cto: { emoji: '🏭' },
+    omset: { icon: 'fa-solid fa-wallet', tint: 'kpi-green' },
+    laba_kotor: { icon: 'fa-solid fa-chart-line', tint: 'kpi-blue' },
+    beban: { icon: 'fa-solid fa-receipt', tint: 'kpi-amber' },
+    laba_bersih: { icon: 'fa-solid fa-trophy', tint: 'kpi-green' },
+    cts: { icon: 'fa-solid fa-bullseye' },
+    cto: { icon: 'fa-solid fa-industry' },
 };
 
 const kpiRupiah = v => 'Rp ' + (Number(v) || 0).toLocaleString('en-US');
@@ -1199,11 +1199,12 @@ async function renderStarCards() {
         if (!c) return '';
         const m = STAR_META[key] || {};
         const cvalue = typeof c.value === 'number' ? kpiRupiah(c.value) : c.value;
+        const iconHtml = m.icon ? `<i class="${m.icon}"></i>` : '';
         if (key === 'laba_bersih') {
             const tint = Number(c.value) < 0 ? 'kpi-red' : 'kpi-green';
             return `
             <div class="star-card ${tint} kpi-solid">
-                <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${m.emoji}</span></div>
+                <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${iconHtml}</span></div>
                 <div class="kpi-value">${cvalue}</div>
                 ${c.sub ? `<div class="kpi-caption kpi-caption-light">${escapeHtml(c.sub)}</div>` : ''}
             </div>`;
@@ -1211,7 +1212,7 @@ async function renderStarCards() {
         if (key === 'cts') {
             return `
             <div class="star-card kpi-target">
-                <div class="kpi-top"><span class="kpi-label-dark">${m.emoji} ${escapeHtml(c.label)}</span></div>
+                <div class="kpi-top"><span class="kpi-label-dark"><i class="${m.icon || 'fa-solid fa-bullseye'} text-brand-600 mr-1.5"></i>${escapeHtml(c.label)}</span></div>
                 <div class="kpi-value-dark">${cvalue}</div>
                 ${kpiProgressBar(c.progress, c.tercapai)}
                 ${c.sub ? `<div class="kpi-caption">${escapeHtml(c.sub)}</div>` : ''}
@@ -1219,7 +1220,7 @@ async function renderStarCards() {
         }
         return `
             <div class="star-card ${m.tint} kpi-solid">
-                <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${m.emoji}</span></div>
+                <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${iconHtml}</span></div>
                 <div class="kpi-value">${cvalue}</div>
                 ${c.sub ? `<div class="kpi-caption kpi-caption-light">${escapeHtml(c.sub)}</div>` : ''}
             </div>`;
@@ -2688,7 +2689,7 @@ function doneWaShow(d, jenis) {
     const isCash = _doneWaJenis === 'CASH';
     const judul = document.getElementById('doneWaTitle');
     const sub = document.getElementById('doneWaSub');
-    if (judul) judul.textContent = isCash ? 'Lengkapi Nota Garansi 🛡️' : 'Unit Selesai ✅';
+    if (judul) judul.innerHTML = isCash ? '<i class="fa-solid fa-shield-halved text-brand-500 mr-1.5"></i> Lengkapi Nota Garansi' : '<i class="fa-solid fa-circle-check text-emerald-500 mr-1.5"></i> Unit Selesai';
     if (sub) sub.textContent = isCash ? 'Kirim pengantar garansi ke pelanggan?' : 'Kirim konfirmasi ke pelanggan?';
     const to = document.getElementById('doneWaTo');
     if (to) to.textContent = 'Ke: ' + ((d && d.nama) || '-') + ' • ' + ((d && d.phone) || '(no. WA kosong)');
