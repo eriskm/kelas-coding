@@ -403,14 +403,84 @@ function akNorm(r) {
     };
 }
 
+function togglePassVisibility(inputId, btn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    const isPass = input.type === 'password';
+    input.type = isPass ? 'text' : 'password';
+    const icon = btn ? btn.querySelector('i') : null;
+    if (icon) {
+        if (isPass) {
+            icon.classList.remove('fa-eye');
+            icon.classList.add('fa-eye-slash');
+        } else {
+            icon.classList.remove('fa-eye-slash');
+            icon.classList.add('fa-eye');
+        }
+    }
+}
+window.togglePassVisibility = togglePassVisibility;
+
+function akAvatar(nama, id) {
+    const palette = [
+        'bg-blue-600',
+        'bg-emerald-600',
+        'bg-purple-600',
+        'bg-indigo-600',
+        'bg-amber-600',
+        'bg-teal-600',
+        'bg-rose-600',
+        'bg-cyan-600'
+    ];
+    const n = (nama || '').trim();
+    let initials = '';
+    if (n && n !== '-') {
+        const parts = n.split(/\s+/).filter(Boolean);
+        if (parts.length >= 2) {
+            initials = (parts[0][0] + parts[1][0]).toUpperCase();
+        } else if (parts.length === 1) {
+            initials = parts[0].slice(0, 2).toUpperCase();
+        }
+    }
+    if (!initials) initials = 'U';
+    const colorIdx = Math.abs(Number(id) || (nama ? nama.charCodeAt(0) : 0)) % palette.length;
+    return {
+        initials,
+        bg: palette[colorIdx]
+    };
+}
+window.akAvatar = akAvatar;
+
 function akRoleBadge(role) {
-    const admin = role === 'Admin';
-    return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${admin ? 'bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}">${escapeHtml(role)}</span>`;
+    const r = (role || '').trim();
+    const up = r.toUpperCase();
+    if (['SUPERADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'DEV', 'DEVELOPER'].includes(up)) {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border border-purple-200 dark:border-purple-800/30"><i class="fa-solid fa-crown text-[10px] text-purple-500"></i> ${escapeHtml(r)}</span>`;
+    }
+    if (['ADMIN', 'MANAGER'].includes(up)) {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border border-blue-200 dark:border-blue-800/30"><i class="fa-solid fa-user-shield text-[10px] text-blue-500"></i> ${escapeHtml(r)}</span>`;
+    }
+    if (up === 'KASIR') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/30"><i class="fa-solid fa-cash-register text-[10px] text-emerald-500"></i> ${escapeHtml(r)}</span>`;
+    }
+    if (up === 'TEKNISI') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 border border-amber-200 dark:border-amber-800/30"><i class="fa-solid fa-wrench text-[10px] text-amber-500"></i> ${escapeHtml(r)}</span>`;
+    }
+    if (['PENGELOLA', 'PEMILIK'].includes(up)) {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800/30"><i class="fa-solid fa-briefcase text-[10px] text-indigo-500"></i> ${escapeHtml(r)}</span>`;
+    }
+    if (up === 'INVESTOR') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-cyan-100 text-cyan-800 dark:bg-cyan-900/30 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800/30"><i class="fa-solid fa-chart-pie text-[10px] text-cyan-500"></i> ${escapeHtml(r)}</span>`;
+    }
+    return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300 border border-gray-200 dark:border-gray-700"><i class="fa-solid fa-user text-[10px]"></i> ${escapeHtml(r)}</span>`;
 }
 
 function akStatusBadge(status) {
     const on = status === 'Aktif';
-    return `<span class="px-2 py-0.5 rounded text-[10px] font-bold ${on ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400' : 'bg-gray-100 text-gray-600 dark:bg-white/10 dark:text-gray-400'}">${escapeHtml(status)}</span>`;
+    if (on) {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Aktif</span>`;
+    }
+    return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-gray-100 text-gray-500 dark:bg-gray-800/60 dark:text-gray-400 border border-gray-200 dark:border-gray-700/50"><span class="w-1.5 h-1.5 rounded-full bg-gray-400"></span>Nonaktif</span>`;
 }
 
 function akFiltered() {
@@ -485,39 +555,90 @@ async function renderAkun() {
         _akView = (rows || []).map(akNorm);
     } catch (err) {
         if (my !== _akReq) return;
-        body.innerHTML = `<tr><td colspan="7"><div class="text-center text-sm text-gray-400 py-6">${escapeHtml(err.message || 'Gagal memuat akun.')}</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="6"><div class="text-center text-sm text-gray-400 py-6">${escapeHtml(err.message || 'Gagal memuat akun.')}</div></td></tr>`;
         return;
     }
     const total = _akView.length;
     const aktif = _akView.filter(a => a.status === 'Aktif').length;
-    const admin = _akView.filter(a => a.role === 'Admin').length;
+    const admin = _akView.filter(a => ['ADMIN', 'SUPERADMIN', 'SUPER ADMIN', 'SUPER_ADMIN', 'DEV', 'DEVELOPER'].includes((a.role || '').toUpperCase())).length;
     const setNum = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v; };
     setNum('akTotal', total);
     setNum('akAktif', aktif);
     setNum('akAdmin', admin);
+
+    // Hitung komposisi tim per role
+    const roleCounts = {};
+    _akView.forEach(a => {
+        if (a.status === 'Aktif') {
+            const r = (a.role || 'Teknisi').trim();
+            roleCounts[r] = (roleCounts[r] || 0) + 1;
+        }
+    });
+    const timSummaryEl = document.getElementById('akTimSummary');
+    if (timSummaryEl) {
+        const roleOrder = ['Superadmin', 'Admin', 'Teknisi', 'Kasir', 'Pengelola', 'Investor'];
+        const keys = Object.keys(roleCounts).sort((a, b) => {
+            const ia = roleOrder.findIndex(x => x.toLowerCase() === a.toLowerCase());
+            const ib = roleOrder.findIndex(x => x.toLowerCase() === b.toLowerCase());
+            if (ia >= 0 && ib >= 0) return ia - ib;
+            if (ia >= 0) return -1;
+            if (ib >= 0) return 1;
+            return a.localeCompare(b);
+        });
+        const pills = keys.map(k => {
+            return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium bg-gray-100 dark:bg-white/5 text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-white/5"><b class="text-brand-600 dark:text-brand-400">${roleCounts[k]}</b> ${escapeHtml(k)}</span>`;
+        });
+        timSummaryEl.innerHTML = pills.length ? pills.join(' ') : '<span class="text-xs text-gray-400">Tidak ada akun aktif</span>';
+    }
+
     const data = akFiltered();
-    body.innerHTML = data.map((a) => {
-        return `
-        <tr class="tx-row">
-            <td class="text-center text-gray-500">${_akView.indexOf(a) + 1}</td>
-            <td class="font-semibold ${a.status === 'Aktif'
-                ? 'text-gray-800 dark:text-gray-200'
-                : 'text-red-600 dark:text-red-400 line-through'}">${escapeHtml(a.nama)}</td>
-            <td class="text-gray-500">${escapeHtml(a.username)}</td>
-            <td class="text-center">${akRoleBadge(a.role)}</td>
-            <td class="text-center">${akStatusBadge(a.status)}</td>
-            <td class="text-gray-500 text-[11px]">${escapeHtml(a.login)}</td>
-            <td class="text-center">
-                <button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-brand-50 dark:hover:bg-brand-500/10 text-gray-500 hover:text-brand-500 transition-colors" title="Edit Akun" onclick="akEdit(${a.id})"><i class="fa-solid fa-pen-to-square"></i></button>
-                ${a.status === 'Aktif'
-                    ? `<button class="tx-view-btn tx-del-btn" title="Nonaktifkan Akun (tidak bisa login, bisa diaktifkan lagi)" onclick="akDeactivate(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-user-slash"></i></button>`
-                    : `<button class="tx-view-btn tx-edit-btn" title="Aktifkan Lagi" onclick="akReactivate(${a.id})"><i class="fa-solid fa-rotate-left"></i></button>`}
-                ${window._bssfRoleKey === 'superadmin' && a.id !== window._currentUserId
-                    ? `<button class="w-7 h-7 rounded bg-gray-100 dark:bg-white/5 hover:bg-red-50 dark:hover:bg-red-500/10 text-gray-500 hover:text-red-500 transition-colors" title="Hapus Permanen (TIDAK BISA DIBATALKAN)" onclick="akDelete(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-trash"></i></button>`
-                    : ''}
-            </td>
-        </tr>`;
-    }).join('');
+    if (!data.length) {
+        body.innerHTML = `<tr><td colspan="6"><div class="text-center text-sm text-gray-400 py-8"><i class="fa-solid fa-user-slash text-2xl mb-2 block text-gray-300 dark:text-gray-600"></i>Tidak ada akun yang sesuai kriteria filter</div></td></tr>`;
+    } else {
+        body.innerHTML = data.map((a) => {
+            const av = akAvatar(a.nama, a.id);
+            const isMe = window._currentUserId && Number(a.id) === Number(window._currentUserId);
+            const meBadge = isMe
+                ? `<span class="px-1.5 py-0.2 text-[9.5px] font-medium rounded-full bg-brand-50 text-brand-600 dark:bg-brand-900/30 dark:text-brand-400 border border-brand-200 dark:border-brand-800/40">Anda</span>`
+                : '';
+            return `
+            <tr class="tx-row">
+                <td class="text-center text-gray-500 text-xs">${_akView.indexOf(a) + 1}</td>
+                <td>
+                    <div class="flex items-center gap-3">
+                        <div class="w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs text-white shadow-sm flex-shrink-0 ${av.bg}">
+                            ${escapeHtml(av.initials)}
+                        </div>
+                        <div class="min-w-0">
+                            <div class="font-semibold text-sm flex items-center gap-1.5 ${a.status === 'Aktif'
+                                ? 'text-gray-800 dark:text-gray-100'
+                                : 'text-gray-400 dark:text-gray-500 line-through'}">
+                                <span class="truncate">${escapeHtml(a.nama)}</span>
+                                ${meBadge}
+                            </div>
+                            <div class="text-xs text-gray-400 dark:text-gray-500 font-mono">@${escapeHtml(a.username)}</div>
+                        </div>
+                    </div>
+                </td>
+                <td class="text-center">${akRoleBadge(a.role)}</td>
+                <td class="text-center">${akStatusBadge(a.status)}</td>
+                <td class="text-gray-500 dark:text-gray-400 text-xs">${escapeHtml(a.login)}</td>
+                <td class="text-center">
+                    <div class="inline-flex items-center justify-center gap-1">
+                        <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-brand-50 hover:text-brand-600 dark:bg-white/5 dark:hover:bg-brand-500/20 dark:hover:text-brand-300 text-gray-500 transition-colors" title="Edit Akun" onclick="akEdit(${a.id})"><i class="fa-solid fa-pen-to-square text-xs"></i></button>
+                        ${isMe
+                            ? `<button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-50 dark:bg-white/5 text-gray-300 dark:text-gray-600 cursor-not-allowed" title="Akun Anda sedang aktif digunakan" disabled><i class="fa-solid fa-shield-halved text-xs"></i></button>`
+                            : (a.status === 'Aktif'
+                                ? `<button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-amber-50 hover:text-amber-600 dark:bg-white/5 dark:hover:bg-amber-500/20 dark:hover:text-amber-300 text-gray-500 transition-colors" title="Nonaktifkan Akun" onclick="akDeactivate(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-user-slash text-xs"></i></button>`
+                                : `<button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-emerald-50 hover:text-emerald-600 dark:bg-white/5 dark:hover:bg-emerald-500/20 dark:hover:text-emerald-300 text-gray-500 transition-colors" title="Aktifkan Lagi" onclick="akReactivate(${a.id})"><i class="fa-solid fa-rotate-left text-xs"></i></button>`)}
+                        ${window._bssfRoleKey === 'superadmin' && !isMe
+                            ? `<button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-rose-50 hover:text-rose-600 dark:bg-white/5 dark:hover:bg-rose-500/20 dark:hover:text-rose-300 text-gray-500 transition-colors" title="Hapus Permanen" onclick="akDelete(${a.id}, '${escapeHtml(a.username).replace(/'/g, "\\'")}')"><i class="fa-solid fa-trash text-xs"></i></button>`
+                            : ''}
+                    </div>
+                </td>
+            </tr>`;
+        }).join('');
+    }
     const info = document.getElementById('akInfo');
     if (info) info.textContent = data.length === total
         ? 'Menampilkan 1-' + total + ' dari ' + total + ' akun'
@@ -532,7 +653,13 @@ function akEdit(id) {
     document.getElementById('akNama').value = a.nama === '-' ? '' : a.nama;
     document.getElementById('akUsername').value = a.username || '';
     document.getElementById('akUsername').disabled = true;
-    document.getElementById('akPassword').value = '';
+    const pwEl = document.getElementById('akPassword');
+    if (pwEl) {
+        pwEl.value = '';
+        pwEl.type = 'password';
+        const eye = pwEl.parentElement ? pwEl.parentElement.querySelector('i') : null;
+        if (eye) { eye.classList.remove('fa-eye-slash'); eye.classList.add('fa-eye'); }
+    }
     document.getElementById('akPassword').placeholder = 'Kosongkan bila tidak diganti';
     document.getElementById('akRole').value = a.role || 'Teknisi';
     document.getElementById('akStatus').value = a.status || 'Aktif';
@@ -680,6 +807,12 @@ function showFormAkun() {
     document.getElementById('akFormTitle').textContent = 'Tambah Akun';
     document.getElementById('akunForm').reset();
     document.getElementById('akUsername').disabled = false;
+    const pwEl = document.getElementById('akPassword');
+    if (pwEl) {
+        pwEl.type = 'password';
+        const eye = pwEl.parentElement ? pwEl.parentElement.querySelector('i') : null;
+        if (eye) { eye.classList.remove('fa-eye-slash'); eye.classList.add('fa-eye'); }
+    }
     document.getElementById('akPassword').placeholder = 'Minimal 4 karakter';
     openFormAkun();
 }

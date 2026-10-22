@@ -1674,12 +1674,17 @@
                                 </div>
                             </div>
                             <div class="panel flex items-center gap-4 p-4 rounded-xl">
-                                <div class="w-10 h-10 rounded-full bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400">
-                                    <i class="fa-solid fa-user-shield text-lg"></i>
+                                <div class="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 flex-shrink-0">
+                                    <i class="fa-solid fa-users-gear text-lg"></i>
                                 </div>
-                                <div>
-                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">ADMIN</div>
-                                    <div class="text-xl font-bold text-gray-800 dark:text-white" id="akAdmin">2</div>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center justify-between">
+                                        <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium tracking-wider">KOMPOSISI TIM</div>
+                                        <span id="akAdmin" class="hidden">0</span>
+                                    </div>
+                                    <div class="flex flex-wrap gap-1 mt-1" id="akTimSummary">
+                                        <span class="text-xs text-gray-400">Memuat tim...</span>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1713,13 +1718,12 @@
                                 <table class="tx-table w-full text-sm">
                                     <thead>
                                         <tr>
-                                            <th class="w-12 text-center">No</th>
-                                            <th>Nama</th>
-                                            <th>Username</th>
+                                            <th class="w-10 text-center">No</th>
+                                            <th>Pengguna</th>
                                             <th class="text-center">Role</th>
                                             <th class="text-center">Status</th>
                                             <th>Terakhir Login</th>
-                                            <th class="text-center w-24">Aksi</th>
+                                            <th class="text-center w-28">Aksi</th>
                                         </tr>
                                     </thead>
                                     <tbody id="akBody"></tbody>
@@ -1730,10 +1734,10 @@
                                 <div class="flex items-center gap-1.5">
                                     <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-left text-[10px]"></i></button>
                                     <button class="w-7 h-7 rounded flex items-center justify-center bg-brand-500 text-white font-bold text-xs">1</button>
-<button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
-                                  </div>
-                              </div>
-                          </div>
+                                    <button class="w-7 h-7 rounded flex items-center justify-center border border-gray-200 dark:border-white/10 text-gray-400 cursor-not-allowed" disabled><i class="fa-solid fa-chevron-right text-[10px]"></i></button>
+                                </div>
+                            </div>
+                        </div>
 
                       <!-- UBAH PASSCODE SENDIRI.
                            Dulu tidak ada jalan mengubah passcode milik sendiri --
@@ -1742,16 +1746,34 @@
                            Panel ini menutup jalan buntu itu (selama masih bisa login).
                            Setelah diubah, semua sesi ikut logout paksa. -->
                       <div class="panel p-4 rounded-xl">
-                          <h3 class="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2 mb-1">
-                              <i class="fa-solid fa-key text-brand-500"></i> Ubah Passcode Saya
-                          </h3>
+                          <div class="flex items-center justify-between mb-2">
+                              <h3 class="text-sm font-bold text-gray-800 dark:text-white flex items-center gap-2">
+                                  <i class="fa-solid fa-key text-brand-500"></i> Ubah Passcode Saya
+                              </h3>
+                              <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/40">Keamanan Sesi</span>
+                          </div>
                           <p class="text-[11px] text-gray-500 dark:text-gray-400 mb-3">
-                              Untuk akun yang sedang login. Setelah diubah, semua perangkat lain otomatis keluar.
+                              Khusus untuk akun yang sedang Anda gunakan. Setelah passcode berhasil diubah, semua perangkat lain otomatis logout.
                           </p>
                           <form id="passcodeForm" class="grid grid-cols-1 sm:grid-cols-3 gap-2.5" autocomplete="off">
-                              <input class="receive-input" type="password" id="pcOld" placeholder="Passcode lama" required>
-                              <input class="receive-input" type="password" id="pcNew" placeholder="Passcode baru (min. 4)" required>
-                              <input class="receive-input" type="password" id="pcNew2" placeholder="Ulangi passcode baru" required>
+                              <div class="relative">
+                                  <input class="receive-input pr-9 w-full" type="password" id="pcOld" placeholder="Passcode lama" required>
+                                  <button type="button" onclick="togglePassVisibility('pcOld', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Tampilkan / Sembunyikan">
+                                      <i class="fa-solid fa-eye text-xs"></i>
+                                  </button>
+                              </div>
+                              <div class="relative">
+                                  <input class="receive-input pr-9 w-full" type="password" id="pcNew" placeholder="Passcode baru (min. 4)" required>
+                                  <button type="button" onclick="togglePassVisibility('pcNew', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Tampilkan / Sembunyikan">
+                                      <i class="fa-solid fa-eye text-xs"></i>
+                                  </button>
+                              </div>
+                              <div class="relative">
+                                  <input class="receive-input pr-9 w-full" type="password" id="pcNew2" placeholder="Ulangi passcode baru" required>
+                                  <button type="button" onclick="togglePassVisibility('pcNew2', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Tampilkan / Sembunyikan">
+                                      <i class="fa-solid fa-eye text-xs"></i>
+                                  </button>
+                              </div>
                               <div class="sm:col-span-3 flex items-center gap-2.5 flex-wrap">
                                   <button type="submit" id="pcBtn" class="receive-submit-btn">
                                       <i class="fa-solid fa-rotate"></i> Ubah Passcode
@@ -1799,8 +1821,10 @@
                                         <div class="field">
                                             <label class="field-label" for="akPassword">Password <b class="text-red-500">*</b></label>
                                             <div class="relative">
-                                                <input class="receive-input" type="password" id="akPassword" placeholder="Masukkan password (opsional saat edit)">
-                                                <span class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-300"><i class="fa-solid fa-lock"></i></span>
+                                                <input class="receive-input pr-9" type="password" id="akPassword" placeholder="Masukkan password (opsional saat edit)">
+                                                <button type="button" onclick="togglePassVisibility('akPassword', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Tampilkan / Sembunyikan">
+                                                    <i class="fa-solid fa-eye text-xs"></i>
+                                                </button>
                                             </div>
                                         </div>
                                     </div>
@@ -2656,6 +2680,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=18"></script>
+    <script src="/static/script.js?v=19"></script>
 </body>
 </html>
