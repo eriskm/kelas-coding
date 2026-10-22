@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """Modal yang diisi SETELAH unit CASH harus tetap keluar dari Laci.
 
 Owner (kas periode 4, 2026-10-19): "ada urutan distribusi uang yang belum
@@ -53,6 +53,14 @@ def _bersihkan(db):
     ids = [i[0] for i in db.query(models.ServiceOrder.id).filter(
         models.ServiceOrder.no_servis.like("MKK-%")).all()]
     if ids:
+        pay_ids = [p[0] for p in db.query(models.Payment.id).filter(
+            models.Payment.service_order_id.in_(ids)).all()]
+        if pay_ids:
+            db.query(models.KasEntry).filter(
+                models.KasEntry.ref_type == "payment",
+                (models.KasEntry.ref_id.in_(pay_ids) |
+                 models.KasEntry.ref_id.in_([str(x) for x in pay_ids]))
+            ).delete(synchronize_session=False)
         db.query(models.KasEntry).filter(
             models.KasEntry.sumber == SUMBER_MODAL,
             models.KasEntry.ref_id.in_(ids)).delete(synchronize_session=False)
@@ -78,6 +86,9 @@ def _auth(db):
     if t is None:
         db.add(models.AuthToken(token="pytest-token-admin", user_id=u.id,
                                 expires_at=datetime.now() + timedelta(days=2)))
+        db.commit()
+    else:
+        t.expires_at = datetime.now() + timedelta(days=2)
         db.commit()
     db.expunge_all()
     return {"Authorization": "Bearer pytest-token-admin"}
@@ -367,3 +378,137 @@ def test_guard_memblokir_hanya_yang_benar_benar_kosong(client, db):
     for bebas in ("MKK-X1", "MKK-X2", "MKK-X3", "MKK-X4"):
         assert bebas not in punya, \
             "%s seharusnya tidak memblokir Tutup Kas, tapi masuk daftar: %s" % (bebas, kosong)
+
+
+def test_update_cash_tanpa_modal_mencatat_pelunasan_lalu_modal(client, db):
+    """Saat order CASH yang belum ada payment diupdate mengisi modal:
+    1. Pelunasan dicatat masuk (KasEntry Masuk & Payment PELUNASAN)
+    2. Modal dicatat keluar (KasEntry Keluar Modal)
+    3. Urutan mutasi kas: Pelunasan Masuk lebih dulu daripada Modal Keluar.
+    """
+    import models
+    auth = _auth(db)
+    _bersihkan(db)
+
+    # Buat order status CASH tanpa modal dan tanpa payment
+    o = _order_cash(db, "MKK-CASH-UPDATE", part=0, jasa=0, harga=200000)
+    oid = o.id
+    db.commit(); db.expunge_all()
+
+    # Pastikan belum ada payment
+    pays_before = db.query(models.Payment).filter(models.Payment.service_order_id == oid).all()
+    assert len(pays_before) == 0
+
+    # Admin mengupdate order: mengisi modal_jasa = 100000
+    r = client.put("/api/orders/%d" % oid, headers=auth, json={"modal_jasa": 100000})
+    assert r.status_code == 200, r.text
+
+    db.expunge_all()
+
+    # 1. Payment PELUNASAN harus tercatat
+    pays_after = db.query(models.Payment).filter(models.Payment.service_order_id == oid).all()
+    assert len(pays_after) == 1, "Harus ada 1 payment Pelunasan yang dicatat"
+    assert pays_after[0].kind == "PELUNASAN"
+    assert Decimal(str(pays_after[0].amount)) == Decimal("200000")
+
+    # 2. KasEntry Pelunasan (Masuk 200k) dan Modal (Keluar 100k)
+    pay_id = pays_after[0].id
+    masuk_pelunasan = db.query(models.KasEntry).filter(
+        (models.KasEntry.ref_type == "payment") &
+        ((models.KasEntry.ref_id == pay_id) | (models.KasEntry.ref_id == str(pay_id))) &
+        (models.KasEntry.jenis == "Masuk")
+    ).all()
+    keluar_modal = db.query(models.KasEntry).filter(
+        (models.KasEntry.ref_type == "MODAL_JASA") &
+        ((models.KasEntry.ref_id == oid) | (models.KasEntry.ref_id == str(oid))) &
+        (models.KasEntry.jenis == "Keluar")
+    ).all()
+
+    assert len(masuk_pelunasan) == 1, "Kas Masuk Pelunasan harus tercatat"
+    assert Decimal(str(masuk_pelunasan[0].nominal)) == Decimal("200000")
+
+    assert len(keluar_modal) == 1, "Kas Keluar Modal harus tercatat"
+    assert Decimal(str(keluar_modal[0].nominal)) == Decimal("100000")
+
+    # 3. Urutan: Pelunasan masuk duluan sebelum Modal keluar
+    assert masuk_pelunasan[0].id < keluar_modal[0].id, "Pelunasan harus dicatat sebelum Modal keluar"
+
+
+def test_update_cash_tanpa_modal_mencatat_pelunasan_lalu_modal_lalu_beban(client, db):
+    """Urutan lengkap sesuai permintaan Owner:
+    1. Pelunasan Masuk
+    2. Modal Keluar (Part + Jasa)
+    3. Pembayaran Beban Keluar dari laba kotor baru
+    """
+    import models
+    from datetime import date
+    from routers.dashboard import get_active_period
+    auth = _auth(db)
+    _bersihkan(db)
+
+    # Pastikan ada active period dan tambah kewajiban beban periode
+    period = get_active_period(db)
+    if period:
+        import finance as _fin
+        from routers.dashboard import batas_periode
+        start, end = batas_periode(period)
+        key = _fin.period_key(db, start, end)
+        db.add(models.ExpensePeriod(periode=key, kategori="OPERASIONAL",
+                                    nama_beban="Listrik Tambahan", nilai=Decimal("50000"),
+                                    dibebankan_pada=datetime.now()))
+        db.commit()
+
+    # Buat order status CASH tanpa modal dan tanpa payment (harga 300k)
+    o = _order_cash(db, "MKK-CASH-FULLSEQ", part=0, jasa=0, harga=300000)
+    oid = o.id
+    db.commit(); db.expunge_all()
+
+    # Catat ID entri beban terbesar sebelum update
+    beban_sblm = db.query(models.KasEntry).filter(
+        models.KasEntry.ref_type == "beban_periode",
+        models.KasEntry.jenis == "Keluar"
+    ).all()
+    max_beban_sblm = max([e.id for e in beban_sblm], default=0)
+
+    # Admin mengupdate order: mengisi modal_jasa = 30000, part_cost = 70000 (total modal 100k, laba kotor 200k)
+    r = client.put("/api/orders/%d" % oid, headers=auth, json={"modal_jasa": 30000, "part_cost": 70000})
+    assert r.status_code == 200, r.text
+
+    db.expunge_all()
+
+    # 1. Pelunasan
+    pays = db.query(models.Payment).filter(models.Payment.service_order_id == oid).all()
+    assert len(pays) == 1
+    pay_id = pays[0].id
+    pelunasan_entry = db.query(models.KasEntry).filter(
+        (models.KasEntry.ref_type == "payment") &
+        ((models.KasEntry.ref_id == pay_id) | (models.KasEntry.ref_id == str(pay_id))) &
+        (models.KasEntry.jenis == "Masuk")
+    ).first()
+    assert pelunasan_entry is not None
+
+    # 2. Modal
+    modal_entries = db.query(models.KasEntry).filter(
+        (models.KasEntry.ref_type.in_(["MODAL_PART", "MODAL_JASA"])) &
+        ((models.KasEntry.ref_id == oid) | (models.KasEntry.ref_id == str(oid))) &
+        (models.KasEntry.jenis == "Keluar")
+    ).all()
+    assert len(modal_entries) == 2
+
+    # 3. Urutan: Pelunasan Masuk harus mendahului Modal Keluar
+    for m in modal_entries:
+        assert pelunasan_entry.id < m.id, "Pelunasan harus mendahului Modal"
+
+    # 4. Jika ada beban periode baru yang dibayarkan dari laba kotor ini,
+    # maka Modal Keluar harus mendahului Pembayaran Beban tersebut.
+    beban_baru = db.query(models.KasEntry).filter(
+        models.KasEntry.ref_type == "beban_periode",
+        models.KasEntry.jenis == "Keluar",
+        models.KasEntry.id > max_beban_sblm
+    ).all()
+    if beban_baru:
+        for b in beban_baru:
+            for m in modal_entries:
+                assert m.id < b.id, "Modal harus mendahului Pembayaran Beban"
+
+

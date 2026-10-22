@@ -89,6 +89,9 @@ def db(app_env, client):
             s.add(models.AuthToken(token="pytest-token-admin", user_id=u.id,
                                    expires_at=datetime.now() + timedelta(days=2)))
             s.commit()
+        else:
+            tok.expires_at = datetime.now() + timedelta(days=2)
+            s.commit()
         if s.query(models.Customer).filter(
                 models.Customer.name == "Pytest Customer").first() is None:
             s.add(models.Customer(name="Pytest Customer", phone="080000000001",

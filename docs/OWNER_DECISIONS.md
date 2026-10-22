@@ -962,6 +962,41 @@ Hutang Beban= 105.000
 
 ---
 
+## OD-LOCK-13 — Karantina Uang Titipan DP & Larangan Menutup Beban dari DP
+
+**Status: LOCKED (Owner, 2026-10-22)**
+
+> Owner: *"1. Uang DP adalah titipan tidak dapat dipakai untuk apapun kecuali untuk pelunasan dari transaksi tersebut, tidak diijinkan untuk menutup Beban minus periode sebelumnya."*
+
+### 13.1 Karantina Mutlak Uang Titipan DP
+- Uang DP adalah dana titipan pelanggan (*custodial/escrow funds*), bukan uang kas operasional toko.
+- Uang DP **DILARANG KERAS** digunakan untuk:
+  - Membayar Modal Part / Modal Jasa unit lain.
+  - Membayar Beban Gaji & Operasional toko.
+  - Menutup defisit/minus kas periode berjalan maupun periode sebelumnya.
+- Uang DP **HANYA** boleh keluar/berkurang dari laci pada dua kondisi sah:
+  1. Unit servis bersangkutan berstatus **`LUNAS`** (DP sah berubah status menjadi pembayaran/omzet transaksi unit tersebut).
+  2. Unit bersangkutan **`CANCEL / FAILED`** dan DP dikembalikan (**`Refund DP`**) kepada konsumen.
+
+### 13.2 Pembayaran Beban Berbasis Kas Bebas Toko
+- Pembayaran Beban Gaji & Operasional Toko (`backend/beban_bayar.py`) **hanya boleh menyerap Kas Bebas Milik Toko**:
+  $$\text{Kas Bebas Milik Toko} = \max(0, \text{Saldo Fisik Laci} - \text{Total Saldo Titipan DP Aktif})$$
+- Fungsi resmi backend: `cash.saldo_laci_milik_toko(db)`.
+- Jika `Kas Bebas Milik Toko == 0` (laci hanya berisi uang DP titipan):
+  - Pembayaran Beban dari Laci adalah **Rp 0** (uang DP tidak boleh disentuh sepeser pun).
+  - Seluruh sisa Beban yang belum terbayar dicatat sebagai **Hutang Beban Periode Tersebut**.
+
+### 13.3 Larangan Menutup Minus Periode Lalu dengan DP atau Kas Baru
+- Sesuai prinsip isolasi periode (`OD-LOCK-11.6`), minus/defisit periode lalu **TIDAK BOLEH** ditutup menggunakan uang DP maupun kas operasional periode baru.
+- Defisit periode lalu tetap tersimpan utuh di tabel **Hutang Beban (Expense Debt)** sampai ada tindakan pelunasan eksplisit oleh Pengelola/Admin.
+
+### Pengujian (Wajib Jadi Test)
+- `tests/test_karantina_dp_beban.py`
+  - `test_beban_tidak_boleh_memakai_uang_dp_murni`: Laci hanya ada 500rb uang DP, Beban 300rb -> Laci bayar Rp 0, Hutang Rp 300rb, Laci tetap utuh 500rb.
+  - `test_beban_hanya_memakai_kas_bebas_toko`: Laci 500rb (300rb DP + 200rb uang toko), Beban 350rb -> Laci bayar 200rb, Hutang 150rb, Laci sisa 300rb pas sebesar uang DP.
+
+---
+
 # Ketidaksesuaian Implementasi
 
 > Dicatat sesuai instruksi: **jangan mengubah keputusan bisnis untuk
@@ -1025,6 +1060,7 @@ Seluruh keputusan Owner sudah sejalan dengan kode.
 | OD-LOCK-10 | `authority.ROLE_SUPERADMIN` terpisah dari `ROLE_ADMIN`; `ROLE_CONFIG` hanya Super Admin |
 | OD-LOCK-10 | `authority.MODAL_FIELDS` + `Action.ORDER_UPDATE_MODAL` - Kasir boleh harga, tidak boleh modal |
 | OD-LOCK-10 | `frontend/script.js` - `BSSF_CAPS` 7 role, `PAGE_CAP` penjaga halaman, `bssfCaps()`/`canViewAset()`/`showAkun()` fail-closed |
+| OD-LOCK-13 | `backend/cash.py` (`saldo_laci_milik_toko`) & `backend/beban_bayar.py` — pembayaran Beban hanya menyerap Kas Bebas Milik Toko, DP terlarang dipakai untuk Beban/defisit periode |
 ---
 
 # Aturan Penggunaan Dokumen Ini

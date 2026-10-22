@@ -540,11 +540,12 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         # `kas_aset_awal` = saldo Laci FISIK pada awal periode (dipakai baris
         # "Kas Aset Awal" di Mutasi Kas dan pembanding rekonsiliasi).
         "kas_aset_awal": _kas_awal,
-        # Versi AKRUAL untuk Conditions Kas: uang DP adalah kewajiban pelanggan,
+        # Versi AKRUAL untuk Kondisi Kas: uang DP adalah kewajiban pelanggan,
         # bukan kas toko, jadi dikurangi agar baris "Kas Kecil/Laci" sejajar dengan
         # Omzet/Modal/Beban (yang semuanya sudah bebas dari DP).
-        "kas_aset_awal_operasional": max(
-            ZERO, _kas_awal - _titipan["saldo"]),
+        # Dihitung pada AWAL periode (start) agar tidak berfluktuasi / dobel hitung
+        # saat ada DP yang berubah menjadi Omzet pelunasan di periode berjalan.
+        "kas_aset_awal_operasional": cash.saldo_laci_milik_toko_sampai(db, start),
         # OD-LOCK-12: nilai AKHIR tabel "Kondisi Kas Operasional" (kolom Saldo
         # baris paling bawah) — persis yang dibaca Admin di halaman Keuangan.
         # Dihitung di SATU tempat supaya angka di layar, angka yang offered ke
@@ -552,7 +553,7 @@ def compute_finance(db: Session, start: datetime, end: datetime, lihat_kas_besar
         # berbeda. `frontend/script.js:renderKondisiKas` memakai formula yang
         # sama dengan urutan baris tabelnya.
         "kondisi_kas_akhir": _kondisi_kas_akhir(
-            kas_awal_operasional=max(ZERO, _kas_awal - _titipan["saldo"]),
+            kas_awal_operasional=cash.saldo_laci_milik_toko_sampai(db, start),
             omset=omset, total_modal=total_modal, total_beban=total_beban,
             alokasi_terbentuk=alokasi_ok,
             laba_bersih=laba_bersih,

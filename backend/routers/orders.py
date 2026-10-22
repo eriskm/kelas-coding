@@ -984,25 +984,61 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
     # karena langkah (2b) sudah mencatat semuanya.
     if (order.status or "").strip().upper() == "CASH":
         try:
-            _koreksi = cash.catat_modal_selisih(db, order, actor=_actor(user))
-            if _koreksi:
-                # Modal berubah setelah CASH -> laba per unit harus dihitung
-                # ulang, kalau tidak `service_orders.laba_bersih` jadi basi.
-                _pays_ulang = db.query(Payment).filter(
+            from finance import boleh_masuk_omzet
+            _valid_omzet = boleh_masuk_omzet(order)
+            _now_order = datetime.now()
+
+            # (1) Kejar pelunasan ketinggalan
+            _pays_now = db.query(Payment).filter(
+                Payment.service_order_id == order.id).all()
+            _sisa_order = to_decimal(payment_summary(order, _pays_now).get("sisa") or 0)
+            if _sisa_order > 0:
+                _kind_payment = "PELUNASAN" if _valid_omzet else "DP"
+                payments_mod.catat_payment(
+                    db, order, _kind_payment, _sisa_order, method="CASH",
+                    note=("Pelunasan otomatis saat update status Cash" if _kind_payment == "PELUNASAN"
+                          else "DP otomatis (modal belum diisi) saat status Cash"),
+                    actor=_actor(user), when=_now_order, allow_settled=True)
+                _pays_now = db.query(Payment).filter(
                     Payment.service_order_id == order.id).all()
-                # Jika ada DP yang sekarang jadi PELUNASAN (karena modal sudah diisi),
-                # konversi kind DP -> PELUNASAN
-                from finance import boleh_masuk_omzet
-                if boleh_masuk_omzet(order):
-                    for p in _pays_ulang:
-                        if (p.kind or "").strip().upper() == "DP":
-                            p.kind = "PELUNASAN"
-                order.laba_bersih = order_profit(order, _pays_ulang)
+
+            # (1b) Konversi DP otomatis ke PELUNASAN jika unit sudah sah masuk omzet.
+            # HANYA DP otomatis (placeholder saat modal belum diisi) yang dikonversi;
+            # DP asli dari pelanggan tetap berjenis DP agar laporan titipan DP akurat.
+            if _valid_omzet:
+                for p in _pays_now:
+                    if (p.kind or "").strip().upper() == "DP" and (
+                        "modal belum diisi" in (p.note or "").lower()
+                    ):
+                        p.kind = "PELUNASAN"
+                        p.note = "Pelunasan otomatis saat status Cash (modal terisi)"
+                        from models import KasEntry
+                        ke = db.query(KasEntry).filter(
+                            KasEntry.ref_type == "payment",
+                            KasEntry.ref_id.in_([p.id, str(p.id)])
+                        ).first()
+                        if ke:
+                            ke.keterangan = "Penerimaan pembayaran PELUNASAN unit #%s (%s)" % (
+                                order.id, p.method or "-")
+
+            if payment_summary(order, _pays_now)["payment_status"] == "LUNAS":
+                lock_lunas_moment(order, when=_now_order)
+
+            # (2) Kejar modal ketinggalan (Modal Jasa, Modal Part, dll.)
+            _koreksi = cash.catat_modal_selisih(db, order, actor=_actor(user))
+
+            # (3) Update laba bersih unit
+            order.laba_bersih = order_profit(order, _pays_now)
+
+            # (4) Bayar beban periode berjalan dari laba kotor baru yang terbentuk
+            if _valid_omzet:
+                _bayar_beban_periode_di_cash(db, order, actor=_actor(user))
+
         except Exception as _exc:  # noqa: BLE001
             db.rollback()
             raise HTTPException(
                 status_code=500,
-                detail="Gagal mencatat pelunasan modal setelah CASH: %s" % _exc)
+                detail="Gagal memproses keuangan setelah CASH: %s" % _exc)
     # (6) DISTRIBUSI OTOMATIS: event CASH menaikkan Laba Kotor, jadi ini salah
     #     satu jalur yang bisa membuat CTO tercapai. Idempoten per periode kas.
     try:

@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """Aturan Owner tentang Modal dan Omzet.
 
 Empat aturan yang ditegaskan Owner:
@@ -62,6 +62,9 @@ def _token(db):
     if t is None:
         db.add(models.AuthToken(token="pytest-token-admin", user_id=u.id,
                                 expires_at=datetime.now() + timedelta(days=2)))
+        db.commit()
+    elif t.expires_at is None or t.expires_at <= datetime.now():
+        t.expires_at = datetime.now() + timedelta(days=2)
         db.commit()
     db.expunge_all()
     return {"Authorization": "Bearer pytest-token-admin"}

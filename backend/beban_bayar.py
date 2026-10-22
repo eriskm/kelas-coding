@@ -93,7 +93,10 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
         return out
 
     # -- (1) Laci ------------------------------------------------------------
-    saldo_laci = cash.saldo_laci(db)
+    # OD-LOCK-13: Beban HANYA boleh dibayar dari kas bebas milik toko
+    # (saldo laci dikurangi seluruh saldo titipan DP yang masih tertahan).
+    # Uang DP adalah dana titipan pelanggan yang dilarang dipakai untuk Beban.
+    saldo_laci = cash.saldo_laci_milik_toko(db)
     dari_laci = quantize(min(sisa_kewajiban, saldo_laci)) if saldo_laci > ZERO else ZERO
 
     # -- (2) KAS ASET: TIDAK PERNAH DISENTUH OTOMATIS -----------------------

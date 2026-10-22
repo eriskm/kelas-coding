@@ -206,7 +206,7 @@ def _pengaruh_distribusi_laci(db, id_entri_awal):
     total = ZERO
     for k in db.query(M).filter(
             M.id > id_entri_awal,
-            M.sumber.in_([cash.SUMBER_CASH_OUT, cash.SUMBER_DISTRIBUSI_ASET])).all():
+            M.sumber.in_([cash.SUMBER_CASH_OUT, cash.SUMBER_DISTRIBUSI_ASET, cash.SUMBER_BEBAN])).all():
         if (k.layer or "") != cash.LAYER_LACI:
             continue
         if (k.jenis or "").lower() == "keluar":

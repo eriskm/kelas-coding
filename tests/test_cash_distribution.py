@@ -60,6 +60,7 @@ def test_distribusi_10_30_30_30_total_100():
 
 def test_distribusi_idempotent_per_periode(db):
     key = "PY-PERIODE-TEST"
+    cash.catat_injeksi(db, cash.LAYER_LACI, to_decimal("700000"), "pytest injeksi distribusi", actor="pytest")
     first = dist.terapkan(db, key, "1000000", oleh="pytest")
     db.commit()
     second = dist.terapkan(db, key, "1000000", oleh="pytest")

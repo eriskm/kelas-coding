@@ -53,35 +53,19 @@ def proses_defisit(kas_period_id: int = Query(None),
                    db: Session = Depends(get_db_session),
                    user: User = Depends(require_authority(Action.EXPENSE_DEBT_WRITE)),
                    idempotency_key: str = Header(None, alias=idem.HEADER)):
-    """Proses defisit Beban: Kas Aset menutup dulu, sisanya Hutang (idempotent)."""
-    return _dengan_idem(db, "beban_hutang.proses", idempotency_key,
-                        {"kas_period_id": kas_period_id},
-                        lambda: _proses_defisit_impl(kas_period_id, db, user))
+    """OD-LOCK-12: Hutang Beban TIDAK PERNAH terbentuk otomatis.
+    
+    Endpoint ini dihapus fungsinya menulis Hutang Beban.
+    Gunakan GET /api/beban-hutang/defisit/{kas_period_id} untuk menghitung defisit,
+    dan POST /api/beban-hutang/catat untuk mencatat manual oleh Admin.
+    """
+    raise HTTPException(
+        status_code=410,
+        detail="Endpoint dinonaktifkan: Hutang Beban tidak pernah terbentuk otomatis (OD-LOCK-12). "
+               "Gunakan POST /api/beban-hutang/catat untuk input manual Admin.")
 
 
-def _proses_defisit_impl(kas_period_id, db, user):
-    period = _target_period(db, kas_period_id)
-    oleh = user.display_name or user.username
-    try:
-        res = debt_mod.proses_defisit(db, period.start_at, period.end_at,
-                                      kas_period_id=period.id, oleh=oleh)
-        db.commit()
-    except debt_mod.DebtError as exc:
-        db.rollback()
-        raise HTTPException(status_code=400, detail=str(exc))
-    except HTTPException:
-        db.rollback()
-        raise
-    except Exception:
-        db.rollback()
-        raise
-    row = res["periode_row"]
-    return {"created": res["created"], "periode": row.periode,
-            "beban": row.beban, "laba_kotor": row.laba_kotor, "defisit": row.defisit,
-            "cover_kas_aset": row.cover_kas_aset, "hutang_baru": row.hutang_baru,
-            "hutang_awal": row.hutang_awal, "hutang_akhir": row.hutang_akhir,
-            "saldo_hutang": debt_mod.saldo_hutang(db),
-            "sumber_dana": "KAS_ASET"}
+
 
 
 @router.post("/lunas")

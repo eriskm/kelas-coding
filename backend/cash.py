@@ -238,6 +238,54 @@ def saldo_laci_sampai(db: Session, mulai: datetime):
     return quantize(saldo)
 
 
+def recompute_saldo_setelah(db: Session, layer: Optional[str] = None) -> int:
+    """Hitung ulang `saldo_setelah` (saldo berjalan) untuk semua entri.
+
+    `saldo_setelah` adalah saldo berjalan yang DITABAH saat entri dibuat.
+    Nilai itu bisa basi untuk dua sebab:
+
+      1. Ada entri yang DIHAPUS setelahnya (mis. lewat
+         `DELETE /api/kas/entries/{id}`). Semua baris sesudahnya masih
+         menyimpan angka lama.
+      2. Entri dibuat di tengah satu request sehingga urutannya tidak sama
+         dengan urutan waktu (terjadi 2026-10-16 saat server jalan dengan
+         kode setengah jadi).
+
+    Yang dipakai untuk menghitung uang (`saldo_layer`) SELALU dihitung ulang
+    dari `nominal`, jadi angka basi ini hanya salah di TAMPILAN (Jurnal Kas)
+    - bukan di saldo yang dipakai rekonsiliasi.
+
+    Urutan = waktu (`created_at`, fallback `tanggal`), lalu `id` sebagai
+    pemutus seri. Entri kategori "Saldo Awal" jadi SALDO AWAL, bukan baris
+    berjalan, jadi dilewati.
+
+    Idempoten: kalau semua nilai sudah cocok, tidak ada yang ditulis.
+    """
+    layers = [layer] if layer else [LAYER_LACI, LAYER_ASET]
+    diubah = 0
+    for lay in layers:
+        rows = rows_layer(db, lay)
+        opening = ZERO
+        for r in rows:
+            if (r.kategori or "").strip() == SALDO_AWAL_KATEGORI:
+                n = _num(r.nominal)
+                opening += n if (r.jenis or "").strip().lower() == "masuk" else -n
+        opening = quantize(opening)
+        urut = sorted(rows, key=lambda r: (_moment(r) or datetime.min, r.id or 0))
+        saldo = opening
+        for r in urut:
+            if (r.kategori or "").strip() == SALDO_AWAL_KATEGORI:
+                continue
+            n = _num(r.nominal)
+            saldo = quantize(
+                saldo + (n if (r.jenis or "").strip().lower() == "masuk" else -n))
+            if quantize(_num(r.saldo_setelah)) != saldo:
+                r.saldo_setelah = saldo
+                diubah += 1
+    db.flush()
+    return diubah
+
+
 def mutasi_tersimpan(db: Session, layer: str, sumber: str, ref_type=None, ref_id=None):
     """Cek mutasi turunan yang sudah tercatat (idempotensi turunan)."""
     lay = norm_layer(layer)
@@ -409,6 +457,79 @@ def saldo_titipan_dp(db: Session) -> Decimal:
         if ditahan > ZERO:
             total += ditahan
     return quantize(total)
+
+
+def saldo_titipan_dp_sampai(db: Session, sampai) -> Decimal:
+    """Total DP yang masih DITAHAN customer di laci PADA MOMEN tertentu (< `sampai`).
+
+    Jika `sampai` is None, sama dengan `saldo_titipan_dp(db)`.
+    Hanya memperhitungkan:
+      - DP yang masuk sebelum `sampai`
+      - DP yang sudah terpakai (unit lunas) sebelum `sampai`
+      - Refund DP yang terjadi sebelum `sampai`
+    """
+    if sampai is None:
+        return saldo_titipan_dp(db)
+
+    from models import Payment, Refund, ServiceOrder
+    from statusflow import lunas_moment
+
+    pays_by_order = {}
+    for p in (db.query(Payment)
+              .filter(Payment.created_at < sampai).all()):
+        pays_by_order.setdefault(p.service_order_id, []).append(p)
+
+    refund_by_order = {}
+    for r in (db.query(Refund)
+              .filter(Refund.created_at < sampai).all()):
+        if (getattr(r, "jenis", "") or "").strip().upper() == "DP":
+            refund_by_order[r.service_order_id] = (
+                refund_by_order.get(r.service_order_id, ZERO) + _num(r.nominal))
+
+    total = ZERO
+    for o in db.query(ServiceOrder).all():
+        rows = pays_by_order.get(o.id) or []
+        dp_order = ZERO
+        for p in rows:
+            if is_dp(p):
+                dp_order += _num(p.amount)
+        if dp_order <= ZERO:
+            continue
+        lm = lunas_moment(o, rows)
+        terpakai = ZERO
+        if lm is not None and lm < sampai:
+            terpakai = dp_terpakai(db, o, rows)
+        ditahan = (dp_order - terpakai - refund_by_order.get(o.id, ZERO))
+        if ditahan > ZERO:
+            total += ditahan
+    return quantize(total)
+
+
+def saldo_laci_milik_toko(db: Session) -> Decimal:
+    """OD-LOCK-13: Saldo Kas Laci yang BEBAS dari kewajiban titipan DP konsumen.
+
+    Uang DP secara fisik ada di laci, tapi berstatus titipan (bukan milik toko).
+    Fungsi ini menghitung kas bebas operasional toko:
+        max(0, saldo_laci - saldo_titipan_dp)
+    Hanya uang ini yang sah dipakai untuk membiayai operasional / Beban toko.
+    """
+    laci = saldo_laci(db)
+    titipan = saldo_titipan_dp(db)
+    bebas = quantize(laci - titipan)
+    return bebas if bebas > ZERO else ZERO
+
+
+def saldo_laci_milik_toko_sampai(db: Session, sampai) -> Decimal:
+    """Saldo Kas Laci BEBAS operasional pada momen awal periode (< `sampai`):
+        max(0, saldo_laci_sampai(db, sampai) - saldo_titipan_dp_sampai(db, sampai))
+    """
+    if sampai is None:
+        return saldo_laci_milik_toko(db)
+    laci = saldo_laci_sampai(db, sampai)
+    titipan = saldo_titipan_dp_sampai(db, sampai)
+    bebas = quantize(laci - titipan)
+    return bebas if bebas > ZERO else ZERO
+
 
 
 # ---------------------------------------------------------------- 2) MODAL (v4 #2)

@@ -18,6 +18,7 @@ from starlette.responses import FileResponse
 from database import Base, engine
 from migrations_cash_layers import migrate_cash_layers
 from migrations_expense_recurring import migrate_expense_recurring
+from migrations_saldo_setelah import migrate_saldo_setelah
 from migrations_tanpa_modal import migrate_service_orders_tanpa_modal
 from migrations_money import migrate_money_precision
 from migrations_warranty_claims import migrate_warranty_claims
@@ -87,6 +88,14 @@ def on_startup():
         _log("[P2-06] migrasi layer kas: %s" % _lr["changed"])
     except Exception as _e:
         _log("[P2-06] migrasi layer kas dilewati: %s" % _e)
+    # 2026-10-19: samakan `saldo_setelah` (saldo berjalan) dengan running sum
+    # sebenarnya. Rantai itu bisa basi kalau ada entri yang dihapus setelahnya
+    # atau entri dibuat di tengah request. NON-DESTRUKTIF + idempotent.
+    try:
+        _ss = migrate_saldo_setelah(engine)
+        _log("[2026-10-19] migrasi saldo_setelah: %s" % _ss["changed"])
+    except Exception as _e:
+        _log("[2026-10-19] migrasi saldo_setelah dilewati: %s" % _e)
     # FIN-MIRROR: flag `recurring` (beban permanen) — mirror tabel `beban` Proyek A.
     try:
         _er = migrate_expense_recurring(engine)

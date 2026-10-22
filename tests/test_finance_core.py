@@ -150,6 +150,26 @@ def test_dp_tidak_masuk_omzet(db):
 def test_beban_hanya_gaji_dan_operasional(db):
     p = _periode_aktif(db)
     tengah = p.start_at + (p.end_at - p.start_at) / 2
+    # Hitung baseline SEBELUM freeze agar delta murni dari test ini.
+    # DB test adalah salinan DB produksi yang mungkin sudah punya expense.
+    import finance as _fin
+    from models import ExpensePeriod
+    # Hapus snapshot periode agar bisa freeze ulang dari awal.
+    from finance import period_key, legacy_period_key
+    kunci = [period_key(db, p.start_at, p.end_at),
+             legacy_period_key(p.start_at)]
+    db.query(ExpensePeriod).filter(
+        ExpensePeriod.periode.in_(kunci)).delete(synchronize_session=False)
+    db.commit()
+    # Bekukan kondisi awal (belum ada expense test) untuk baseline.
+    _fin.freeze_expenses_for_period(db, p.start_at, p.end_at, commit=True)
+    baseline = to_decimal(_fin.compute_finance_core(db, p.start_at, p.end_at)["total_beban"])
+    baseline_gaji = to_decimal(_fin.compute_finance_core(db, p.start_at, p.end_at)["beban_gaji"])
+    baseline_ops = to_decimal(_fin.compute_finance_core(db, p.start_at, p.end_at)["beban_operasional"])
+    # Hapus snapshot lagi agar bisa freeze ulang dengan expense baru.
+    db.query(ExpensePeriod).filter(
+        ExpensePeriod.periode.in_(kunci)).delete(synchronize_session=False)
+    db.commit()
     db.add(_expense("Gaji", "PY gaji", 100000, tengah))
     db.add(_expense("Operasional", "PY ops", 50000, tengah))
     db.add(_expense("Transport", "PY transport", 999999, tengah))
@@ -157,4 +177,9 @@ def test_beban_hanya_gaji_dan_operasional(db):
     finance.freeze_expenses_for_period(db, p.start_at, p.end_at, commit=True)
     core = finance.compute_finance_core(db, p.start_at, p.end_at)
     assert core["total_beban"] == core["beban_gaji"] + core["beban_operasional"]
-    assert core["total_beban"] < to_decimal("999999")
+    # Transport TIDAK boleh masuk beban (bukan kategori Gaji/Ops).
+    # Delta dari baseline: hanya Gaji 100rb + Ops 50rb = 150rb.
+    assert to_decimal(core["total_beban"]) == baseline + to_decimal("150000"), \
+        "Transport 999rb tidak boleh masuk total_beban"
+    assert to_decimal(core["beban_gaji"]) == baseline_gaji + to_decimal("100000")
+    assert to_decimal(core["beban_operasional"]) == baseline_ops + to_decimal("50000")

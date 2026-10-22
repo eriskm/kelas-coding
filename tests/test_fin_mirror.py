@@ -136,14 +136,18 @@ def test_beban_katalog_dipotong_di_setiap_periode(db):
     # Periode 1: beku seperti biasa.
     s0, e0 = _periode(-1)
     finance.freeze_expenses_for_period(db, s0, e0, commit=False)
-    assert to_decimal(finance.compute_finance_core(db, s0, e0)["total_beban"]) == diharapkan
+    total_p1 = to_decimal(finance.compute_finance_core(db, s0, e0)["total_beban"])
+    assert total_p1 == diharapkan
 
     # Periode 2 & 3: TIDAK ada expense baru sama sekali.
+    # Assertion: carry-over konsisten -- total_beban periode 2 & 3 harus
+    # SAMA dengan periode 1 (bukan dihitung ulang dari baseline pre-freeze
+    # yang bisa bergeser karena expense lain di suite ini).
     for offset in (0, 1):
         s, e = _periode(offset)
         finance.freeze_expenses_for_period(db, s, e, commit=False)
         core = finance.compute_finance_core(db, s, e)
-        assert to_decimal(core["total_beban"]) == diharapkan, \
+        assert to_decimal(core["total_beban"]) == total_p1, \
             "beban katalog harus tetap dipotong di periode %s (perilaku A)" % s.date()
 
 
@@ -344,8 +348,13 @@ def test_omset_konsisten_antara_core_dan_order_profit(db):
     cust = _customer(db)
     s0, e0 = _periode(0)
     for i, harga in enumerate((300000, 450000, 120000)):
-        _unit(db, cust, "FIN-MIRROR-CONS-%d" % i, harga,
-              modal=(100000, 50000, 25000), status="CASH", moment=datetime.now())
+        o = _unit(db, cust, "FIN-MIRROR-CONS-%d" % i, harga,
+                  modal=(100000, 50000, 25000), status="CASH", moment=datetime.now())
+        # Omzet hanya untuk unit LUNAS: catat pelunasan penuh.
+        db.add(models.Payment(service_order_id=o.id, kind="PELUNASAN",
+                              amount=to_decimal(harga), method="CASH",
+                              note="Pelunasan otomatis test", created_at=o.taken_at))
+    db.flush()
     cohort = finance.settled_orders(db, s0, e0)
     assert len(cohort) >= 3
     total_core = to_decimal(finance.compute_finance_core(db, s0, e0)["omset"])
