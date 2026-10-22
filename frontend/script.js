@@ -4325,18 +4325,20 @@ async function kuAsetKeluar() {
 async function kuAsetTransfer() {
     if (!can('KAS_ASET_INJEKSI')) { toast('Aksi ditolak: hanya Admin.'); return; }
     if (!canViewAset()) { toast('Transfer Kas Aset tidak tersedia untuk role Anda.'); return; }
-    const nominal = Number(document.getElementById('kuAsetNominal').value || 0);
-    const keterangan = (document.getElementById('kuAsetKeterangan').value || '').trim();
+    const nomEl = document.getElementById('kuTransferNominal') || document.getElementById('kuAsetNominal');
+    const ketEl = document.getElementById('kuTransferKeterangan') || document.getElementById('kuAsetKeterangan');
+    const nominal = Number((nomEl ? nomEl.value : 0) || 0);
+    const keterangan = ((ketEl ? ketEl.value : '') || '').trim();
     const arah = ((document.getElementById('kuTransferArah') || {}).value || 'LACI->KAS_ASET').split('->');
-    if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan wajib diisi.', 'error'); return; }
+    if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan transfer wajib diisi.', 'error'); return; }
     const masterSebelum = (_kuSaldoLapisan && _kuSaldoLapisan.master_kas) || 0;
     try {
         const res = await apiPost('/kas/aset/transfer',
             { dari: arah[0], ke: arah[1], nominal, keterangan }, { idempotencyKey: newIdemKey() });
         _kuFb('kuAsetFeedback', 'Transfer selesai. ' + res.label_dari + ' → ' + res.label_ke
             + '. Master Kas ' + _kuMoney(res.master_kas_setelah) + '.', 'success');
-        document.getElementById('kuAsetNominal').value = '';
-        document.getElementById('kuAsetKeterangan').value = '';
+        if (nomEl) nomEl.value = '';
+        if (ketEl) ketEl.value = '';
         toast('Transfer Kas Aset tercatat.', 'success');
         await loadKuFinance();
     } catch (err) {
