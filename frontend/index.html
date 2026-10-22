@@ -1037,91 +1037,142 @@
                     <!-- ===== PAGE: SPAREPART ===== -->
                     <section id="pageSparepart" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
 
+                        <!-- Header & Call To Action -->
                         <div class="flex items-center justify-between flex-wrap gap-3">
                             <div>
                                 <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
                                     <i class="fa-solid fa-microchip text-brand-500"></i>
-                                    Sparepart
+                                    Inventaris Sparepart
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Stok & harga sparepart toko</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Manajemen stok fisik, harga beli modal, harga jual, dan log mutasi barang</p>
                             </div>
-                            <button type="button" onclick="spAdd()" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
-                                <i class="fa-solid fa-plus"></i> Tambah Sparepart
-                            </button>
-                        </div>
-
-                        <div class="sp-top-row">
-                            <div class="gr-kpi-grid" id="spKpi"></div>
-                            <div class="sp-search-wrap">
-                                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
-                                <input type="text" id="spSearch" class="receive-input pl-9" placeholder="Cari sparepart..." autocomplete="off">
+                            <div class="flex items-center gap-2">
+                                <button type="button" onclick="spAdd()" class="receive-submit-btn bg-brand-500 hover:bg-brand-600 text-white font-semibold" data-cap="SPAREPART_WRITE">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Tambah Sparepart</span>
+                                </button>
                             </div>
                         </div>
 
+                        <!-- KPI Metrics: 5 Cards Grid Full-Width Interactive -->
+                        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="spKpi"></div>
+
+                        <!-- Search & Filter Bar -->
+                        <div class="panel p-3">
+                            <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
+                                <div class="relative flex-1">
+                                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
+                                    <input type="text" id="spSearch" class="receive-input pl-9 w-full" placeholder="Cari nama part, merek, device, atau kategori..." autocomplete="off">
+                                </div>
+                                <div class="w-full sm:w-44">
+                                    <select id="spCatFilter" class="receive-input w-full" aria-label="Filter Kategori">
+                                        <option value="">Semua Kategori</option>
+                                    </select>
+                                </div>
+                                <div class="w-full sm:w-40">
+                                    <select id="spStockFilter" class="receive-input w-full" aria-label="Filter Level Stok">
+                                        <option value="all">Semua Stok</option>
+                                        <option value="ready">Aman (&gt; 5)</option>
+                                        <option value="low">Menipis (&le; 5)</option>
+                                        <option value="out">Habis (0)</option>
+                                    </select>
+                                </div>
+                                <button type="button" onclick="spResetFilters()" class="receive-back-btn whitespace-nowrap text-xs" title="Reset filter pencarian">
+                                    <i class="fa-solid fa-rotate-left"></i> Reset
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Tabel Inventaris Sparepart (Ramping 6 Kolom) -->
                         <div class="panel overflow-hidden">
                             <div class="overflow-x-auto">
                                 <table class="tx-table sp-table w-full text-sm">
                                     <thead>
                                         <tr>
-                                            <th>No</th>
-                                            <th>Tgl Masuk</th>
-                                            <th>Kategori</th>
-                                            <th>Merek</th>
-                                            <th>Jenis Barang</th>
-                                            <th>Device</th>
-                                            <th class="text-center">Qty</th>
-                                            <th class="text-right">Beli</th>
-                                            <th class="text-right">Jual</th>
-                                            <th class="text-center">Aksi</th>
+                                            <th class="w-12 text-center">No</th>
+                                            <th>Sparepart &amp; Barang</th>
+                                            <th>Kompatibilitas Device</th>
+                                            <th class="text-left w-36">Stok &amp; Status</th>
+                                            <th class="text-right w-44">Harga (Jual / Modal)</th>
+                                            <th class="text-center w-28">Aksi Cepat</th>
                                         </tr>
                                     </thead>
                                     <tbody id="spBody"></tbody>
                                 </table>
                             </div>
-                            <div id="spEmpty" class="hidden text-center py-10 text-sm text-gray-400">
+                            <div id="spEmpty" class="hidden text-center py-12 text-sm text-gray-400">
                                 <i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>
-                                Belum ada data sparepart.
+                                <span>Belum ada data sparepart.</span>
                             </div>
-                            <div id="spLoading" class="text-center py-10 text-sm text-gray-400">
-                                <i class="fa-solid fa-circle-notch fa-spin text-xl"></i> Memuat data...
+                            <div id="spLoading" class="text-center py-12 text-sm text-gray-400">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl mb-2 block"></i> Memuat data inventaris...
                             </div>
-                            <div class="px-4 py-3 border-t border-gray-100 dark:border-white/5">
-                                <div class="flex flex-col sm:flex-row sm:items-end gap-2.5" data-cap="SPAREPART_WRITE">
-                                    <div class="flex-1">
-                                        <label class="field-label" for="spMovePart">Part</label>
-                                        <select class="receive-input" id="spMovePart"></select>
+                            <div id="spPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
+                                <div id="spInfo" class="text-xs text-gray-500 dark:text-gray-400 font-medium"></div>
+                                <div id="spPageBtns" class="flex items-center gap-1.5"></div>
+                            </div>
+                        </div>
+
+                        <!-- Card Dedikasi: Pengadaan & Riwayat Mutasi Stok -->
+                        <div id="spMoveSection" class="panel p-4 sm:p-5 space-y-4">
+                            <div class="flex items-center justify-between flex-wrap gap-2 pb-3 border-b border-gray-100 dark:border-white/5">
+                                <div class="flex items-center gap-2.5">
+                                    <div class="w-8 h-8 rounded-lg bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 flex items-center justify-center text-sm border border-brand-200/60 dark:border-brand-900/40">
+                                        <i class="fa-solid fa-truck-ramp-box"></i>
                                     </div>
-                                    <div class="w-full sm:w-32">
-                                        <label class="field-label" for="spMoveQty">Qty Masuk</label>
-                                        <input class="receive-input" type="number" id="spMoveQty" min="1" value="1">
+                                    <div>
+                                        <h3 class="text-sm sm:text-base font-bold text-gray-800 dark:text-white">Pengadaan &amp; Mutasi Stok</h3>
+                                        <p class="text-xs text-gray-500 dark:text-gray-400">Catat stok masuk dari supplier dan pantau pergerakan part terkini</p>
                                     </div>
-                                    <div class="flex-1">
-                                        <label class="field-label" for="spMoveNote">Keterangan</label>
-                                        <input class="receive-input" type="text" id="spMoveNote" placeholder="mis. pembelian / retur">
-                                    </div>
-                                    <button type="button" onclick="spMoveSubmit()" class="receive-submit-btn">
-                                        <i class="fa-solid fa-box-open"></i> Catat Barang Masuk
-                                    </button>
                                 </div>
-                                <div id="spMoveFeedback" class="hidden receive-feedback mt-2"></div>
-                                <div class="overflow-x-auto mt-3">
-                                    <table class="tx-table w-full text-sm">
+                                <button type="button" onclick="loadSparepartMoves()" class="receive-back-btn text-xs" title="Muat ulang riwayat mutasi">
+                                    <i class="fa-solid fa-rotate"></i> Refresh Mutasi
+                                </button>
+                            </div>
+
+                            <!-- Form Tambah Stok Masuk -->
+                            <div class="p-3.5 rounded-xl bg-gray-50 dark:bg-white/[0.02] border border-gray-100 dark:border-white/5" data-cap="SPAREPART_WRITE">
+                                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                                    <div class="sm:col-span-5">
+                                        <label class="field-label" for="spMovePart">Pilih Sparepart</label>
+                                        <select class="receive-input w-full" id="spMovePart"></select>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="field-label" for="spMoveQty">Qty Masuk</label>
+                                        <input class="receive-input w-full" type="number" id="spMoveQty" min="1" value="1">
+                                    </div>
+                                    <div class="sm:col-span-3">
+                                        <label class="field-label" for="spMoveNote">Keterangan / Supplier</label>
+                                        <input class="receive-input w-full" type="text" id="spMoveNote" placeholder="cth. Restock Tokopedia / Retur">
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <button type="button" onclick="spMoveSubmit()" class="receive-submit-btn w-full justify-center">
+                                            <i class="fa-solid fa-plus"></i> Simpan Stok
+                                        </button>
+                                    </div>
+                                </div>
+                                <div id="spMoveFeedback" class="hidden receive-feedback mt-2.5"></div>
+                            </div>
+
+                            <!-- Riwayat Mutasi Stok Table -->
+                            <div>
+                                <h4 class="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                                    <i class="fa-solid fa-clock-rotate-left text-brand-500"></i> Riwayat 25 Mutasi Terakhir
+                                </h4>
+                                <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+                                    <table class="tx-table w-full text-xs sm:text-sm">
                                         <thead>
                                             <tr>
-                                                <th>Waktu</th>
-                                                <th>Part</th>
-                                                <th>Aksi</th>
-                                                <th class="numeric-r">Qty</th>
-                                                <th class="numeric-r">Saldo</th>
+                                                <th class="w-36">Waktu</th>
+                                                <th>Sparepart</th>
+                                                <th class="w-28 text-center">Aksi</th>
+                                                <th class="w-20 text-right">Qty</th>
+                                                <th class="w-24 text-right">Saldo Akhir</th>
                                             </tr>
                                         </thead>
                                         <tbody id="spMoveBody"></tbody>
                                     </table>
                                 </div>
-                            </div>
-                            <div id="spPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
-                                <div id="spInfo" class="text-xs text-gray-500 dark:text-gray-400"></div>
-                                <div id="spPageBtns" class="flex items-center gap-1.5"></div>
                             </div>
                         </div>
                     </section>
@@ -2699,6 +2750,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=22"></script>
+    <script src="/static/script.js?v=23"></script>
 </body>
 </html>

@@ -1602,19 +1602,60 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .gr-kpi-grid .sm-top i { flex-shrink: 0; }
 .gr-kpi-grid .sm-num { font-size: 22px; }
 .gr-kpi-grid .sm-pct { font-size: 11px; padding: 1px 8px; }
-/* KPI Sparepart: -20% dari ukuran KPI Garansi (scope khusus) */
-#spKpi .sm-card { padding: 8px 10px; }
-#spKpi .sm-top { font-size: 11px; }
-#spKpi .sm-num { font-size: 18px; }
-#spKpi .sm-pct { font-size: 10px; }
-/* Sparepart: pencarian sejajar 4 card KPI (isi slot kosong grid) */
-.sp-top-row { display: flex; flex-direction: column; gap: 8px; }
-.sp-search-wrap { position: relative; }
-@media (min-width: 640px) {
-    .sp-top-row { flex-direction: row; align-items: stretch; }
-    .sp-top-row .gr-kpi-grid { flex: 1 1 auto; min-width: 0; grid-template-columns: repeat(4, minmax(0, 1fr)); }
-    .sp-search-wrap { flex: 0 0 230px; display: flex; }
+/* KPI Sparepart Modernized */
+#spKpi .sm-card {
+    padding: 9px 12px;
+    border-radius: 11px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all .18s cubic-bezier(0.4, 0, 0.2, 1);
+    user-select: none;
+    border: 1px solid transparent;
 }
+#spKpi .sm-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px -2px rgba(0, 0, 0, 0.08);
+}
+#spKpi .sm-card.is-active {
+    border-color: #b91c1c;
+    box-shadow: 0 0 0 2px rgba(185, 28, 28, 0.25);
+}
+.dark #spKpi .sm-card.is-active {
+    border-color: #f87171;
+    box-shadow: 0 0 0 2px rgba(248, 113, 113, 0.3);
+}
+#spKpi .sm-top { font-size: 11px; gap: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#spKpi .sm-top i { flex-shrink: 0; }
+#spKpi .sm-num { font-size: 19px; font-weight: 800; }
+#spKpi .sm-pct { font-size: 10.5px; padding: 1px 8px; border-radius: 999px; }
+
+/* Sparepart: tombol aksi cepat & tabel */
+.sp-action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
+    background: transparent;
+    transition: all .15s ease;
+    cursor: pointer;
+}
+.dark .sp-action-btn {
+    border-color: rgba(255, 255, 255, 0.08);
+    color: #94a3b8;
+}
+.sp-action-btn:hover {
+    transform: translateY(-1px);
+}
+#pageSparepart .sp-table { min-width: 800px; width: 100%; table-layout: auto; }
+#pageSparepart .sp-table th, #pageSparepart .sp-table td { vertical-align: middle; }
 /* Badge status memakai warna semantiknya sendiri (terang & gelap) */
 
 /* Sparepart: tombol aksi + indikator stok */

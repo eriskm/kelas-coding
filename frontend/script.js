@@ -4014,10 +4014,38 @@ async function loadPlPage(page) {
 const SP_PER_PAGE = 10;
 let _spPage = 1;
 let _spQuery = '';
+let _spStockFilter = 'all';
+let _spCatFilter = '';
 let _spReq = 0;
 let _spEditId = -1;
 // State real dari backend (GET/POST/PUT/DELETE /api/spareparts). SP_MOCK dipensiunkan.
 let _spView = [];
+
+function spCategoryMeta(cat) {
+    const c = (cat || '').toUpperCase();
+    if (c.includes('LCD') || c.includes('LAYAR') || c.includes('SCREEN') || c.includes('TOUCH')) {
+        return { icon: 'fa-mobile-screen', bg: 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-400 border-blue-200 dark:border-blue-900/50' };
+    }
+    if (c.includes('BAT')) {
+        return { icon: 'fa-battery-half', bg: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50' };
+    }
+    if (c.includes('FLEX') || c.includes('KONEK') || c.includes('CONN') || c.includes('PORT') || c.includes('PLUG') || c.includes('CAS')) {
+        return { icon: 'fa-plug', bg: 'bg-violet-50 text-violet-600 dark:bg-violet-950/50 dark:text-violet-400 border-violet-200 dark:border-violet-900/50' };
+    }
+    if (c.includes('KAM') || c.includes('CAM')) {
+        return { icon: 'fa-camera', bg: 'bg-cyan-50 text-cyan-600 dark:bg-cyan-950/50 dark:text-cyan-400 border-cyan-200 dark:border-cyan-900/50' };
+    }
+    if (c.includes('IC') || c.includes('CHIP') || c.includes('MESIN') || c.includes('CPU') || c.includes('NAND')) {
+        return { icon: 'fa-microchip', bg: 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400 border-amber-200 dark:border-amber-900/50' };
+    }
+    if (c.includes('SPEAK') || c.includes('BUZZ') || c.includes('MIC') || c.includes('SUARA')) {
+        return { icon: 'fa-volume-high', bg: 'bg-rose-50 text-rose-600 dark:bg-rose-950/50 dark:text-rose-400 border-rose-200 dark:border-rose-900/50' };
+    }
+    if (c.includes('CASE') || c.includes('BACK') || c.includes('HOUSING') || c.includes('FRAME')) {
+        return { icon: 'fa-shield', bg: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700' };
+    }
+    return { icon: 'fa-box-archive', bg: 'bg-brand-50 text-brand-600 dark:bg-brand-950/50 dark:text-brand-400 border-brand-200 dark:border-brand-900/50' };
+}
 
 function spNorm(r) {
     return {
@@ -4067,10 +4095,30 @@ async function spDel(id) {
     if (!confirm('Hapus sparepart "' + s.jenis + '"?')) return;
     try {
         await apiDel('/spareparts/' + id);
+        toast('Sparepart berhasil dihapus.', 'success');
         renderSparepart();
     } catch (err) {
         toast(err.message || 'Gagal menghapus.');
     }
+}
+
+function spQuickRestock(id) {
+    const s = (_spView || []).find(x => x && x.id === id);
+    if (!s) return;
+    const sel = document.getElementById('spMovePart');
+    if (sel) {
+        sel.value = String(id);
+    }
+    const qtyInput = document.getElementById('spMoveQty');
+    if (qtyInput) {
+        qtyInput.value = '1';
+        qtyInput.focus();
+    }
+    const section = document.getElementById('spMoveSection');
+    if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    toast('Siap catat stok masuk untuk ' + s.jenis + '.', 'info');
 }
 
 // ── P2-12: pergerakan stok (barang masuk + riwayat) ──
@@ -4080,17 +4128,33 @@ async function loadSparepartMoves() {
     if (!body && !sel) return;
     let moves = [];
     try { const r = await apiGet('/inventory/moves?limit=25'); moves = (r && r.items) || []; } catch (_) {}
-    if (sel && !sel.options.length && _sparepartsCache && _sparepartsCache.length) {
-        sel.innerHTML = _sparepartsCache.map(p => `<option value="${p.id}">${escapeHtml((p.merek || '') + ' ' + (p.jenis || ''))}</option>`).join('');
+    if (sel && _spView && _spView.length) {
+        const curr = sel.value;
+        sel.innerHTML = _spView.map(p => `<option value="${p.id}"${String(p.id) === curr ? ' selected' : ''}>${escapeHtml((p.merek || '') + ' ' + (p.jenis || ''))} (Sisa: ${p.qty})</option>`).join('');
     }
     if (body) {
-        body.innerHTML = moves.length ? moves.map(m => `<tr>
-            <td>${escapeHtml(String(m.waktu || '').replace('T', ' ').slice(0, 16))}</td>
-            <td class="tx-ellipsis" title="${escapeHtml(m.sparepart_label || '-')}">${escapeHtml(m.sparepart_label || '-')}</td>
-            <td>${escapeHtml(m.aksi || '-')}</td>
-            <td class="numeric-r">${m.qty}</td>
-            <td class="numeric-r">${m.qty_sesudah}</td></tr>`).join('')
-            : `<tr><td colspan="5"><div class="text-center text-sm text-gray-400 py-6">Belum ada pergerakan stok.</div></td></tr>`;
+        if (!moves.length) {
+            body.innerHTML = `<tr><td colspan="5"><div class="text-center text-xs text-gray-400 py-6"><i class="fa-solid fa-box-open text-2xl mb-1.5 block opacity-40"></i>Belum ada pergerakan stok tercatat.</div></td></tr>`;
+        } else {
+            body.innerHTML = moves.map(m => {
+                let badge = `<span class="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-semibold bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300">${escapeHtml(m.aksi || '-')}</span>`;
+                if (m.aksi === 'MASUK') {
+                    badge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40"><i class="fa-solid fa-arrow-down text-[9px]"></i> Masuk</span>`;
+                } else if (m.aksi === 'PAKAI') {
+                    badge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-indigo-50 text-indigo-700 dark:bg-indigo-950/40 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-800/40"><i class="fa-solid fa-screwdriver-wrench text-[9px]"></i> Dipakai</span>`;
+                } else if (m.aksi === 'BATAL') {
+                    badge = `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"><i class="fa-solid fa-rotate-left text-[9px]"></i> Batal</span>`;
+                }
+                const dt = String(m.waktu || '').replace('T', ' ').slice(0, 16);
+                return `<tr>
+                    <td class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escapeHtml(dt)}</td>
+                    <td class="font-medium text-gray-800 dark:text-gray-200 max-w-[200px] truncate" title="${escapeHtml(m.sparepart_label || '-')}">${escapeHtml(m.sparepart_label || '-')}</td>
+                    <td class="text-center">${badge}</td>
+                    <td class="text-right font-bold tabular-nums ${m.aksi === 'MASUK' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300'}">${m.aksi === 'MASUK' ? '+' : ''}${m.qty}</td>
+                    <td class="text-right font-extrabold tabular-nums text-gray-900 dark:text-white">${m.qty_sesudah}</td>
+                </tr>`;
+            }).join('');
+        }
     }
     applyRoleUI(document.getElementById('pageSparepart') || document);
 }
@@ -4237,30 +4301,88 @@ function renderSpKpi(src) {
     if (!el) return;
     const data = src || _spView || [];
     const total = data.length;
-    const habis = data.filter(s => (s.qty || 0) <= 0).length;
+    const aman = data.filter(s => (s.qty || 0) > 5).length;
     const tipis = data.filter(s => (s.qty || 0) > 0 && (s.qty || 0) <= 5).length;
+    const habis = data.filter(s => (s.qty || 0) <= 0).length;
     const nilai = data.reduce((a, s) => a + (Number(s.qty) || 0) * (Number(s.jual) || 0), 0);
+
     const cards = [
-        { label: 'Total Item', value: total, unit: 'item', icon: 'fa-boxes-stacked', cls: 'sm-slate' },
-        { label: 'Stok Habis', value: habis, unit: 'item', icon: 'fa-box-open', cls: 'sm-red' },
-        { label: 'Stok Menipis', value: tipis, unit: 'item', icon: 'fa-triangle-exclamation', cls: 'sm-amber' },
-        { label: 'Nilai Stok', value: spRupiah(nilai), unit: 'jual', icon: 'fa-sack-dollar', cls: 'sm-green' },
+        { key: 'all', label: 'Total Jenis', value: total, unit: 'jenis part', icon: 'fa-boxes-stacked', cls: 'sm-slate' },
+        { key: 'ready', label: 'Stok Aman', value: aman, unit: '> 5 unit', icon: 'fa-circle-check', cls: 'sm-green' },
+        { key: 'low', label: 'Stok Menipis', value: tipis, unit: '≤ 5 unit', icon: 'fa-triangle-exclamation', cls: 'sm-amber' },
+        { key: 'out', label: 'Stok Habis', value: habis, unit: '0 unit', icon: 'fa-box-open', cls: 'sm-red' },
+        { key: 'value', label: 'Nilai Stok Jual', value: spRupiah(nilai), unit: 'est. omzet', icon: 'fa-sack-dollar', cls: 'sm-cyan' },
     ];
-    el.innerHTML = cards.map(c => `
-        <div class="sm-card ${c.cls}">
+
+    el.innerHTML = cards.map(c => {
+        const isActive = _spStockFilter === c.key ? ' is-active' : '';
+        return `
+        <div class="sm-card sp-kpi-card ${c.cls}${isActive}" onclick="spKpiClick('${c.key}')" role="button" tabindex="0" title="Klik untuk memfilter: ${c.label}">
             <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
             <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">${c.unit}</span></div>
-        </div>
-    `).join('');
+        </div>`;
+    }).join('');
+}
+
+function spKpiClick(key) {
+    if (key === 'value') return;
+    if (_spStockFilter === key) {
+        _spStockFilter = 'all';
+    } else {
+        _spStockFilter = key;
+    }
+    const sel = document.getElementById('spStockFilter');
+    if (sel) sel.value = _spStockFilter;
+    _spPage = 1;
+    renderSparepart();
+}
+
+function spResetFilters() {
+    _spQuery = '';
+    _spStockFilter = 'all';
+    _spCatFilter = '';
+    _spPage = 1;
+    const search = document.getElementById('spSearch');
+    if (search) search.value = '';
+    const catSel = document.getElementById('spCatFilter');
+    if (catSel) catSel.value = '';
+    const stockSel = document.getElementById('spStockFilter');
+    if (stockSel) stockSel.value = 'all';
+    renderSparepart();
+}
+
+function updateSpCatOptions(data) {
+    const sel = document.getElementById('spCatFilter');
+    if (!sel) return;
+    const curr = _spCatFilter || sel.value || '';
+    const cats = Array.from(new Set((data || []).map(s => (s.kategori || '').trim()).filter(Boolean))).sort();
+    let html = '<option value="">Semua Kategori</option>';
+    cats.forEach(c => {
+        html += `<option value="${escapeHtml(c)}"${c === curr ? ' selected' : ''}>${escapeHtml(c)}</option>`;
+    });
+    sel.innerHTML = html;
 }
 
 function spFiltered() {
     const q = _spQuery.trim().toLowerCase();
     // P2-15: cache untuk form pergerakan stok (barang masuk / pemakaian part).
     try { _sparepartsCache = (_spView || []).slice(); } catch (_) {}
-    if (!q) return (_spView || []).slice();
-    return (_spView || []).filter(s => [s.jenis, s.merek, s.device, s.kategori]
-        .some(f => (f || '').toLowerCase().includes(q)));
+    let list = (_spView || []).slice();
+    if (q) {
+        list = list.filter(s => [s.jenis, s.merek, s.device, s.kategori]
+            .some(f => (f || '').toLowerCase().includes(q)));
+    }
+    if (_spCatFilter) {
+        list = list.filter(s => (s.kategori || '').toLowerCase() === _spCatFilter.toLowerCase());
+    }
+    if (_spStockFilter === 'low') {
+        list = list.filter(s => s.qty > 0 && s.qty <= 5);
+    } else if (_spStockFilter === 'out') {
+        list = list.filter(s => s.qty <= 0);
+    } else if (_spStockFilter === 'ready') {
+        list = list.filter(s => s.qty > 5);
+    }
+    return list;
 }
 
 // Ambil SEMUA halaman sparepart (limit backend 100/halaman).
@@ -4294,8 +4416,10 @@ async function renderSparepart() {
             const _allKpi = await spFetchAll('', my);
             if (_allKpi === null) return;
             renderSpKpi(_allKpi);
+            updateSpCatOptions(_allKpi);
         } else {
             renderSpKpi(_spView);
+            updateSpCatOptions(_spView);
         }
     } catch (err) {
         if (my !== _spReq) return;
@@ -4337,25 +4461,97 @@ async function renderSparepart() {
         pagination.classList.add('hidden');
         if (info) info.textContent = '';
         if (pageBtns) pageBtns.innerHTML = '';
+        await loadSparepartMoves();
         return;
     }
 
     const start = (_spPage - 1) * SP_PER_PAGE;
     const rows = data.slice(start, start + SP_PER_PAGE);
     rows.forEach((s, i) => {
+        const meta = spCategoryMeta(s.kategori);
+        const margin = (s.jual || 0) - (s.beli || 0);
+        const marginPct = s.beli > 0 ? Math.round((margin / s.beli) * 100) : 0;
+
+        let stockPill = '';
+        if (s.qty <= 0) {
+            stockPill = `<div class="flex items-center gap-1.5">
+                <span class="text-sm font-extrabold text-rose-600 dark:text-rose-400">0</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
+                    <i class="fa-solid fa-circle-xmark text-[9px]"></i> Habis
+                </span>
+            </div>`;
+        } else if (s.qty <= 5) {
+            stockPill = `<div class="flex items-center gap-1.5">
+                <span class="text-sm font-extrabold text-amber-600 dark:text-amber-400">${s.qty}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
+                    <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Menipis
+                </span>
+            </div>`;
+        } else {
+            stockPill = `<div class="flex items-center gap-1.5">
+                <span class="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">${s.qty}</span>
+                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40">
+                    <i class="fa-solid fa-check text-[9px]"></i> Aman
+                </span>
+            </div>`;
+        }
+
         const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td class="tx-num">${start + i + 1}</td>
-            <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(s.tgl || '')}">${txDate(s.tgl)}</td>
-            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(s.kategori)}">${escapeHtml(s.kategori)}</span></td>
-            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(s.merek)}">${escapeHtml(s.merek)}</span></td>
-            <td><span class="tx-device tx-ellipsis" title="${escapeHtml(s.jenis)}">${escapeHtml(s.jenis)}</span></td>
-            <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(s.device)}">${escapeHtml(s.device)}</span></td>
-            <td class="text-center tx-nowrap">${spQtyCell(s.qty)}</td>
-            <td class="tx-laba-muted tx-nowrap">${spRupiah(s.beli)}</td>
-            <td class="tx-laba tx-nowrap">${spRupiah(s.jual)}</td>
-            <td class="tx-aksi">
-                <button type="button" class="tx-view-btn" data-spmenu-btn title="Menu" onclick="spMenuToggle(${s.id}, this)"><i class="fa-solid fa-ellipsis-vertical"></i></button>
+            <td class="text-center text-xs text-gray-400">${start + i + 1}</td>
+            <td>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-sm border ${meta.bg}">
+                        <i class="fa-solid ${meta.icon}"></i>
+                    </div>
+                    <div class="min-w-0">
+                        <div class="font-bold text-gray-900 dark:text-white truncate max-w-[280px]" title="${escapeHtml(s.jenis)}">
+                            ${escapeHtml(s.jenis)}
+                        </div>
+                        <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300">
+                                ${escapeHtml(s.merek || '-')}
+                            </span>
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400">
+                                ${escapeHtml(s.kategori || '-')}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </td>
+            <td>
+                <div class="min-w-0">
+                    <div class="font-medium text-gray-800 dark:text-gray-200 truncate max-w-[190px]" title="${escapeHtml(s.device)}">
+                        ${escapeHtml(s.device || 'Universal')}
+                    </div>
+                    <div class="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-0.5">
+                        <i class="fa-regular fa-calendar text-[10px]"></i>
+                        <span>Masuk: ${txDate(s.tgl)}</span>
+                    </div>
+                </div>
+            </td>
+            <td>${stockPill}</td>
+            <td class="text-right">
+                <div class="font-bold text-sm text-emerald-600 dark:text-emerald-400 tabular-nums">
+                    ${spRupiah(s.jual)}
+                </div>
+                <div class="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums mt-0.5 flex items-center justify-end gap-1.5">
+                    <span>Beli: ${spRupiah(s.beli)}</span>
+                    ${s.jual > 0 && s.beli > 0 ? `<span class="text-[10px] px-1 rounded ${margin >= 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'} font-semibold">+${marginPct}%</span>` : ''}
+                </div>
+            </td>
+            <td class="text-center">
+                <div class="flex items-center justify-center gap-1">
+                    <button type="button" class="sp-action-btn hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50" onclick="spQuickRestock(${s.id})" title="Catat Stok Masuk" data-cap="SPAREPART_WRITE">
+                        <i class="fa-solid fa-boxes-stacked text-xs"></i>
+                    </button>
+                    <button type="button" class="sp-action-btn hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50" onclick="spEdit(${s.id})" title="Edit Data Part" data-cap="SPAREPART_WRITE">
+                        <i class="fa-solid fa-pen-to-square text-xs"></i>
+                    </button>
+                    <button type="button" class="sp-action-btn hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50" onclick="spDel(${s.id})" title="Hapus Sparepart" data-cap="SPAREPART_DELETE">
+                        <i class="fa-solid fa-trash text-xs"></i>
+                    </button>
+                </div>
             </td>
         `;
         body.appendChild(tr);
@@ -4383,6 +4579,9 @@ async function renderSparepart() {
         }
         pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _spPage + 1, _spPage === totalPages, false, 'Berikutnya'));
     }
+
+    await loadSparepartMoves();
+    applyRoleUI(document.getElementById('pageSparepart') || document);
 }
 
 function initSparepart() {
@@ -4393,6 +4592,24 @@ function initSparepart() {
         input.addEventListener('input', () => {
             clearTimeout(t);
             t = setTimeout(() => { _spQuery = input.value; _spPage = 1; renderSparepart(); }, 300);
+        });
+    }
+    const catSel = document.getElementById('spCatFilter');
+    if (catSel && !catSel.dataset.bound) {
+        catSel.dataset.bound = '1';
+        catSel.addEventListener('change', () => {
+            _spCatFilter = catSel.value;
+            _spPage = 1;
+            renderSparepart();
+        });
+    }
+    const stockSel = document.getElementById('spStockFilter');
+    if (stockSel && !stockSel.dataset.bound) {
+        stockSel.dataset.bound = '1';
+        stockSel.addEventListener('change', () => {
+            _spStockFilter = stockSel.value;
+            _spPage = 1;
+            renderSparepart();
         });
     }
     const form = document.getElementById('spareForm');
