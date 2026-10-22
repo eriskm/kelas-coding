@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="id" class="h-full">
 <head>
     <meta charset="UTF-8">
@@ -2578,6 +2578,32 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=15"></script>
+    <!-- ========== POPUP NOTIFIKASI SISA BEBAN / HUTANG BEBAN (SETELAH TUTUP KAS) ========== -->
+    <div id="kuHutangSaranPopup" class="audit-overlay hidden" onclick="if(event.target===this)closeKuHutangSaranPopup()" role="alertdialog" aria-label="Sisa Beban Belum Dilunasi">
+        <div class="rsp-card" style="max-width: 440px;">
+            <div class="rsp-check" style="background: rgba(239, 68, 68, 0.15); color: #ef4444;">
+                <i class="fa-solid fa-file-invoice-dollar"></i>
+            </div>
+            <h3 class="rsp-title" style="color: #ef4444;">Sisa Beban Belum Dilunasi</h3>
+            <p class="audit-desc" id="kuHutangSaranDesc" style="text-align: left; font-size: 13px; line-height: 1.5; margin-top: 8px;">
+                Saldo kas bebas toko bernilai <b>NOL</b> sehingga masih terdapat sisa Beban periode sebesar <b id="kuHutangSaranNominal" style="color: #dc2626;">Rp 0</b> yang belum terbayar.
+            </p>
+            <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; padding: 10px 12px; text-align: left; font-size: 12px; line-height: 1.5; color: #b45309; margin-top: 12px;">
+                <i class="fa-solid fa-circle-info" style="margin-right: 4px;"></i>
+                Sesuai aturan keuangan, sisa beban periode yang tidak tertutup kas toko dapat diteruskan dan dicatat ke <b>Hutang Beban</b>.
+            </div>
+            <div class="rsp-btns" style="margin-top: 16px;">
+                <button type="button" onclick="bukaPanelHutangBebanDariTutupKas()" class="receive-submit-btn rsp-btn" style="background: #2563eb; color: #fff;">
+                    <i class="fa-solid fa-arrow-right"></i>
+                    <span>Catat ke Hutang Beban</span>
+                </button>
+                <button type="button" onclick="closeKuHutangSaranPopup()" class="receive-back-btn rsp-btn">
+                    <i class="fa-solid fa-xmark"></i> Nanti Saja
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js?v=16"></script>
 </body>
 </html>

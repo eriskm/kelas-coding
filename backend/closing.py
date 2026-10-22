@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """P2-08 — Orkestrasi Tutup Kas (OD-013, SSOT-1/6/7, Q7, Q14).
 
 Tanggung jawab modul ini (TANPA redesign Buku Kas):
@@ -153,7 +153,8 @@ def selesaikan_periode(db: Session, period, fin: dict, oleh: str = None) -> dict
         laba_kotor=to_decimal(fin.get("laba_kotor") or 0))
     out["beban_dibayar"] = quantize(to_decimal(be.get("dari_laci") or 0)
                                     + to_decimal(be.get("dari_kas_aset") or 0))
-    out["beban_sisa"] = quantize(to_decimal(be.get("hutang") or 0))
+    out["beban_sisa"] = quantize(max(to_decimal(be.get("kekurangan") or 0),
+                                     to_decimal(be.get("hutang") or 0)))
     out["beban_dari_kas_aset"] = quantize(to_decimal(be.get("dari_kas_aset") or 0))
     out["beban_detail"] = be
 

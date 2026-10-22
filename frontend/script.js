@@ -4600,6 +4600,43 @@ function kuShowMain() {
     if (page) page.scrollIntoView({ block: 'start' });
 }
 
+let _sisaHutangPending = 0;
+
+function bukaKuHutangSaranPopup(nominal) {
+    _sisaHutangPending = Number(nominal) || 0;
+    const ov = document.getElementById('kuHutangSaranPopup');
+    const nomEl = document.getElementById('kuHutangSaranNominal');
+    if (!ov) return;
+    if (nomEl) nomEl.textContent = 'Rp ' + _sisaHutangPending.toLocaleString('id-ID');
+    ov.classList.remove('hidden');
+}
+
+function closeKuHutangSaranPopup() {
+    const ov = document.getElementById('kuHutangSaranPopup');
+    if (ov) ov.classList.add('hidden');
+}
+
+function bukaPanelHutangBebanDariTutupKas() {
+    closeKuHutangSaranPopup();
+    const wrap = document.getElementById('kuHutangManualWrap');
+    const input = document.getElementById('kuHutangInput');
+    const btn = document.getElementById('kuHutangBtn');
+    if (wrap) {
+        wrap.classList.remove('hidden');
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    if (input && _sisaHutangPending > 0) {
+        input.value = Math.round(_sisaHutangPending);
+        if (typeof _kuFb === 'function') {
+            _kuFb('kuDebtFeedback', 'Sisa Beban periode sebesar Rp ' + Number(_sisaHutangPending).toLocaleString('id-ID') + ' siap dicatat ke Hutang Beban. Tekan tombol Catat di bawah untuk konfirmasi.', 'info');
+        }
+        setTimeout(() => {
+            if (btn) btn.focus();
+            else input.focus();
+        }, 300);
+    }
+}
+
 // Tutup Kas real: kunci snapshot periode aktif ke server, buka periode baru.
 async function kuTutupKas() {
     let counted = null;
@@ -4608,10 +4645,7 @@ async function kuTutupKas() {
         if (raw) counted = JSON.parse(raw).nominal;
     } catch (_) {}
 
-    // PERINGATAN KERAS (bukan pemblokiran). Unit CASH yang Modalnya belum diisi
-    // TIDAK masuk Omzet/Transaksi sama sekali -- jadi kalau dibiarkan begitu,
-    // Laba maupun CTO jadi tidak benar. Tutup kas tetap boleh diteruskan,
-    // tapi harus terasa jelas bahwa ada transaksi yang belum lengkap.
+    // 1. PERINGATAN MODAL KOSONG (Gerbang server OD-LOCK-09)
     let warn = '';
     let hard = 0;
     try {
@@ -4638,13 +4672,72 @@ async function kuTutupKas() {
         }
     } catch (_) {}
 
-    const msg = counted
-        ? 'Proses Tutup Kas & Pindah Arsip? Hitungan laci terakhir: Rp ' + Number(counted).toLocaleString('id-ID') + '. Selisih akan dicatat di arsip.' + warn
-        : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.' + warn;
-    if (!confirm(msg)) return;
-    // Kalau ada modal kosong, minta konfirmasi kedua. Bukan sekadar mengulang
-    // dialog yang sama -- tujuannya supaya ini terasa benar-benar "keras" dan
-    // tidak lolos dengan tidak sengaja menekan OK.
+    // 2. CEK UJUNG HITUNGAN MINUS (REKONSILIASI FISIK & KONDISI KAS)
+    const saldoLaciSistem = Number((_kuSaldoLapisan && _kuSaldoLapisan.laci) || 0);
+    const kasBebasToko = Number((_kuSaldoLapisan && _kuSaldoLapisan.laci_milik_toko) || 0);
+    const kondisiKasAkhir = typeof kuKondisiKasAkhir === 'function' ? kuKondisiKasAkhir() : 0;
+    
+    let selisihFisik = null;
+    if (counted !== null && counted !== undefined) {
+        selisihFisik = counted - saldoLaciSistem;
+    }
+
+    let warnMinus = '';
+    let adaMinus = false;
+
+    // (2a) Rekonsiliasi Uang Fisik Minus (Tekor)
+    if (selisihFisik !== null && selisihFisik < 0) {
+        adaMinus = true;
+        warnMinus += '\n\n' + '='.repeat(56)
+            + '\n⚠  PERINGATAN: HITUNGAN REKONSILIASI FISIK BERAKHIR MINUS  ⚠'
+            + '\n' + '='.repeat(56)
+            + '\n• Uang Fisik Laci (Declare) : Rp ' + Number(counted).toLocaleString('id-ID')
+            + '\n• Saldo Sistem di Laci       : Rp ' + Number(saldoLaciSistem).toLocaleString('id-ID')
+            + '\n• Selisih Tekor (Minus)      : -Rp ' + Number(Math.abs(selisihFisik)).toLocaleString('id-ID')
+            + '\n\nUang fisik di laci LEBIH KECIL daripada catatan saldo sistem (Tekor).'
+            + '\nPastikan kembali hitungan fisik dan mutasi laci Anda sudah sesuai.'
+            + '\n' + '='.repeat(56);
+    }
+
+    // (2b) Kondisi Kas Operasional Berakhir Minus
+    if (kondisiKasAkhir < 0) {
+        adaMinus = true;
+        warnMinus += '\n\n' + '='.repeat(56)
+            + '\n⚠  PERINGATAN: KONDISI KAS OPERASIONAL BERAKHIR MINUS  ⚠'
+            + '\n' + '='.repeat(56)
+            + '\n• Kondisi Kas Akhir Periode  : -Rp ' + Number(Math.abs(kondisiKasAkhir)).toLocaleString('id-ID')
+            + '\nLaba Kotor periode ini belum dapat menutup total Beban operasional toko.'
+            + '\n' + '='.repeat(56);
+    }
+
+    // (2c) Saldo Kas Bebas Toko NOL & Sisa Beban
+    let infoKasNol = '';
+    const totalBeban = Number((_kuFin && _kuFin.total_beban) || 0);
+    if (kasBebasToko <= 0 && totalBeban > 0) {
+        infoKasNol += '\n\nℹ  INFO SISA BEBAN PERIODE:'
+            + '\nSaldo kas bebas toko saat ini berada dalam kondisi NOL.'
+            + '\nSisa beban periode yang belum terbayar akan diarahkan ke Hutang Beban setelah Tutup Kas.';
+    }
+
+    // 3. DIALOG KONFIRMASI UTAMA
+    const baseMsg = counted
+        ? 'Proses Tutup Kas & Pindah Arsip? Hitungan laci terakhir: Rp ' + Number(counted).toLocaleString('id-ID') + '. Selisih akan dicatat di arsip.'
+        : 'Proses Tutup Kas & Pindah Arsip (jam 16.00)? Pastikan seluruh transaksi kas sudah tercatat.';
+
+    const fullConfirmMsg = baseMsg + warnMinus + infoKasNol + warn;
+    if (!confirm(fullConfirmMsg)) return;
+
+    // 4. KONFIRMASI TAMBAHAN JIKA ADA UJUNG HITUNGAN BERAKHIR MINUS
+    if (adaMinus) {
+        const konfirmasiMinus = confirm(
+            'PERHATIAN: Hitungan kas Anda berakhir MINUS / TEKOR.\n\n'
+            + 'Apakah Anda sudah memastikan hitungan uang fisik dan data transaksi ini sudah benar-benar sesuai?\n\n'
+            + 'Klik OK untuk tetap melanjutkan Tutup Kas dengan nilai minus ini.\n'
+            + 'Klik Cancel untuk membatalkan dan memeriksa ulang hitungan.');
+        if (!konfirmasiMinus) return;
+    }
+
+    // 5. KONFIRMASI TAMBAHAN JIKA ADA MODAL KOSONG
     if (hard > 0) {
         const lagi = confirm(
             'Yakin? ' + hard + ' transaksi akan ikut masuk ARSIP tanpa Modal\n'
@@ -4652,20 +4745,35 @@ async function kuTutupKas() {
             + 'Klik Cancel untuk membatalkan dan mengisi Modal dulu.');
         if (!lagi) return;
     }
+
     try {
         const res = await apiPost('/kas/close', { cash_counted: counted },
                                  { idempotencyKey: newIdemKey() });
         try { localStorage.removeItem('bsf_audit_kas'); } catch (_) {}
         const s = (res && res.snapshot) || {};
         const f = s.finance || {};
+        const pen = (s && s.penyelesaian) || {};
+        const def = (pen && pen.defisit) || {};
+        const bebanBelumTerbayar = Number(pen.beban_belum_terbayar || 0);
+        const defisitMinus = Number(def.minus || 0);
+        const sisaHutangBeban = Math.max(bebanBelumTerbayar, defisitMinus);
+
         const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
         toast('Tutup kas berhasil. Masuk ' + r(f.total_masuk) + ' • Keluar ' + r(f.total_keluar)
             + ' • Saldo ' + r(f.saldo)
             + (s.selisih !== null && s.selisih !== undefined ? ' • Selisih laci ' + r(s.selisih) : '')
             + '. Periode baru dibuka.', 'success');
+        
         try { await loadDashboard(); } catch (_) {}
         await loadKuFinance();
         renderKuArsip();
+
+        // 6. NOTIFIKASI PENGARAH KE HUTANG BEBAN JIKA SISA BEBAN / KAS TOKO NOL
+        if (sisaHutangBeban > 0) {
+            setTimeout(() => {
+                bukaKuHutangSaranPopup(sisaHutangBeban);
+            }, 600);
+        }
     } catch (err) {
         toast(err.message || 'Gagal tutup kas.');
     }

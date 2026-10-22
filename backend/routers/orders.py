@@ -891,14 +891,15 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             #     Memakai helper SSOT yang sama dengan POST /api/payments ->
             #     tidak ada jalur tulis payment kedua (FIX-27), dan mutasi
             #     Saldo Laci (`cash.catat_penerimaan`) tepat satu kali.
+            from finance import boleh_masuk_omzet
+            _valid_omzet = boleh_masuk_omzet(order)
             _pays_pre = db.query(Payment).filter(
                 Payment.service_order_id == order.id).all()
             _sisa = to_decimal(payment_summary(order, _pays_pre).get("sisa") or 0)
             if _sisa > 0:
                 # Jika modal belum diisi (modal=0 DAN tidak "Tanpa Modal"), catat sebagai DP (titipan)
                 # Bukan PELUNASAN. Nanti bisa dikonversi saat modal diisi.
-                from finance import boleh_masuk_omzet
-                _kind = "PELUNASAN" if boleh_masuk_omzet(order) else "DP"
+                _kind = "PELUNASAN" if _valid_omzet else "DP"
                 payments_mod.catat_payment(
                     db, order, _kind, _sisa, method="CASH",
                     note=("Pelunasan otomatis saat status Cash" if _kind == "PELUNASAN" 
@@ -942,7 +943,10 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             # Idempoten: `bayar_began_periode` menghitung total yang SUDAH
             # dibayar dari ledger (ref_type='beban_periode', ref_id=period_key),
             # jadi replay CASH tidak pernah bayar dua kali.
-            _bayar_beban_periode_di_cash(db, order, actor=_actor(user))
+            # OD-LOCK-08 / OD-LOCK-13: Hanya bayar beban jika unit sah masuk Omzet.
+            # Jika modal belum diisi (pending modal), uang berstatus titipan DP.
+            if _valid_omzet:
+                _bayar_beban_periode_di_cash(db, order, actor=_actor(user))
             # (3) Serah-terima unit (CASH otomatis berarti customer mengambil).
             order.unit_status = "DIAMBIL"
             order.taken_at = _now_cash

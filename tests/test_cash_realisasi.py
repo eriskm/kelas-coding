@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """P2-15 (Owner Cash Model) — CASH sebagai event realisasi transaksi.
 
 Aturan yang diuji (meniru Project A):
@@ -170,6 +170,7 @@ def test_event_cash_lengkap(client, db, auth):
     _kunci = _p.start_at.date().isoformat()
     d_awal = dist_mod.sudah_ada(db, _kunci, _p.id)
     _id_awal = d_awal.id if d_awal is not None else None
+    _cash_out_awal = to_decimal(d_awal.cash_out) if d_awal is not None else ZERO_SAFE
 
     import finance as _fin
     import beban_bayar as _beb
@@ -195,11 +196,14 @@ def test_event_cash_lengkap(client, db, auth):
     # DP 300rb SUDAH masuk laci sejak diterima (dicatat sebelum `before_laci`).
     d_akhir = dist_mod.sudah_ada(db, _kunci, _p.id)
     tergakar = ZERO_SAFE
-    if d_akhir is not None and d_akhir.id != _id_awal:
-        # OD-LOCK-11.5: saat CASH yang keluar dari Laci HANYA 70% (cash_out).
-        # 30% Hak Kas Aset masih di Laci sampai Tutup Kas, jadi tidak ikut
-        # dihitung sebagai yang tergakar sekarang.
-        tergakar = to_decimal(d_akhir.cash_out)
+    if d_akhir is not None:
+        if d_akhir.id != _id_awal:
+            # OD-LOCK-11.5: saat CASH yang keluar dari Laci HANYA 70% (cash_out).
+            # 30% Hak Kas Aset masih di Laci sampai Tutup Kas, jadi tidak ikut
+            # dihitung sebagai yang tergakar sekarang.
+            tergakar = to_decimal(d_akhir.cash_out)
+        else:
+            tergakar = to_decimal(d_akhir.cash_out) - _cash_out_awal
 
     # Owner (2026-10-17): setiap event CASH juga mencoba membayar Beban
     # periode dari Laci, SETELAH Modal keluar (OD-LOCK-01 tetap dijaga). Jadi
@@ -298,7 +302,7 @@ def test_warranty_muncul_setelah_tutup_kas(client, db, auth):
     assert o.taken_at is None      # garansi belum aktif
 
     assert client.put("/api/orders/%d" % o.id, headers=auth,
-                        json={"status": "CASH"}).status_code == 200
+                      json={"status": "CASH"}).status_code == 200
     db.expire_all()
     assert o.taken_at is not None, "taken_at = mulai garansi"
 

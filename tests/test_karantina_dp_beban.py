@@ -248,3 +248,74 @@ def test_dp_pelunasan_tidak_dobel_di_kas_awal_operasional(fresh_db):
     assert fin2["kas_aset_awal_operasional"] == Decimal("0.00"), (
         "kas_aset_awal_operasional tidak boleh melonjak jadi 200rb karena DP sudah masuk di Omzet!"
     )
+
+
+def test_order_cash_tanpa_modal_tidak_boleh_dipakai_bayar_beban(fresh_db):
+    """OD-LOCK-08 & OD-LOCK-13:
+    Order diubah ke CASH tapi modal belum diisi (tanpa_modal=False):
+    - Pembayaran customer dikarantina sebagai DP titipan.
+    - DP tersebut BELUM terpakai (dp_terpakai == 0) karena belum sah jadi Omzet.
+    - Kas Bebas Toko (saldo_laci_milik_toko) tetap 0.
+    - Beban TIDAK BOLEH dibayar dari laci (dari_laci == 0).
+    """
+    db = fresh_db
+    import models as m
+    import cash as cash_mod
+    import beban_bayar
+    from finance import boleh_masuk_omzet
+
+    t0 = datetime(2026, 10, 22, 14, 0, 0)
+    p = m.KasPeriod(start_at=t0, end_at=t0 + timedelta(days=1), status="OPEN")
+    db.add(p)
+    cust = m.Customer(name="Cust Pending Modal", phone="082222", created_at=t0)
+    db.add(cust)
+    db.flush()
+
+    order = m.ServiceOrder(
+        customer_id=cust.id, no_servis="SV-PENDING-MODAL",
+        device="Infinix Hot 10",
+        status="CASH", unit_status="DIAMBIL", service_date=t0.date(),
+        estimate=Decimal("350000"), final_price=Decimal("350000"),
+        part_cost=ZERO, modal_jasa=ZERO, modal_lainnya=ZERO,
+        tanpa_modal=False,  # Modal belum diisi dan bukan tanpa_modal
+        created_at=t0
+    )
+    db.add(order)
+    db.flush()
+
+    # Pastikan unit ini BELUM boleh masuk omzet
+    assert not boleh_masuk_omzet(order)
+
+    # Uang diterima dari customer 350.000 (jenis DP karena modal belum diisi)
+    pay = m.Payment(
+        service_order_id=order.id, amount=Decimal("350000"),
+        kind="DP", method="CASH",
+        note="DP otomatis (modal belum diisi) saat status Cash",
+        created_at=t0
+    )
+    db.add(pay)
+    db.flush()
+    cash_mod.catat_penerimaan(db, pay, actor="kasir")
+    db.flush()
+
+    # Saldo fisik laci 350.000
+    assert cash_mod.saldo_laci(db) == Decimal("350000.00")
+    # Karena modal belum diisi, DP BELUM terpakai!
+    assert cash_mod.dp_terpakai(db, order) == Decimal("0.00")
+    # Saldo titipan DP harus 350.000 utuh
+    assert cash_mod.saldo_titipan_dp(db) == Decimal("350000.00")
+    # Kas Bebas Milik Toko HARUS 0!
+    assert cash_mod.saldo_laci_milik_toko(db) == Decimal("0.00")
+
+    # Coba bayar beban periode 350.000
+    res = beban_bayar.bayar_beban_periode(
+        db, t0, t0 + timedelta(days=1), "kas_period:%d" % p.id,
+        Decimal("350000"), oleh="admin", kas_period_id=p.id, laba_kotor=Decimal("0.00")
+    )
+
+    # Beban DILARANG menyerap uang DP ini!
+    assert res["dari_laci"] == Decimal("0.00"), "Beban tidak boleh dibayar dari DP titipan!"
+    assert res["hutang"] == Decimal("350000.00"), "Sisa beban menjadi hutang beban"
+    # Saldo laci tetap 350.000 (tidak berkurang)
+    assert cash_mod.saldo_laci(db) == Decimal("350000.00")
+

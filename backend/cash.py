@@ -416,6 +416,12 @@ def dp_terpakai(db: Session, order, rows=None) -> Decimal:
         return ZERO
     if payment_summary(order, rows)["payment_status"] != "LUNAS":
         return ZERO
+    # OD-LOCK-08 / OD-LOCK-13: DP otomatis (placeholder saat modal belum diisi)
+    # adalah uang titipan yang dikarantina. Uang ini BELUM terpakai sampai
+    # modal diisi dan sah menjadi omzet.
+    for p in rows:
+        if is_dp(p) and "modal belum diisi" in (getattr(p, "note", "") or "").lower():
+            return ZERO
     return quantize(min(dp_order, to_decimal(kewajiban(order))))
 
 
