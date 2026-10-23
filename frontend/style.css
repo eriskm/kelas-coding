@@ -4521,3 +4521,74 @@ select.range-pill.range-select option { color: #0f172a; }
     border-color: rgba(255, 255, 255, 0.15);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
 }
+
+/* ============================================
+   TRANSAKSI: HEADER CTA BUTTONS
+   ============================================ */
+.tx-header-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    height: 38px;
+    padding: 0 16px;
+    border-radius: 9px;
+    font-size: 12.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.18s ease;
+    white-space: nowrap;
+    user-select: none;
+}
+.tx-header-btn-primary {
+    background: #dc2626;
+    color: #ffffff;
+    border: 1px solid #dc2626;
+    box-shadow: 0 2px 5px rgba(220, 38, 38, 0.25);
+}
+.tx-header-btn-primary:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(220, 38, 38, 0.35);
+}
+.tx-header-btn-primary:active {
+    transform: translateY(0);
+}
+.tx-header-btn-secondary {
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #cbd5e1;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+.tx-header-btn-secondary i {
+    color: #2563eb;
+    transition: transform 0.18s ease;
+}
+.dark .tx-header-btn-secondary {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #e2e8f0;
+}
+.dark .tx-header-btn-secondary i {
+    color: #60a5fa;
+}
+.tx-header-btn-secondary:hover {
+    background: #f8fafc;
+    border-color: #93c5fd;
+    color: #1d4ed8;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(37, 99, 235, 0.12);
+}
+.tx-header-btn-secondary:hover i {
+    transform: scale(1.1);
+}
+.dark .tx-header-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(96, 165, 250, 0.4);
+    color: #93c5fd;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.3);
+}
+.tx-header-btn-secondary:active {
+    transform: translateY(0);
+}

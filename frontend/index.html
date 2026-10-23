@@ -308,11 +308,13 @@
                                 <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Monitoring alur pengerjaan unit, teknisi penanggung jawab, dan status kas</p>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap">
-                                <button type="button" onclick="showServisBaru()" class="receive-submit-btn bg-brand-500 hover:bg-brand-600 text-white font-semibold">
-                                    <i class="fa-solid fa-plus"></i> Servis Baru
+                                <button type="button" onclick="showServisBaru()" class="tx-header-btn tx-header-btn-primary" title="Daftarkan unit servis baru">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>Servis Baru</span>
                                 </button>
-                                <button type="button" onclick="openClaimReceive()" class="receive-back-btn" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
-                                    <i class="fa-solid fa-shield-halved"></i> Klaim Garansi
+                                <button type="button" onclick="openClaimReceive()" class="tx-header-btn tx-header-btn-secondary" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                    <span>Klaim Garansi</span>
                                 </button>
                             </div>
                         </div>
@@ -2839,6 +2841,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=28"></script>
+    <script src="/static/script.js?v=29"></script>
 </body>
 </html>
