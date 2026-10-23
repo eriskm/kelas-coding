@@ -2011,25 +2011,37 @@
                                     <span class="rc-posbar-badge" id="rcPathBadge" title="Terdeteksi otomatis dari data">AUTO</span>
                                 </div>
                                 <div class="rc-posbar-opts" id="rcPathGroup">
-                                    <label class="rc-pos">
+                                    <label class="rc-pos" title="Penerimaan unit awal untuk antrean pengecekan">
                                         <input type="radio" name="rcPath" value="TITIP" checked>
                                         <span class="rc-pos-ico"><i class="fa-solid fa-inbox"></i></span>
-                                        <span class="rc-pos-txt">Titip Unit</span>
+                                        <div class="rc-pos-body">
+                                            <span class="rc-pos-txt">Titip Unit</span>
+                                            <span class="rc-pos-sub">Antrean awal</span>
+                                        </div>
                                     </label>
-                                    <label class="rc-pos">
+                                    <label class="rc-pos" title="Diagnosa awal jelas, langsung dikerjakan teknisi">
                                         <input type="radio" name="rcPath" value="PERBAIKAN">
                                         <span class="rc-pos-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
-                                        <span class="rc-pos-txt">Perbaikan</span>
+                                        <div class="rc-pos-body">
+                                            <span class="rc-pos-txt">Perbaikan</span>
+                                            <span class="rc-pos-sub">Langsung kerja</span>
+                                        </div>
                                     </label>
-                                    <label class="rc-pos">
+                                    <label class="rc-pos" title="Perlu menunggu pemesanan atau kedatangan suku cadang">
                                         <input type="radio" name="rcPath" value="SPAREPART">
                                         <span class="rc-pos-ico"><i class="fa-solid fa-hourglass-half"></i></span>
-                                        <span class="rc-pos-txt">Sparepart</span>
+                                        <div class="rc-pos-body">
+                                            <span class="rc-pos-txt">Sparepart</span>
+                                            <span class="rc-pos-sub">Tunggu part</span>
+                                        </div>
                                     </label>
-                                    <label class="rc-pos">
+                                    <label class="rc-pos" title="Servis kilat langsung selesai ditunggu konsumen">
                                         <input type="radio" name="rcPath" value="TUNGGU">
                                         <span class="rc-pos-ico"><i class="fa-solid fa-bolt"></i></span>
-                                        <span class="rc-pos-txt">Tunggu</span>
+                                        <div class="rc-pos-body">
+                                            <span class="rc-pos-txt">Tunggu</span>
+                                            <span class="rc-pos-sub">Servis kilat</span>
+                                        </div>
                                     </label>
                                 </div>
                             </div>
@@ -2141,6 +2153,18 @@
                                         </select>
                                     </div>
                                     <input type="hidden" id="rcStatus" value="DITERIMA">
+                                </div>
+                                <!-- Live Financial Summary Chip / Bar -->
+                                <div id="rcCalcBar" class="rc-calc-bar hidden">
+                                    <div class="rc-calc-inner">
+                                        <div class="rc-calc-breakdown">
+                                            <span class="rc-calc-chip" id="rcCalcChipEst"><i class="fa-solid fa-receipt"></i> Estimasi: <b id="rcCalcEstVal">Rp 0</b></span>
+                                            <span class="rc-calc-chip" id="rcCalcChipDp"><i class="fa-solid fa-hand-holding-dollar"></i> DP: <b id="rcCalcDpVal">Rp 0</b></span>
+                                        </div>
+                                        <div id="rcCalcSisaBadge" class="rc-calc-badge is-sisa">
+                                            <i class="fa-solid fa-calculator"></i> <span id="rcCalcSisaText">Sisa Pelunasan:</span> <b id="rcCalcSisaVal">Rp 0</b>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -2785,6 +2809,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=24"></script>
+    <script src="/static/script.js?v=25"></script>
 </body>
 </html>

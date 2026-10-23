@@ -2522,15 +2522,58 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     border-radius: 6px;
     font-size: 11px;
 }
-#pageReceive #rcCheckGroups .rc-check-grid { gap: 2px 10px; }
+#pageReceive #rcCheckGroups .rc-check-grid { gap: 5px 8px; }
 #pageReceive #rcCheckGroups .rc-check {
-    font-size: 12px;
-    gap: 5px;
-    padding: 1px 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    user-select: none;
     line-height: 1.35;
     max-width: 100%;
 }
-#pageReceive #rcCheckGroups .rc-check input { width: 13px; height: 13px; }
+#pageReceive #rcCheckGroups .rc-check:hover {
+    background: #f1f5f9;
+    border-color: #cbd5e1;
+}
+#pageReceive #rcCheckGroups .rc-check input {
+    accent-color: #dc2626;
+    width: 13px;
+    height: 13px;
+    margin: 0;
+    cursor: pointer;
+    flex-shrink: 0;
+}
+#pageReceive #rcCheckGroups .rc-check:has(input:checked) {
+    background: #fef2f2;
+    border-color: #fca5a5;
+    color: #b91c1c;
+    font-weight: 700;
+    box-shadow: 0 1px 2px rgba(220, 38, 38, 0.08);
+}
+.dark #pageReceive #rcCheckGroups .rc-check {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #cbd5e1;
+}
+.dark #pageReceive #rcCheckGroups .rc-check:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+.dark #pageReceive #rcCheckGroups .rc-check:has(input:checked) {
+    background: rgba(220, 38, 38, 0.18);
+    border-color: rgba(220, 38, 38, 0.45);
+    color: #fca5a5;
+    box-shadow: none;
+}
 /* Desktop: grup berdampingan — sekat vertikal tipis, tanpa tumpukan top-border */
 @media (min-width: 641px) {
     #pageReceive #rcCheckGroups .rc-check-group + .rc-check-group {
@@ -2904,23 +2947,30 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .rc-posbar-badge.rc-badge-in { animation: rcBadgeIn .2s ease-out; }
 @keyframes rcBadgeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
 .rc-posbar-opts { display: flex; gap: 6px; flex: 1 1 auto; min-width: 0; }
-.rc-pos { flex: 1 1 0; min-width: 0; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 999px; border: 1px solid transparent; transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .15s ease; -webkit-tap-highlight-color: transparent; }
+.rc-pos { flex: 1 1 0; min-width: 0; display: flex; flex-direction: row; align-items: center; justify-content: center; gap: 7px; cursor: pointer; padding: 5px 8px; border-radius: 9px; border: 1px solid transparent; transition: background-color .18s ease, border-color .18s ease, box-shadow .18s ease, transform .15s ease; -webkit-tap-highlight-color: transparent; }
 .rc-pos:hover { background: #fff; border-color: #e2e8f0; }
 .dark .rc-pos:hover { background: rgba(255,255,255,.04); border-color: rgba(255,255,255,.1); }
 .rc-pos:active { transform: scale(.97); }
 .rc-pos input { position: absolute; opacity: 0; pointer-events: none; }
-.rc-pos-ico { width: 22px; height: 22px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #94a3b8; background: #fff; border: 1.5px solid #e2e8f0; transition: transform .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; flex-shrink: 0; }
+.rc-pos-ico { width: 22px; height: 22px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 11px; color: #94a3b8; background: #fff; border: 1.5px solid #e2e8f0; transition: transform .18s ease, background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease; flex-shrink: 0; }
 .dark .rc-pos-ico { background: #1a1a24; border-color: rgba(255,255,255,.1); }
-.rc-pos-txt { font-size: 11px; font-weight: 700; color: #64748b; text-align: center; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .18s ease; }
+.rc-pos-body { display: flex; flex-direction: column; min-width: 0; text-align: left; line-height: 1.15; }
+.rc-pos-txt { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; transition: color .18s ease; }
 .dark .rc-pos-txt { color: #94a3b8; }
+.rc-pos-sub { font-size: 9px; font-weight: 500; color: #94a3b8; white-space: nowrap; transition: color .18s ease; }
+.dark .rc-pos-sub { color: #64748b; }
 .rc-pos:has(input:checked) { background: #fff; border-color: #fecaca; box-shadow: 0 0 0 2px rgba(220,38,38,.08); }
 .dark .rc-pos:has(input:checked) { background: rgba(220,38,38,.1); border-color: rgba(220,38,38,.45); box-shadow: none; }
 .rc-pos input:checked + .rc-pos-ico { border-color: #dc2626; color: #dc2626; background: #fef2f2; box-shadow: 0 0 0 2px rgba(220,38,38,.12); }
 .rc-posbar.is-live .rc-pos input:checked + .rc-pos-ico { animation: rcPosPop .2s ease-out; }
 @keyframes rcPosPop { 0% { transform: scale(.82); } 55% { transform: scale(1.08); } 100% { transform: scale(1); } }
-.rc-pos input:checked ~ .rc-pos-txt { color: #b91c1c; }
+.rc-pos input:checked ~ .rc-pos-txt,
+.rc-pos input:checked ~ .rc-pos-body .rc-pos-txt { color: #b91c1c; }
 .dark .rc-pos input:checked + .rc-pos-ico { background: rgba(220,38,38,.18); color: #fca5a5; }
-.dark .rc-pos input:checked ~ .rc-pos-txt { color: #fca5a5; }
+.dark .rc-pos input:checked ~ .rc-pos-txt,
+.dark .rc-pos input:checked ~ .rc-pos-body .rc-pos-txt { color: #fca5a5; }
+.rc-pos input:checked ~ .rc-pos-body .rc-pos-sub { color: #ef4444; }
+.dark .rc-pos input:checked ~ .rc-pos-body .rc-pos-sub { color: #f87171; }
 .rc-pos input:focus-visible + .rc-pos-ico { outline: 2px solid #dc2626; outline-offset: 2px; }
 /* Smart-detection ping — sekali, dipicu via class .rc-flash dari JS (presentasi saja) */
 .rc-pos.rc-flash .rc-pos-ico { animation: rcPosPing .32s ease-out, rcPosPop .2s ease-out; }
@@ -4247,3 +4297,131 @@ select.range-pill.range-select option { color: #0f172a; }
 #txKpi .sm-num { font-size: 19px; font-weight: 800; }
 #txKpi .sm-pct { font-size: 10.5px; padding: 1px 8px; border-radius: 999px; }
 #pageTransaksi .tx-table { min-width: 860px; width: 100%; table-layout: auto; }
+
+/* Servis Baru: Live Financial Summary Calculator */
+.rc-calc-bar {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+}
+.dark .rc-calc-bar {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.rc-calc-inner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.rc-calc-breakdown {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.rc-calc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 500;
+    color: #64748b;
+    background: #fff;
+    padding: 3px 8px;
+    border-radius: 6px;
+    border: 1px solid #e2e8f0;
+}
+.dark .rc-calc-chip {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+}
+.rc-calc-chip b {
+    color: #1e293b;
+    font-weight: 700;
+}
+.dark .rc-calc-chip b {
+    color: #f1f5f9;
+}
+.rc-calc-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+}
+.rc-calc-badge.is-sisa {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+}
+.dark .rc-calc-badge.is-sisa {
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.3);
+}
+.rc-calc-badge.is-lunas {
+    background: #f0fdf4;
+    color: #15803d;
+    border: 1px solid #bbf7d0;
+}
+.dark .rc-calc-badge.is-lunas {
+    background: rgba(34, 197, 94, 0.15);
+    color: #86efac;
+    border-color: rgba(34, 197, 94, 0.3);
+}
+.rc-calc-badge.is-invalid {
+    background: #fef2f2;
+    color: #b91c1c;
+    border: 1px solid #fecaca;
+    animation: rcBadgeIn 0.2s ease-out;
+}
+.dark .rc-calc-badge.is-invalid {
+    background: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+/* Histori Cerdas: Gunakan Nama Action */
+.rc-cust-act {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #e2e8f0;
+}
+.dark .rc-cust-act {
+    border-top-color: rgba(255, 255, 255, 0.08);
+}
+.rc-use-name-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    padding: 3px 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.rc-use-name-btn:hover {
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+.dark .rc-use-name-btn {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: rgba(220, 38, 38, 0.3);
+    color: #fca5a5;
+}
+.dark .rc-use-name-btn:hover {
+    background: rgba(220, 38, 38, 0.25);
+}

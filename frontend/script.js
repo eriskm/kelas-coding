@@ -235,6 +235,7 @@ function restoreReceiveDraft() {
         if (d._checklist && typeof applyChecklist === 'function') applyChecklist('rc', d._checklist);
     } catch (_) {}
     try { updateReceiveSteps(); } catch (_) {}
+    try { updateReceiveCalc(); } catch (_) {}
     try { rcMarkReq(); } catch (_) {}
     return true;
 }
@@ -750,6 +751,7 @@ function openServisBaru() {
     const _st = document.getElementById('receiveSubmitText');
     if (_st) _st.textContent = 'Terima & Daftarkan Servis';
     updateReceiveSteps();
+    try { updateReceiveCalc(); } catch (_) {}
     loadSmartHistory();
     setActiveNav('servisbaru', document.querySelectorAll('.nav-link'));
     setActiveNav(null, document.querySelectorAll('.mobile-nav-item'));
@@ -6448,6 +6450,59 @@ function updateReceiveSteps() {
     });
 }
 
+function updateReceiveCalc() {
+    const estEl = document.getElementById('rcEstimate');
+    const dpEl = document.getElementById('rcDp');
+    const bar = document.getElementById('rcCalcBar');
+    if (!estEl || !dpEl || !bar) return;
+
+    const est = parseFloat(estEl.value) || 0;
+    const dp = parseFloat(dpEl.value) || 0;
+
+    if (est <= 0 && dp <= 0) {
+        bar.classList.add('hidden');
+        return;
+    }
+
+    bar.classList.remove('hidden');
+    const estValEl = document.getElementById('rcCalcEstVal');
+    const dpValEl = document.getElementById('rcCalcDpVal');
+    const badge = document.getElementById('rcCalcSisaBadge');
+    const sisaText = document.getElementById('rcCalcSisaText');
+    const sisaVal = document.getElementById('rcCalcSisaVal');
+
+    if (estValEl) estValEl.textContent = formatRupiah(est);
+    if (dpValEl) dpValEl.textContent = formatRupiah(dp);
+
+    if (badge) {
+        badge.classList.remove('is-sisa', 'is-lunas', 'is-invalid');
+        if (est > 0 && dp > est) {
+            badge.classList.add('is-invalid');
+            if (sisaText) sisaText.textContent = 'Peringatan: DP Melebihi Estimasi!';
+            if (sisaVal) sisaVal.textContent = '';
+        } else if (est > 0 && dp === est) {
+            badge.classList.add('is-lunas');
+            if (sisaText) sisaText.textContent = 'Lunas di Depan';
+            if (sisaVal) sisaVal.textContent = '(Sisa Rp 0)';
+        } else {
+            const sisa = Math.max(0, est - dp);
+            badge.classList.add('is-sisa');
+            if (sisaText) sisaText.textContent = 'Sisa Pelunasan:';
+            if (sisaVal) sisaVal.textContent = formatRupiah(sisa);
+        }
+    }
+}
+
+function rcUseCustName(name) {
+    const el = document.getElementById('rcName');
+    if (el && name) {
+        el.value = name;
+        el.focus();
+        try { updateReceiveSteps(); } catch (_) {}
+        try { scheduleReceiveDraft(); } catch (_) {}
+    }
+}
+
 function rcShortcutToggle() {
     const pop = document.getElementById('rcShortcutPop');
     if (pop) pop.classList.toggle('open');
@@ -6494,15 +6549,23 @@ function initReceiveShortcuts() {
 
 function renderCustSummary(o) {
     const initial = ((o.name || '?').trim().charAt(0) || '?').toUpperCase();
+    const canUseName = o.name && o.name !== 'Pelanggan';
     return `<div class="rc-cust">
-        <div class="rc-cust-top"><span class="rc-cust-ava">${escapeHtml(initial)}</span>`
-        + `<div class="rc-cust-id"><b>${escapeHtml(o.name)}</b><span>${escapeHtml(o.phone)}</span></div>`
-        + `<span class="rc-cust-total">${o.total}× servis</span></div>`
-        + `<div class="rc-cust-grid">`
-        + `<div><span>Device Terakhir</span><b>${escapeHtml(o.device || '-')}</b></div>`
-        + `<div><span>Perbaikan Terakhir</span><b>${escapeHtml(o.plan || '-')}</b></div>`
-        + `<div><span>Harga Terakhir</span><b>${o.price != null ? formatRupiah(o.price) : '-'}</b></div>`
-        + `</div></div>`;
+        <div class="rc-cust-top">
+            <span class="rc-cust-ava">${escapeHtml(initial)}</span>
+            <div class="rc-cust-id">
+                <b>${escapeHtml(o.name)}</b>
+                <span>${escapeHtml(o.phone)}</span>
+            </div>
+            <span class="rc-cust-total">${o.total}× servis</span>
+        </div>
+        ${canUseName ? `<div class="rc-cust-act"><button type="button" class="rc-use-name-btn" onclick="rcUseCustName('${escapeHtml(o.name)}')"><i class="fa-solid fa-user-check"></i> Gunakan Nama Ini</button></div>` : ''}
+        <div class="rc-cust-grid">
+            <div><span>Device Terakhir</span><b>${escapeHtml(o.device || '-')}</b></div>
+            <div><span>Perbaikan Terakhir</span><b>${escapeHtml(o.plan || '-')}</b></div>
+            <div><span>Harga Terakhir</span><b>${o.price != null ? formatRupiah(o.price) : '-'}</b></div>
+        </div>
+    </div>`;
 }
 
 function historyItemsHtml(rows) {
@@ -6549,8 +6612,15 @@ async function loadSmartHistory() {
         }
         setBadge('Ditemukan ' + rows.length, 'found');
         const first = rows[0];
+        const foundName = (first.customer && first.customer.name) || '';
+        const nameVal = (nameEl && nameEl.value.trim()) || '';
+        if (foundName && nameEl && !nameVal) {
+            nameEl.value = foundName;
+            try { updateReceiveSteps(); } catch (_) {}
+            try { scheduleReceiveDraft(); } catch (_) {}
+        }
         const cust = {
-            name: (nameEl && nameEl.value.trim()) || 'Pelanggan',
+            name: (nameEl && nameEl.value.trim()) || foundName || 'Pelanggan',
             phone: phone,
             total: rows.length,
             device: first.device,
@@ -6653,7 +6723,7 @@ async function loadReceiveTechnicians() {
 async function initReceivePage() {
     // Guard anti double-binding: listener submit/input dipasang sekali saja.
     // Pemanggilan ulang hanya me-restore draft (tanpa dobel POST/history).
-    if (window._initReceiveBound) { restoreReceiveDraft(); loadReceiveTechnicians(); return; }
+    if (window._initReceiveBound) { restoreReceiveDraft(); loadReceiveTechnicians(); try { updateReceiveCalc(); } catch (_) {} return; }
     window._initReceiveBound = true;
     renderChecklist('rc', 'rcCheckGroups', null, { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
@@ -6675,8 +6745,8 @@ async function initReceivePage() {
     });
 
     const form = document.getElementById('receiveForm');
-    form.addEventListener('input', () => { rcAutoPath(); updateReceiveSteps(); scheduleReceiveDraft(); });
-    form.addEventListener('change', () => { rcAutoPath(); updateReceiveSteps(); scheduleReceiveDraft(); });
+    form.addEventListener('input', () => { rcAutoPath(); updateReceiveSteps(); updateReceiveCalc(); scheduleReceiveDraft(); });
+    form.addEventListener('change', () => { rcAutoPath(); updateReceiveSteps(); updateReceiveCalc(); scheduleReceiveDraft(); });
     // Initial path Servis Baru: radio Posisi Servis (klik manual = kunci pilihan).
     document.querySelectorAll('input[name="rcPath"]').forEach(r => {
         if (!r.dataset.pathBound) {
@@ -6687,6 +6757,7 @@ async function initReceivePage() {
     rcApplyPath();
     initReceiveShortcuts();
     updateReceiveSteps();
+    updateReceiveCalc();
 
     document.getElementById('receiveForm').addEventListener('submit', async function (e) {
         e.preventDefault();
