@@ -4425,3 +4425,99 @@ select.range-pill.range-select option { color: #0f172a; }
 .dark .rc-use-name-btn:hover {
     background: rgba(220, 38, 38, 0.25);
 }
+
+/* ============================================
+   KEUANGAN: SEGMENTED TABS & MODERN KPI
+   ============================================ */
+.ku-tabs-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    border-radius: 12px;
+    max-width: 100%;
+    overflow-x: auto;
+}
+.dark .ku-tabs-nav {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.ku-tab-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 7px 14px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.18s ease;
+    user-select: none;
+}
+.ku-tab-btn:hover {
+    color: #0f172a;
+    background: rgba(255, 255, 255, 0.7);
+}
+.dark .ku-tab-btn {
+    color: #94a3b8;
+}
+.dark .ku-tab-btn:hover {
+    color: #f1f5f9;
+    background: rgba(255, 255, 255, 0.08);
+}
+.ku-tab-btn.is-active {
+    color: #dc2626;
+    background: #fff;
+    font-weight: 700;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+.dark .ku-tab-btn.is-active {
+    color: #fca5a5;
+    background: #1e1e2d;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.ku-period-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #dc2626;
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    padding: 2.5px 9px;
+    border-radius: 999px;
+}
+.dark .ku-period-badge {
+    background: rgba(220, 38, 38, 0.15);
+    border-color: rgba(220, 38, 38, 0.3);
+    color: #fca5a5;
+}
+
+.ku-kpi-card {
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    transition: all 0.2s ease;
+}
+.dark .ku-kpi-card {
+    background: #14141c;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.ku-kpi-card:hover {
+    border-color: #cbd5e1;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+}
+.dark .ku-kpi-card:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}

@@ -1276,16 +1276,110 @@
 
                         <div class="flex items-center justify-between flex-wrap gap-3">
                             <div>
-                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
-                                    <i class="fa-solid fa-coins text-brand-500"></i>
-                                    Keuangan
-                                </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola arus kas, pengeluaran, dan alokasi profit SUKABUMI FLASHER.</p>
+                                <div class="flex items-center gap-2.5 flex-wrap">
+                                    <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                        <i class="fa-solid fa-coins text-brand-500"></i>
+                                        Keuangan
+                                    </h2>
+                                    <span id="kuPeriodBadge" class="ku-period-badge"><i class="fa-solid fa-calendar-day"></i> Periode Kas Aktif</span>
+                                </div>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Kelola arus kas operasional, brankas aset, dan pembagian laba toko.</p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <div class="ku-notif-wrap">
+                                    <button type="button" id="kuNotifBtn" class="ku-notif-btn"
+                                            aria-haspopup="true" aria-expanded="false"
+                                            title="Notifikasi"
+                                            onclick="kuToggleNotif(event)">
+                                        <i class="fa-solid fa-bell"></i>
+                                        <span id="kuNotifBadge" class="ku-notif-badge hidden">0</span>
+                                    </button>
+                                    <div id="kuNotifPop" class="ku-notif-pop hidden"
+                                         role="dialog" aria-label="Notifikasi">
+                                        <div class="ku-notif-pop-head">
+                                            <span>Notifikasi &mdash; 10 terbaru</span>
+                                            <span id="kuNotifProvider" class="ku-notif-pop-prov"></span>
+                                        </div>
+                                        <div class="ku-notif-pop-body">
+                                            <table class="tx-table w-full text-sm">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Waktu</th>
+                                                        <th>Event</th>
+                                                        <th>Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="kuNotifBody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Buku Kas + Alokasi (fokus utama) -->
+                        <!-- Segmented Navigation Bar: 3 Tabs -->
+                        <div class="ku-tabs-nav" role="tablist" aria-label="Navigasi Halaman Keuangan">
+                            <button type="button" class="ku-tab-btn is-active" id="kuTabBtnOperasional" onclick="kuSwitchTab('operasional')" role="tab" aria-selected="true">
+                                <i class="fa-solid fa-cash-register"></i>
+                                <span>Operasional &amp; Kas</span>
+                            </button>
+                            <button type="button" class="ku-tab-btn" id="kuTabBtnAset" onclick="kuSwitchTab('aset')" role="tab" aria-selected="false">
+                                <i class="fa-solid fa-vault"></i>
+                                <span>Brankas &amp; Hutang</span>
+                            </button>
+                            <button type="button" class="ku-tab-btn" id="kuTabBtnRiwayat" onclick="kuSwitchTab('riwayat')" role="tab" aria-selected="false">
+                                <i class="fa-solid fa-clock-rotate-left"></i>
+                                <span>Mutasi &amp; Rekonsiliasi</span>
+                            </button>
+                        </div>
+
                         <div id="kuMainView" class="space-y-4">
+                        <!-- TAB 1: OPERASIONAL & KAS -->
+                        <div id="kuTabPaneOperasional" class="space-y-4">
+                            <!-- Quick KPI 4-Card -->
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3" id="kuKpiBar">
+                                <div class="sm-card ku-kpi-card">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="sm-kpi-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                            <i class="fa-solid fa-cash-register"></i>
+                                        </span>
+                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Kas Laci (Kasir)</span>
+                                    </div>
+                                    <div class="text-base sm:text-lg font-extrabold text-gray-800 dark:text-white" id="kuKpiLaci">Rp 0</div>
+                                    <span class="text-[10px] text-gray-400">Saldo fisik di laci</span>
+                                </div>
+                                <div class="sm-card ku-kpi-card">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="sm-kpi-icon bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                                            <i class="fa-solid fa-receipt"></i>
+                                        </span>
+                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Omzet Periode</span>
+                                    </div>
+                                    <div class="text-base sm:text-lg font-extrabold text-blue-600 dark:text-blue-400" id="kuKpiOmzet">Rp 0</div>
+                                    <span class="text-[10px] text-gray-400">Total servis lunas</span>
+                                </div>
+                                <div class="sm-card ku-kpi-card">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="sm-kpi-icon bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                                            <i class="fa-solid fa-file-invoice-dollar"></i>
+                                        </span>
+                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Beban</span>
+                                    </div>
+                                    <div class="text-base sm:text-lg font-extrabold text-amber-600 dark:text-amber-400" id="kuKpiBeban">Rp 0</div>
+                                    <span class="text-[10px] text-gray-400">Gaji &amp; operasional</span>
+                                </div>
+                                <div class="sm-card ku-kpi-card">
+                                    <div class="flex items-center gap-2 mb-1">
+                                        <span class="sm-kpi-icon bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400">
+                                            <i class="fa-solid fa-chart-line"></i>
+                                        </span>
+                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Laba Bersih</span>
+                                    </div>
+                                    <div class="text-base sm:text-lg font-extrabold text-purple-600 dark:text-purple-400" id="kuKpiLaba">Rp 0</div>
+                                    <span class="text-[10px] text-gray-400">Laba kotor &minus; beban</span>
+                                </div>
+                            </div>
+
                         <div class="grid grid-cols-1 lg:grid-cols-5 gap-2.5 sm:gap-3">
                             <div class="panel lg:col-span-3 ku-kas-panel">
                                 <!-- (1) RINGKASAN: satu angka per pos -->
@@ -1388,6 +1482,10 @@
                             </div>
                         </div>
 
+                        </div><!-- /#kuTabPaneOperasional -->
+
+                        <!-- TAB 2: BRANKAS & HUTANG (KAS ASET) -->
+                        <div id="kuTabPaneAset" class="space-y-4 hidden">
                         <!-- P2-15: Kas Aset - Distribusi - Hutang Beban - Notifikasi.
                              Panel Distribusi Laba dihapus (duplikat Alokasi Profit),
                              Notifikasi jadi icon lonceng di baris Riwayat Transaksi. -->
@@ -1541,49 +1639,15 @@
                         <!-- PEMBUKA RIWAYAT: Rincian Arus Kas sengaja tidak lagi tampil
                              di halaman utama. Buka lewat tombol paling bawah ini supaya
                              Conditions Kas Operasional tetap jadi fokus. -->
-                        <div class="ku-riwayat-toggle-wrap" id="kuRiwayatToggleWrap">
+                        </div><!-- /#kuTabPaneAset -->
+
+                        <!-- Backup wrapper pembuka riwayat untuk kompatibilitas -->
+                        <div class="ku-riwayat-toggle-wrap hidden" id="kuRiwayatToggleWrap">
                             <button type="button" id="kuRiwayatBtn" onclick="kuShowRiwayat()" class="ku-riwayat-btn">
                                 <i class="fa-solid fa-clock-rotate-left"></i> Riwayat Transaksi
                             </button>
-
-                            <!-- Notifikasi (P2-13): log read-only. Sengaja hanya ICON --
-                                 panel penuhnya dihapus supaya halaman Keuangan tidak
-                                 bertambah tinggi. Isinya tetap bisa dibuka kapan saja
-                                 lewat popover ini. -->
-                            <div class="ku-notif-wrap">
-                                <button type="button" id="kuNotifBtn" class="ku-notif-btn"
-                                        aria-haspopup="true" aria-expanded="false"
-                                        title="Notifikasi"
-                                        onclick="kuToggleNotif(event)">
-                                    <i class="fa-solid fa-bell"></i>
-                                    <span id="kuNotifBadge" class="ku-notif-badge hidden">0</span>
-                                </button>
-                                <div id="kuNotifPop" class="ku-notif-pop hidden"
-                                     role="dialog" aria-label="Notifikasi">
-                                    <div class="ku-notif-pop-head">
-                                        <span>Notifikasi &mdash; 10 terbaru</span>
-                                        <span id="kuNotifProvider" class="ku-notif-pop-prov"></span>
-                                    </div>
-                                    <div class="ku-notif-pop-body">
-                                        <table class="tx-table w-full text-sm">
-                                            <thead>
-                                                <tr>
-                                                    <th>Waktu</th>
-                                                    <th>Event</th>
-                                                    <th>Status</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="kuNotifBody"></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
 
-                        <!-- RIWAYAT TRANSAKSI — 3 bagian:
-                             (1) Ringkasan Kas Laci, (2) Mutasi Kas,
-                             (3) Rekonsiliasi Tutup Kas. Hanya dirender saat
-                             tombol Riwayat Transaksi ditekan. -->
                         <div id="kuRiwayatView" class="hidden ku-riwayat-panel">
                             <div class="panel">
                                 <div class="flex items-start justify-between gap-3 flex-wrap">
@@ -2809,6 +2873,6 @@
         </div>
     </div>
 
-    <script src="/static/script.js?v=25"></script>
+    <script src="/static/script.js?v=26"></script>
 </body>
 </html>

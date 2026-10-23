@@ -4832,11 +4832,73 @@ function kuRupiah(v) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(v) || 0);
 }
 
+let _kuActiveTab = 'operasional';
+
+function kuSwitchTab(tab) {
+    _kuActiveTab = tab || 'operasional';
+
+    const btnOp = document.getElementById('kuTabBtnOperasional');
+    const btnAs = document.getElementById('kuTabBtnAset');
+    const btnRi = document.getElementById('kuTabBtnRiwayat');
+
+    if (btnOp) { btnOp.classList.toggle('is-active', _kuActiveTab === 'operasional'); btnOp.setAttribute('aria-selected', _kuActiveTab === 'operasional' ? 'true' : 'false'); }
+    if (btnAs) { btnAs.classList.toggle('is-active', _kuActiveTab === 'aset'); btnAs.setAttribute('aria-selected', _kuActiveTab === 'aset' ? 'true' : 'false'); }
+    if (btnRi) { btnRi.classList.toggle('is-active', _kuActiveTab === 'riwayat'); btnRi.setAttribute('aria-selected', _kuActiveTab === 'riwayat' ? 'true' : 'false'); }
+
+    const paneOp = document.getElementById('kuTabPaneOperasional');
+    const paneAs = document.getElementById('kuTabPaneAset');
+    const paneRi = document.getElementById('kuRiwayatView');
+    const tWrap = document.getElementById('kuRiwayatToggleWrap');
+
+    if (paneOp) paneOp.classList.toggle('hidden', _kuActiveTab !== 'operasional');
+    if (paneAs) paneAs.classList.toggle('hidden', _kuActiveTab !== 'aset');
+    if (paneRi) paneRi.classList.toggle('hidden', _kuActiveTab !== 'riwayat');
+    if (tWrap) tWrap.classList.add('hidden');
+
+    if (_kuActiveTab === 'riwayat') {
+        renderRiwayat();
+        renderKuArsip();
+    }
+}
+
+function renderKuKpi() {
+    const fin = _kuFin || {};
+    const sl = _kuSaldoLapisan || {};
+
+    const laciVal = sl.saldo_laci != null ? Number(sl.saldo_laci) : Number(fin.saldo_laci || 0);
+    const laciEl = document.getElementById('kuKpiLaci');
+    if (laciEl) laciEl.textContent = formatRupiah(laciVal);
+
+    const omzetVal = Number(fin.omset || 0);
+    const omzetEl = document.getElementById('kuKpiOmzet');
+    if (omzetEl) omzetEl.textContent = formatRupiah(omzetVal);
+
+    const bebanVal = Number(fin.total_beban || 0);
+    const bebanEl = document.getElementById('kuKpiBeban');
+    if (bebanEl) bebanEl.textContent = formatRupiah(bebanVal);
+
+    const labaVal = Number(fin.laba_bersih || 0);
+    const labaEl = document.getElementById('kuKpiLaba');
+    if (labaEl) {
+        labaEl.textContent = formatRupiah(labaVal);
+        labaEl.classList.toggle('text-red-500', labaVal < 0);
+        labaEl.classList.toggle('text-purple-600', labaVal >= 0);
+        labaEl.classList.toggle('dark:text-purple-400', labaVal >= 0);
+        labaEl.classList.toggle('dark:text-red-400', labaVal < 0);
+    }
+
+    const badge = document.getElementById('kuPeriodBadge');
+    if (badge && fin.periode) {
+        badge.innerHTML = `<i class="fa-solid fa-calendar-day"></i> Periode ${escapeHtml(String(fin.periode))}`;
+    }
+}
+
 async function renderKeuangan() {
-    kuShowMain(true);
+    kuSwitchTab(_kuActiveTab || 'operasional');
     initKuKasForm();
     await loadKuFinance();
-    renderRiwayat();
+    renderKuKpi();
+    if (_kuRiwayatVisible()) renderRiwayat();
 }
 
 // Satu-satunya sumber angka Buku Kas: backend (overview + riwayat periode aktif).
@@ -4860,6 +4922,7 @@ async function loadKuFinance() {
             renderKondisiKas();
         renderKuTitipan();
         renderAlloc();
+        renderKuKpi();
         // Tabel Rincian Arus Kas = detail Kondisi Kas. Karena panelnya disembunyikan
         // di balik tombol "Riwayat Transaksi", jangan render diam-diam: cukup muat
         // ulang saat tombolnya ditekan (kuShowRiwayat).
@@ -5313,20 +5376,14 @@ function _kuRiwayatVisible() {
 // Buka Riwayat Transaksi: tampilkan panelnya, sembunyikan pembuka, muat ulang
 // tabel (penting: dipanggil ulang tiap dibuka supaya data periode segar).
 function kuShowRiwayat() {
+    kuSwitchTab('riwayat');
     const view = document.getElementById('kuRiwayatView');
-    const toggle = document.getElementById('kuRiwayatToggleWrap');
-    if (view) view.classList.remove('hidden');
-    if (toggle) toggle.classList.add('hidden');
-    renderRiwayat();
     if (view) view.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 // Kembali ke halaman utama: sembunyikan Riwayat, tampilkan kembali pembuka.
 function kuShowMain() {
-    const view = document.getElementById('kuRiwayatView');
-    const toggle = document.getElementById('kuRiwayatToggleWrap');
-    if (view) view.classList.add('hidden');
-    if (toggle) toggle.classList.remove('hidden');
+    kuSwitchTab('operasional');
     const page = document.getElementById('pageKeuangan');
     if (page) page.scrollIntoView({ block: 'start' });
 }
