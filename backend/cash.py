@@ -552,7 +552,18 @@ def catat_modal(db: Session, order, actor: str = None):
         nilai = quantize(_num(getattr(order, attr, 0)))
         if nilai <= ZERO:
             continue
-        if mutasi_tersimpan(db, LAYER_LACI, SUMBER_MODAL, kode, order.id):
+        # Periksa apakah mutasi modal untuk order ini sudah pernah dicatat
+        existing = db.query(_entry_model()).filter(
+            _entry_model().layer == LAYER_LACI,
+            _entry_model().sumber == SUMBER_MODAL,
+            _entry_model().ref_type == kode,
+            _entry_model().ref_id == order.id,
+        ).all()
+        # Validasi integritas: jika order memiliki no_servis, pastikan keterangan mutasi juga memuat no_servis
+        # Mencegah tabrakan dengan data uji coba / order terhapus yang pernah memakai ID yang sama
+        if getattr(order, "no_servis", None):
+            existing = [e for e in existing if order.no_servis in (e.keterangan or "")]
+        if existing:
             continue
         mut = catat_mutasi(db, LAYER_LACI, "Keluar", KATEGORI[SUMBER_MODAL],
                            "%s unit %s" % (kode.replace("_", " ").title(),
@@ -595,6 +606,9 @@ def catat_modal_selisih(db: Session, order, actor: str = None) -> list:
                 KasEntry.sumber == SUMBER_MODAL,
                 KasEntry.ref_type == kode,
                 KasEntry.ref_id == order.id).all():
+            # Validasi integritas: mutasi harus benar-benar milik order ini (berdasarkan no_servis)
+            if getattr(order, "no_servis", None) and order.no_servis not in (e.keterangan or ""):
+                continue
             n = _num(e.nominal)
             # Modal yang SUDAH terbayar adalah entri "Keluar" -- jadi menambah
             # modal yang tercatat. Entri "Masuk" adalah koreksi yang mengembalikan
