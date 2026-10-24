@@ -2821,45 +2821,68 @@
     </div>
 
     <!-- ========== POPUP: PENGATURAN BEBAN HARIAN ========== -->
-    <div id="bebanPopup" class="audit-overlay hidden" onclick="if(event.target===this)closeBeban()" role="dialog" aria-label="Pengaturan Beban Harian">
+    <div id="bebanPopup" class="audit-overlay hidden" onclick="if(event.target===this)closeBeban()" role="dialog" aria-label="Input Beban Toko">
         <div class="rsp-card beban-card">
             <button type="button" class="float-close beban-close" onclick="closeBeban()" aria-label="Tutup">
                 <i class="fa-solid fa-xmark"></i>
             </button>
-            <div class="flex items-center gap-2.5">
-                <span class="receive-title-icon"><i class="fa-solid fa-money-check-dollar"></i></span>
-                <div class="min-w-0">
-                    <h3 class="rsp-title">Pengaturan Beban Harian</h3>
-                    <p class="float-sub">Kelola beban rutin toko</p>
+            <div class="flex items-center justify-between gap-2.5 pb-2.5 border-b border-gray-100 dark:border-white/5">
+                <div class="flex items-center gap-2.5">
+                    <span class="receive-title-icon"><i class="fa-solid fa-money-check-dollar"></i></span>
+                    <div class="min-w-0">
+                        <h3 class="rsp-title">Input Beban Toko</h3>
+                        <p class="float-sub">Kelola pengeluaran operasional &amp; gaji periode kas berjalan</p>
+                    </div>
                 </div>
             </div>
+
+            <!-- Quick Chips: Pilihan Cepat Beban Rutin -->
+            <div class="mt-2.5">
+                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar" id="bebanQuickChips">
+                    <span class="text-[10px] font-bold uppercase tracking-wider text-gray-400 mr-0.5 flex-shrink-0">Cepat:</span>
+                    <button type="button" onclick="bebanPickChip('Listrik', 'Operasional')" class="beban-chip" title="Pilih beban Listrik (Operasional)"><i class="fa-solid fa-bolt text-amber-500"></i> Listrik</button>
+                    <button type="button" onclick="bebanPickChip('Wifi / Internet', 'Operasional')" class="beban-chip" title="Pilih beban Wifi (Operasional)"><i class="fa-solid fa-wifi text-blue-500"></i> Wifi</button>
+                    <button type="button" onclick="bebanPickChip('Air Galon &amp; Kopi', 'Operasional')" class="beban-chip" title="Pilih beban Air Galon &amp; Kopi (Operasional)"><i class="fa-solid fa-mug-hot text-orange-500"></i> Air &amp; Kopi</button>
+                    <button type="button" onclick="bebanPickChip('Uang Makan Kasir', 'Gaji')" class="beban-chip" title="Pilih Uang Makan Kasir (Gaji)"><i class="fa-solid fa-utensils text-purple-500"></i> Makan Kasir</button>
+                    <button type="button" onclick="bebanPickChip('Uang Makan Teknisi', 'Gaji')" class="beban-chip" title="Pilih Uang Makan Teknisi (Gaji)"><i class="fa-solid fa-user-gear text-indigo-500"></i> Makan Teknisi</button>
+                    <button type="button" onclick="bebanPickChip('Bensin &amp; Kurir Part', 'Operasional')" class="beban-chip" title="Pilih Bensin &amp; Kurir (Operasional)"><i class="fa-solid fa-motorcycle text-emerald-500"></i> Bensin/Kurir</button>
+                    <button type="button" onclick="bebanPickChip('Kebersihan &amp; Sampah', 'Operasional')" class="beban-chip" title="Pilih Kebersihan (Operasional)"><i class="fa-solid fa-broom text-teal-500"></i> Kebersihan</button>
+                </div>
+            </div>
+
+            <!-- Form Input Beban -->
             <div class="beban-form mt-2 text-left">
                 <div class="beban-form-row">
-                    <input class="receive-input flex-1 min-w-0" type="text" id="bebanNama" placeholder="Nama beban (misal: Listrik)" autocomplete="off" aria-label="Nama beban">
-                    <input class="receive-input beban-nilai" type="number" id="bebanNilai" min="0" placeholder="Rp" autocomplete="off" aria-label="Nilai rupiah">
+                    <input class="receive-input w-full" type="text" id="bebanNama" placeholder="Nama pengeluaran (misal: Token Listrik Depan Toko)" autocomplete="off" aria-label="Nama beban">
                 </div>
-                <div class="beban-form-row">
-                    <select class="receive-input flex-1 min-w-0" id="bebanKategori" aria-label="Sektor beban">
+                <div class="beban-form-row flex items-stretch gap-2">
+                    <select class="receive-input w-36 sm:w-40 flex-shrink-0" id="bebanKategori" aria-label="Sektor beban">
                         <option value="Operasional" selected>Operasional</option>
                         <option value="Gaji">Gaji</option>
                     </select>
+                    <div class="relative flex-1 min-w-0">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 select-none">Rp</span>
+                        <input class="receive-input w-full pl-9 font-semibold" type="text" inputmode="numeric" id="bebanNilai" placeholder="0" autocomplete="off" aria-label="Nilai rupiah">
+                    </div>
                     <button type="button" onclick="bebanAdd()" id="bebanAddBtn" class="receive-submit-btn beban-tambah">
                         <i class="fa-solid fa-plus"></i> <span id="bebanAddText">Tambah</span>
                     </button>
                 </div>
             </div>
-            <div class="overflow-x-auto mt-2 beban-tablewrap">
+
+            <!-- Tabel Daftar Beban -->
+            <div class="overflow-x-auto mt-2.5 beban-tablewrap">
                 <table class="tx-table beban-table w-full text-sm">
                     <thead>
                         <tr>
-                            <th>Kategori</th>
-                            <th>Uraian</th>
-                            <th>Nilai (Rp)</th>
-                            <th>Aksi</th>
+                            <th class="text-center">Kategori</th>
+                            <th>Uraian Beban</th>
+                            <th class="text-right">Nilai (Rp)</th>
+                            <th class="text-center">Aksi</th>
                         </tr>
                     </thead>
                     <tbody id="bebanBody"></tbody>
-                    <tfoot>
+                    <tfoot class="hidden">
                         <tr>
                             <td colspan="2">Total Beban</td>
                             <td id="bebanTotal">0</td>
@@ -2868,6 +2891,23 @@
                     </tfoot>
                 </table>
             </div>
+
+            <!-- Ringkasan Kategori (Operasional vs Gaji vs Total) -->
+            <div class="grid grid-cols-3 gap-2 mt-2.5">
+                <div class="p-2 rounded-lg bg-orange-50/70 dark:bg-orange-950/20 border border-orange-200/60 dark:border-orange-800/30 text-center">
+                    <div class="text-[9.5px] uppercase font-bold text-orange-600 dark:text-orange-400">Operasional</div>
+                    <div class="text-xs sm:text-sm font-extrabold text-orange-900 dark:text-orange-200 mt-0.5" id="bebanSubOps">Rp 0</div>
+                </div>
+                <div class="p-2 rounded-lg bg-purple-50/70 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/30 text-center">
+                    <div class="text-[9.5px] uppercase font-bold text-purple-600 dark:text-purple-400">Gaji</div>
+                    <div class="text-xs sm:text-sm font-extrabold text-purple-900 dark:text-purple-200 mt-0.5" id="bebanSubGaji">Rp 0</div>
+                </div>
+                <div class="p-2 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/30 text-center">
+                    <div class="text-[9.5px] uppercase font-bold text-blue-600 dark:text-blue-400">Total Beban</div>
+                    <div class="text-xs sm:text-sm font-extrabold text-blue-900 dark:text-blue-200 mt-0.5" id="bebanSubTotal">Rp 0</div>
+                </div>
+            </div>
+
             <div id="bebanFeedback" class="hidden receive-feedback text-left mt-2"></div>
             <button type="button" onclick="bebanSave()" id="bebanSaveBtn" class="beban-simpan">
                 <i class="fa-solid fa-floppy-disk"></i>

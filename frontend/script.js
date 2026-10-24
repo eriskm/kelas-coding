@@ -9077,9 +9077,57 @@ async function bebanMigrateOnce(rows) {
     try { localStorage.removeItem(BEBAN_STORE_KEY); } catch (_) {}
 }
 
+function initBebanInputs() {
+    const nilaiEl = document.getElementById('bebanNilai');
+    const namaEl = document.getElementById('bebanNama');
+    if (nilaiEl && !nilaiEl._bebanBound) {
+        nilaiEl._bebanBound = true;
+        nilaiEl.addEventListener('input', function() {
+            const raw = this.value.replace(/\D/g, '');
+            if (!raw) {
+                this.value = '';
+            } else {
+                this.value = Number(raw).toLocaleString('id-ID');
+            }
+        });
+        nilaiEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                bebanAdd();
+            }
+        });
+    }
+    if (namaEl && !namaEl._bebanBound) {
+        namaEl._bebanBound = true;
+        namaEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (nilaiEl) {
+                    nilaiEl.focus({ preventScroll: true });
+                    nilaiEl.select();
+                }
+            }
+        });
+    }
+}
+
+function bebanPickChip(nama, kat) {
+    const namaEl = document.getElementById('bebanNama');
+    const katEl = document.getElementById('bebanKategori');
+    const nilaiEl = document.getElementById('bebanNilai');
+    if (namaEl) namaEl.value = nama;
+    if (katEl) katEl.value = kat;
+    if (nilaiEl) {
+        nilaiEl.focus({ preventScroll: true });
+        nilaiEl.select();
+    }
+}
+window.bebanPickChip = bebanPickChip;
+
 async function openBeban() {
     _bebanEditIdx = -1;
     _bebanDeleted = [];
+    initBebanInputs();
     const kat = document.getElementById('bebanKategori');
     const nama = document.getElementById('bebanNama');
     const nilai = document.getElementById('bebanNilai');
@@ -9131,25 +9179,42 @@ function bebanRender() {
     const body = document.getElementById('bebanBody');
     if (!body) return;
     if (!_bebanList.length) {
-        body.innerHTML = `<tr><td colspan="4"><div class="beban-empty"><i class="fa-solid fa-receipt"></i>Belum ada beban — tambah lewat form di atas.</div></td></tr>`;
+        body.innerHTML = `<tr><td colspan="4"><div class="beban-empty"><i class="fa-solid fa-receipt"></i>Belum ada beban — gunakan pilihan cepat atau form di atas.</div></td></tr>`;
     } else {
-    body.innerHTML = _bebanList.map((b, i) => {
-        const isGaji = String(b.kategori || '').toLowerCase().includes('gaji');
-        return `
-        <tr>
-            <td><span class="beban-cat ${isGaji ? 'is-gaji' : 'is-ops'}">${escapeHtml(b.kategori)}</span></td>
-            <td class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(b.nama)}</td>
-            <td>${bebanNum(b.nilai)}</td>
-            <td>
-                <button type="button" class="beban-ico is-edit" title="Edit" onclick="bebanEdit(${i})"><i class="fa-solid fa-pen"></i></button>
-                <button type="button" class="beban-ico is-del" title="Hapus" onclick="bebanDel(${i})"><i class="fa-solid fa-trash"></i></button>
-            </td>
-        </tr>`;
-    }).join('');
+        body.innerHTML = _bebanList.map((b, i) => {
+            const isGaji = String(b.kategori || '').toLowerCase().includes('gaji');
+            return `
+            <tr>
+                <td class="text-center"><span class="beban-cat ${isGaji ? 'is-gaji' : 'is-ops'}">${escapeHtml(b.kategori)}</span></td>
+                <td class="font-medium text-gray-800 dark:text-gray-200">${escapeHtml(b.nama)}</td>
+                <td class="text-right font-semibold text-gray-800 dark:text-gray-200">${bebanRupiah(b.nilai)}</td>
+                <td class="text-center">
+                    <button type="button" class="beban-ico is-edit" title="Edit" onclick="bebanEdit(${i})"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" class="beban-ico is-del" title="Hapus" onclick="bebanDel(${i})"><i class="fa-solid fa-trash"></i></button>
+                </td>
+            </tr>`;
+        }).join('');
     }
-    const total = _bebanList.reduce((a, b) => a + (Number(b.nilai) || 0), 0);
+
+    let totalOps = 0;
+    let totalGaji = 0;
+    _bebanList.forEach(b => {
+        const v = Number(b.nilai) || 0;
+        if (String(b.kategori || '').toLowerCase().includes('gaji')) totalGaji += v;
+        else totalOps += v;
+    });
+    const total = totalOps + totalGaji;
+
+    const subOpsEl = document.getElementById('bebanSubOps');
+    const subGajiEl = document.getElementById('bebanSubGaji');
+    const subTotEl = document.getElementById('bebanSubTotal');
     const tfoot = document.getElementById('bebanTotal');
+
+    if (subOpsEl) subOpsEl.textContent = bebanRupiah(totalOps);
+    if (subGajiEl) subGajiEl.textContent = bebanRupiah(totalGaji);
+    if (subTotEl) subTotEl.textContent = bebanRupiah(total);
     if (tfoot) tfoot.textContent = bebanNum(total);
+
     const info = document.getElementById('bebanInfo');
     if (info) info.textContent = _bebanList.length + ' beban • Total ' + bebanRupiah(total);
 }
@@ -9165,7 +9230,8 @@ function bebanFeedback(msg, isErr) {
 function bebanAdd() {
     const kat = (document.getElementById('bebanKategori') || {}).value || 'Operasional';
     const nama = ((document.getElementById('bebanNama') || {}).value || '').trim();
-    const nilai = Math.round(parseFloat((document.getElementById('bebanNilai') || {}).value) || 0);
+    const rawNilai = String((document.getElementById('bebanNilai') || {}).value || '').replace(/\D/g, '');
+    const nilai = Math.round(parseFloat(rawNilai) || 0);
     if (!nama) {
         bebanFeedback('Isi dulu nama bebannya.', true);
         const el = document.getElementById('bebanNama');
@@ -9190,6 +9256,8 @@ function bebanAdd() {
     document.getElementById('bebanNama').value = '';
     document.getElementById('bebanNilai').value = '';
     bebanRender();
+    const elNama = document.getElementById('bebanNama');
+    if (elNama) elNama.focus({ preventScroll: true });
 }
 
 function bebanEdit(i) {
@@ -9198,7 +9266,8 @@ function bebanEdit(i) {
     _bebanEditIdx = i;
     document.getElementById('bebanKategori').value = b.kategori;
     document.getElementById('bebanNama').value = b.nama;
-    document.getElementById('bebanNilai').value = b.nilai;
+    const v = Number(b.nilai) || 0;
+    document.getElementById('bebanNilai').value = v > 0 ? v.toLocaleString('id-ID') : '';
     const addTxt = document.getElementById('bebanAddText');
     if (addTxt) addTxt.textContent = 'Update';
     document.getElementById('bebanNama').focus({ preventScroll: true });

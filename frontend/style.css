@@ -2278,7 +2278,39 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .audit-desc { margin: 8px 0 0; font-size: 12.5px; color: #64748b; }
 .dark .audit-desc { color: #94a3b8; }
 /* Popup Beban Harian (ref: atur.png) — clean & ringkas */
-.beban-card { width: min(420px, calc(100vw - 32px)); padding: 18px 16px 16px; max-height: calc(100dvh - 32px); overflow-y: auto; text-align: left; position: relative; }
+.beban-card { width: min(540px, calc(100vw - 32px)); padding: 20px 18px 18px; max-height: calc(100dvh - 32px); overflow-y: auto; text-align: left; position: relative; }
+.beban-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    background: #f1f5f9;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+}
+.beban-chip:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+    transform: translateY(-1px);
+}
+.dark .beban-chip {
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.dark .beban-chip:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #f8fafc;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 .beban-card::before {
     content: ''; position: absolute; top: 0; left: 18px; right: 18px; height: 2px; border-radius: 0 0 4px 4px;
     background: linear-gradient(90deg, #dc2626, #f97316);
@@ -2295,9 +2327,9 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .beban-tablewrap { border: 1px solid #eef1f5; border-radius: 12px; overflow: hidden; }
 .dark .beban-tablewrap { border-color: rgba(255,255,255,0.08); }
 .beban-table { border-collapse: collapse; min-width: 0; width: 100%; table-layout: fixed; }
-.beban-table thead th:nth-child(1) { width: 88px; }
-.beban-table thead th:nth-child(3) { width: 84px; }
-.beban-table thead th:nth-child(4) { width: 60px; padding-left: 4px; padding-right: 4px; }
+.beban-table thead th:nth-child(1) { width: 95px; }
+.beban-table thead th:nth-child(3) { width: 110px; }
+.beban-table thead th:nth-child(4) { width: 65px; padding-left: 4px; padding-right: 4px; }
 .beban-table tbody td { white-space: normal; overflow-wrap: anywhere; }
 .beban-table tbody td:nth-child(4) { padding-left: 4px; padding-right: 4px; }
 .beban-table thead th {
