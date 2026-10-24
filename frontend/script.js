@@ -7872,7 +7872,7 @@ async function clrRefundGaransi() {
     nominal = Number(v);
     if (!nominal || nominal <= 0) { claimRWorkflowFeedback('Nominal tidak valid.', true); return; }
     try {
-        const pre = await apiGet('/refunds/precheck/garansi/' + _clrClaim.id + '&nominal=' + nominal);
+        const pre = await apiGet('/refunds/precheck/garansi/' + _clrClaim.id + '?nominal=' + nominal);
         if (pre && pre.cukup === false) {
             claimRWorkflowFeedback('Saldo Kas Aset tidak cukup untuk refund ini.', true);
             return;
