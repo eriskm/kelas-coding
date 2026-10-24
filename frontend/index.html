@@ -159,6 +159,7 @@
                     <a href="#" class="nav-link" data-page="garansi">
                         <i class="fa-solid fa-shield-halved"></i>
                         <span>Garansi</span>
+                        <span id="navGaransiBadge" class="hidden ml-auto text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500 text-white leading-none"></span>
                     </a>
                     <a href="#" class="nav-link" data-page="sparepart">
                         <i class="fa-solid fa-microchip"></i>
@@ -248,6 +249,29 @@
                                 <div class="cto-head-txt"><b>Target Operasional</b><span>CTS + CTO</span></div>
                             </div>
                             <div id="ctoFloatBody"></div>
+                        </div>
+                    </div>
+
+                    <!-- Widget: Tugas Follow-Up Garansi Hari Ini -->
+                    <div id="dashGaransiTask" class="hidden px-3 sm:px-5 pb-3 sm:pb-4">
+                        <div class="p-3.5 sm:p-4 rounded-xl bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 shadow-sm">
+                            <div class="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-amber-200/70 dark:border-amber-800/30">
+                                <div class="flex items-center gap-2.5">
+                                    <span class="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center text-xs shadow-sm"><i class="fa-brands fa-whatsapp"></i></span>
+                                    <div>
+                                        <div class="font-bold text-xs sm:text-sm text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                            <span>Tugas Follow-Up: Garansi Berakhir Hari Ini</span>
+                                            <span id="dashGrProgress" class="text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200"></span>
+                                        </div>
+                                        <div class="text-[11px] text-gray-500 dark:text-gray-400">Hubungi pelanggan via WhatsApp untuk menanyakan kondisi servis setelah masa garansi berakhir.</div>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="showGaransi(); grSetFilterStatus('hari_ini');" class="text-xs font-semibold text-amber-700 hover:text-amber-800 dark:text-amber-300 dark:hover:text-amber-200 flex items-center gap-1">
+                                    <span>Buka Menu Garansi</span>
+                                    <i class="fa-solid fa-arrow-right text-[10px]"></i>
+                                </button>
+                            </div>
+                            <div id="dashGrList" class="mt-2.5 space-y-2"></div>
                         </div>
                     </div>
 
@@ -414,19 +438,6 @@
                             </div>
                         </div>
 
-                        <!-- Alert: Notifikasi Garansi Berakhir Hari Ini -->
-                        <div id="grAlertToday" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-200 flex items-center justify-between flex-wrap gap-2.5">
-                            <div class="flex items-center gap-2.5">
-                                <span class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm"><i class="fa-brands fa-whatsapp"></i></span>
-                                <div>
-                                    <div class="font-bold text-xs sm:text-sm" id="grAlertTitle">Ada Garansi Berakhir Hari Ini</div>
-                                    <div class="text-[11px] text-amber-700/90 dark:text-amber-300/90" id="grAlertDesc">Sapa pelanggan untuk menanyakan kondisi servisannya via WhatsApp.</div>
-                                </div>
-                            </div>
-                            <button type="button" onclick="grSetFilterStatus('hari_ini')" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-sm">
-                                <i class="fa-solid fa-filter"></i> Lihat Unit
-                            </button>
-                        </div>
 
                         <!-- Search & Filter Bar -->
                         <div class="panel p-3">
@@ -578,6 +589,20 @@
                             <button type="button" onclick="openClaimReceive()" class="receive-submit-btn" style="background:#dc2626; color:#fff;" title="Terima unit klaim garansi (mengacu ke servis sebelumnya)">
                                 <i class="fa-solid fa-file-circle-plus"></i>
                                 <span>Terima Klaim Garansi</span>
+                            </button>
+                        </div>
+
+                        <!-- Alert: Notifikasi Garansi Berakhir Hari Ini -->
+                        <div id="grAlertToday" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-200 flex items-center justify-between flex-wrap gap-2.5">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm"><i class="fa-brands fa-whatsapp"></i></span>
+                                <div>
+                                    <div class="font-bold text-xs sm:text-sm" id="grAlertTitle">Ada Garansi Berakhir Hari Ini</div>
+                                    <div class="text-[11px] text-amber-700/90 dark:text-amber-300/90" id="grAlertDesc">Sapa pelanggan untuk menanyakan kondisi servisannya via WhatsApp.</div>
+                                </div>
+                            </div>
+                            <button type="button" onclick="grSetFilterStatus('hari_ini')" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-sm">
+                                <i class="fa-solid fa-filter"></i> Lihat Unit
                             </button>
                         </div>
 
