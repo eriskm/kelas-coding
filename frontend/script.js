@@ -1216,7 +1216,7 @@ async function renderStarCards() {
         }
         if (key === 'cts') {
             return `
-            <div class="star-card kpi-target">
+            <div class="star-card kpi-target col-span-2 sm:col-span-1">
                 <div class="kpi-top"><span class="kpi-label-dark"><i class="${m.icon || 'fa-solid fa-bullseye'} text-brand-600 mr-1.5"></i>${escapeHtml(c.label)}</span></div>
                 <div class="kpi-value-dark">${cvalue}</div>
                 ${kpiProgressBar(c.progress, c.tercapai)}
@@ -1846,10 +1846,11 @@ async function renderTxKpi() {
         { key: 'CASH', label: 'Cash / Lunas', value: cash, unit: 'lunas periode ini', icon: 'fa-sack-dollar', cls: 'sm-purple' },
     ];
 
-    el.innerHTML = cards.map(c => {
+    el.innerHTML = cards.map((c, i) => {
         const isActive = _txStatusFilter === c.key ? ' is-active' : '';
+        const spanCls = i === 4 ? ' col-span-2 sm:col-span-1' : '';
         return `
-        <div class="sm-card tx-kpi-card ${c.cls}${isActive}" onclick="txKpiClick('${c.key}')" role="button" tabindex="0" title="Klik untuk memfilter: ${c.label}">
+        <div class="sm-card tx-kpi-card ${c.cls}${isActive}${spanCls}" onclick="txKpiClick('${c.key}')" role="button" tabindex="0" title="Klik untuk memfilter: ${c.label}">
             <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
             <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">${c.unit}</span></div>
         </div>`;
@@ -3458,8 +3459,8 @@ function renderGrKpi() {
         { label: 'Expired', value: n.expired, icon: 'fa-circle-xmark', cls: 'sm-red', filter: 'expired' },
         { label: 'Sedang Klaim', value: n.klaim, icon: 'fa-file-circle-plus', cls: 'sm-blue', filter: 'klaim' },
     ];
-    el.innerHTML = cards.map(c => `
-        <div class="sm-card ${c.cls} cursor-pointer hover:shadow-md transition-all p-3 sm:p-3.5" onclick="grSetFilterStatus('${c.filter}')" title="Klik untuk filter: ${c.label}">
+    el.innerHTML = cards.map((c, i) => `
+        <div class="sm-card ${c.cls}${i === 4 ? ' col-span-2 sm:col-span-1' : ''} cursor-pointer hover:shadow-md transition-all p-3 sm:p-3.5" onclick="grSetFilterStatus('${c.filter}')" title="Klik untuk filter: ${c.label}">
             <div class="sm-top text-xs sm:text-[11.5px]"><i class="fa-solid ${c.icon}"></i> ${c.label}</div>
             <div class="sm-bot mt-1.5"><span class="sm-num text-xl sm:text-2xl font-extrabold">${c.value}</span><span class="sm-pct font-bold text-[10px]">unit</span></div>
         </div>
@@ -3749,7 +3750,7 @@ function updateGrWidgets() {
                                 </div>
                             </div>
                         </div>
-                        <div class="flex items-center gap-1.5">
+                        <div class="flex items-center gap-1.5 ml-auto sm:ml-0">
                             <button type="button" onclick="grWaOpenByOrder(${g.service_order_id})" class="px-2.5 py-1 rounded-md ${done ? 'bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 dark:bg-white/5 dark:text-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs'} text-xs font-semibold flex items-center gap-1 transition-colors" title="Kirim Pesan WhatsApp">
                                 <i class="fa-brands fa-whatsapp"></i>
                                 <span>${done ? 'Kirim Ulang' : 'Kirim WA'}</span>
