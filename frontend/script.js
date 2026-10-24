@@ -6699,9 +6699,9 @@ async function loadSmartHistory() {
 const CHECK_FISIK = [
     { key: 'lcd_pecah', label: 'LCD Pecah' },
     { key: 'lcd_terbuka', label: 'LCD Terbuka' },
-    { key: 'frame_bengkok', label: 'Frame/Case Bengkok' },
+    { key: 'frame_bengkok', label: 'Frame bengkok' },
     { key: 'frame_gompal', label: 'Frame/Case Gompal' },
-    { key: 'tombol_tidak_ada', label: 'Tombol Tidak Ada' },
+    { key: 'tombol_tidak_ada', label: 'Tombol rusak' },
     { key: 'bekas_air', label: 'Bekas Air' }
 ];
 
