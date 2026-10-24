@@ -3345,6 +3345,7 @@ function grState(g) {
     if (g.klaim) return { key: 'klaim', label: 'Klaim', days: grDaysLeft(g.akhir) };
     const d = grDaysLeft(g.akhir);
     if (d === null) return { key: 'aktif', label: 'Aktif', days: null };
+    if (d === 0) return { key: 'hari_ini', label: 'Habis Hari Ini', days: 0 };
     if (d < 0) return { key: 'expired', label: 'Expired', days: d };
     if (d <= 30) return { key: 'segera', label: 'Akan Berakhir', days: d };
     return { key: 'aktif', label: 'Aktif', days: d };
@@ -3360,6 +3361,9 @@ function grStatusBadge(g) {
     }
     if (st.key === 'aktif') {
         return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/40"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>Aktif${escapeHtml(extra)}</span>`;
+    }
+    if (st.key === 'hari_ini') {
+        return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 border border-amber-300/80 dark:border-amber-700/60"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>Habis Hari Ini</span>`;
     }
     if (st.key === 'segera') {
         return `<span class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200/60 dark:border-amber-800/40"><i class="fa-solid fa-hourglass-half text-[10px]"></i>Akan Berakhir${escapeHtml(extra)}</span>`;
@@ -3378,7 +3382,14 @@ function grFiltered() {
     return (_grAll || []).filter(g => {
         if (q && ![g.nama, g.phone, g.device, g.no, g.imei, g.brand, g.model].some(f => (f || '').toLowerCase().includes(q))) return false;
         if (_grDate && !(g.mulai <= _grDate && _grDate <= g.akhir)) return false;
-        if (_grStatus && grState(g).key !== _grStatus) return false;
+        if (_grStatus) {
+            const st = grState(g);
+            if (_grStatus === 'expired') {
+                if (st.key !== 'expired' && st.key !== 'hari_ini') return false;
+            } else if (st.key !== _grStatus) {
+                return false;
+            }
+        }
         return true;
     });
 }
@@ -3425,14 +3436,28 @@ function initGrToolbar() {
 function renderGrKpi() {
     const el = document.getElementById('grKpi');
     if (!el) return;
-    const n = { total: (_grAll || []).length, aktif: 0, segera: 0, expired: 0, klaim: 0 };
+    const n = { total: (_grAll || []).length, aktif: 0, segera: 0, hari_ini: 0, expired: 0, klaim: 0 };
     (_grAll || []).forEach(g => {
         const k = grState(g).key;
         if (k === 'aktif') n.aktif++;
+        else if (k === 'hari_ini') { n.hari_ini++; n.expired++; }
         else if (k === 'segera') n.segera++;
         else if (k === 'expired') n.expired++;
         else if (k === 'klaim') n.klaim++;
     });
+
+    const alertEl = document.getElementById('grAlertToday');
+    if (alertEl) {
+        if (n.hari_ini > 0) {
+            alertEl.classList.remove('hidden');
+            const tit = document.getElementById('grAlertTitle');
+            const desc = document.getElementById('grAlertDesc');
+            if (tit) tit.textContent = `Ada ${n.hari_ini} Unit Garansi Berakhir Hari Ini`;
+            if (desc) desc.textContent = `Sapa pelanggan dan tanyakan kondisi servisannya via WhatsApp Sukabumi Tech Flasher.`;
+        } else {
+            alertEl.classList.add('hidden');
+        }
+    }
     const cards = [
         { label: 'Total Garansi', value: n.total, icon: 'fa-shield-halved', cls: 'sm-slate', filter: '' },
         { label: 'Garansi Aktif', value: n.aktif, icon: 'fa-circle-check', cls: 'sm-green', filter: 'aktif' },
@@ -3540,6 +3565,76 @@ function grDetail(idx) {
 function closeGrDetail() {
     document.getElementById('pageWarranty').classList.remove('open');
 }
+
+// ─────────────────────────────────────────────
+// WHATSAPP AFTER-SALES: GARANSI BERAKHIR
+// ─────────────────────────────────────────────
+
+function grWaMessage(nama, noServis) {
+    const cust = (nama && nama !== '-') ? nama : 'Pelanggan';
+    const no = (noServis && noServis !== '-') ? noServis : '-';
+    return `Halo Kak ${cust} 👋😊\n\nKami dari Sukabumi Tech Flasher ingin menginformasikan bahwa masa garansi servis perangkat Kakak dengan No. Servis ${no} telah berakhir hari ini.\n\nKami ingin menanyakan, bagaimana kondisi perangkatnya saat ini? Semoga tetap awet dan berfungsi dengan baik ya, Kak. 🙏\n\nApabila setelah masa garansi berakhir terdapat kendala yang sama, jangan sungkan untuk membawa kembali perangkatnya ke toko kami.\n\nJika kendalanya tidak terlalu sulit, kami dengan senang hati akan berusaha memberikan pelayanan ekstra sebagai bentuk apresiasi atas kepercayaan Kakak kepada kami.\n\nTerima kasih telah mempercayakan servis perangkat Kakak kepada Sukabumi Tech Flasher. 😊`;
+}
+
+let _grWaData = null;
+
+function grWaOpen(idx) {
+    const g = _grView[idx];
+    if (!g) return;
+    _grWaData = g;
+    const num = notaWaNumber(g.phone);
+    const to = document.getElementById('grWaTo');
+    if (to) {
+        to.innerHTML = `Penerima: <b>${escapeHtml(g.nama || '-')}</b> (${escapeHtml(g.phone || 'tanpa nomor')}) &bull; Unit: <b>${escapeHtml(g.device || '-')}</b> (#${escapeHtml(g.no || '-')})`;
+    }
+    const prev = document.getElementById('grWaPreview');
+    const msg = grWaMessage(g.nama, g.no);
+    if (prev) prev.textContent = msg;
+
+    const warn = document.getElementById('grWaWarn');
+    const send = document.getElementById('grWaSendBtn');
+    if (warn) {
+        if (!num) {
+            warn.textContent = 'Nomor WhatsApp tidak valid atau belum diisi pada unit ini.';
+            warn.classList.remove('hidden');
+        } else {
+            warn.classList.add('hidden');
+        }
+    }
+    if (send) send.classList.toggle('hidden', !num);
+    const pop = document.getElementById('grWaPopup');
+    if (pop) pop.classList.remove('hidden');
+}
+
+function grWaClose() {
+    const pop = document.getElementById('grWaPopup');
+    if (pop) pop.classList.add('hidden');
+    _grWaData = null;
+}
+
+function grWaSend() {
+    const g = _grWaData;
+    if (!g) return;
+    const num = notaWaNumber(g.phone);
+    if (!num) {
+        toast('Nomor WhatsApp tidak valid atau belum diisi.', 'error');
+        return;
+    }
+    const msg = grWaMessage(g.nama, g.no);
+    try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(msg);
+        }
+    } catch (_) {}
+    window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+    grWaClose();
+    toast('Membuka WhatsApp untuk Kak ' + (g.nama || 'Pelanggan'), 'success');
+}
+
+window.grWaOpen = grWaOpen;
+window.grWaClose = grWaClose;
+window.grWaSend = grWaSend;
+window.grWaMessage = grWaMessage;
 
 function grClaim(idx) {
     const g = _grView[idx];
@@ -3718,6 +3813,9 @@ async function renderGaransi() {
                     </button>
                     <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-gray-100 hover:bg-amber-50 hover:text-amber-600 dark:bg-white/5 dark:hover:bg-amber-500/20 dark:hover:text-amber-300 text-gray-500 transition-colors" title="Ajukan Klaim Garansi" onclick="grClaim(${idx})">
                         <i class="fa-solid fa-file-circle-plus text-xs"></i>
+                    </button>
+                    <button type="button" class="w-7 h-7 inline-flex items-center justify-center rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/60 dark:text-emerald-400 transition-colors" title="Kirim WA Sapa Garansi Berakhir" onclick="grWaOpen(${idx})">
+                        <i class="fa-brands fa-whatsapp text-xs"></i>
                     </button>
                 </div>
             </td>

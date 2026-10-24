@@ -414,6 +414,20 @@
                             </div>
                         </div>
 
+                        <!-- Alert: Notifikasi Garansi Berakhir Hari Ini -->
+                        <div id="grAlertToday" class="hidden p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-200 flex items-center justify-between flex-wrap gap-2.5">
+                            <div class="flex items-center gap-2.5">
+                                <span class="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center font-bold text-sm flex-shrink-0 shadow-sm"><i class="fa-brands fa-whatsapp"></i></span>
+                                <div>
+                                    <div class="font-bold text-xs sm:text-sm" id="grAlertTitle">Ada Garansi Berakhir Hari Ini</div>
+                                    <div class="text-[11px] text-amber-700/90 dark:text-amber-300/90" id="grAlertDesc">Sapa pelanggan untuk menanyakan kondisi servisannya via WhatsApp.</div>
+                                </div>
+                            </div>
+                            <button type="button" onclick="grSetFilterStatus('hari_ini')" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold text-xs transition-colors flex items-center gap-1.5 shadow-sm">
+                                <i class="fa-solid fa-filter"></i> Lihat Unit
+                            </button>
+                        </div>
+
                         <!-- Search & Filter Bar -->
                         <div class="panel p-3">
                             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
@@ -583,6 +597,7 @@
                                     </div>
                                     <select id="grStatusFilter" class="receive-input flex-1 sm:w-44 text-xs" aria-label="Filter status">
                                         <option value="">Semua Status</option>
+                                        <option value="hari_ini">Habis Hari Ini</option>
                                         <option value="aktif">Aktif</option>
                                         <option value="segera">Akan Berakhir (≤30 hr)</option>
                                         <option value="expired">Expired</option>
@@ -2618,6 +2633,27 @@
                                 <button type="button" class="receive-submit-btn donewa-send" id="doneWaSendBtn" onclick="doneWaSend()"><i class="fa-brands fa-whatsapp"></i> Kirim via WA</button>
                             </div>
                             <p class="donewa-note">WhatsApp terbuka dengan pesan siap kirim — tekan kirim di WA untuk menyelesaikan.</p>
+                        </div>
+                    </div>
+
+                    <!-- ========== POPUP: KONFIRMASI WA GARANSI BERAKHIR ========== -->
+                    <div id="grWaPopup" class="audit-overlay hidden" onclick="if(event.target===this)grWaClose()" role="dialog" aria-label="Kirim WhatsApp Garansi Berakhir">
+                        <div class="rsp-card donewa-card">
+                            <div class="donewa-head">
+                                <span class="donewa-ico"><i class="fa-brands fa-whatsapp"></i></span>
+                                <div class="min-w-0">
+                                    <h3 class="rsp-title"><i class="fa-solid fa-shield-halved text-amber-500 mr-1.5"></i>Garansi Berakhir</h3>
+                                    <p class="float-sub">Sapa pelanggan &amp; tanyakan kondisi unit</p>
+                                </div>
+                            </div>
+                            <p class="donewa-to" id="grWaTo"></p>
+                            <div class="donewa-preview" id="grWaPreview"></div>
+                            <div class="donewa-warn hidden" id="grWaWarn"></div>
+                            <div class="donewa-btns">
+                                <button type="button" class="receive-back-btn donewa-later" onclick="grWaClose()">Batal</button>
+                                <button type="button" class="receive-submit-btn donewa-send" style="background:#22c55e; border-color:#22c55e;" id="grWaSendBtn" onclick="grWaSend()"><i class="fa-brands fa-whatsapp"></i> Kirim via WA</button>
+                            </div>
+                            <p class="donewa-note">WhatsApp terbuka dengan pesan siap kirim — tekan tombol Kirim di aplikasi WhatsApp.</p>
                         </div>
                     </div>
 
