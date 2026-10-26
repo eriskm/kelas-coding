@@ -579,6 +579,108 @@ def latest_orders(db: Session = Depends(get_db_session), limit: int = 10,
     return result
 
 
+@router.get("/unclaimed", response_model=schemas.UnclaimedOrdersSummary)
+def get_unclaimed_orders(
+    db: Session = Depends(get_db_session),
+    min_stage: int = 0,
+):
+    """Daftar unit servis mengendap (status DONE dan FAILED yang belum diambil).
+
+    Tahapan:
+      - Stage 1: 7 - 29 hari (Pengingat biasa)
+      - Stage 2: 30 - 59 hari (Pengingat serius)
+      - Stage 3: 60 - 89 hari (Penawaran solusi / pembelian unit)
+      - Stage 4: 90+ hari (Peringatan maksimal / prioritas tertinggi)
+    """
+    from sqlalchemy import or_, func
+    from datetime import datetime
+    from decimal import Decimal
+
+    qry = (
+        db.query(ServiceOrder)
+        .options(joinedload(ServiceOrder.customer))
+        .filter(
+            ServiceOrder.status.in_(["DONE", "FAILED"]),
+            or_(
+                ServiceOrder.unit_status == "DI TOKO",
+                ServiceOrder.unit_status.is_(None),
+            ),
+            ServiceOrder.taken_at.is_(None),
+        )
+    )
+    orders = qry.all()
+
+    now = datetime.now()
+    items = []
+    c1 = c2 = c3 = c4 = 0
+
+    for o in orders:
+        sh_waktu = (
+            db.query(func.max(StatusHistory.waktu))
+            .filter(
+                StatusHistory.service_order_id == o.id,
+                StatusHistory.ke_status == o.status,
+            )
+            .scalar()
+        )
+        if sh_waktu is not None:
+            status_at = sh_waktu
+        elif o.service_date:
+            status_at = datetime.combine(o.service_date, datetime.min.time())
+        else:
+            status_at = o.created_at or now
+
+        days = max(0, (now - status_at).days)
+
+        if days >= 90:
+            stage = 4
+            c4 += 1
+        elif days >= 60:
+            stage = 3
+            c3 += 1
+        elif days >= 30:
+            stage = 2
+            c2 += 1
+        elif days >= 7:
+            stage = 1
+            c1 += 1
+        else:
+            stage = 0
+
+        if stage >= min_stage:
+            cust_name = o.customer.name if o.customer else "-"
+            cust_phone = o.customer.phone if o.customer else "-"
+            items.append(
+                schemas.UnclaimedOrderOut(
+                    id=o.id,
+                    no_servis=o.no_servis,
+                    customer_id=o.customer_id,
+                    customer_name=cust_name,
+                    customer_phone=cust_phone,
+                    device=o.device,
+                    status=o.status,
+                    unit_status=o.unit_status or "DI TOKO",
+                    estimate=o.estimate or Decimal("0"),
+                    final_price=o.final_price,
+                    status_at=status_at,
+                    days_pending=days,
+                    stage=stage,
+                )
+            )
+
+    items.sort(key=lambda x: x.days_pending, reverse=True)
+    total_alert = c1 + c2 + c3 + c4
+
+    return schemas.UnclaimedOrdersSummary(
+        total=total_alert,
+        stage_1=c1,
+        stage_2=c2,
+        stage_3=c3,
+        stage_4=c4,
+        items=items,
+    )
+
+
 @router.get("/{order_id}", response_model=schemas.ServiceOrderOut)
 def get_order(order_id: int, db: Session = Depends(get_db_session)):
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()

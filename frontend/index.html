@@ -346,7 +346,44 @@
                         <!-- KPI Summary Cards (5 Cards Interactive) -->
                         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="txKpi"></div>
 
-                        <!-- Search & Filter Toolbar -->
+                                                <!-- Banner Widget Unit Mengendap (Model C) -->
+                        <div id="unclaimedAlertBox" class="hidden rounded-xl border border-amber-300 dark:border-amber-700/60 bg-gradient-to-r from-amber-50 via-orange-50 to-amber-50 dark:from-amber-950/30 dark:via-orange-950/20 dark:to-amber-950/30 p-3.5 shadow-sm">
+                            <div class="flex items-center justify-between flex-wrap gap-3">
+                                <div class="flex items-center gap-3">
+                                    <span class="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center font-bold text-base shadow-sm flex-shrink-0">
+                                        <i class="fa-solid fa-clock-rotate-left"></i>
+                                    </span>
+                                    <div>
+                                        <div class="text-xs font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                            <span id="unclaimedAlertTitle">Unit Mengendap Perlu Tindak Lanjut</span>
+                                            <span id="unclaimedTotalBadge" class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200">0 Unit</span>
+                                        </div>
+                                        <div class="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5" id="unclaimedAlertDesc">
+                                            Unit status DONE dan FAILED yang belum diambil konsumen perlu diingatkan berkala via WhatsApp.
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-1.5 flex-wrap text-xs font-semibold" id="unclaimedFilterTabs">
+                                    <button type="button" onclick="filterUnclaimedStage(0)" class="unclaimed-filter-btn is-active" data-stage="0">
+                                        Semua (<span id="unclaimedCntAll">0</span>)
+                                    </button>
+                                    <button type="button" onclick="filterUnclaimedStage(1)" class="unclaimed-filter-btn" data-stage="1" style="--st-col:#eab308;">
+                                        7 Hari (<span id="unclaimedCnt1">0</span>)
+                                    </button>
+                                    <button type="button" onclick="filterUnclaimedStage(2)" class="unclaimed-filter-btn" data-stage="2" style="--st-col:#f97316;">
+                                        30 Hari (<span id="unclaimedCnt2">0</span>)
+                                    </button>
+                                    <button type="button" onclick="filterUnclaimedStage(3)" class="unclaimed-filter-btn" data-stage="3" style="--st-col:#ec4899;">
+                                        60 Hari (<span id="unclaimedCnt3">0</span>)
+                                    </button>
+                                    <button type="button" onclick="filterUnclaimedStage(4)" class="unclaimed-filter-btn" data-stage="4" style="--st-col:#ef4444;">
+                                        90+ Hari (<span id="unclaimedCnt4">0</span>)
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+<!-- Search & Filter Toolbar -->
                         <div class="panel p-3">
                             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
                                 <div class="relative flex-1">
@@ -2682,7 +2719,38 @@
                         </div>
                     </div>
 
-                    <!-- ===== FLOATING WINDOW: NOTA PENERIMAAN SERVICE ===== -->
+                                        <!-- ========== POPUP: Sapa Unit Mengendap (Model C) ========== -->
+                    <div id="unclaimedWaPopup" class="audit-overlay hidden" onclick="if(event.target===this)unclaimedWaClose()" role="dialog" aria-label="Kirim WhatsApp Unit Mengendap">
+                        <div class="rsp-card donewa-card">
+                            <div class="donewa-head">
+                                <span class="donewa-ico" style="background:#f59e0b;"><i class="fa-brands fa-whatsapp"></i></span>
+                                <div class="min-w-0">
+                                    <h3 class="rsp-title flex items-center gap-2">
+                                        <span id="unclaimedWaStageBadge" class="px-2 py-0.5 rounded text-[11px] font-extrabold uppercase bg-amber-100 text-amber-800">Tahap 1</span>
+                                        <span id="unclaimedWaTitle">Pengingat Unit Mengendap</span>
+                                    </h3>
+                                    <p class="float-sub" id="unclaimedWaSub">Pengingat berkala agar unit segera diambil konsumen</p>
+                                </div>
+                            </div>
+                            <p class="donewa-to" id="unclaimedWaTo"></p>
+                            <div class="donewa-preview">
+                                <textarea id="unclaimedWaMsg" class="w-full bg-transparent border-none text-xs font-mono resize-none focus:outline-none" rows="5" aria-label="Isi Pesan WhatsApp"></textarea>
+                            </div>
+                            <div class="donewa-warn hidden" id="unclaimedWaWarn"></div>
+                            <div class="donewa-btns">
+                                <button type="button" class="receive-back-btn donewa-later" onclick="unclaimedWaClose()">Tutup</button>
+                                <button type="button" class="receive-back-btn" id="unclaimedWaMarkBtn" onclick="unclaimedWaMarkDone()" style="font-size:12px; font-weight:600;" title="Tandai sudah dihubungi tanpa membuka WA">
+                                    <i class="fa-solid fa-check"></i> Tandai Sudah Dihubungi
+                                </button>
+                                <button type="button" class="receive-submit-btn donewa-send" style="background:#22c55e; border-color:#22c55e;" id="unclaimedWaSendBtn" onclick="unclaimedWaSend()">
+                                    <i class="fa-brands fa-whatsapp"></i> Kirim via WA
+                                </button>
+                            </div>
+                            <p class="donewa-note">WhatsApp terbuka dengan pesan siap kirim — tekan tombol Kirim di aplikasi WhatsApp.</p>
+                        </div>
+                    </div>
+
+<!-- ===== FLOATING WINDOW: NOTA PENERIMAAN SERVICE ===== -->
                     <section id="pageNota" class="float-window" role="dialog" aria-label="Nota Penerimaan Service">
                         <div class="float-titlebar" id="notaTitlebar">
                             <div class="flex items-center gap-2.5 min-w-0">

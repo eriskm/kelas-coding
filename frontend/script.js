@@ -1982,7 +1982,19 @@ function txRowHtml(o, num) {
             <div class="tx-line-main tx-user tx-ellipsis font-bold text-gray-800 dark:text-gray-200" title="${escapeHtml(o.customer_name || '-')}">${escapeHtml(o.customer_name || 'Pelanggan Umum')}</div>
             <div class="tx-line-sub tx-cell-muted tx-ellipsis">${waLink || (escapeHtml(o.customer_phone || '-'))}</div>
         </td>
-        <td class="tx-statuscell">${txStatusBadge(o.status)}</td>
+        <td class="tx-statuscell">${txStatusBadge(o.status)}${(() => {
+            if ((o.status === 'DONE' || o.status === 'FAILED') && (!o.unit_status || o.unit_status === 'DI TOKO')) {
+                const un = (_unclaimedData && _unclaimedData.items) ? _unclaimedData.items.find(x => x.id === o.id) : null;
+                if (un && un.stage >= 1) {
+                    const stg = un.stage;
+                    const col = stg === 4 ? 'bg-red-500 text-white' : stg === 3 ? 'bg-pink-500 text-white' : stg === 2 ? 'bg-orange-500 text-white' : 'bg-amber-500 text-white';
+                    const lbl = stg === 4 ? '90+H' : stg === 3 ? '60H' : stg === 2 ? '30H' : '7H';
+                    const isDone = isUnclaimedWaDone(un);
+                    return `<button type="button" onclick="event.stopPropagation(); unclaimedWaOpen(${o.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${col} hover:opacity-90 shadow-xs ml-1" title="Unit Mengendap ${un.days_pending} Hari (${isDone ? 'Sudah disapa hari ini' : 'Klik untuk Sapa Konsumen'})"><i class="fa-brands fa-whatsapp"></i> ${lbl}${isDone ? ' ✓' : ''}</button>`;
+                }
+            }
+            return '';
+        })()}</td>
         <td class="tx-work">
             <div class="tx-line-main tx-user tx-ellipsis font-medium text-gray-800 dark:text-gray-200" title="${escapeHtml(o.damagetype || '-')}">${escapeHtml(o.damagetype || '-')}</div>
             <div class="tx-line-sub tx-cell-muted tx-ellipsis text-xs text-gray-400" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</div>
@@ -4230,7 +4242,19 @@ async function plDetailOpen(id, toHistory) {
                     <td class="tx-cell-muted"><span class="tx-ellipsis" title="${escapeHtml(o.repair_plan || '-')}">${escapeHtml(o.repair_plan || '-')}</span></td>
                     <td class="tx-cell-muted tx-nowrap" title="${escapeHtml(o.technician || '-')}">${escapeHtml(o.technician || '-')}</td>
                     <td class="tx-laba tx-nowrap">${plRupiah(harga)}</td>
-                    <td class="tx-statuscell">${txStatusBadge(o.status)}</td>
+                    <td class="tx-statuscell">${txStatusBadge(o.status)}${(() => {
+            if ((o.status === 'DONE' || o.status === 'FAILED') && (!o.unit_status || o.unit_status === 'DI TOKO')) {
+                const un = (_unclaimedData && _unclaimedData.items) ? _unclaimedData.items.find(x => x.id === o.id) : null;
+                if (un && un.stage >= 1) {
+                    const stg = un.stage;
+                    const col = stg === 4 ? 'bg-red-500 text-white' : stg === 3 ? 'bg-pink-500 text-white' : stg === 2 ? 'bg-orange-500 text-white' : 'bg-amber-500 text-white';
+                    const lbl = stg === 4 ? '90+H' : stg === 3 ? '60H' : stg === 2 ? '30H' : '7H';
+                    const isDone = isUnclaimedWaDone(un);
+                    return `<button type="button" onclick="event.stopPropagation(); unclaimedWaOpen(${o.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${col} hover:opacity-90 shadow-xs ml-1" title="Unit Mengendap ${un.days_pending} Hari (${isDone ? 'Sudah disapa hari ini' : 'Klik untuk Sapa Konsumen'})"><i class="fa-brands fa-whatsapp"></i> ${lbl}${isDone ? ' ✓' : ''}</button>`;
+                }
+            }
+            return '';
+        })()}</td>
                 </tr>`;
             }).join('') : '<tr><td colspan="9" class="text-center text-gray-400 py-6">Belum ada riwayat servis.</td></tr>';
         }
@@ -7474,7 +7498,7 @@ function notaDigitalFit() {
         const sheet = wrap.querySelector('.nps-sheet, .ng-sheet, .ndr-sheet');
         if (!sheet) return;
         const avail = wrap.clientWidth || 0;
-        const baseW = sheet.classList.contains('ng-sheet') ? 961 : sheet.classList.contains('ndr-sheet') ? 920 : 1066;
+        const baseW = (sheet.classList.contains('ng-sheet') || sheet.classList.contains('nps-sheet')) ? 961 : sheet.classList.contains('ndr-sheet') ? 920 : 961;
         const s = avail > 0 ? Math.min(1, avail / baseW) : 1;
         if (s < 1) {
             sheet.style.transform = 'scale(' + s + ')';
@@ -7582,9 +7606,6 @@ function renderNotaDigital(d) {
     const teknisi = notaTechnician(d.technician);
     const tgl = notaTglSlash(d.tgl);
     const jam = notaJam();
-    const imei = (d.imei || '').trim() || '-';
-    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=132x132&margin=6&data='
-        + encodeURIComponent('SUKABUMI FLASHER ' + (d.no || ''));
     const stCls = notaStatusClass(d.status).replace('nd-', '');
     // Snapshot kondisi servis saat nota dibuat (bukan histori/timeline).
     const st = notaSnapshotStatus(d.status);
@@ -7593,103 +7614,229 @@ function renderNotaDigital(d) {
     const imeiTxt = (d.imei || '').trim() || '-';
     const fisikTxt = notaChecklistText(d.checklist && d.checklist.fisik, CHECK_FISIK);
     const lenTxt = notaChecklistText(d.checklist && d.checklist.len, CHECK_LEN);
+
     el.innerHTML = `
     <div class="nps-sheet">
+        <!-- HEADER -->
         <div class="nps-head">
             <div class="nps-brand">
-                <span class="nps-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"><i class="fa-solid fa-bolt"></i></span>
-                <div><b>SUKABUMI FLASHER</b><span>SMARTPHONE SERVICE LAB</span></div>
+                <div class="nps-logo-icon">
+                    <img src="/static/assets/logo.png" alt="Logo" onerror="this.style.display='none';var s=this.nextElementSibling;if(s)s.style.display='block';">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:30px;height:30px;color:#2563eb;display:none;"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><circle cx="12" cy="14" r="3"></circle><path d="M12 11v-2"></path><path d="M12 19v-2"></path></svg>
+                </div>
+                <div>
+                    <b>SUKABUMI FLASHER</b>
+                    <span>SMARTPHONE SERVICE LAB</span>
+                </div>
             </div>
             <div class="nps-contact">
-                <div><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waShop)}</div>
-                <div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
-                <div><i class="fa-regular fa-clock"></i>Jam: ${escapeHtml(jam)}</div>
+                <div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                    <span>${escapeHtml(waShop)}</span>
+                </div>
+                <div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                    <span>${escapeHtml(tgl)}</span>
+                </div>
+                <div>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                    <span>Jam: ${escapeHtml(jam)}</span>
+                </div>
             </div>
         </div>
+
         <div class="nps-body">
+            <!-- Row 1: Title & Proof -->
             <div class="nps-titlerow">
                 <div class="nps-title">
+                    <div class="nps-doctype-pill">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                        <span>TANDA TERIMA RESMI</span>
+                    </div>
                     <h3>NOTA <em>PENERIMAAN</em> SERVICE</h3>
-                    <div class="nps-idlabel"><span class="nps-rule"></span><i class="fa-solid fa-play"></i>NOMER SERVICE<span class="nps-rule"></span></div>
-                    <div class="nps-id">${escapeHtml(d.no || '-')}</div>
+                    <div class="nps-idlabel">
+                        <div class="nps-id-tag">NOMOR SERVICE</div>
+                        <div class="nps-id">${escapeHtml(d.no || '-')}</div>
+                    </div>
                 </div>
                 <div class="nps-proof">
-                    <span class="nps-proof-ico"><i class="fa-solid fa-clipboard-check"></i></span>
-                    <div><b>BUKTI PENERIMAAN BARANG<br><em>UNTUK PERBAIKAN</em></b><span>Harap simpan nota ini untuk pengambilan unit.</span></div>
+                    <div class="nps-proof-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                    </div>
+                    <div>
+                        <b>BUKTI PENERIMAAN RESMI<br><em>UNTUK PERBAIKAN</em></b>
+                        <span>Harap simpan berkas nota digital ini sebagai bukti sah untuk pengambilan unit.</span>
+                    </div>
                 </div>
             </div>
+
+            <!-- Row 2: Dua Kolom Utama -->
             <div class="nps-cols">
+                <!-- Kolom Kiri: Detail Pelanggan, Device, Diagnosa, Kelengkapan -->
                 <div class="nps-main">
+                    <!-- Kartu Pelanggan -->
                     <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-user"></i></span>PELANGGAN</div>
-                        <div class="nps-name">${escapeHtml(d.nama || '-')}</div>
-                        <div class="nps-line"><i class="fa-brands fa-whatsapp"></i>${escapeHtml(d.phone || '-')}</div>
+                        <div class="nps-card-header">
+                            <div class="nps-ch-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+                            </div>
+                            <span class="nps-ch-title">DATA PELANGGAN</span>
+                        </div>
+                        <div class="nps-card-content">
+                            <div class="nps-cust-name">${escapeHtml(d.nama || '-')}</div>
+                            <div class="nps-cust-phone">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                <span>${escapeHtml(d.phone || '-')}</span>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Kartu Device & IMEI -->
                     <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>DEVICE</div>
-                        <div class="nps-name">${escapeHtml(d.device || '-')}</div>
-                        <div class="nps-kv"><span>IMEI</span><b>${escapeHtml(imeiTxt)}</b></div>
+                        <div class="nps-card-header">
+                            <div class="nps-ch-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                            </div>
+                            <span class="nps-ch-title">PERANGKAT & IDENTITAS</span>
+                        </div>
+                        <div class="nps-card-content">
+                            <div class="nps-dev-title">${escapeHtml(d.device || '-')}</div>
+                            <div class="nps-dev-meta">
+                                <span>IMEI / SN:</span>
+                                <b>${escapeHtml(imeiTxt)}</b>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Kartu Keluhan & Rencana Tindakan -->
                     <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>KELUHAN / DIAGNOSA</div>
-                        <p class="nps-text">${escapeHtml(d.damage || '-')}</p>
+                        <div class="nps-card-header">
+                            <div class="nps-ch-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
+                            </div>
+                            <span class="nps-ch-title">KELUHAN & RENCANA TINDAKAN</span>
+                        </div>
+                        <div class="nps-card-content">
+                            <div class="nps-field-group">
+                                <div class="nps-field-label">Keluhan / Diagnosa Awal:</div>
+                                <div class="nps-field-desc">${escapeHtml(d.damage || '-')}</div>
+                            </div>
+                            <div class="nps-field-group" style="margin-top: 10px;">
+                                <div class="nps-field-label">Rencana Tindakan:</div>
+                                <div class="nps-field-desc">${escapeHtml(d.plan || '-')}</div>
+                            </div>
+                        </div>
                     </div>
+
+                    <!-- Kartu Kondisi Fisik & Kelengkapan -->
                     <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-list-check"></i></span>RENCANA TINDAKAN</div>
-                        <p class="nps-text">${escapeHtml(d.plan || '-')}</p>
-                    </div>
-                    <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-box-open"></i></span>KELENGKAPAN SAAT DITERIMA</div>
-                        <p class="nps-text">${escapeHtml(lenTxt)}</p>
-                    </div>
-                    <div class="nps-card">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-triangle-exclamation"></i></span>KONDISI FISIK SAAT DITERIMA</div>
-                        <p class="nps-text">${escapeHtml(fisikTxt)}</p>
+                        <div class="nps-card-header">
+                            <div class="nps-ch-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
+                            </div>
+                            <span class="nps-ch-title">KONDISI FISIK & KELENGKAPAN SAAT TERIMA</span>
+                        </div>
+                        <div class="nps-card-content">
+                            <div class="nps-field-group">
+                                <div class="nps-field-label">Kelengkapan:</div>
+                                <div class="nps-field-desc">${escapeHtml(lenTxt)}</div>
+                            </div>
+                            <div class="nps-field-group" style="margin-top: 10px;">
+                                <div class="nps-field-label">Kondisi Fisik:</div>
+                                <div class="nps-field-desc">${escapeHtml(fisikTxt)}</div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <!-- Kolom Kanan: Estimasi Biaya & Status Lifecycle Tracker -->
                 <div class="nps-side">
-                    <div class="nps-cost">
-                        <div class="nps-cost-head">ESTIMASI BIAYA (PERKIRAAN)</div>
-                        <div class="nps-cost-row"><span>Estimasi</span><b>${escapeHtml(notaRupiah(d.estimate))}</b></div>
-                        <div class="nps-cost-row"><span>DP</span><b>${escapeHtml(notaRupiah(d.dp))}</b></div>
-                        <div class="nps-cost-row is-total"><span>Sisa</span><b>${escapeHtml(notaRupiah(sisa))}</b></div>
-                        <p class="nps-cost-note">${d.garansi ? escapeHtml(d.garansi) : 'Estimasi dapat berubah sesuai hasil diagnosa teknisi.'}</p>
-                    </div>
-                    <div class="nps-progress">
-                        <div class="nps-cap"><span class="nps-ico"><i class="fa-solid fa-chart-line"></i></span>STATUS</div>
-                        <div class="nps-statusline">
-                            <span class="nps-pill ${st.cls}">${escapeHtml(st.label)}</span>
+                    <!-- Kartu Estimasi Biaya -->
+                    <div class="nps-card nps-card-cost">
+                        <div class="nps-cost-header">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                            <span>ESTIMASI BIAYA</span>
                         </div>
-                        <div class="nps-steps">${NPS_STAGES.map((s, i) => {
-                            const cls = st.stage < 0 ? '' : (i < st.stage ? ' is-past' : (i === st.stage ? ' is-now' : ''));
-                            return `<div class="nps-tstep${cls}"><span class="nps-tdot"></span>${s}</div>`;
-                        }).join('')}</div>
-                        ${st.stage >= 0 ? `<div class="nps-segbar">${NPS_STAGES.map((s, i) => `<span class="nps-seg${i <= st.stage ? ' on' : ''}"></span>`).join('')}<span class="nps-segnum">${st.stage + 1}/${NPS_STAGES.length}</span></div>` : ''}
-                        <p class="nps-statussub">${escapeHtml(st.sub)}</p>
-                        <p class="nps-received">Diterima pada: <b>${escapeHtml(tgl)}</b> | <b>${escapeHtml(jam)}</b></p>
+                        <div class="nps-cost-body">
+                            <div class="nps-cost-row">
+                                <span>Estimasi</span>
+                                <b>${escapeHtml(notaRupiah(d.estimate))}</b>
+                            </div>
+                            <div class="nps-cost-row">
+                                <span>DP (Uang Muka)</span>
+                                <b>${escapeHtml(notaRupiah(d.dp))}</b>
+                            </div>
+                            <div class="nps-cost-row is-total">
+                                <span>Sisa Estimasi</span>
+                                <b>${escapeHtml(notaRupiah(sisa))}</b>
+                            </div>
+                            <div class="nps-cost-note">
+                                ${d.garansi ? escapeHtml(d.garansi) : 'Estimasi biaya bersifat perkiraan awal dan dapat disesuaikan dengan hasil diagnosa teknisi.'}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Kartu Status Layanan & Lifecycle Stepper -->
+                    <div class="nps-card nps-card-progress">
+                        <div class="nps-card-header">
+                            <div class="nps-ch-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                            </div>
+                            <span class="nps-ch-title">STATUS SERVICE</span>
+                        </div>
+                        <div class="nps-status-body">
+                            <div class="nps-status-badge">
+                                <span class="nps-pill ${st.cls}">${escapeHtml(st.label)}</span>
+                            </div>
+                            <div class="nps-steps">
+                                ${NPS_STAGES.map((s, i) => {
+                                    const cls = st.stage < 0 ? '' : (i < st.stage ? ' is-past' : (i === st.stage ? ' is-now' : ''));
+                                    return `<div class="nps-tstep${cls}"><span class="nps-tdot"></span><span class="nps-tstep-text">${s}</span></div>`;
+                                }).join('')}
+                            </div>
+                            ${st.stage >= 0 ? `<div class="nps-segbar">${NPS_STAGES.map((s, i) => `<span class="nps-seg${i <= st.stage ? ' on' : ''}"></span>`).join('')}<span class="nps-segnum">${st.stage + 1}/${NPS_STAGES.length}</span></div>` : ''}
+                            <div class="nps-statussub">${escapeHtml(st.sub)}</div>
+                            <div class="nps-received">Diterima: <b>${escapeHtml(tgl)}</b> | <b>${escapeHtml(jam)}</b></div>
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="nps-qrbox">
-                <div class="nps-qrleft">
-                    <div class="nps-qrtitle">CEK <em>STATUS</em> SERVICE</div>
-                    <p>Scan QR atau buka link berikut untuk melihat status terbaru unit Anda.</p>
-                    <div class="nps-linkpill"><i class="fa-solid fa-globe"></i>boss-sf.id/lacak/${escapeHtml(d.no || '')}</div>
+
+            <!-- Row 3: Panduan Pengambilan Unit & Keamanan (Opsi A) -->
+            <div class="nps-grid-footer">
+                <div class="nps-footer-card">
+                    <div class="nps-fc-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"></path><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"></path></svg>
+                        <span>PANDUAN PENGAMBILAN UNIT</span>
+                    </div>
+                    <div class="nps-fc-desc">Harap simpan berkas gambar Nota Digital ini sebagai bukti tanda terima sah. Tunjukkan gambar nota atau sebutkan No. Servis <strong>${escapeHtml(d.no || '-')}</strong> ke kasir / teknisi kami saat mengambil unit.</div>
+                    <div class="nps-fc-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                        Hotline WA: ${escapeHtml(waShop || '-')}
+                    </div>
                 </div>
-                <div class="nps-qrwrap">
-                    <img src="${qrUrl}" alt="QR servis" loading="lazy" onerror="this.style.display='none';var f=this.parentNode.querySelector('.nps-kode-fallback');if(f)f.style.display='flex';">
-                    <div class="nps-kode-fallback" style="display:none"><span>KODE SERVIS</span><b>${escapeHtml(d.no || '-')}</b></div>
-                </div>
-                <div class="nps-trust">
-                    <div class="nps-trow"><i class="fa-solid fa-shield-halved"></i><div><b>DATA UNIT AMAN</b><span>Kami menjaga data dan privasi perangkat Anda.</span></div></div>
-                    <div class="nps-trow"><i class="fa-regular fa-clock"></i><div><b>ESTIMASI PENGERJAAN</b><span>Akan diinformasikan setelah proses diagnosa.</span></div></div>
-                    <div class="nps-trow"><i class="fa-solid fa-phone"></i><div><b>BUTUH BANTUAN?</b><span>Hubungi kami di ${escapeHtml(waShop)}</span></div></div>
+
+                <div class="nps-footer-card nps-fc-right">
+                    <div class="nps-fc-right-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    </div>
+                    <p>Tanda terima resmi diterbitkan oleh<br><strong>SUKABUMI FLASHER<br>SMARTPHONE SERVICE LAB</strong></p>
+                    <div style="height: 1px; background: #bfdbfe; margin: 10px 0;"></div>
+                    <p style="font-size: 13px; color: #555;">Kami menjamin kerahasiaan data serta keamanan komponen perangkat Anda.</p>
                 </div>
             </div>
         </div>
-        <div class="nps-foot">
-            <div class="nps-foot-l"><i class="fa-regular fa-circle-check"></i><span>Terima kasih telah mempercayakan perbaikan perangkat Anda kepada kami.</span></div>
-            <div class="nps-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+
+        <!-- FOOTER DARK -->
+        <div class="nps-footer-dark">
+            <div class="nps-fd-left">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <p>Terima kasih telah mempercayakan<br>perbaikan perangkat Anda kepada kami.</p>
+            </div>
+            <div class="nps-foot-r nps-fd-right">
+                <b>Powered by <em>BOSS</em></b>
+                <span>BUSINESS OPERATION SMART SYSTEM</span>
+            </div>
         </div>
     </div>`;
 }
@@ -9614,3 +9761,267 @@ document.addEventListener('DOMContentLoaded', async function () {
         showLogin();
     }
 });
+
+
+// ============================================
+// UNIT MENGENDAP (MODEL C) - Follow-Up Bertahap 7/30/60/90 Hari
+// ============================================
+
+let _unclaimedData = null;
+let _unclaimedFilterStage = 0; // 0 = all
+let _unclaimedActiveTarget = null;
+
+function _unclaimedTodayStr() {
+    return new Date().toISOString().slice(0, 10);
+}
+
+function getUnclaimedWaDoneMap() {
+    try {
+        const key = 'boss_unclaimed_wa_done_' + _unclaimedTodayStr();
+        const raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : {};
+    } catch (_) {
+        return {};
+    }
+}
+
+function setUnclaimedWaDone(keyId, isDone) {
+    if (!keyId) return;
+    try {
+        const storageKey = 'boss_unclaimed_wa_done_' + _unclaimedTodayStr();
+        const map = getUnclaimedWaDoneMap();
+        if (isDone) {
+            map[String(keyId)] = new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+        } else {
+            delete map[String(keyId)];
+        }
+        localStorage.setItem(storageKey, JSON.stringify(map));
+    } catch (_) {}
+}
+
+function isUnclaimedWaDone(o) {
+    if (!o) return false;
+    const map = getUnclaimedWaDoneMap();
+    const k1 = o.no_servis ? String(o.no_servis) : '';
+    const k2 = o.id ? String(o.id) : '';
+    return Boolean((k1 && map[k1]) || (k2 && map[k2]));
+}
+
+function getUnclaimedWaDoneTime(o) {
+    if (!o) return null;
+    const map = getUnclaimedWaDoneMap();
+    const k1 = o.no_servis ? String(o.no_servis) : '';
+    const k2 = o.id ? String(o.id) : '';
+    return (k1 && map[k1]) || (k2 && map[k2]) || null;
+}
+
+function unclaimedWaMessage(o, stage) {
+    const nama = (o.customer_name || 'Kak').trim();
+    const device = (o.device || 'perangkat').trim();
+    const no = (o.no_servis || '-').trim();
+    const isDone = (o.status === 'DONE');
+    const stg = Number(stage) || (o.stage || 1);
+
+    if (isDone) {
+        if (stg === 1) {
+            return `Halo Kak ${nama}, kami informasikan HP ${device} Kakak (No. Servis ${no}) sudah selesai diservis dan masih berada di toko kami. Silakan diambil jika sudah ada waktu, ya. Terima kasih! - SUKABUMI FLASHER`;
+        } else if (stg === 2) {
+            return `Halo Kak ${nama}, HP ${device} Kakak (No. Servis ${no}) sudah cukup lama (30 hari) berada di toko kami. Mohon konfirmasi kapan unit akan diambil agar kami bisa mengatur penyimpanan unit dengan baik. Terima kasih! - SUKABUMI FLASHER`;
+        } else if (stg === 3) {
+            return `Halo Kak ${nama}, kami mohon kepastian terkait HP ${device} (No. Servis ${no}) yang masih berada di toko kami. Jika Kakak tidak berencana mengambilnya, kami terbuka untuk membahas kemungkinan pembelian unit oleh toko dengan harga yang disepakati bersama. Terima kasih! - SUKABUMI FLASHER`;
+        } else {
+            return `Halo Kak ${nama}, HP ${device} Kakak (No. Servis ${no}) sudah hampir 3 bulan berada di toko kami. Mohon segera mengonfirmasi jadwal pengambilan. Jika ingin menjual unit kepada kami, silakan hubungi CS untuk membahas harga. Jika tidak ada kesepakatan, unit tetap perlu diambil kembali. Terima kasih! - SUKABUMI FLASHER`;
+        }
+    } else {
+        // FAILED
+        if (stg === 1) {
+            return `Halo Kak ${nama}, kami informasikan HP ${device} Kakak (No. Servis ${no}) belum berhasil diperbaiki dan masih berada di toko kami. Silakan diambil kembali jika sudah ada waktu, ya. Tanpa biaya perbaikan. Terima kasih! - SUKABUMI FLASHER`;
+        } else if (stg === 2) {
+            return `Halo Kak ${nama}, HP ${device} Kakak (No. Servis ${no}) yang batal/belum berhasil diperbaiki sudah 30 hari berada di toko kami. Mohon konfirmasi kapan unit akan diambil kembali agar tidak tercecer. Terima kasih! - SUKABUMI FLASHER`;
+        } else if (stg === 3) {
+            return `Halo Kak ${nama}, kami mohon kepastian terkait HP ${device} (No. Servis ${no}) yang masih berada di toko kami. Jika Kakak tidak berencana mengambilnya kembali, kami terbuka untuk penawaran pembelian bahan/part unit oleh toko dengan harga sepakat. Terima kasih! - SUKABUMI FLASHER`;
+        } else {
+            return `Halo Kak ${nama}, HP ${device} Kakak (No. Servis ${no}) sudah hampir 3 bulan berada di toko kami. Mohon segera mengonfirmasi jadwal pengambilan unit. Jika ingin melepas/menjual unit kepada toko, silakan hubungi CS. Jika tidak, unit tetap wajib diambil kembali. Terima kasih! - SUKABUMI FLASHER`;
+        }
+    }
+}
+
+async function loadUnclaimedUnits() {
+    try {
+        const res = await apiGet('/orders/unclaimed');
+        _unclaimedData = res || { total: 0, stage_1: 0, stage_2: 0, stage_3: 0, stage_4: 0, items: [] };
+        updateUnclaimedBanner();
+    } catch (_) {
+        _unclaimedData = { total: 0, stage_1: 0, stage_2: 0, stage_3: 0, stage_4: 0, items: [] };
+        updateUnclaimedBanner();
+    }
+}
+
+function updateUnclaimedBanner() {
+    const box = document.getElementById('unclaimedAlertBox');
+    if (!box) return;
+    const d = _unclaimedData;
+    if (!d || d.total <= 0) {
+        box.classList.add('hidden');
+        return;
+    }
+    box.classList.remove('hidden');
+
+    const totBadge = document.getElementById('unclaimedTotalBadge');
+    if (totBadge) totBadge.textContent = d.total + ' Unit';
+
+    const cAll = document.getElementById('unclaimedCntAll');
+    if (cAll) cAll.textContent = d.total;
+
+    const c1 = document.getElementById('unclaimedCnt1');
+    if (c1) c1.textContent = d.stage_1 || 0;
+
+    const c2 = document.getElementById('unclaimedCnt2');
+    if (c2) c2.textContent = d.stage_2 || 0;
+
+    const c3 = document.getElementById('unclaimedCnt3');
+    if (c3) c3.textContent = d.stage_3 || 0;
+
+    const c4 = document.getElementById('unclaimedCnt4');
+    if (c4) c4.textContent = d.stage_4 || 0;
+}
+
+function filterUnclaimedStage(stg) {
+    if (_unclaimedFilterStage === stg) {
+        _unclaimedFilterStage = 0; // toggle off
+    } else {
+        _unclaimedFilterStage = stg;
+    }
+
+    const tabs = document.querySelectorAll('#unclaimedFilterTabs .unclaimed-filter-btn');
+    tabs.forEach(btn => {
+        const bStg = Number(btn.dataset.stage);
+        if (bStg === _unclaimedFilterStage) btn.classList.add('is-active');
+        else btn.classList.remove('is-active');
+    });
+
+    if (_unclaimedFilterStage > 0) {
+        if (_unclaimedData && _unclaimedData.items) {
+            const filtered = _unclaimedData.items.filter(x => x.stage === _unclaimedFilterStage);
+            const body = document.getElementById('txBody');
+            const empty = document.getElementById('txEmpty');
+            const loading = document.getElementById('txLoading');
+            const pagination = document.getElementById('txPagination');
+            if (body) {
+                if (loading) loading.classList.add('hidden');
+                if (!filtered.length) {
+                    if (empty) {
+                        empty.innerHTML = '<i class="fa-solid fa-clock-rotate-left text-3xl mb-2 block opacity-40"></i>Tidak ada unit mengendap di tahap ini.';
+                        empty.classList.remove('hidden');
+                    }
+                    body.innerHTML = '';
+                } else {
+                    if (empty) empty.classList.add('hidden');
+                    body.innerHTML = filtered.map((o, idx) => txRowHtml(o, idx + 1)).join('');
+                    const info = document.getElementById('txInfo');
+                    if (info) {
+                        info.textContent = `${filtered.length} unit mengendap (Tahap ${_unclaimedFilterStage})`;
+                    }
+                }
+                if (pagination) pagination.classList.add('hidden');
+            }
+        }
+    } else {
+        renderTransaksi();
+    }
+}
+
+function unclaimedWaOpen(orderId) {
+    let o = null;
+    if (_unclaimedData && _unclaimedData.items) {
+        o = _unclaimedData.items.find(x => x.id === orderId);
+    }
+    if (!o) return;
+
+    _unclaimedActiveTarget = o;
+    const stage = o.stage || (o.days_pending >= 90 ? 4 : o.days_pending >= 60 ? 3 : o.days_pending >= 30 ? 2 : 1);
+
+    const pop = document.getElementById('unclaimedWaPopup');
+    if (!pop) return;
+
+    const stageBadge = document.getElementById('unclaimedWaStageBadge');
+    if (stageBadge) {
+        stageBadge.textContent = 'Tahap ' + stage + ' (' + (stage === 4 ? '90+ Hari' : stage === 3 ? '60 Hari' : stage === 2 ? '30 Hari' : '7 Hari') + ')';
+        stageBadge.className = 'px-2 py-0.5 rounded text-[11px] font-extrabold uppercase ' +
+            (stage === 4 ? 'bg-red-100 text-red-800' : stage === 3 ? 'bg-pink-100 text-pink-800' : stage === 2 ? 'bg-orange-100 text-orange-800' : 'bg-amber-100 text-amber-800');
+    }
+
+    const titleEl = document.getElementById('unclaimedWaTitle');
+    if (titleEl) {
+        titleEl.textContent = o.status === 'DONE' ? 'Unit Selesai Belum Diambil' : 'Unit Gagal Belum Diambil';
+    }
+
+    const toEl = document.getElementById('unclaimedWaTo');
+    if (toEl) {
+        const doneTime = getUnclaimedWaDoneTime(o);
+        toEl.innerHTML = `Kepada: <b>${escapeHtml(o.customer_name || 'Pelanggan')}</b> (${escapeHtml(o.customer_phone || '-')}) • <b>${escapeHtml(o.device || '-')}</b> (#${escapeHtml(o.no_servis || '-')})<br><span class="text-xs text-amber-700 font-semibold">Mengendap ${o.days_pending || 0} hari</span>` +
+            (doneTime ? `<span class="ml-2 inline-flex items-center gap-1 text-emerald-600 font-bold text-xs"><i class="fa-solid fa-check"></i> Sudah disapa (${doneTime})</span>` : '');
+    }
+
+    const msgEl = document.getElementById('unclaimedWaMsg');
+    if (msgEl) {
+        msgEl.value = unclaimedWaMessage(o, stage);
+    }
+
+    const warnEl = document.getElementById('unclaimedWaWarn');
+    const sendBtn = document.getElementById('unclaimedWaSendBtn');
+    const cleanNum = (o.customer_phone || '').replace(/\D/g, '');
+    if (!cleanNum) {
+        if (warnEl) {
+            warnEl.textContent = 'Nomor WhatsApp customer tidak tersedia.';
+            warnEl.classList.remove('hidden');
+        }
+        if (sendBtn) sendBtn.disabled = true;
+    } else {
+        if (warnEl) warnEl.classList.add('hidden');
+        if (sendBtn) sendBtn.disabled = false;
+    }
+
+    pop.classList.remove('hidden');
+}
+
+function unclaimedWaClose() {
+    const pop = document.getElementById('unclaimedWaPopup');
+    if (pop) pop.classList.add('hidden');
+    _unclaimedActiveTarget = null;
+}
+
+function unclaimedWaMarkDone() {
+    const o = _unclaimedActiveTarget;
+    if (!o) return;
+    setUnclaimedWaDone(o.no_servis || o.id, true);
+    unclaimedWaClose();
+    if (_unclaimedFilterStage > 0) filterUnclaimedStage(_unclaimedFilterStage);
+    else renderTransaksi();
+}
+
+function unclaimedWaSend() {
+    const o = _unclaimedActiveTarget;
+    if (!o) return;
+    const msgEl = document.getElementById('unclaimedWaMsg');
+    const msg = msgEl ? msgEl.value : unclaimedWaMessage(o, o.stage || 1);
+
+    let num = String(o.customer_phone || '').replace(/\D/g, '');
+    if (num.startsWith('0')) num = '62' + num.slice(1);
+
+    if (num) {
+        window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
+        setUnclaimedWaDone(o.no_servis || o.id, true);
+    }
+    unclaimedWaClose();
+    if (_unclaimedFilterStage > 0) filterUnclaimedStage(_unclaimedFilterStage);
+    else renderTransaksi();
+}
+
+window.loadUnclaimedUnits = loadUnclaimedUnits;
+window.filterUnclaimedStage = filterUnclaimedStage;
+window.unclaimedWaOpen = unclaimedWaOpen;
+window.unclaimedWaClose = unclaimedWaClose;
+window.unclaimedWaSend = unclaimedWaSend;
+window.unclaimedWaMarkDone = unclaimedWaMarkDone;
+window.unclaimedWaMessage = unclaimedWaMessage;

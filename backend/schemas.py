@@ -193,6 +193,32 @@ class ServiceOrderPage(BaseModel):
     items: List[ServiceOrderList]
 
 
+class UnclaimedOrderOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    no_servis: str
+    customer_id: int
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    device: str
+    status: str
+    unit_status: Optional[str] = None
+    estimate: MoneyOut
+    final_price: Optional[MoneyOut] = None
+    status_at: Optional[datetime] = None
+    days_pending: int
+    stage: int  # 0 (<7d), 1 (7-29d), 2 (30-59d), 3 (60-89d), 4 (90+d)
+
+
+class UnclaimedOrdersSummary(BaseModel):
+    total: int
+    stage_1: int
+    stage_2: int
+    stage_3: int
+    stage_4: int
+    items: List[UnclaimedOrderOut]
+
+
 # ---------- Payment ----------
 class PaymentBase(BaseModel):
     service_order_id: int
