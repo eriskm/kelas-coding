@@ -3473,162 +3473,146 @@ select.range-pill.range-select option { color: #0f172a; }
    ============================================ */
 .ng-sheet {
     width: 961px; max-width: none; background: #ffffff; color: #111;
-    font-family: Inter, system-ui, "Segoe UI", sans-serif;
-    font-size: 16px; line-height: 1.55;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 16px; line-height: 1.5;
     -webkit-font-smoothing: antialiased;
+    box-sizing: border-box;
+    display: flex; flex-direction: column;
 }
-/* ── Header ─────────────────────────────────────────────── */
-.ng-head {
-    background: linear-gradient(135deg, #d31111, #7f0d0d); color: #fff;
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 18px; padding: 34px 34px 32px;
-}
-.ng-logo {
-    width: 96px; height: 96px; border-radius: 18px; background: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-    overflow: hidden; flex-shrink: 0;
-    box-shadow: 0 6px 18px rgba(0,0,0,.18);
-}
-.ng-logo img { width: 100%; height: 100%; object-fit: cover; }
-.ng-brand { display: flex; align-items: center; gap: 18px; min-width: 0; }
-.ng-brand > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
-.ng-brand b { font-size: 30px; font-style: italic; font-weight: 800;
-    letter-spacing: 1px; line-height: 1.05; }
-.ng-brand span { font-size: 13px; font-weight: 600; letter-spacing: 3.4px; opacity: .92; }
-.ng-contact { text-align: right; font-size: 17px; font-weight: 700; flex-shrink: 0; }
-.ng-contact > div { display: flex; align-items: center; justify-content: flex-end;
-    gap: 10px; margin-top: 9px; }
-.ng-contact > div:first-child { margin-top: 0; }
-.ng-contact i { font-size: 16px; opacity: .95; }
+.ng-sheet * { box-sizing: border-box; }
 
-/* ── Judul ──────────────────────────────────────────────── */
-.ng-body { padding: 30px 34px 26px; }
-.ng-intro { display: flex; gap: 24px; align-items: flex-start; margin-bottom: 24px; }
-.ng-title { flex: 1 1 auto; min-width: 0; }
-.ng-title h3 { margin: 0; font-size: 38px; font-weight: 800; letter-spacing: .5px;
-    display: flex; align-items: center; gap: 13px; line-height: 1.1; }
-.ng-title h3 > i { color: #d31111; font-size: 34px; }
-.ng-title h3 em { font-style: normal; color: #d31111; }
-.ng-idlabel { display: flex; align-items: center; gap: 11px; margin-top: 14px;
-    font-size: 14px; font-weight: 800; letter-spacing: 1.2px; }
-.ng-idlabel i { color: #d31111; font-size: 13px; }
-.ng-rule { flex: 1; height: 2px; background: #d31111; }
-.ng-id { font-size: 44px; font-weight: 800; color: #2563eb;
-    letter-spacing: .5px; margin-top: 6px; word-break: break-all; line-height: 1.1; }
-
-.ng-proof {
-    width: 330px; flex-shrink: 0; border: 2px solid #d31111; border-radius: 14px;
-    padding: 18px 20px; display: flex; gap: 14px; align-items: flex-start;
-    background: #fff;
-}
-.ng-proof-ico { width: 36px; height: 36px; border-radius: 9px; background: #d31111;
-    color: #fff; display: inline-flex; align-items: center; justify-content: center;
-    font-size: 18px; flex-shrink: 0; }
-.ng-proof b { display: block; font-size: 16.5px; font-weight: 800; line-height: 1.3; }
-.ng-proof b em { font-style: normal; color: #d31111; }
-.ng-proof span { display: block; font-size: 14px; color: #5b6472;
-    margin-top: 9px; line-height: 1.5; }
-
-/* ── Dua kolom ───────────────────────────────────────────── */
+/* ── Compatibility selectors ─────────────────────────────── */
 .ng-cols { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: stretch; }
 .ng-main { display: flex; flex-direction: column; gap: 15px; }
 .ng-side { display: flex; flex-direction: column; gap: 15px; }
-/* Kartu QR meregang supaya kolom kanan sama tinggi dengan kolom kiri. */
 .ng-side > .ng-card:last-child { flex: 1 1 auto; display: flex; flex-direction: column; }
 
-.ng-card {
-    border: 1px solid #e4e7ec; border-radius: 14px; padding: 18px 20px; background: #fff;
-    box-shadow: 0 1px 3px rgba(16,24,40,.05);
+/* ── Header ─────────────────────────────────────────────── */
+.ng-header {
+    background: #d30000; padding: 25px 35px; color: white;
+    position: relative; overflow: hidden; display: flex;
+    align-items: center; justify-content: space-between;
+    min-height: 120px; flex-shrink: 0;
 }
-.ng-cap { display: flex; align-items: center; gap: 12px; font-size: 14px;
-    font-weight: 800; letter-spacing: 1.2px; color: #5b6472; text-transform: uppercase; }
-.ng-ico { width: 38px; height: 38px; border-radius: 10px; background: #d31111; color: #fff;
-    display: inline-flex; align-items: center; justify-content: center;
-    font-size: 17px; flex-shrink: 0; }
-.ng-val { font-size: 24px; font-weight: 800; color: #111; margin-top: 11px;
-    word-break: break-word; line-height: 1.25; }
-.ng-sub { font-size: 16px; color: #374151; margin-top: 9px; word-break: break-word;
-    line-height: 1.5; }
-.ng-sub b { color: #111; }
-.ng-plan { font-size: 17px; color: #111; font-weight: 600; margin-top: 11px;
-    line-height: 1.5; word-break: break-word; }
+.ng-header-bg-shape {
+    position: absolute; right: -50px; top: -50px; width: 300px; height: 300px;
+    background: rgba(255,255,255,0.05); border-radius: 50%; z-index: 1; pointer-events: none;
+}
+.ng-header-content {
+    display: flex; justify-content: space-between; width: 100%; z-index: 2; position: relative;
+    align-items: center;
+}
+.ng-brand { display: flex; align-items: center; gap: 15px; }
+.ng-logo-icon {
+    width: 54px; height: 54px; background: white; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    position: relative; overflow: hidden; padding: 2px; flex-shrink: 0;
+}
+.ng-logo-icon img { width: 100%; height: 100%; object-fit: contain; }
+.ng-brand-text-container { display: flex; flex-direction: column; }
+.ng-brand-title { font-size: 28px; font-weight: 900; font-style: italic; line-height: 0.95; letter-spacing: -0.5px; }
+.ng-brand-subtitle { font-size: 13px; font-weight: 700; letter-spacing: 0.5px; margin-top: 5px; opacity: 0.95; }
+.ng-header-contact { text-align: right; display: flex; flex-direction: column; gap: 6px; justify-content: center; }
+.ng-contact-item { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; justify-content: flex-end; }
+.ng-contact-item svg { width: 16px; height: 16px; flex-shrink: 0; }
 
-.ng-pill { display: inline-flex; align-items: center; gap: 9px; margin-top: 14px;
-    background: #fef2f2; border: 1px solid #fecaca; border-radius: 999px;
-    padding: 8px 17px; font-size: 15px; color: #b91c1c; font-weight: 700; }
-.ng-pill i { font-size: 14px; }
-/* Ikon + teks dibungkus elemen (bukan text node polos) karena html2canvas
-  1.4.1.drop salah satu kalau teks polos dan elemen inline jadi saudara flex item. */
-.ng-pill > span > i { margin-right: 8px; }
-.ng-pill b { font-weight: 800; }
-.ng-pill i.fa-check { color: #16a34a; }
-.ng-pill .ng-sep { color: #d4a5a5; }
+/* ── Main Body ───────────────────────────────────────────── */
+.ng-main-body { padding: 25px 35px; flex: 1; display: flex; flex-direction: column; gap: 16px; }
 
-.ng-term { list-style: none; margin: 13px 0 0; padding: 0; }
-.ng-term li { display: flex; gap: 11px; align-items: flex-start; padding: 8px 0;
-    font-size: 15px; color: #374151; line-height: 1.5; }
-.ng-term li > i { color: #d31111; margin-top: 4px; flex-shrink: 0; font-size: 14px; }
+/* ── Top Section ─────────────────────────────────────────── */
+.ng-top-section { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 5px; gap: 20px; }
+.ng-title-area h1 { font-size: 32px; font-weight: 900; color: #111; letter-spacing: -1px; margin: 0 0 12px 0; line-height: 1.1; }
+.ng-title-area h1 span { color: #d30000; }
+.ng-garansi-status { display: flex; align-items: center; gap: 15px; }
+.ng-shield-icon { width: 55px; height: 55px; color: #10b981; flex-shrink: 0; }
+.ng-status-text h2 { color: #10b981; font-size: 22px; font-weight: 800; margin: 0 0 2px 0; }
+.ng-status-text p { font-size: 13px; color: #666; max-width: 290px; line-height: 1.4; font-weight: 500; margin: 0; }
 
-.ng-status { margin-top: 13px; border-radius: 11px; padding: 15px 16px;
-    display: flex; gap: 13px; align-items: flex-start; background: #f0fdf4;
-    border: 1px solid #bbf7d0; }
-.ng-status.is-gray { background: #f3f4f6; border-color: #d1d5db; }
-.ng-status-ico { width: 38px; height: 38px; border-radius: 50%; background: #16a34a;
-    color: #fff; display: inline-flex; align-items: center; justify-content: center;
-    font-size: 18px; flex-shrink: 0; }
-.ng-status.is-gray .ng-status-ico { background: #9ca3af; }
-.ng-status b { display: block; font-size: 22px; font-weight: 800; color: #15803d;
-    letter-spacing: .5px; line-height: 1.2; }
-.ng-status.is-gray b { color: #4b5563; }
-.ng-status span { display: block; font-size: 15px; color: #4b5563; margin-top: 4px; }
-.ng-status u { display: block; text-decoration: none; font-size: 17px;
-    font-weight: 800; color: #111; margin-top: 4px; }
+.ng-garansi-id-box { border: 2px solid #d30000; border-radius: 12px; text-align: center; overflow: hidden; width: 340px; flex-shrink: 0; background: #fff; }
+.ng-id-label { font-size: 13px; color: #555; font-weight: 700; margin-top: 14px; }
+.ng-id-value { font-size: 26px; font-weight: 900; color: #111; margin: 4px 0 14px 0; word-break: break-all; }
+.ng-id-footer { background: #d30000; color: white; padding: 10px; font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; }
 
-.ng-qr { display: flex; gap: 16px; align-items: center; margin-top: 14px; flex: 1 1 auto; }
-.ng-qrwrap { width: 134px; height: 134px; flex-shrink: 0; border: 1px solid #e4e7ec;
-    border-radius: 10px; display: flex; align-items: center; justify-content: center;
-    overflow: hidden; background: #fff; }
-.ng-qrwrap img { width: 100%; height: 100%; object-fit: contain; }
-.ng-qrtext { font-size: 15px; color: #4b5563; line-height: 1.55; }
-.ng-link { display: flex; align-items: center; gap: 11px; margin-top: 15px;
-    width: 100%; background: #d31111; color: #fff; border-radius: 12px;
-    padding: 12px 16px; }
-.ng-link > i { font-size: 19px; flex-shrink: 0; }
-.ng-link > span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ng-link b { font-size: 15px; font-weight: 800; line-height: 1.25; }
-.ng-link em { font-style: normal; font-family: ui-monospace, "SF Mono", Menlo, monospace;
-    font-size: 13px; opacity: .92; line-height: 1.4; word-break: normal; }
-.ng-link-no { display: inline-block; margin-top: 1px; font-weight: 700; opacity: 1;
-    white-space: nowrap; }
+/* ── Row 1: Grid 3 Kolom ─────────────────────────────────── */
+.ng-grid-3col { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+.ng-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fafafa; }
+.ng-card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.ng-card-header svg { width: 18px; height: 18px; color: #d30000; flex-shrink: 0; }
+.ng-ch-title { font-size: 13px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.5px; }
+.ng-cap { display: flex; align-items: center; gap: 10px; font-size: 13px; font-weight: 700; color: #555; text-transform: uppercase; margin-bottom: 8px; }
+.ng-val-primary { font-size: 20px; font-weight: 800; color: #111; margin-bottom: 6px; word-break: break-word; }
+.ng-val-secondary { font-size: 14px; color: #444; font-weight: 500; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
 
-.ng-parts { list-style: none; margin: 11px 0 0; padding: 0; }
-.ng-parts li { display: flex; gap: 10px; align-items: flex-start; padding: 7px 0;
-    font-size: 16px; color: #111; border-bottom: 1px dashed #eceef1; }
+/* ── Row 2: Grid Utama ───────────────────────────────────── */
+.ng-grid-main { display: grid; grid-template-columns: 1fr 1.05fr 1.15fr; gap: 16px; align-items: stretch; }
+.ng-card-detail { border: 1px solid #e5e7eb; border-radius: 12px; background: #fafafa; display: flex; flex-direction: column; overflow: hidden; }
+
+/* Detail Perbaikan */
+.ng-detail-section { padding: 14px 16px; border-bottom: 1px dashed #d1d5db; }
+.ng-detail-section:last-child { border-bottom: none; }
+.ng-ds-title { font-size: 13px; font-weight: 700; color: #666; margin-bottom: 5px; }
+.ng-ds-value { font-size: 14px; color: #222; font-weight: 500; line-height: 1.5; word-break: break-word; }
+.ng-parts { list-style: none; margin: 8px 0 0; padding: 0; }
+.ng-parts li { display: flex; gap: 8px; align-items: flex-start; padding: 5px 0; font-size: 13.5px; color: #111; border-bottom: 1px dashed #eceef1; }
 .ng-parts li:last-child { border-bottom: none; }
-.ng-parts li > i { color: #16a34a; margin-top: 4px; flex-shrink: 0; }
+.ng-parts li > i { color: #16a34a; margin-top: 3px; flex-shrink: 0; }
 .ng-parts .ng-pqty { color: #5b6472; font-weight: 700; }
 
-/* ── Strip bawah ─────────────────────────────────────────── */
-.ng-strip { display: grid; grid-template-columns: repeat(3, 1fr); gap: 22px;
-    background: #f8fafc; border: 1px solid #e4e7ec; border-radius: 14px;
-    padding: 20px 24px; margin-top: 22px; }
-.ng-sitem { display: flex; gap: 13px; align-items: flex-start; }
-.ng-sitem > i { color: #d31111; font-size: 21px; margin-top: 3px; flex-shrink: 0; }
-.ng-sitem b { display: block; font-size: 15px; font-weight: 800; letter-spacing: .6px;
-    color: #111; line-height: 1.3; }
-.ng-sitem span { display: block; font-size: 14px; color: #5b6472;
-    margin-top: 5px; line-height: 1.5; }
+/* Masa Garansi */
+.ng-masa-garansi-inner { padding: 15px; background: #fff; border: 1px solid #10b981; border-radius: 12px; margin: 0 16px 14px 16px; }
+.ng-mg-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px dashed #e5e7eb; }
+.ng-mg-row:last-child { border-bottom: none; }
+.ng-mg-icon { width: 34px; height: 34px; background: #ecfdf5; color: #10b981; border-radius: 8px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.ng-mg-icon svg { width: 18px; height: 18px; }
+.ng-mg-label { font-size: 13px; color: #666; font-weight: 600; }
+.ng-mg-val { font-size: 16px; font-weight: 800; color: #10b981; }
+.ng-mg-info { background: #ecfdf5; padding: 12px; border-radius: 8px; font-size: 13px; color: #065f46; font-weight: 500; margin: 0 16px 16px 16px; display: flex; gap: 8px; align-items: flex-start; line-height: 1.4; }
 
-/* ── Footer ──────────────────────────────────────────────── */
-.ng-foot { display: flex; align-items: stretch; }
-.ng-foot-l { flex: 1 1 auto; background: #d31111; color: #fff; display: flex;
-    align-items: center; gap: 14px; font-size: 17px; font-weight: 700; padding: 26px 32px; }
-.ng-foot-l i { font-size: 27px; flex-shrink: 0; }
-.ng-foot-r { background: #0a0a0a; color: #fff; display: flex; flex-direction: column;
-    justify-content: center; gap: 4px; padding: 26px 32px; flex-shrink: 0; text-align: right; }
-.ng-foot-r b { font-size: 19px; font-weight: 800; }
-.ng-foot-r b em { font-style: normal; color: #ef4444; }
-.ng-foot-r span { font-size: 12px; font-weight: 600; letter-spacing: 1.6px; opacity: .78; }
+/* Cakupan & Pengecualian */
+.ng-cakupan-list { padding: 0 16px 12px 16px; display: flex; flex-direction: column; gap: 7px; }
+.ng-cakupan-item { display: flex; align-items: flex-start; gap: 8px; font-size: 13.5px; font-weight: 500; color: #444; line-height: 1.4; }
+.ng-c-icon-green { color: #10b981; width: 17px; height: 17px; flex-shrink: 0; margin-top: 1px; }
+.ng-c-icon-red { color: #ef4444; width: 17px; height: 17px; flex-shrink: 0; margin-top: 1px; }
+.ng-alert-header { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px dashed #d1d5db; margin-top: 4px; }
+.ng-alert-header svg { width: 18px; height: 18px; color: #ef4444; flex-shrink: 0; }
+.ng-alert-header .ng-ch-title { font-size: 13px; font-weight: 700; color: #ef4444; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* ── Row 3: Footer Cards ─────────────────────────────────── */
+.ng-grid-footer { display: grid; grid-template-columns: 1.25fr 1fr; gap: 16px; align-items: stretch; margin-top: 2px; }
+.ng-qr-center { border: 1px solid #e5e7eb; padding: 10px; border-radius: 12px; background: white; flex-shrink: 0; }
+.ng-qr-center img { width: 100px; height: 100px; display: block; }
+.ng-footer-card { border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; background: #fafafa; height: 100%; display: flex; flex-direction: column; justify-content: center; }
+.ng-fc-title { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+.ng-fc-title svg { width: 20px; height: 20px; color: #d30000; flex-shrink: 0; }
+.ng-fc-title span { font-size: 14px; font-weight: 800; color: #111; }
+.ng-fc-desc { font-size: 13px; color: #666; line-height: 1.45; font-weight: 500; margin-bottom: 12px; }
+.ng-fc-btn { background: #d30000; color: white; padding: 7px 14px; border-radius: 20px; font-size: 13px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; }
+.ng-fc-right { background: #fef2f2; border: 1px solid #fecaca; text-align: center; }
+.ng-fc-right-icon { width: 42px; height: 42px; background: white; border-radius: 50%; color: #d30000; display: flex; align-items: center; justify-content: center; margin: 0 auto 8px auto; box-shadow: 0 4px 6px -1px rgba(211,0,0,0.1); }
+.ng-fc-right p { font-size: 13px; color: #555; line-height: 1.4; font-weight: 500; margin: 0; }
+.ng-fc-right p strong { color: #d30000; font-weight: 800; }
+
+/* ── Ketentuan Garansi (Bottom) ───────────────────────────── */
+.ng-ketentuan-section { margin-top: auto; padding-top: 8px; }
+.ng-ks-header { display: flex; align-items: center; gap: 15px; margin-bottom: 10px; }
+.ng-ks-title { font-size: 14px; font-weight: 800; color: #d30000; white-space: nowrap; }
+.ng-ks-line { height: 1px; background: #d30000; flex: 1; opacity: 0.3; }
+.ng-ks-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.ng-ks-item { display: flex; align-items: flex-start; gap: 8px; }
+.ng-ks-icon { width: 28px; height: 28px; border-radius: 50%; border: 1px solid #fca5a5; display: flex; align-items: center; justify-content: center; color: #d30000; flex-shrink: 0; background: white; }
+.ng-ks-icon svg { width: 14px; height: 14px; }
+.ng-ks-text { font-size: 13px; color: #555; line-height: 1.35; font-weight: 500; }
+.ng-ks-text strong { color: #d30000; }
+
+/* ── Footer Dark ─────────────────────────────────────────── */
+.ng-footer-dark { background: #111; color: white; padding: 20px 35px; display: flex; justify-content: space-between; align-items: center; min-height: 75px; flex-shrink: 0; }
+.ng-fd-left { display: flex; align-items: center; gap: 10px; }
+.ng-fd-left svg { width: 24px; height: 24px; color: #d30000; flex-shrink: 0; }
+.ng-fd-left p { font-size: 14px; font-weight: 500; margin: 0; line-height: 1.35; }
+.ng-foot-r { text-align: right; }
+.ng-foot-r b { font-size: 18px; font-weight: 800; margin: 0; display: block; color: #fff; }
+.ng-foot-r b em { font-style: normal; color: #d30000; }
+.ng-foot-r span { font-size: 12px; color: #888; font-weight: 600; letter-spacing: 0.5px; display: block; }
 
 /* ============================================
    NOTA DIGITAL - recreate visual reference

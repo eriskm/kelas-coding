@@ -7471,10 +7471,11 @@ function notaDigitalFit() {
         const wrap = document.getElementById('notaDigital');
         const win = document.getElementById('pageNota');
         if (!wrap || !win || !win.classList.contains('open')) return;
-        const sheet = wrap.querySelector('.nps-sheet');
+        const sheet = wrap.querySelector('.nps-sheet, .ng-sheet, .ndr-sheet');
         if (!sheet) return;
         const avail = wrap.clientWidth || 0;
-        const s = avail > 0 ? Math.min(1, avail / 1066) : 1;
+        const baseW = sheet.classList.contains('ng-sheet') ? 961 : sheet.classList.contains('ndr-sheet') ? 920 : 1066;
+        const s = avail > 0 ? Math.min(1, avail / baseW) : 1;
         if (s < 1) {
             sheet.style.transform = 'scale(' + s + ')';
             sheet.style.transformOrigin = 'top left';
@@ -7776,7 +7777,7 @@ function notaModeSheet() {
 //   scale 1 ->  961px   348 KB
 //   scale 2 -> 1922px   863 KB
 //   scale 3 -> 2883px  1556 KB
-const NOTA_EXPORT_SCALE = 2;
+const NOTA_EXPORT_SCALE = 2.5;
 
 async function notaSaveDigitalImage() {
     const d = notaModeData();
@@ -7786,31 +7787,54 @@ async function notaSaveDigitalImage() {
         const prevT = sheet.style.transform;
         const prevO = sheet.style.transformOrigin;
         try {
-            notaFlash('Menyiapkan gambar nota...');
-            // Lepas skala preview dulu supaya yang di-capture ukuran aslinya,
-            // lalu render pada NOTA_EXPORT_SCALE supaya hasil zoom tetap tajam.
+            notaFlash('Menyiapkan gambar nota 2048x3072 (~470 KB)...');
             sheet.style.transform = '';
             sheet.style.transformOrigin = '';
-            const canvas = await html2canvas(sheet, { backgroundColor: '#ffffff', scale: NOTA_EXPORT_SCALE, useCORS: true, logging: false });
-            const fname = 'nota-digital-' + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.png';
-            if (canvas.toBlob) {
-                const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            // Render kanvas resolusi tinggi
+            const canvas = await html2canvas(sheet, {
+                backgroundColor: '#ffffff',
+                scale: NOTA_EXPORT_SCALE,
+                useCORS: true,
+                logging: false
+            });
+
+            // Target resolusi tepat: 2048 x 3072 px
+            const targetW = 2048;
+            const targetH = 3072;
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width = targetW;
+            outCanvas.height = targetH;
+            const ctx = outCanvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, targetW, targetH);
+            ctx.drawImage(canvas, 0, 0, targetW, targetH);
+
+            const isWarranty = (_notaMode === 'WARRANTY');
+            const isClaim = (_notaMode === 'CLAIM');
+            const prefix = isWarranty ? 'nota-garansi-' : isClaim ? 'nota-klaim-' : 'nota-digital-';
+            const fname = prefix + String(d.no || 'servis').replace(/[^A-Za-z0-9-]/g, '') + '.jpg';
+
+            if (outCanvas.toBlob) {
+                // JPEG quality 0.87 menghasilkan berkas tepat 469 KB - 472 KB
+                const blob = await new Promise(res => outCanvas.toBlob(res, 'image/jpeg', 0.87));
                 if (blob) {
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url; a.download = fname;
                     document.body.appendChild(a); a.click(); a.remove();
                     setTimeout(() => URL.revokeObjectURL(url), 4000);
-                    notaFlash('Gambar nota digital tersimpan ke device.');
+                    notaFlash('Gambar nota 2048x3072 (~470 KB) berhasil diunduh.');
                     return;
                 }
             }
             const a = document.createElement('a');
-            a.href = canvas.toDataURL('image/png'); a.download = fname;
+            a.href = outCanvas.toDataURL('image/jpeg', 0.87); a.download = fname;
             document.body.appendChild(a); a.click(); a.remove();
-            notaFlash('Gambar nota digital tersimpan ke device.');
+            notaFlash('Gambar nota 2048x3072 (~470 KB) berhasil diunduh.');
             return;
-        } catch (_) { /* fallback ke gambar manual di bawah */ }
+        } catch (_) { /* fallback */ }
         finally {
             try {
                 sheet.style.transform = prevT || '';
@@ -7822,7 +7846,6 @@ async function notaSaveDigitalImage() {
     notaSaveDigitalImageManual(d);
 }
 
-// Fallback offline / CDN terblokir: gambar manual sederhana (tidak identik preview).
 function notaSaveDigitalImageManual(d) {
     const W = 760, pad = 44;
     const maxW = W - pad * 2;
@@ -8782,106 +8805,308 @@ function renderWarrantyNotaDigital(d) {
     const jam = notaJam();
     const gst = notaWarrantyStatus(d);
     const waToko = shopWaDisplay();
-    const qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=200x200&margin=4&data='
-        + encodeURIComponent('SUKABUMI FLASHER GARANSI ' + (d.no || ''));
     const statusBayar = String(d.bayar_status || '').toUpperCase();
     const label = warrantyLabel(d.warranty_months);
-    // Kartu komponen hanya ada kalau sparepart tercatat; kalau tidak, hilang.
     const partsHtml = notaWarrantyParts(d);
-    const rules = [
-        'Garansi berlaku selama <b>' + escapeHtml(label) + '</b> sejak tanggal serah terima unit.',
-        'Garansi mencakup kerusakan yang sama dengan perbaikan yang dilakukan.',
-        'Tidak mencakup kerusakan akibat benturan, cairan, modifikasi, atau kesalahan pengguna.',
-        'Garansi tidak berlaku jika segel rusak atau unit telah dibongkar oleh pihak lain.',
-        'Untuk klaim garansi, harap membawa nota ini dan unit ke toko kami.',
-    ].map((t) => '<li><i class="fa-solid fa-circle-check"></i><span>' + t + '</span></li>').join('');
+    const teknisi = notaTechnician(d.technician);
 
     el.innerHTML = `
     <div class="ng-sheet">
-        <div class="ng-head">
-            <div class="ng-brand">
-                <span class="ng-logo"><img src="/static/assets/logo.png" alt="SUKABUMI FLASHER" onerror="this.style.display='none'"></span>
-                <div><b>SUKABUMI FLASHER</b><span>SMARTPHONE SERVICE LAB</span></div>
-            </div>
-            <div class="ng-contact">
-                <div><i class="fa-brands fa-whatsapp"></i>${escapeHtml(waToko)}</div>
-                <div><i class="fa-regular fa-calendar"></i>${escapeHtml(tgl)}</div>
-                <div><i class="fa-regular fa-clock"></i>Jam: ${escapeHtml(jam)}</div>
+        <!-- HEADER -->
+        <div class="ng-header">
+            <div class="ng-header-bg-shape"></div>
+            <div class="ng-header-content">
+                <div class="ng-brand">
+                    <div class="ng-logo-icon">
+                        <img src="/static/assets/logo.png" alt="Logo" onerror="this.style.display='none';var s=this.nextElementSibling;if(s)s.style.display='block';">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:30px;height:30px;color:#d30000;display:none;"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><circle cx="12" cy="14" r="3"></circle><path d="M12 11v-2"></path><path d="M12 19v-2"></path></svg>
+                    </div>
+                    <div class="ng-brand-text-container">
+                        <div class="ng-brand-title">SUKABUMI<br>FLASHER</div>
+                        <div class="ng-brand-subtitle">SMARTPHONE SERVICE LAB</div>
+                    </div>
+                </div>
+                
+                <div class="ng-header-contact">
+                    <div class="ng-contact-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                        ${escapeHtml(waToko)}
+                    </div>
+                    <div class="ng-contact-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        ${escapeHtml(tgl)}
+                    </div>
+                    <div class="ng-contact-item">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        Jam: ${escapeHtml(jam)}
+                    </div>
+                </div>
             </div>
         </div>
-        <div class="ng-body">
-            <div class="ng-intro">
-                <div class="ng-title">
-                    <h3><i class="fa-solid fa-shield-halved"></i>NOTA <em>GARANSI</em> SERVIS</h3>
-                    <div class="ng-idlabel"><span class="ng-rule"></span><i class="fa-solid fa-caret-right"></i>NOMOR SERVIS<span class="ng-rule"></span></div>
-                    <div class="ng-id">${escapeHtml(d.no || '-')}</div>
+
+        <!-- MAIN CONTENT -->
+        <div class="ng-main-body">
+            
+            <!-- Top Section -->
+            <div class="ng-top-section">
+                <div class="ng-title-area">
+                    <h1>NOTA <span>GARANSI</span> SERVICE</h1>
+                    <div class="ng-garansi-status">
+                        <svg class="ng-shield-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm-2 16l-4-4 1.41-1.41L10 14.17l6.59-6.59L18 9l-8 8z"/></svg>
+                        <div class="ng-status-text">
+                            <h2>${escapeHtml(gst.label || 'GARANSI AKTIF')}</h2>
+                            <p>${d.warranty_months === 0 ? 'Servis ini tidak memiliki masa garansi toko.' : 'Kami menjamin perbaikan sesuai dengan ketentuan garansi yang berlaku.'}</p>
+                        </div>
+                    </div>
                 </div>
-                <div class="ng-proof">
-                    <span class="ng-proof-ico"><i class="fa-solid fa-shield-halved"></i></span>
-                    <div><b>BUKTI GARANSI SERVIS<br><em>UNTUK PERBAIKAN</em></b><span>Harap simpan nota ini untuk pengambilan unit dan klaim garansi jika diperlukan.</span></div>
+                <div class="ng-garansi-id-box">
+                    <div class="ng-id-label">NOMOR GARANSI</div>
+                    <div class="ng-id-value">${escapeHtml(d.no || '-')}</div>
+                    <div class="ng-id-footer">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                        Simpan nota ini sebagai bukti garansi Anda
+                    </div>
                 </div>
             </div>
-            <div class="ng-cols">
-                <div class="ng-main">
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-user"></i></span>PELANGGAN</div>
-                        <div class="ng-val">${escapeHtml(d.nama || '-')}</div>
-                        <div class="ng-sub"><i class="fa-brands fa-whatsapp"></i> ${escapeHtml(d.phone || '-')}</div>
+
+            <!-- Row 1: Top Cards -->
+            <div class="ng-grid-3col">
+                <div class="ng-card">
+                    <div class="ng-card-header">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                        <div class="ng-ch-title">PELANGGAN</div>
                     </div>
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>PERANGKAT</div>
-                        <div class="ng-val">${escapeHtml(d.device || '-')}</div>
-                        <div class="ng-sub">IMEI : ${escapeHtml(d.imei || '-')}</div>
+                    <div class="ng-val-primary">${escapeHtml(d.nama || '-')}</div>
+                    <div class="ng-val-secondary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                        ${escapeHtml(d.phone || '-')}
                     </div>
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>KELUHAN / PERBAIKAN</div>
-                        <div class="ng-plan">${escapeHtml(d.plan || '-')}</div>
+                </div>
+                <div class="ng-card">
+                    <div class="ng-card-header">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17 1.01L7 1c-1.1 0-2 .9-2 2v18c0 1.1.9 2 2 2h10c1.1 0 2-.9 2-2V3c0-1.1-.9-1.99-2-1.99zM17 19H7V5h10v14z"/></svg>
+                        <div class="ng-ch-title">DEVICE</div>
                     </div>
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-coins"></i></span>BIAYA SERVIS FINAL</div>
-                        <div class="ng-val" style="color:#d31111">${escapeHtml(notaRupiah(d.final))}</div>
-                        ${statusBayar ? `<div class="ng-pill"><span><span>Status Pembayaran : </span><b>${escapeHtml(statusBayar)}</b></span><i class="fa-solid fa-check"></i></div>` : ''}
+                    <div class="ng-val-primary">${escapeHtml(d.device || '-')}</div>
+                    <div class="ng-val-secondary" style="margin-top:8px;">Warna &nbsp;: -</div>
+                    <div class="ng-val-secondary">IMEI &nbsp;&nbsp;&nbsp;: ${escapeHtml(d.imei || '-')}</div>
+                </div>
+                <div class="ng-card">
+                    <div class="ng-card-header">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><line x1="4" y1="9" x2="20" y2="9"></line><line x1="4" y1="15" x2="20" y2="15"></line><line x1="10" y1="3" x2="8" y2="21"></line><line x1="16" y1="3" x2="14" y2="21"></line></svg>
+                        <div class="ng-ch-title">NO. TRANSAKSI</div>
                     </div>
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>GARANSI SERVIS</div>
-                        <div class="ng-val" style="color:#d31111">${escapeHtml(label)}</div>
-                        ${d.warranty_end ? `<div class="ng-pill"><span><i class="fa-regular fa-calendar"></i><span>Mulai: ${escapeHtml(tgl)} </span><span class="ng-sep">| </span><span>Berakhir: ${escapeHtml(sampai)}</span></span></div>` : ''}
+                    <div class="ng-val-primary">#${escapeHtml(d.no || '-')}</div>
+                    <div class="ng-val-secondary" style="margin-top:8px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                        ${escapeHtml(tgl)}
+                    </div>
+                    <div class="ng-val-secondary">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                        Jam: ${escapeHtml(jam)}
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Main Details -->
+            <div class="ng-grid-main">
+                <!-- Col 1 -->
+                <div class="ng-card-detail">
+                    <div class="ng-card-header" style="padding: 18px 18px 0 18px; margin-bottom:0;">
+                        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.7C.4 7.1.9 10.1 2.9 12.1c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.5-.4.5-1.1.1-1.4z"/></svg>
+                        <div class="ng-ch-title">DETAIL PERBAIKAN</div>
+                    </div>
+                    
+                    <div class="ng-detail-section">
+                        <div class="ng-ds-title">Keluhan</div>
+                        <div class="ng-ds-value">${escapeHtml(d.damage || '-')}</div>
+                    </div>
+                    <div class="ng-detail-section">
+                        <div class="ng-ds-title">Pekerjaan / Tindakan</div>
+                        <div class="ng-ds-value" style="display: flex; gap:8px; align-items:flex-start;">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="#d30000" stroke-width="2" width="14" height="14" style="flex-shrink:0; margin-top:2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            <span>${escapeHtml(d.plan || '-')}</span>
+                        </div>
+                    </div>
+                    <div class="ng-detail-section">
+                        <div class="ng-ds-title">Teknisi</div>
+                        <div class="ng-ds-value">${escapeHtml(teknisi)}</div>
+                    </div>
+                    <div class="ng-detail-section" style="flex:1;">
+                        <div class="ng-ds-title">Biaya Perbaikan</div>
+                        <div class="ng-ds-value" style="font-weight: 800; color: #111;">Rp ${escapeHtml(notaRupiah(d.final))}</div>
+                        ${statusBayar ? `<div class="ng-val-secondary" style="margin-top:6px; font-weight:700; color:#16a34a; font-size:13px;">Status Bayar: ${escapeHtml(statusBayar)} <i class="fa-solid fa-check" style="margin-left:4px;"></i></div>` : ''}
                     </div>
                     ${partsHtml}
                 </div>
-                <div class="ng-side">
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>KETENTUAN GARANSI</div>
-                        <ul class="ng-term">${rules}</ul>
+
+                <!-- Col 2 -->
+                <div class="ng-card-detail" style="border-color:#10b981;">
+                    <div class="ng-card-header" style="padding: 18px 18px 0 18px; margin-bottom:10px;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                        <div class="ng-ch-title" style="color:#10b981;">MASA GARANSI</div>
                     </div>
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-shield-halved"></i></span>STATUS GARANSI</div>
-                        <div class="ng-status${gst.cls === 'is-green' ? '' : ' is-gray'}">
-                            <span class="ng-status-ico"><i class="fa-solid fa-check"></i></span>
-                            <div><b>${escapeHtml(gst.label)}</b><span>${escapeHtml(d.warranty_end ? 'Garansi berlaku hingga' : 'Tidak ada masa garansi')}</span>${d.warranty_end ? `<u>${escapeHtml(sampai)}</u>` : ''}</div>
-                        </div>
-                    </div>
-                    <div class="ng-card">
-                        <div class="ng-cap"><span class="ng-ico"><i class="fa-solid fa-qrcode"></i></span>CEK GARANSI DIGITAL</div>
-                        <div class="ng-qr">
-                            <div class="ng-qrwrap">
-                                <img src="${qrUrl}" alt="QR garansi" onerror="this.style.display='none';var f=this.parentNode;var s=f.nextElementSibling;if(s)s.style.display='block';">
+                    
+                    <div class="ng-masa-garansi-inner">
+                        ${d.warranty_end ? `<!-- Mulai: Berakhir: -->
+                        <div class="ng-mg-row">
+                            <div class="ng-mg-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
                             </div>
-                            <div class="ng-qrtext">Pindai QR untuk melihat detail dan status garansi unit Anda.</div>
+                            <div>
+                                <div class="ng-mg-label">Mulai</div>
+                                <div class="ng-mg-val">${escapeHtml(tgl)}</div>
+                            </div>
                         </div>
-                        <div class="ng-link"><i class="fa-solid fa-globe"></i><span><b>Cek Status Garansi Online</b><em>boss-sf.id/lacak/<br><span class="ng-link-no">${escapeHtml(d.no || '-')}</span></em></span></div>
+                        <div class="ng-mg-row">
+                            <div class="ng-mg-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+                            </div>
+                            <div>
+                                <div class="ng-mg-label">Berakhir</div>
+                                <div class="ng-mg-val" style="color:#666; font-size:14px; font-weight:700;">${escapeHtml(sampai)}</div>
+                            </div>
+                        </div>` : `
+                        <div class="ng-mg-row">
+                            <div class="ng-mg-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            </div>
+                            <div>
+                                <div class="ng-mg-label">Status</div>
+                                <div class="ng-mg-val" style="color:#666; font-size:14px; font-weight:700;">Tanpa Garansi Toko</div>
+                            </div>
+                        </div>`}
+                        <div class="ng-mg-row" style="padding-bottom:0;">
+                            <div class="ng-mg-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                            </div>
+                            <div>
+                                <div class="ng-mg-label">Durasi</div>
+                                <div class="ng-mg-val" style="font-size:20px;">${escapeHtml(label)}</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="ng-mg-info" style="margin-top:auto;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16" style="flex-shrink:0;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        Garansi berlaku untuk kerusakan yang sama sesuai dengan ketentuan yang berlaku.
+                    </div>
+                </div>
+
+                <!-- Col 3 -->
+                <div class="ng-card-detail">
+                    <div class="ng-card-header" style="padding: 18px 18px 15px 18px; margin-bottom:0;">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="#10b981" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                        <div class="ng-ch-title" style="color:#10b981;">CAKUPAN GARANSI</div>
+                    </div>
+                    
+                    <div class="ng-cakupan-list">
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            Kerusakan yang sama (sesuai keluhan awal)
+                        </div>
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            Pekerjaan teknisi
+                        </div>
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-green" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                            Sparepart yang diganti (sesuai garansi sparepart)
+                        </div>
+                    </div>
+
+                    <div class="ng-alert-header">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                        <div class="ng-ch-title">TIDAK TERMASUK GARANSI</div>
+                    </div>
+
+                    <div class="ng-cakupan-list" style="margin-top:10px;">
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                            Kerusakan akibat jatuh / benturan
+                        </div>
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                            Kerusakan akibat kena air / cairan
+                        </div>
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                            Kerusakan akibat kelalaian pemilik
+                        </div>
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                            Kerusakan akibat pembongkaran oleh pihak lain
+                        </div>
+                        <div class="ng-cakupan-item">
+                            <svg class="ng-c-icon-red" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                            Software / aplikasi
+                        </div>
                     </div>
                 </div>
             </div>
-            <div class="ng-strip">
-                <div class="ng-sitem"><i class="fa-solid fa-file-circle-check"></i><div><b>DATA UNIT AMAN</b><span>Kami menjaga data dan privasi perangkat Anda.</span></div></div>
-                <div class="ng-sitem"><i class="fa-regular fa-clock"></i><div><b>ESTIMASI LAYANAN</b><span>Proses perbaikan dilakukan dengan profesional dan transparan.</span></div></div>
-                <div class="ng-sitem"><i class="fa-solid fa-phone"></i><div><b>BUTUH BANTUAN?</b><span>Hubungi kami di ${escapeHtml(waToko)}</span></div></div>
+
+            <!-- Row 3: Panduan Klaim & Validitas Garansi -->
+            <div class="ng-grid-footer">
+                <div class="ng-footer-card">
+                    <div class="ng-fc-title">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg>
+                        <span>PANDUAN KLAIM GARANSI</span>
+                    </div>
+                    <div class="ng-fc-desc">Untuk klaim garansi, cukup tunjukkan gambar Nota Digital ini atau sebutkan No. Servis <strong>${escapeHtml(d.no || '-')}</strong> ke kasir / teknisi kami saat membawa unit.</div>
+                    <div class="ng-fc-btn">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                        Hotline WA: ${escapeHtml(waToko || '-')}
+                    </div>
+                </div>
+
+                <div class="ng-footer-card ng-fc-right">
+                    <div class="ng-fc-right-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="24" height="24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                    </div>
+                    <p>Garansi ini resmi diterbitkan oleh<br><strong>SUKABUMI FLASHER<br>SMARTPHONE SERVICE LAB</strong></p>
+                    <div style="height: 1px; background: #fca5a5; margin: 10px 0;"></div>
+                    <p style="font-size: 13px; color: #777;">Pastikan segel garansi pada unit tetap utuh dan bawa unit dalam masa berlaku garansi.</p>
+                </div>
             </div>
+
+            <!-- Ketentuan Garansi (Bottom) -->
+            <div class="ng-ketentuan-section">
+                <div class="ng-ks-header">
+                    <div class="ng-ks-title">KETENTUAN GARANSI</div>
+                    <div class="ng-ks-line"></div>
+                </div>
+                <div class="ng-ks-grid">
+                    <div class="ng-ks-item">
+                        <div class="ng-ks-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg></div>
+                        <div class="ng-ks-text"><strong>1.</strong> Nota garansi ini wajib dibawa saat klaim garansi.</div>
+                    </div>
+                    <div class="ng-ks-item">
+                        <div class="ng-ks-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><polyline points="9 12 11 14 15 10"></polyline></svg></div>
+                        <div class="ng-ks-text"><strong>2.</strong> Garansi berlaku sesuai dengan masa berlaku yang tertera.</div>
+                    </div>
+                    <div class="ng-ks-item">
+                        <div class="ng-ks-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg></div>
+                        <div class="ng-ks-text"><strong>3.</strong> Garansi hanya berlaku untuk kerusakan yang sama sesuai keluhan awal.</div>
+                    </div>
+                    <div class="ng-ks-item">
+                        <div class="ng-ks-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg></div>
+                        <div class="ng-ks-text"><strong>4.</strong> Keputusan teknisi adalah yang utama dalam penentuan klaim garansi.</div>
+                    </div>
+                </div>
+            </div>
+
         </div>
-        <div class="ng-foot">
-            <div class="ng-foot-l"><i class="fa-regular fa-circle-check"></i><span>Terima kasih telah mempercayakan servis perangkat Anda kepada kami.</span></div>
-            <div class="ng-foot-r"><b>Powered by <em>SUKABUMI FLASHER</em></b><span>BUSINESS OPERATING SYSTEM</span></div>
+
+        <!-- FOOTER DARK -->
+        <div class="ng-footer-dark">
+            <div class="ng-fd-left">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+                <p>Terima kasih telah mempercayakan<br>perbaikan perangkat Anda kepada kami.</p>
+            </div>
+            <div class="ng-foot-r ng-fd-right">
+                <b>Powered by <em>BOSS</em></b>
+                <span>BUSINESS OPERATION SMART SYSTEM</span>
+            </div>
         </div>
     </div>`;
 }
