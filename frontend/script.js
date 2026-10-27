@@ -1172,6 +1172,8 @@ function kpiProgressBar(pct, tercapai) {
 // jam 16:00 hanya PATOKAN PENGINGAT, bukan batas periode. Kalau periode aktif
 // sudah lewat jam 16:00, tampilkan peringatan (bukan sekadar mengubah angka).
 function renderPeriodeWarning(per) {
+    window._lastPeriodData = per;
+    try { if (typeof updateHeaderNotif === 'function') updateHeaderNotif(); } catch (_) {}
     if (!per) return;
     let box = document.getElementById('kasPeriodWarning');
     if (!box) {
@@ -1801,10 +1803,156 @@ async function updateStatusBar() {
 }
 window.updateStatusBar = updateStatusBar;
 
+// ─────────────────────────────────────────────
+// NOTIFIKASI & TUGAS TOKO (HEADER BELL HUB)
+// ─────────────────────────────────────────────
+
+function toggleHeaderNotif(event) {
+    if (event) event.stopPropagation();
+    const pop = document.getElementById('headerNotifPop');
+    const btn = document.getElementById('headerNotifBtn');
+    if (!pop) return;
+    const isHidden = pop.classList.contains('hidden');
+    if (isHidden) {
+        updateHeaderNotif();
+        pop.classList.remove('hidden');
+        if (btn) btn.setAttribute('aria-expanded', 'true');
+    } else {
+        closeHeaderNotif();
+    }
+}
+window.toggleHeaderNotif = toggleHeaderNotif;
+
+function closeHeaderNotif() {
+    const pop = document.getElementById('headerNotifPop');
+    const btn = document.getElementById('headerNotifBtn');
+    if (pop) pop.classList.add('hidden');
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+}
+window.closeHeaderNotif = closeHeaderNotif;
+
+document.addEventListener('click', function(e) {
+    const pop = document.getElementById('headerNotifPop');
+    const btn = document.getElementById('headerNotifBtn');
+    if (pop && !pop.classList.contains('hidden')) {
+        if (!pop.contains(e.target) && (!btn || !btn.contains(e.target))) {
+            closeHeaderNotif();
+        }
+    }
+});
+
+function updateHeaderNotif() {
+    const badge = document.getElementById('headerNotifBadge');
+    const sumBadge = document.getElementById('headerNotifSummaryBadge');
+    const list = document.getElementById('headerNotifList');
+    if (!list) return;
+
+    const notifs = [];
+
+    // 1. Peringatan Periode Kas Belum Ditutup (lewat jam 16:00)
+    const per = window._lastPeriodData;
+    if (per && per.lewat_jam_16) {
+        const mulai = (per.start_at || '').replace('T', ' ').slice(0, 16);
+        notifs.push({
+            id: 'kas_period',
+            type: 'danger',
+            icon: 'fa-solid fa-clock-rotate-left text-rose-500',
+            bg: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40',
+            title: 'Periode Kas Belum Ditutup',
+            desc: 'Dibuka ' + escapeHtml(mulai) + ' & sudah lewat jam 16:00. Segera tutup kas.',
+            actionLabel: 'Buka Keuangan',
+            onClick: "showKeuangan(); closeHeaderNotif();"
+        });
+    }
+
+    // 2. Unit Garansi Berakhir Hari Ini (belum disapa via WA)
+    const todayUnits = Array.isArray(window._grAll) ? window._grAll.filter(g => grState(g).key === 'hari_ini') : [];
+    const pendingGr = todayUnits.filter(g => !isGrWaDone(g));
+    if (pendingGr.length > 0) {
+        notifs.push({
+            id: 'garansi_pending',
+            type: 'warning',
+            icon: 'fa-solid fa-shield-halved text-amber-500',
+            bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/40',
+            title: pendingGr.length + ' Follow-up Garansi Hari Ini',
+            desc: pendingGr.length + ' dari ' + todayUnits.length + ' pelanggan habis garansi belum dihubungi via WA.',
+            actionLabel: 'Cek Garansi',
+            onClick: "showGaransi(); closeHeaderNotif();"
+        });
+    }
+
+    // 3. Unit Mengendap Kritis (>60 / >90 Hari)
+    const uc = window._lastUnclaimedData;
+    const s3 = uc ? (Number(uc.stage_3) || 0) : 0;
+    const s4 = uc ? (Number(uc.stage_4) || 0) : 0;
+    if (s3 > 0 || s4 > 0) {
+        notifs.push({
+            id: 'unclaimed_critical',
+            type: s4 > 0 ? 'danger' : 'warning',
+            icon: 'fa-solid fa-boxes-packing text-orange-500',
+            bg: 'bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-900/40',
+            title: (s3 + s4) + ' Unit Mengendap Kritis',
+            desc: (s4 > 0 ? s4 + ' unit >90H (peringatan final). ' : '') + (s3 > 0 ? s3 + ' unit >60H.' : ''),
+            actionLabel: 'Kelola Unit',
+            onClick: "showTransaksi(); closeHeaderNotif();"
+        });
+    }
+
+    const totalCount = notifs.length;
+    if (badge) {
+        if (totalCount > 0) {
+            badge.textContent = totalCount > 99 ? '99+' : totalCount;
+            badge.classList.remove('hidden');
+        } else {
+            badge.textContent = '0';
+            badge.classList.add('hidden');
+        }
+    }
+
+    if (sumBadge) {
+        sumBadge.textContent = totalCount > 0 ? (totalCount + ' Perhatian') : 'Beres';
+        sumBadge.className = totalCount > 0
+            ? 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300'
+            : 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
+    }
+
+    if (notifs.length === 0) {
+        list.innerHTML = `
+            <div class="py-6 px-4 text-center">
+                <div class="w-9 h-9 mx-auto mb-2 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm">
+                    <i class="fa-solid fa-check"></i>
+                </div>
+                <div class="font-bold text-gray-800 dark:text-gray-200 text-xs">Semua Tugas Beres</div>
+                <p class="text-[11px] text-gray-500 dark:text-gray-400 mt-0.5">Tidak ada peringatan atau follow-up tertunda saat ini.</p>
+            </div>
+        `;
+    } else {
+        list.innerHTML = notifs.map(n => `
+            <div class="p-2.5 rounded-lg border transition-all ${n.bg} flex items-start gap-2.5">
+                <div class="w-6 h-6 rounded-md bg-white/80 dark:bg-surface-700 flex items-center justify-center flex-shrink-0 text-xs shadow-xs">
+                    <i class="${n.icon}"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="font-bold text-gray-800 dark:text-gray-100 text-xs leading-snug">${escapeHtml(n.title)}</div>
+                    <div class="text-[11px] text-gray-600 dark:text-gray-300 mt-0.5 leading-snug">${escapeHtml(n.desc)}</div>
+                    <div class="mt-2 flex items-center justify-end">
+                        <button type="button" onclick="${n.onClick}" class="px-2 py-1 rounded bg-white dark:bg-surface-700 hover:bg-gray-100 dark:hover:bg-white/10 text-gray-700 dark:text-gray-200 text-[10.5px] font-semibold shadow-2xs border border-gray-200 dark:border-white/10 flex items-center gap-1 transition">
+                            <span>${escapeHtml(n.actionLabel)}</span>
+                            <i class="fa-solid fa-arrow-right text-[9px]"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+}
+window.updateHeaderNotif = updateHeaderNotif;
+
 async function loadDashboard() {
     await Promise.all([renderStarCards(), renderInsights(), initCharts(), renderStatusMini(), renderDamageSection()]);
     try { await renderDashGaransiTask(); } catch (_) {}
     try { await updateStatusBar(); } catch (_) {}
+    try { updateHeaderNotif(); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────
@@ -3777,6 +3925,11 @@ async function loadWarrantyData(force = false) {
 }
 
 function updateGrWidgets(unclaimedData) {
+    if (unclaimedData !== undefined) {
+        window._lastUnclaimedData = unclaimedData;
+    } else {
+        unclaimedData = window._lastUnclaimedData;
+    }
     const todayUnits = (_grAll || []).filter(g => grState(g).key === 'hari_ini');
     const doneUnits = todayUnits.filter(g => isGrWaDone(g));
     const pendingUnits = todayUnits.filter(g => !isGrWaDone(g));
@@ -3929,6 +4082,7 @@ function updateGrWidgets(unclaimedData) {
             }).join('');
         }
     }
+    try { updateHeaderNotif(); } catch (_) {}
 }
 
 async function renderDashGaransiTask() {

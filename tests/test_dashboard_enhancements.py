@@ -77,3 +77,17 @@ def test_technicians_accessible_for_status_bar(client, auth):
     assert res.status_code == 200
     data = res.json()
     assert isinstance(data, list)
+
+
+def test_header_notification_hub_and_no_weather():
+    """Pastikan widget cuaca dummy dihapus dan notifikasi hub terpasang di header."""
+    with open("frontend/index.html", "r", encoding="utf-8") as f:
+        html = f.read()
+    assert "32°C" not in html
+    assert "fa-cloud-sun" not in html
+    assert "headerNotifBtn" in html
+    assert "headerNotifPop" in html
+    assert "headerNotifBadge" in html
+    assert "headerNotifSummaryBadge" in html
+    assert "headerNotifList" in html
+
