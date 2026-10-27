@@ -91,3 +91,68 @@ def test_header_notification_hub_and_no_weather():
     assert "headerNotifSummaryBadge" in html
     assert "headerNotifList" in html
 
+
+
+def test_repair_aging_levels_and_escalation(client, auth, db):
+    """Pastikan endpoint /api/orders/repair-aging mengelompokkan level Normal, Waspada, dan Kritis dengan benar."""
+    from datetime import datetime, timedelta
+    import models as m
+
+    cust = m.Customer(name="Tester Aging", phone="0899887766")
+    db.add(cust)
+    db.commit()
+
+    now = datetime.now()
+    # 1. Normal: masuk proses 1 hari lalu (Hari ke-2)
+    o1 = m.ServiceOrder(
+        no_servis="SRV-NORM", customer_id=cust.id, device="Redmi 9",
+        status="PROSES", technician="Budi", created_at=now - timedelta(days=1)
+    )
+    # 2. Waspada: masuk proses 4 hari lalu (Hari ke-5)
+    o2 = m.ServiceOrder(
+        no_servis="SRV-WASP", customer_id=cust.id, device="iPhone 11",
+        status="PROSES", technician="Budi", created_at=now - timedelta(days=4)
+    )
+    # 3. Kritis: masuk proses 8 hari lalu (Hari ke-9)
+    o3 = m.ServiceOrder(
+        no_servis="SRV-KRIT", customer_id=cust.id, device="Samsung A52",
+        status="PROSES", technician="Deni", created_at=now - timedelta(days=8)
+    )
+    db.add_all([o1, o2, o3])
+    db.commit()
+
+    # Tambahkan jejak status history agar presisi
+    sh1 = m.StatusHistory(service_order_id=o1.id, ke_status="PROSES", waktu=now - timedelta(days=1))
+    sh2 = m.StatusHistory(service_order_id=o2.id, ke_status="PROSES", waktu=now - timedelta(days=4))
+    sh3 = m.StatusHistory(service_order_id=o3.id, ke_status="PROSES", waktu=now - timedelta(days=8))
+    db.add_all([sh1, sh2, sh3])
+    db.commit()
+
+    # Query all
+    res = client.get("/api/orders/repair-aging", headers=auth)
+    assert res.status_code == 200
+    data = res.json()
+    assert data["total_repair"] >= 3
+    assert data["normal_count"] >= 1
+    assert data["waspada_count"] >= 1
+    assert data["kritis_count"] >= 1
+    assert data["alert_count"] == data["waspada_count"] + data["kritis_count"]
+
+    # Cari item spesifik
+    norm_item = next(x for x in data["items"] if x["no_servis"] == "SRV-NORM")
+    assert norm_item["level"] == "normal"
+    assert norm_item["days_in_repair"] == 2
+
+    wasp_item = next(x for x in data["items"] if x["no_servis"] == "SRV-WASP")
+    assert wasp_item["level"] == "waspada"
+    assert wasp_item["days_in_repair"] == 5
+
+    krit_item = next(x for x in data["items"] if x["no_servis"] == "SRV-KRIT")
+    assert krit_item["level"] == "kritis"
+    assert krit_item["days_in_repair"] == 9
+
+    # Filter by technician Budi
+    res_budi = client.get("/api/orders/repair-aging?technician=Budi", headers=auth)
+    assert res_budi.status_code == 200
+    data_budi = res_budi.json()
+    assert all(x["technician"] == "Budi" for x in data_budi["items"])

@@ -1727,6 +1727,7 @@ function labelRole(role) {
 }
 
 function setAdminUI(user) {
+    window._currentUser = user;
     const name = user.display_name || 'Administrator';
     const initial = name.charAt(0).toUpperCase();
     document.getElementById('adminName').textContent = name;
@@ -1898,6 +1899,106 @@ function updateHeaderNotif() {
         });
     }
 
+    // 4. Service Status Aging & Escalation (Status PROSES / Repair)
+    const aging = window._lastRepairAgingData;
+    if (aging && Array.isArray(aging.items)) {
+        const user = window._currentUser;
+        const role = (user && user.role) ? String(user.role).trim().toUpperCase() : '';
+        const uname = (user && user.username) ? String(user.username).trim().toLowerCase() : '';
+        const dname = (user && user.display_name) ? String(user.display_name).trim().toLowerCase() : '';
+
+        const isTeknisi = (role === 'TEKNISI');
+        const isKasir = (role === 'KASIR');
+
+        if (isTeknisi) {
+            // Level Normal (1-3 hari): On-track, tidak membunyikan lonceng
+            // Level Waspada (4-6 hari) & Kritis (>=7 hari): Ditujukan ke teknisi terkait
+            const myItems = aging.items.filter(function(it) {
+                const t = (it.technician || '').trim().toLowerCase();
+                return (t && (t === uname || t === dname));
+            });
+            const myKritis = myItems.filter(function(it) { return it.level === 'kritis'; });
+            const myWaspada = myItems.filter(function(it) { return it.level === 'waspada'; });
+
+            if (myKritis.length > 0) {
+                notifs.push({
+                    id: 'repair_kritis_teknisi',
+                    type: 'danger',
+                    icon: 'fa-solid fa-triangle-exclamation text-rose-500',
+                    bg: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40',
+                    title: myKritis.length + ' Servis Repair Kritis (≥ 7 Hari)',
+                    desc: myKritis.map(function(x) { return '#' + x.no_servis; }).slice(0, 3).join(', ') + ' tertahan di meja Anda. Segera update status / koordinasi.',
+                    actionLabel: 'Buka Servis',
+                    onClick: "showTransaksi(); closeHeaderNotif();"
+                });
+            }
+            if (myWaspada.length > 0) {
+                notifs.push({
+                    id: 'repair_waspada_teknisi',
+                    type: 'warning',
+                    icon: 'fa-solid fa-clock-rotate-left text-amber-500',
+                    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/40',
+                    title: myWaspada.length + ' Servis Masuk Hari ke 4–6',
+                    desc: myWaspada.map(function(x) { return '#' + x.no_servis; }).slice(0, 3).join(', ') + ' butuh pembaruan progress sebelum ditanyakan CS.',
+                    actionLabel: 'Buka Servis',
+                    onClick: "showTransaksi(); closeHeaderNotif();"
+                });
+            }
+        } else if (isKasir) {
+            // CS / Kasir: Menerima Level Waspada (4-6 hari) dan Kritis (>=7 hari)
+            if (aging.kritis_count > 0) {
+                notifs.push({
+                    id: 'repair_kritis_cs',
+                    type: 'danger',
+                    icon: 'fa-solid fa-triangle-exclamation text-rose-500',
+                    bg: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40',
+                    title: aging.kritis_count + ' Unit Repair Kritis (≥ 7 Hari)',
+                    desc: aging.kritis_count + ' unit dalam perbaikan >7 hari. Koordinasikan dengan teknisi & pantau komplain.',
+                    actionLabel: 'Lihat Servis',
+                    onClick: "showTransaksi(); closeHeaderNotif();"
+                });
+            }
+            if (aging.waspada_count > 0) {
+                notifs.push({
+                    id: 'repair_waspada_cs',
+                    type: 'warning',
+                    icon: 'fa-solid fa-user-clock text-amber-500',
+                    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/40',
+                    title: aging.waspada_count + ' Unit Repair Waspada (4–6 Hari)',
+                    desc: aging.waspada_count + ' unit masuk hari ke 4–6. Siapkan informasi update sebelum pelanggan menanyakan.',
+                    actionLabel: 'Lihat Servis',
+                    onClick: "showTransaksi(); closeHeaderNotif();"
+                });
+            }
+        } else {
+            // Admin / Super Admin: Eskalasi Kritis utama + informasi Waspada
+            if (aging.kritis_count > 0) {
+                notifs.push({
+                    id: 'repair_kritis_admin',
+                    type: 'danger',
+                    icon: 'fa-solid fa-triangle-exclamation text-rose-500',
+                    bg: 'bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-900/40',
+                    title: aging.kritis_count + ' Eskalasi Kritis: Repair ≥ 7 Hari',
+                    desc: aging.kritis_count + ' unit tertahan seminggu lebih. Butuh peninjauan manajerial / supervisi teknis.',
+                    actionLabel: 'Tinjau Unit',
+                    onClick: "showTransaksi(); closeHeaderNotif();"
+                });
+            }
+            if (aging.waspada_count > 0) {
+                notifs.push({
+                    id: 'repair_waspada_admin',
+                    type: 'warning',
+                    icon: 'fa-solid fa-screwdriver-wrench text-amber-500',
+                    bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/40',
+                    title: aging.waspada_count + ' Unit Repair Waspada (4–6 Hari)',
+                    desc: aging.waspada_count + ' unit sedang dikerjakan teknisi masuk hari ke 4–6.',
+                    actionLabel: 'Lihat Detail',
+                    onClick: "showTransaksi(); closeHeaderNotif();"
+                });
+            }
+        }
+    }
+
     const totalCount = notifs.length;
     if (badge) {
         if (totalCount > 0) {
@@ -1948,10 +2049,20 @@ function updateHeaderNotif() {
 }
 window.updateHeaderNotif = updateHeaderNotif;
 
+async function loadRepairAging() {
+    try {
+        const data = await apiGet('/orders/repair-aging');
+        window._lastRepairAgingData = data;
+        updateHeaderNotif();
+    } catch (_) {}
+}
+window.loadRepairAging = loadRepairAging;
+
 async function loadDashboard() {
     await Promise.all([renderStarCards(), renderInsights(), initCharts(), renderStatusMini(), renderDamageSection()]);
     try { await renderDashGaransiTask(); } catch (_) {}
     try { await updateStatusBar(); } catch (_) {}
+    try { await loadRepairAging(); } catch (_) {}
     try { updateHeaderNotif(); } catch (_) {}
 }
 

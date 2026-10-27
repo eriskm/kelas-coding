@@ -1,4 +1,5 @@
 """Service orders endpoints (FINAL LOCK: 3 dimensi terpisah)."""
+from typing import Optional
 import random
 from datetime import date, datetime
 
@@ -677,6 +678,107 @@ def get_unclaimed_orders(
         stage_2=c2,
         stage_3=c3,
         stage_4=c4,
+        items=items,
+    )
+
+
+@router.get("/repair-aging", response_model=schemas.RepairAgingSummary)
+def get_repair_aging_orders(
+    db: Session = Depends(get_db_session),
+    technician: Optional[str] = None,
+):
+    """Pusat Eskalasi & Status Aging Servisan (Status PROSES / Repair).
+
+    Skema Tingkatan (Berdasarkan Hari Kalender Kerja Penuh Toko):
+      - Normal: 1 - 3 hari (Penerima: Teknisi terkait)
+      - Waspada: 4 - 6 hari (Penerima: Teknisi + CS/Kasir)
+      - Kritis: >= 7 hari (Penerima: Teknisi + CS/Kasir + Admin/Manager)
+
+    Pemicu Lonceng Notifikasi Toko:
+      - Hanya Level Waspada dan Kritis (>= 4 hari).
+    """
+    from sqlalchemy import or_, func
+    from datetime import datetime
+
+    qry = (
+        db.query(ServiceOrder)
+        .options(joinedload(ServiceOrder.customer))
+        .filter(
+            ServiceOrder.status == "PROSES",
+            or_(
+                ServiceOrder.unit_status == "DI TOKO",
+                ServiceOrder.unit_status.is_(None),
+            ),
+            ServiceOrder.taken_at.is_(None),
+        )
+    )
+    if technician:
+        qry = qry.filter(ServiceOrder.technician == technician)
+
+    orders = qry.all()
+
+    now = datetime.now()
+    items = []
+    normal_cnt = 0
+    waspada_cnt = 0
+    kritis_cnt = 0
+
+    for o in orders:
+        sh_waktu = (
+            db.query(func.max(StatusHistory.waktu))
+            .filter(
+                StatusHistory.service_order_id == o.id,
+                StatusHistory.ke_status == o.status,
+            )
+            .scalar()
+        )
+        if sh_waktu is not None:
+            status_at = sh_waktu
+        elif o.service_date:
+            status_at = datetime.combine(o.service_date, datetime.min.time())
+        else:
+            status_at = o.created_at or now
+
+        # Hari ke-1 adalah hari pertama masuk proses (selisih hari + 1, min 1)
+        days = max(1, (now.date() - status_at.date()).days + 1)
+
+        if days >= 7:
+            level = "kritis"
+            kritis_cnt += 1
+        elif days >= 4:
+            level = "waspada"
+            waspada_cnt += 1
+        else:
+            level = "normal"
+            normal_cnt += 1
+
+        cust_name = o.customer.name if o.customer else "-"
+        cust_phone = o.customer.phone if o.customer else "-"
+
+        items.append(
+            schemas.RepairAgingItem(
+                id=o.id,
+                no_servis=o.no_servis,
+                customer_id=o.customer_id,
+                customer_name=cust_name,
+                customer_phone=cust_phone,
+                device=o.device,
+                technician=o.technician,
+                status=o.status,
+                status_at=status_at,
+                days_in_repair=days,
+                level=level,
+            )
+        )
+
+    items.sort(key=lambda x: x.days_in_repair, reverse=True)
+
+    return schemas.RepairAgingSummary(
+        total_repair=len(items),
+        normal_count=normal_cnt,
+        waspada_count=waspada_cnt,
+        kritis_count=kritis_cnt,
+        alert_count=waspada_cnt + kritis_cnt,
         items=items,
     )
 

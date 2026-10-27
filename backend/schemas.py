@@ -219,6 +219,31 @@ class UnclaimedOrdersSummary(BaseModel):
     items: List[UnclaimedOrderOut]
 
 
+# ---------- Service Status Aging & Escalation ----------
+class RepairAgingItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    no_servis: str
+    customer_id: int
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    device: str
+    technician: Optional[str] = None
+    status: str
+    status_at: Optional[datetime] = None
+    days_in_repair: int
+    level: str  # 'normal' (1-3d), 'waspada' (4-6d), 'kritis' (>=7d)
+
+
+class RepairAgingSummary(BaseModel):
+    total_repair: int
+    normal_count: int      # 1-3 hari (Teknisi)
+    waspada_count: int     # 4-6 hari (Teknisi + CS)
+    kritis_count: int      # >=7 hari (Teknisi + CS + Admin)
+    alert_count: int       # waspada_count + kritis_count
+    items: List[RepairAgingItem]
+
+
 # ---------- Payment ----------
 class PaymentBase(BaseModel):
     service_order_id: int
