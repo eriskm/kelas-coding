@@ -672,8 +672,13 @@ def get_overview(db: Session = Depends(get_db_session),
 
 
 @router.get("/statistics/status")
-def get_status_stats(db: Session = Depends(get_db_session)):
-    """Tren 7 hari real + hitungan per status saat ini (pengganti dummy)."""
+def get_status_stats(
+    range_type: str = "all",
+    db: Session = Depends(get_db_session)
+):
+    """Tren 7 hari real + hitungan per status saat ini (pengganti dummy).
+    range_type: 'all' (default), 'period' (periode aktif), '7d' (7 hari terakhir), '30d' (30 hari terakhir).
+    """
     today = datetime.now().date()
     days = [today - timedelta(days=i) for i in range(6, -1, -1)]
     categories = [d.strftime("%a") for d in days]
@@ -696,11 +701,24 @@ def get_status_stats(db: Session = Depends(get_db_session)):
         masuk.append(len(created))
         selesai.append(sum(1 for cd in lunas_days if cd == d))
         pending.append(sum(1 for o in created if (o.status or "") in pending_set))
+    
+    # Filter by_status sesuai range_type
+    sq = db.query(ServiceOrder)
+    now = datetime.now()
+    if range_type == "7d":
+        sq = sq.filter(ServiceOrder.created_at >= now - timedelta(days=7))
+    elif range_type == "30d":
+        sq = sq.filter(ServiceOrder.created_at >= now - timedelta(days=30))
+    elif range_type == "period":
+        per = get_active_period(db)
+        if per and getattr(per, "start_at", None):
+            sq = sq.filter(ServiceOrder.created_at >= per.start_at)
+
     by_status = []
     for name in ["DITERIMA", "ANALISA", "KONFIRMASI", "WAIT PART",
                  "REPAIR", "DONE", "CASH", "CANCEL", "FAILED"]:
         by_status.append({"name": name,
-                          "value": db.query(ServiceOrder).filter(ServiceOrder.status == name).count()})
+                          "value": sq.filter(ServiceOrder.status == name).count()})
     return {
         "categories": categories,
         "series": [

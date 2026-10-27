@@ -1321,9 +1321,8 @@ async function renderInsights() {
         return `
         <div class="insight-card ${tint}">
             <div class="insight-top ${color}">${it.label}</div>
-            <span class="insight-icon ${color}"><i class="fa-solid ${iconMap[it.label] || 'fa-chart-simple'}"></i></span>
-            <div class="insight-val">${it.value}</div>
-            <div class="insight-label">Unit</div>
+            <div class="insight-val my-1">${it.value}</div>
+            <div class="insight-label text-[10px] text-gray-400 font-medium">Unit</div>
         </div>`;
     }).join('');
 }
@@ -1363,9 +1362,31 @@ const STATUS_META = [
     { name: 'FAILED',      color: '#dc2626', cls: 'sm-red',     icon: 'fa-triangle-exclamation' },
 ];
 
-async function statusCounts() {
+let _statusRangeFilter = 'all';
+
+async function setStatusRangeFilter(range) {
+    _statusRangeFilter = range || 'all';
+    document.querySelectorAll('#statusRangeButtons .status-range-btn').forEach(btn => {
+        btn.classList.toggle('is-active', btn.dataset.range === _statusRangeFilter);
+    });
+    await renderStatusMini();
+}
+window.setStatusRangeFilter = setStatusRangeFilter;
+
+function goStatusFilter(status) {
+    _txStatusFilter = status || '';
+    _txPage = 1;
+    const sel = document.getElementById('txStatusFilter');
+    if (sel) sel.value = _txStatusFilter;
+    showTransaksi();
+}
+window.goStatusFilter = goStatusFilter;
+
+async function statusCounts(range) {
     try {
-        const st = await apiGet('/statistics/status');
+        const r = range !== undefined ? range : (_statusRangeFilter || 'all');
+        const url = r === 'all' ? '/statistics/status' : `/statistics/status?range_type=${encodeURIComponent(r)}`;
+        const st = await apiGet(url);
         const byName = {};
         ((st && st.by_status) || []).forEach(r => { byName[r.name] = Number(r.value) || 0; });
         return STATUS_META.map(m => ({ ...m, value: byName[m.name] || 0 }));
@@ -1375,85 +1396,134 @@ async function statusCounts() {
 }
 
 async function initCharts() {
-    const co = getCommonOpts();
-    const rows = await statusCounts();
-    const data = rows.map(s => s.value);
-    const max = Math.max(1, ...data);
-
-    // Statistik Status Transaksi — Smooth Line/Area per status (real)
-    const discrete = rows.map((s, i) => ({
-        seriesIndex: 0,
-        dataPointIndex: i,
-        fillColor: s.color,
-        strokeColor: isDark() ? '#111118' : '#ffffff',
-        size: 5,
-    }));
-    statusChart = new ApexCharts(document.querySelector('#chartStatusTransaksi'), {
-        ...co,
-        chart: { ...co.chart, type: 'area', height: getChartHeight(), toolbar: { show: false }, zoom: { enabled: false } },
-        series: [{ name: 'Transaksi', data: data }],
-        xaxis: {
-            categories: rows.map(s => s.name),
-            labels: { style: { fontSize: '9px', fontWeight: 600 }, rotate: 0, trim: false },
-            axisBorder: { show: false },
-            axisTicks: { show: false },
-        },
-        yaxis: { min: 0, max: max + 1, tickAmount: Math.min(max + 1, 7), labels: { style: { fontSize: '10px' } } },
-        grid: { borderColor: chartGridColor(), strokeDashArray: 4, xaxis: { lines: { show: false } }, yaxis: { lines: { show: true } } },
-        colors: ['#3b82f6'],
-        fill: { type: 'gradient', gradient: { shadeIntensity: 1, opacityFrom: 0.35, opacityTo: 0.02 } },
-        stroke: { curve: 'smooth', width: 3 },
-        markers: { size: 0, strokeWidth: 2, discrete },
-        dataLabels: {
-            enabled: true,
-            formatter: v => v,
-            offsetY: -13,
-            style: { fontSize: '10px', fontWeight: '800' },
-            background: { enabled: true, foreColor: '#0f172a', background: '#ffffff', borderRadius: 7, padding: 4, opacity: 0.95, dropShadow: { enabled: false } },
-        },
-        legend: { show: false },
-        tooltip: { y: { formatter: v => v + ' unit' } },
-        responsive: [{
-            breakpoint: 640,
-            options: { chart: { height: 220 }, xaxis: { labels: { style: { fontSize: '8px' } } } },
-        }],
-    });
-    statusChart.render();
+    const el = document.querySelector('#chartStatusTransaksi');
+    if (!el) return;
+    try {
+        const co = getCommonOpts();
+        const rows = await statusCounts();
+        const data = rows.map(s => s.value);
+        const max = Math.max(1, ...data);
+        const discrete = rows.map((s, i) => ({
+            seriesIndex: 0, dataPointIndex: i, fillColor: s.color, strokeColor: isDark() ? '#111118' : '#ffffff', size: 5,
+        }));
+        statusChart = new ApexCharts(el, {
+            ...co,
+            chart: { ...co.chart, type: 'area', height: getChartHeight(), toolbar: { show: false }, zoom: { enabled: false } },
+            series: [{ name: 'Transaksi', data: data }],
+            xaxis: { categories: rows.map(s => s.name), labels: { style: { fontSize: '9px', fontWeight: 600 }, rotate: 0, trim: false } },
+            yaxis: { min: 0, max: max + 1, tickAmount: Math.min(max + 1, 7), labels: { style: { fontSize: '10px' } } },
+            colors: ['#3b82f6'], stroke: { curve: 'smooth', width: 3 }, markers: { size: 0, strokeWidth: 2, discrete },
+        });
+        statusChart.render();
+    } catch (_) {}
 }
 
 function updateChartTheme() {
-    if (statusChart) statusChart.updateOptions({ theme: { mode: isDark() ? 'dark' : 'light' }, grid: { borderColor: chartGridColor() } });
+    if (statusChart && typeof statusChart.updateOptions === 'function') {
+        try { statusChart.updateOptions({ theme: { mode: isDark() ? 'dark' : 'light' }, grid: { borderColor: chartGridColor() } }); } catch (_) {}
+    }
 }
 
 // ─────────────────────────────────────────────
-// DASHBOARD ANALYTICS (ref: konten.png)
+// DASHBOARD ANALYTICS: PIPELINE STATUS SERVIS
 // ─────────────────────────────────────────────
 
 async function renderStatusMini() {
+    const pipelineEl = document.getElementById('statusPipelineContainer');
     const grid = document.getElementById('statusMiniGrid');
     const banner = document.getElementById('insightStatus');
-    if (!grid) return;
-    const rows = await statusCounts();
+    const badgeActive = document.getElementById('pipelineActiveBadge');
+
+    const rows = await statusCounts(_statusRangeFilter);
     const total = rows.reduce((a, b) => a + b.value, 0);
-    const pct = v => total > 0 ? (v / total * 100).toFixed(1) + '%' : '0.0%';
-    grid.innerHTML = rows.map(c => `
-        <div class="sm-card ${c.cls}">
-            <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.name}</div>
-            <div class="sm-bot"><span class="sm-num">${c.value}</span><span class="sm-pct">${pct(c.value)}</span></div>
-        </div>
-    `).join('');
+    const pctTotal = v => total > 0 ? (v / total * 100).toFixed(1) + '%' : '0.0%';
+
+    // Pipeline Active Status (Dalam Pengerjaan)
+    const activeNames = ['DITERIMA', 'ANALISA', 'KONFIRMASI', 'WAIT PART', 'REPAIR'];
+    const activeRows = rows.filter(r => activeNames.includes(r.name));
+    const totalActive = activeRows.reduce((a, b) => a + b.value, 0);
+
+    if (badgeActive) {
+        badgeActive.textContent = `${totalActive} Unit Aktif`;
+    }
+
+    // Tentukan Bottleneck (status aktif dengan unit terbanyak > 0)
+    const activeSorted = activeRows.filter(r => r.value > 0).sort((a, b) => b.value - a.value);
+    const bottleneck = activeSorted.length > 0 ? activeSorted[0] : null;
+
+    if (pipelineEl) {
+        if (totalActive === 0) {
+            pipelineEl.innerHTML = `<div class="p-3 text-center text-xs text-gray-500 dark:text-gray-400 bg-gray-50/50 dark:bg-white/[0.02] rounded-xl border border-dashed border-gray-200 dark:border-white/10">Tidak ada unit aktif dalam antrian saat ini. Meja teknisi bersih!</div>`;
+        } else {
+            pipelineEl.innerHTML = activeRows.map(it => {
+                const isBottleneck = bottleneck && it.name === bottleneck.name && it.value > 0;
+                const pct = totalActive > 0 ? Math.round((it.value / totalActive) * 100) : 0;
+                const w = Math.max(3, pct);
+                const cardCls = isBottleneck ? 'pipeline-row pipeline-bottleneck' : 'pipeline-row';
+                const badgeHtml = isBottleneck
+                    ? `<span class="text-[9.5px] px-1.5 py-0.5 rounded font-extrabold bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200 uppercase tracking-wide">Bottleneck</span>`
+                    : '';
+                return `
+                    <div class="${cardCls}" onclick="goStatusFilter('${escapeHtml(it.name)}')" title="Klik untuk lihat transaksi ${escapeHtml(it.name)}">
+                        <div class="flex items-center justify-between mb-1 text-xs">
+                            <span class="font-bold text-gray-800 dark:text-gray-100 flex items-center gap-1.5">
+                                <i class="fa-solid ${it.icon}" style="color:${it.color}"></i>
+                                <span>${it.name}</span>
+                                ${badgeHtml}
+                            </span>
+                            <span class="font-extrabold ${isBottleneck ? 'text-amber-900 dark:text-amber-200' : 'text-gray-900 dark:text-gray-100'}">${it.value} Unit <span class="text-[10px] font-normal text-gray-400">(${pct}%)</span></span>
+                        </div>
+                        <div class="w-full bg-gray-100 dark:bg-white/10 h-2 rounded-full overflow-hidden">
+                            <div class="h-full rounded-full transition-all duration-300" style="width:${w}%; background:${it.color}"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // Mini Grid Status Bawah (9 status lengkap)
+    if (grid) {
+        grid.innerHTML = rows.map(c => `
+            <div class="sm-card ${c.cls} cursor-pointer hover:opacity-90 transition" onclick="goStatusFilter('${escapeHtml(c.name)}')" title="Filter status: ${escapeHtml(c.name)}">
+                <div class="sm-top text-[10px] font-bold tracking-wider">${c.name}</div>
+                <div class="sm-bot mt-1"><span class="sm-num font-extrabold">${c.value}</span><span class="sm-pct">${pctTotal(c.value)}</span></div>
+            </div>
+        `).join('');
+    }
+
+    // Insight AI Cerdas & Solutif
     if (banner) {
         if (!total) {
             banner.innerHTML = `<span class="insight-ava insight-ava-ai"><i class="fa-solid fa-robot"></i></span>`
-                + `<p><b>Insight AI:</b> Belum ada transaksi tercatat.</p>`
-                + `<span class="insight-side"><i class="fa-solid fa-chart-line"></i></span>`;
-            return;
+                + `<p><b>Insight AI:</b> Belum ada transaksi tercatat pada rentang ini.</p>`
+                ;
+        } else if (totalActive === 0) {
+            banner.innerHTML = `<span class="insight-ava insight-ava-ai"><i class="fa-solid fa-circle-check"></i></span>`
+                + `<p><b>Insight AI:</b> Seluruh antrian servis aktif telah terselesaikan. Fokus pada pengujian unit atau follow-up customer.</p>`
+                ;
+        } else if (bottleneck) {
+            let advice = '';
+            let btnLabel = `Filter ${bottleneck.name}`;
+            if (bottleneck.name === 'WAIT PART') {
+                advice = `<b>Perhatian:</b> <b>${bottleneck.value} unit</b> tertahan di <b>WAIT PART</b>. Segera belanja suku cadang atau cek supplier agar durasi servis tidak molor.`;
+                btnLabel = 'Filter Wait Part';
+            } else if (bottleneck.name === 'KONFIRMASI') {
+                advice = `<b>Peluang:</b> <b>${bottleneck.value} unit</b> menunggu persetujuan biaya pelanggan. CS perlu follow-up penawaran agar perbaikan dapat dimulai.`;
+                btnLabel = 'Filter Konfirmasi';
+            } else if (bottleneck.name === 'REPAIR') {
+                advice = `<b>Fokus:</b> <b>${bottleneck.value} unit</b> sedang dalam pengerjaan teknisi. Pastikan perbaikan selesai sesuai estimasi waktu.`;
+                btnLabel = 'Filter Repair';
+            } else if (bottleneck.name === 'DITERIMA' || bottleneck.name === 'ANALISA') {
+                advice = `<b>Antrian:</b> <b>${bottleneck.value} unit</b> menunggu diagnosa awal. Segera periksa kerusakan unit baru.`;
+                btnLabel = `Filter ${bottleneck.name}`;
+            } else {
+                advice = `<b>Insight AI:</b> ${bottleneck.name} mendominasi antrian (${bottleneck.value} unit). Teknisi sedang fokus melakukan pengerjaan.`;
+            }
+            banner.innerHTML = `<span class="insight-ava insight-ava-ai"><i class="fa-solid fa-lightbulb"></i></span>`
+                + `<div class="flex-1"><p>${advice}</p></div>`
+                + `<button type="button" class="px-2.5 py-1 rounded-md bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10.5px] whitespace-nowrap shadow-xs ml-2" onclick="goStatusFilter('${escapeHtml(bottleneck.name)}')">${btnLabel} <i class="fa-solid fa-arrow-right text-[9px]"></i></button>`;
         }
-        const top = rows.slice().sort((a, b) => b.value - a.value)[0];
-        banner.innerHTML = `<span class="insight-ava insight-ava-ai"><i class="fa-solid fa-robot"></i></span>`
-            + `<p><b>Insight AI:</b> ${top.name} mendominasi <b>${pct(top.value)} (${top.value} unit)</b> dari total transaksi.`
-            + ` Teknisi sedang fokus melakukan pengerjaan perbaikan unit.</p>`
-            + `<span class="insight-side"><i class="fa-solid fa-chart-line"></i></span>`;
     }
 }
 
@@ -3669,13 +3739,58 @@ async function loadWarrantyData(force = false) {
     }
 }
 
-function updateGrWidgets() {
+function updateGrWidgets(unclaimedData) {
     const todayUnits = (_grAll || []).filter(g => grState(g).key === 'hari_ini');
     const doneUnits = todayUnits.filter(g => isGrWaDone(g));
     const pendingUnits = todayUnits.filter(g => !isGrWaDone(g));
     const totalToday = todayUnits.length;
     const pendingCount = pendingUnits.length;
     const doneCount = doneUnits.length;
+
+    // Update Priority Hub Unit Mengendap (Tahap 1-4)
+    const ucTotal = (unclaimedData && unclaimedData.total) ? Number(unclaimedData.total) : 0;
+    const ucProgEl = document.getElementById('dashUnclaimedProgress');
+    const ucDescEl = document.getElementById('dashUnclaimedDesc');
+    const hubEl = document.getElementById('dashPriorityHub');
+    const badgeEl = document.getElementById('dashPriorityBadge');
+
+    if (ucProgEl) ucProgEl.textContent = `${ucTotal} Unit`;
+    const c1 = document.getElementById('dashUcCnt1'); if (c1) c1.textContent = unclaimedData ? unclaimedData.stage_1 : 0;
+    const c2 = document.getElementById('dashUcCnt2'); if (c2) c2.textContent = unclaimedData ? unclaimedData.stage_2 : 0;
+    const c3 = document.getElementById('dashUcCnt3'); if (c3) c3.textContent = unclaimedData ? unclaimedData.stage_3 : 0;
+    const c4 = document.getElementById('dashUcCnt4'); if (c4) c4.textContent = unclaimedData ? unclaimedData.stage_4 : 0;
+
+    if (ucDescEl) {
+        if (unclaimedData && unclaimedData.stage_4 > 0) {
+            ucDescEl.innerHTML = `<span class="font-bold text-rose-700 dark:text-rose-300">${unclaimedData.stage_4} unit >90 hari</span> perlu konfirmasi & peringatan segera.`;
+        } else if (unclaimedData && unclaimedData.stage_3 > 0) {
+            ucDescEl.innerHTML = `<span class="font-bold text-pink-700 dark:text-pink-300">${unclaimedData.stage_3} unit >60 hari</span> perlu penawaran solusi / pembelian.`;
+        } else if (ucTotal > 0) {
+            ucDescEl.textContent = `${ucTotal} unit selesai/gagal belum diambil pemilik toko.`;
+        } else {
+            ucDescEl.textContent = 'Tidak ada unit mengendap tertahan di toko saat ini.';
+        }
+    }
+
+    if (hubEl) {
+        if (totalToday === 0 && ucTotal === 0) {
+            hubEl.classList.add('hidden');
+        } else {
+            hubEl.classList.remove('hidden');
+            if (badgeEl) {
+                if (unclaimedData && unclaimedData.stage_4 > 0) {
+                    badgeEl.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-rose-200 text-rose-900 dark:bg-rose-900/60 dark:text-rose-200';
+                    badgeEl.textContent = 'Prioritas Kritis (>90H)';
+                } else if (pendingCount > 0 || ucTotal > 0) {
+                    badgeEl.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200';
+                    badgeEl.textContent = 'Perlu Follow-up';
+                } else {
+                    badgeEl.className = 'text-[10px] px-2 py-0.5 rounded-full font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300';
+                    badgeEl.textContent = 'Semua Selesai';
+                }
+            }
+        }
+    }
 
     // 1. Sidebar Nav Badge
     const navBadge = document.getElementById('navGaransiBadge');
@@ -3781,7 +3896,11 @@ function updateGrWidgets() {
 
 async function renderDashGaransiTask() {
     await loadWarrantyData();
-    updateGrWidgets();
+    let unclaimedData = null;
+    try {
+        unclaimedData = await apiGet('/orders/unclaimed');
+    } catch (_) {}
+    updateGrWidgets(unclaimedData);
 }
 window.renderDashGaransiTask = renderDashGaransiTask;
 
