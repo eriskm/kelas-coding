@@ -1765,9 +1765,46 @@ function showAkun() {
     showPage('akun'); renderAkun();
 }
 
+
+// ─────────────────────────────────────────────
+// STATUS BAR (REAL-TIME ONLINE & TEKNISI AKTIF)
+// ─────────────────────────────────────────────
+
+function setOnlineStatus(online) {
+    const dot = document.getElementById('sbOnlineDot');
+    const txt = document.getElementById('sbOnlineText');
+    if (!dot || !txt) return;
+    if (online) {
+        dot.className = 'w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse';
+        txt.textContent = 'Online';
+        txt.className = 'text-gray-600 dark:text-gray-400 font-medium';
+    } else {
+        dot.className = 'w-1.5 h-1.5 rounded-full bg-rose-500';
+        txt.textContent = 'Offline';
+        txt.className = 'text-rose-600 dark:text-rose-400 font-bold';
+    }
+}
+window.setOnlineStatus = setOnlineStatus;
+window.addEventListener('online', () => setOnlineStatus(true));
+window.addEventListener('offline', () => setOnlineStatus(false));
+
+async function updateStatusBar() {
+    try {
+        const techs = await apiGet('/orders/technicians');
+        const count = Array.isArray(techs) ? techs.length : 0;
+        const el = document.getElementById('sbTeknisiCount');
+        if (el) el.textContent = count + ' Orang';
+        setOnlineStatus(true);
+    } catch (_) {
+        if (!navigator.onLine) setOnlineStatus(false);
+    }
+}
+window.updateStatusBar = updateStatusBar;
+
 async function loadDashboard() {
     await Promise.all([renderStarCards(), renderInsights(), initCharts(), renderStatusMini(), renderDamageSection()]);
     try { await renderDashGaransiTask(); } catch (_) {}
+    try { await updateStatusBar(); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────

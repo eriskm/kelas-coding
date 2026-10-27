@@ -2883,13 +2883,13 @@
 
                 <!-- ===== STATUS BAR ===== -->
                 <div class="status-bar h-7 hidden sm:flex items-center justify-between px-5 flex-shrink-0 text-[10.5px] text-gray-500 dark:text-gray-500">
-                    <div class="flex items-center gap-4">
-                        <span class="flex items-center gap-1.5">
-                            <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-                            Online
+                    <div class="flex items-center gap-3">
+                        <span class="flex items-center gap-1.5" id="sbOnlineStatus">
+                            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" id="sbOnlineDot"></span>
+                            <span id="sbOnlineText" class="text-gray-600 dark:text-gray-400 font-medium">Online</span>
                         </span>
-                        <span>Servis aktif: <b class="text-gray-700 dark:text-gray-300">48</b></span>
-                        <span>Teknisi: <b class="text-gray-700 dark:text-gray-300">4</b></span>
+                        <span class="text-gray-300 dark:text-gray-700">&bull;</span>
+                        <span>Teknisi: <b id="sbTeknisiCount" class="text-gray-700 dark:text-gray-300">-</b></span>
                     </div>
                     <div class="flex items-center gap-4">
                         <span>v1.0.0</span>

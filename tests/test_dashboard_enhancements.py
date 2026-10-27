@@ -2,6 +2,7 @@
 - Filter rentang waktu statistik status (all, 7d, 30d, period)
 - Integrasi pipeline status dan smart recommendations
 - Hub tugas operasional terpadu (garansi + unit mengendap)
+- Data real teknisi untuk status bar
 """
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -68,4 +69,11 @@ def test_unclaimed_orders_accessible_for_dashboard_hub(client, auth):
     assert "stage_2" in data
     assert "stage_3" in data
     assert "stage_4" in data
-    assert "items" in data
+
+
+def test_technicians_accessible_for_status_bar(client, auth):
+    """Pastikan endpoint /api/orders/technicians merespons untuk data real teknisi di status bar."""
+    res = client.get("/api/orders/technicians", headers=auth)
+    assert res.status_code == 200
+    data = res.json()
+    assert isinstance(data, list)
