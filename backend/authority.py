@@ -146,6 +146,7 @@ class Action:
     REPORT_INVESTOR = "REPORT_INVESTOR"
     REPORT_SPAREPART = "REPORT_SPAREPART"
     ORDER_UPDATE_MODAL = "ORDER_UPDATE_MODAL"
+    PART_SALE_CREATE = "PART_SALE_CREATE" 
 
 
 AUTHORITY_MATRIX = {
@@ -165,6 +166,7 @@ AUTHORITY_MATRIX = {
     Action.ORDER_DELETE: {ROLE_SUPER, ROLE_ADMIN},
     # -- uang ---------------------------------------------------------------
     Action.PAYMENT_CREATE: {ROLE_SUPER, ROLE_ADMIN, ROLE_KASIR},
+    Action.PART_SALE_CREATE: {ROLE_SUPER, ROLE_ADMIN, ROLE_KASIR},
     Action.PAYMENT_CANCEL: {ROLE_SUPER, ROLE_ADMIN},
     # Beban. Kasir TIDAK boleh: tugasnya pembayaran & nota, bukan mencatat
     # beban (Owner: "tidak boleh mengubah ... konfigurasi keuangan").

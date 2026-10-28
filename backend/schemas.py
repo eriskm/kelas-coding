@@ -648,6 +648,77 @@ class SparepartPage(BaseModel):
     items: List[SparepartOut]
 
 
+# ---------- Sparepart Batches (FIFO) ----------
+class SparepartBatchCreate(BaseModel):
+    supplier: Optional[str] = None
+    harga_beli: MoneyOut
+    harga_jual: MoneyOut
+    qty_masuk: int
+    tanggal_masuk: Optional[date] = None
+
+
+class SparepartBatchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    sparepart_id: int
+    supplier: Optional[str] = None
+    harga_beli: MoneyOut
+    harga_jual: MoneyOut
+    qty_masuk: int
+    qty_sisa: int
+    tanggal_masuk: date
+    status: str
+    created_at: datetime
+
+
+# ---------- Part Sales (Kasir POS Penjualan Langsung) ----------
+class PartSaleItemIn(BaseModel):
+    sparepart_id: int
+    qty: int
+
+
+class PartSaleCreate(BaseModel):
+    customer_name: Optional[str] = "Pelanggan Umum"
+    customer_phone: Optional[str] = None
+    payment_method: Optional[str] = "CASH"  # CASH | TRANSFER
+    items: List[PartSaleItemIn]
+
+
+class PartSaleItemOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    sparepart_id: int
+    sparepart_name: Optional[str] = None
+    batch_id: Optional[int] = None
+    qty: int
+    harga_beli: MoneyOut
+    harga_jual: MoneyOut
+    subtotal: MoneyOut
+
+
+class PartSaleOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    no_transaksi: str
+    customer_name: str
+    customer_phone: Optional[str] = None
+    total_omzet: MoneyOut
+    total_modal: MoneyOut
+    laba: MoneyOut
+    payment_method: str
+    oleh: Optional[str] = None
+    created_at: datetime
+    items: List[PartSaleItemOut]
+
+
+class PartSalePage(BaseModel):
+    total: int
+    page: int
+    limit: int
+    total_pages: int
+    items: List[PartSaleOut]
+
+
 # ---------- Refund (P2-10) ----------
 REFUND_JENIS = ["DP", "GARANSI", "FAILED_CANCEL"]
 

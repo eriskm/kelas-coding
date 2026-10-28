@@ -323,6 +323,7 @@ function showPage(name) {
     // tidak boleh menavigasi ulang (mencegah render ganda).
     window._activePage = name;
     const isDash = name === 'dashboard';
+    const isPenjualanPart = name === 'penjualanpart';
     const isTransaksi = name === 'transaksi';
     const isPelanggan = name === 'pelanggan';
     const isGaransi = name === 'garansi';
@@ -348,6 +349,9 @@ function showPage(name) {
     }
     
     document.getElementById('pageDashboard').classList.toggle('hidden', !isDash);
+    if (document.getElementById('pagePenjualanPart')) {
+        document.getElementById('pagePenjualanPart').classList.toggle('hidden', !isPenjualanPart);
+    }
     document.getElementById('pageTransaksi').classList.toggle('hidden', !isTransaksi);
     document.getElementById('pagePelanggan').classList.toggle('hidden', !isPelanggan);
     document.getElementById('pageGaransi').classList.toggle('hidden', !isGaransi);
@@ -359,7 +363,7 @@ function showPage(name) {
     
     const navs = document.querySelectorAll('.nav-link');
     const mobiles = document.querySelectorAll('.mobile-nav-item');
-    const target = isDash ? 'dashboard' : isTransaksi ? 'transaksi' : isPelanggan ? 'pelanggan' : isGaransi ? 'garansi' : isSparepart ? 'sparepart' : isKeuangan ? 'keuangan' : isAkun ? 'akun' : 'dashboard';
+    const target = isDash ? 'dashboard' : isPenjualanPart ? 'penjualanpart' : isTransaksi ? 'transaksi' : isPelanggan ? 'pelanggan' : isGaransi ? 'garansi' : isSparepart ? 'sparepart' : isKeuangan ? 'keuangan' : isAkun ? 'akun' : 'dashboard';
     setActiveNav(target, navs);
     setActiveNav(target, mobiles);
     if (window.innerWidth < 640) toggleSidebar(false);
@@ -368,6 +372,10 @@ function showPage(name) {
 function showDashboard() {
     showPage('dashboard');
     try { renderDashGaransiTask(); } catch (_) {}
+}
+function showPenjualanPart() {
+    showPage('penjualanpart');
+    renderPenjualanPart();
 }
 function showTransaksi() { showPage('transaksi'); renderTransaksi(); }
 function showPelanggan() { showPage('pelanggan'); renderPelanggan(); }
@@ -1621,6 +1629,8 @@ function initNav() {
             const page = this.dataset.page;
             if (page === 'servisbaru') {
                 showPage('receive');
+            } else if (page === 'penjualanpart') {
+                showPenjualanPart();
             } else if (page === 'dashboard') {
                 showPage('dashboard');
             } else if (page === 'transaksi') {
@@ -2017,6 +2027,30 @@ function updateHeaderNotif() {
             : 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-300';
     }
 
+    // 5. Peringatan Stok Sparepart Menipis / Habis (Aspek B)
+    const lowParts = Array.isArray(window._lowStockParts) ? window._lowStockParts : [];
+    if (lowParts.length > 0) {
+        const habisCount = lowParts.filter(p => (Number(p.stok) || 0) <= 0).length;
+        const menipisCount = lowParts.length - habisCount;
+        let descTxt = '';
+        if (habisCount > 0 && menipisCount > 0) {
+            descTxt = habisCount + ' part habis & ' + menipisCount + ' part menipis (<= 3 unit). Segera restock.';
+        } else if (habisCount > 0) {
+            descTxt = habisCount + ' part stok habis (0 unit). Segera restock.';
+        } else {
+            descTxt = menipisCount + ' part stok menipis (<= 3 unit). Segera pesan.';
+        }
+        notifs.push({
+            id: 'sparepart_low_stock',
+            type: habisCount > 0 ? 'danger' : 'warning',
+            icon: 'fa-solid fa-boxes-stacked text-amber-500',
+            bg: 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-900/40',
+            title: lowParts.length + ' Part Perlu Restock',
+            desc: descTxt,
+            actionLabel: 'Cek Sparepart',
+            onClick: "showSparepart(); closeHeaderNotif();"
+        });
+    }
     if (notifs.length === 0) {
         list.innerHTML = `
             <div class="py-6 px-4 text-center">
@@ -2048,6 +2082,17 @@ function updateHeaderNotif() {
     }
 }
 window.updateHeaderNotif = updateHeaderNotif;
+async function loadLowStockSpareparts() {
+    try {
+        const data = await apiGet('/spareparts?limit=100');
+        if (data && Array.isArray(data.items)) {
+            window._lowStockParts = data.items.filter(p => (Number(p.stok) || 0) <= 3);
+            if (typeof updateHeaderNotif === 'function') updateHeaderNotif();
+        }
+    } catch (_) {}
+}
+window.loadLowStockSpareparts = loadLowStockSpareparts;
+
 
 async function loadRepairAging() {
     try {
@@ -2063,6 +2108,7 @@ async function loadDashboard() {
     try { await renderDashGaransiTask(); } catch (_) {}
     try { await updateStatusBar(); } catch (_) {}
     try { await loadRepairAging(); } catch (_) {}
+    try { await loadLowStockSpareparts(); } catch (_) {}
     try { updateHeaderNotif(); } catch (_) {}
 }
 
@@ -5212,6 +5258,8 @@ function renderSpKpi(src) {
     const el = document.getElementById('spKpi');
     if (!el) return;
     const data = src || _spView || [];
+    window._lowStockParts = (data || []).filter(s => (Number(s.qty || s.stok) || 0) <= 3);
+    try { if (typeof updateHeaderNotif === 'function') updateHeaderNotif(); } catch (_) {}
     const total = data.length;
     const aman = data.filter(s => (s.qty || 0) > 5).length;
     const tipis = data.filter(s => (s.qty || 0) > 0 && (s.qty || 0) <= 5).length;
@@ -6482,7 +6530,7 @@ function renderKondisiKas() {
     // 2. Kas Kecil / Laci — saldo operasional (titipan DP dikurangi).
     row('Kas Kecil / Laci', Number(fin.kas_aset_awal_operasional) || 0, 0, 'is-laci');
     // 3. Total Penjualan Service (Omzet periode).
-    row('Total Penjualan Service', Number(fin.omset) || 0, 0);
+    row('Total Penjualan Part & Service', Number(fin.omset) || 0, 0);
     // TIDAK ADA baris titipan DP di Kondisi Kas Operasional.
     //
     // Owner (tegas): "uang DP tidak masuk ke Kondisi Kas Operasional. DP hanya
@@ -10446,3 +10494,449 @@ window.unclaimedWaClose = unclaimedWaClose;
 window.unclaimedWaSend = unclaimedWaSend;
 window.unclaimedWaMarkDone = unclaimedWaMarkDone;
 window.unclaimedWaMessage = unclaimedWaMessage;
+
+
+// ==========================================
+// FITUR KASIR PENJUALAN PART & AKSESORIS (POS)
+// ==========================================
+window._posCart = [];
+window._posSpareparts = [];
+window._posActiveSale = null;
+
+function posRupiah(v) {
+    return 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
+}
+
+async function renderPenjualanPart() {
+    const grid = document.getElementById('posProductGrid');
+    if (grid) {
+        grid.innerHTML = '<div class="col-span-2 text-center py-10 text-gray-400 text-xs flex items-center justify-center gap-2"><i class="fa-solid fa-circle-notch fa-spin text-emerald-500"></i> Memuat katalog produk...</div>';
+    }
+    try {
+        const data = await apiGet('/spareparts?limit=200');
+        window._posSpareparts = (data && data.items) || [];
+
+        // Update category dropdown
+        const catSelect = document.getElementById('posCategoryFilter');
+        if (catSelect) {
+            const currentVal = catSelect.value;
+            const cats = Array.from(new Set(window._posSpareparts.map(p => (p.kategori || '').trim()).filter(Boolean))).sort();
+            catSelect.innerHTML = '<option value="">Semua Kategori</option>' + cats.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+            catSelect.value = currentVal;
+        }
+
+        posFilterProducts();
+        posRenderCart();
+    } catch (err) {
+        if (grid) {
+            grid.innerHTML = `<div class="col-span-2 text-center py-8 text-rose-500 text-xs">Gagal memuat produk: ${escapeHtml(err.message || 'Error')}</div>`;
+        }
+    }
+}
+
+function posFilterProducts() {
+    const grid = document.getElementById('posProductGrid');
+    if (!grid) return;
+
+    const q = (document.getElementById('posSearchInput')?.value || '').trim().toLowerCase();
+    const cat = (document.getElementById('posCategoryFilter')?.value || '').trim();
+
+    let list = window._posSpareparts || [];
+    if (cat) {
+        list = list.filter(p => (p.kategori || '').trim() === cat);
+    }
+    if (q) {
+        list = list.filter(p => {
+            const nama = (p.nama || p.jenis || '').toLowerCase();
+            const merk = (p.merek || '').toLowerCase();
+            const dev = (p.device || '').toLowerCase();
+            const kode = (p.kode || '').toLowerCase();
+            return nama.includes(q) || merk.includes(q) || dev.includes(q) || kode.includes(q);
+        });
+    }
+
+    if (list.length === 0) {
+        grid.innerHTML = '<div class="col-span-2 text-center py-12 text-gray-400 text-xs">Tidak ada produk yang cocok</div>';
+        return;
+    }
+
+    grid.innerHTML = list.map(p => {
+        const stok = Number(p.stok != null ? p.stok : p.qty) || 0;
+        const harga = Number(p.harga_jual != null ? p.harga_jual : p.jual) || 0;
+        const isHabis = stok <= 0;
+        const isMenipis = !isHabis && stok <= 3;
+        const badgeCls = isHabis
+            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50'
+            : isMenipis
+            ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50'
+            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50';
+        const badgeTxt = isHabis ? 'Habis' : isMenipis ? `Sisa ${stok}` : `Stok ${stok}`;
+
+        return `
+            <div class="panel p-3 flex flex-col justify-between hover:border-emerald-500/40 transition group ${isHabis ? 'opacity-60 bg-gray-50/50 dark:bg-white/2' : ''}">
+                <div class="space-y-1">
+                    <div class="flex items-start justify-between gap-1.5">
+                        <span class="font-bold text-xs text-gray-800 dark:text-gray-100 line-clamp-2">${escapeHtml(p.nama || p.jenis || '-')}</span>
+                        <span class="text-[10px] font-semibold px-1.5 py-0.5 rounded ${badgeCls} shrink-0">${badgeTxt}</span>
+                    </div>
+                    <div class="text-[10.5px] text-gray-400 dark:text-gray-400 flex items-center gap-2">
+                        ${p.device ? `<span><i class="fa-solid fa-mobile-screen text-[9px] mr-1"></i>${escapeHtml(p.device)}</span>` : ''}
+                        ${p.kode ? `<span class="font-mono text-[9.5px]">[${escapeHtml(p.kode)}]</span>` : ''}
+                    </div>
+                </div>
+                <div class="flex items-center justify-between pt-2.5 mt-2 border-t border-gray-100 dark:border-white/5">
+                    <span class="text-xs font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums">${posRupiah(harga)}</span>
+                    <button type="button" onclick="posAddToCart(${p.id})" ${isHabis ? 'disabled' : ''} class="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[11px] font-bold flex items-center gap-1 shadow-2xs transition">
+                        <i class="fa-solid fa-plus text-[10px]"></i>
+                        <span>Tambah</span>
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+function posAddToCart(partId) {
+    const part = (window._posSpareparts || []).find(p => p.id === partId);
+    if (!part) return;
+
+    const stok = Number(part.stok != null ? part.stok : part.qty) || 0;
+    if (stok <= 0) {
+        toast('Stok produk habis!', 'warning');
+        return;
+    }
+
+    const item = window._posCart.find(i => i.id === partId);
+    if (item) {
+        if (item.qty + 1 > item.max_stock) {
+            toast(`Maksimal stok tercapai: ${item.max_stock}`, 'warning');
+            return;
+        }
+        item.qty += 1;
+    } else {
+        window._posCart.push({
+            id: part.id,
+            nama: part.nama || part.jenis || 'Part',
+            device: part.device || '',
+            kode: part.kode || '',
+            harga_jual: Number(part.harga_jual != null ? part.harga_jual : part.jual) || 0,
+            qty: 1,
+            max_stock: stok,
+        });
+    }
+    posRenderCart();
+}
+
+function posUpdateQty(partId, delta) {
+    const idx = window._posCart.findIndex(i => i.id === partId);
+    if (idx === -1) return;
+
+    const item = window._posCart[idx];
+    const target = item.qty + delta;
+    if (target <= 0) {
+        window._posCart.splice(idx, 1);
+    } else if (target > item.max_stock) {
+        toast(`Maksimal stok tercapai: ${item.max_stock}`, 'warning');
+        return;
+    } else {
+        item.qty = target;
+    }
+    posRenderCart();
+}
+
+function posRemoveFromCart(partId) {
+    window._posCart = window._posCart.filter(i => i.id !== partId);
+    posRenderCart();
+}
+
+function posClearCart() {
+    window._posCart = [];
+    const custName = document.getElementById('posCustomerName');
+    const custPhone = document.getElementById('posCustomerPhone');
+    const notes = document.getElementById('posNotes');
+    const cashRec = document.getElementById('posCashReceived');
+    if (custName) custName.value = '';
+    if (custPhone) custPhone.value = '';
+    if (notes) notes.value = '';
+    if (cashRec) cashRec.value = '';
+    posRenderCart();
+}
+
+function posRenderCart() {
+    const countBadge = document.getElementById('posCartCount');
+    const container = document.getElementById('posCartItems');
+    const totalEl = document.getElementById('posTotalOmzet');
+
+    const totalQty = window._posCart.reduce((sum, i) => sum + i.qty, 0);
+    const subtotal = window._posCart.reduce((sum, i) => sum + (i.qty * i.harga_jual), 0);
+
+    if (countBadge) countBadge.textContent = `${totalQty} item`;
+    if (totalEl) totalEl.textContent = posRupiah(subtotal);
+
+    if (!container) return;
+
+    if (window._posCart.length === 0) {
+        container.innerHTML = `
+            <div class="text-center py-10 text-gray-400 text-xs space-y-1">
+                <i class="fa-solid fa-cart-arrow-down text-2xl text-gray-300 dark:text-gray-600"></i>
+                <p>Keranjang masih kosong</p>
+                <p class="text-[10.5px] text-gray-400">Pilih produk di katalog sebelah kiri</p>
+            </div>
+        `;
+        posCalcChange();
+        return;
+    }
+
+    container.innerHTML = window._posCart.map(item => `
+        <div class="p-2.5 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-200/70 dark:border-white/5 space-y-1.5">
+            <div class="flex items-start justify-between gap-2">
+                <div class="flex-1">
+                    <div class="font-bold text-xs text-gray-800 dark:text-gray-100 line-clamp-1">${escapeHtml(item.nama)}</div>
+                    <div class="text-[10px] text-gray-400">${item.device ? escapeHtml(item.device) + ' • ' : ''}${posRupiah(item.harga_jual)} / pcs</div>
+                </div>
+                <button type="button" onclick="posRemoveFromCart(${item.id})" class="text-gray-400 hover:text-rose-500 p-1 text-xs transition" title="Hapus">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="flex items-center justify-between pt-1">
+                <div class="flex items-center gap-1.5">
+                    <button type="button" onclick="posUpdateQty(${item.id}, -1)" class="w-6 h-6 rounded-md bg-white dark:bg-surface-800 border border-gray-200 dark:border-white/10 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 transition">-</button>
+                    <span class="w-8 text-center text-xs font-extrabold text-gray-800 dark:text-gray-100 tabular-nums">${item.qty}</span>
+                    <button type="button" onclick="posUpdateQty(${item.id}, 1)" class="w-6 h-6 rounded-md bg-white dark:bg-surface-800 border border-gray-200 dark:border-white/10 flex items-center justify-center text-xs font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-100 transition">+</button>
+                </div>
+                <span class="text-xs font-bold text-gray-900 dark:text-white tabular-nums">${posRupiah(item.qty * item.harga_jual)}</span>
+            </div>
+        </div>
+    `).join('');
+
+    posCalcChange();
+}
+
+function posCalcChange() {
+    const subtotal = window._posCart.reduce((sum, i) => sum + (i.qty * i.harga_jual), 0);
+    const method = document.querySelector('input[name="posPaymentMethod"]:checked')?.value || 'CASH';
+    const cashBox = document.getElementById('posCashInputs');
+    const cashInput = document.getElementById('posCashReceived');
+    const changeText = document.getElementById('posChangeText');
+
+    if (method === 'TRANSFER') {
+        if (cashBox) cashBox.classList.add('hidden');
+        if (changeText) {
+            changeText.textContent = 'Pas (Transfer)';
+            changeText.className = 'px-2.5 py-1.5 text-xs font-extrabold text-indigo-600 dark:text-indigo-400 tabular-nums bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10';
+        }
+    } else {
+        if (cashBox) cashBox.classList.remove('hidden');
+        const received = Number(cashInput?.value) || 0;
+        if (!changeText) return;
+
+        if (received >= subtotal) {
+            const kembalian = received - subtotal;
+            changeText.textContent = posRupiah(kembalian);
+            changeText.className = 'px-2.5 py-1.5 text-xs font-extrabold text-emerald-600 dark:text-emerald-400 tabular-nums bg-gray-50 dark:bg-white/5 rounded-lg border border-gray-200 dark:border-white/10';
+        } else {
+            const kurang = subtotal - received;
+            changeText.textContent = 'Kurang ' + posRupiah(kurang);
+            changeText.className = 'px-2.5 py-1.5 text-xs font-extrabold text-rose-600 dark:text-rose-400 tabular-nums bg-rose-50 dark:bg-rose-950/40 rounded-lg border border-rose-200 dark:border-rose-900/50';
+        }
+    }
+}
+
+async function posSubmitSale() {
+    if (window._posCart.length === 0) {
+        toast('Keranjang masih kosong!', 'warning');
+        return;
+    }
+
+    const subtotal = window._posCart.reduce((sum, i) => sum + (i.qty * i.harga_jual), 0);
+    const method = document.querySelector('input[name="posPaymentMethod"]:checked')?.value || 'CASH';
+    const cashInput = document.getElementById('posCashReceived');
+    const received = method === 'CASH' ? (Number(cashInput?.value) || 0) : subtotal;
+
+    if (method === 'CASH' && received < subtotal) {
+        toast('Uang tunai diterima kurang dari total tagihan!', 'warning');
+        return;
+    }
+
+    const custName = (document.getElementById('posCustomerName')?.value || '').trim() || 'Pelanggan Umum';
+    const custPhone = (document.getElementById('posCustomerPhone')?.value || '').trim() || null;
+    const notes = (document.getElementById('posNotes')?.value || '').trim() || null;
+
+    const payload = {
+        customer_name: custName,
+        customer_phone: custPhone,
+        payment_method: method,
+        catatan: notes,
+        items: window._posCart.map(i => ({
+            sparepart_id: i.id,
+            qty: i.qty,
+            harga_jual: i.harga_jual
+        }))
+    };
+
+    const submitBtn = document.getElementById('posSubmitBtn');
+    if (submitBtn) {
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Memproses...';
+    }
+
+    try {
+        const result = await apiPost('/spareparts/sales', payload);
+        toast('Transaksi penjualan part berhasil!', 'success');
+
+        const kembalian = method === 'CASH' ? Math.max(0, received - subtotal) : 0;
+        posShowReceipt(result, received, kembalian);
+
+        posClearCart();
+        renderPenjualanPart();
+        try { if (typeof renderKondisiKas === 'function') renderKondisiKas(); } catch (_) {}
+    } catch (err) {
+        toast(err.message || 'Gagal memproses transaksi!', 'danger');
+    } finally {
+        if (submitBtn) {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fa-solid fa-receipt"></i><span>Proses & Cetak Struk</span>';
+        }
+    }
+}
+
+function posShowReceipt(sale, bayar, kembali) {
+    window._posActiveSale = sale;
+    const modal = document.getElementById('posReceiptModal');
+    const receipt = document.getElementById('posThermalReceipt');
+    if (!modal || !receipt) return;
+
+    const tgl = (sale.created_at || '').replace('T', ' ').slice(0, 16) || new Date().toLocaleString('id-ID');
+    const items = sale.items || [];
+    const bayarVal = bayar != null ? bayar : Number(sale.total_omzet);
+    const kembaliVal = kembali != null ? kembali : 0;
+
+    receipt.innerHTML = `
+        <div class="text-center pb-2.5 border-b border-dashed border-gray-300 dark:border-white/20 mb-2.5">
+            <div class="font-extrabold text-[12px] uppercase tracking-wider text-gray-900 dark:text-white">MJ PRO SERVICE</div>
+            <div class="text-[9.5px] text-gray-500 dark:text-gray-400">Spesialis Service HP & Sparepart</div>
+            <div class="text-[9px] text-gray-400">Struk Resmi Penjualan Sparepart</div>
+        </div>
+        <div class="space-y-0.5 text-[10px] pb-2 border-b border-dashed border-gray-300 dark:border-white/20 mb-2 text-gray-600 dark:text-gray-300">
+            <div class="flex justify-between"><span>No:</span><span class="font-bold text-gray-900 dark:text-white">${escapeHtml(sale.no_transaksi || '-')}</span></div>
+            <div class="flex justify-between"><span>Tgl:</span><span>${escapeHtml(tgl)}</span></div>
+            <div class="flex justify-between"><span>Kasir:</span><span>${escapeHtml(sale.oleh || 'Kasir')}</span></div>
+            <div class="flex justify-between"><span>Pembeli:</span><span>${escapeHtml(sale.customer_name || 'Pelanggan Umum')}</span></div>
+        </div>
+        <div class="space-y-1.5 pb-2 border-b border-dashed border-gray-300 dark:border-white/20 mb-2">
+            ${items.map(it => `
+                <div class="text-[10px]">
+                    <div class="font-semibold text-gray-800 dark:text-gray-200 line-clamp-1">${escapeHtml(it.sparepart_name || 'Part #' + it.sparepart_id)}</div>
+                    <div class="flex justify-between text-gray-500 dark:text-gray-400 text-[9.5px]">
+                        <span>${it.qty} x ${posRupiah(it.harga_jual)}</span>
+                        <span class="font-bold text-gray-800 dark:text-gray-200">${posRupiah(it.subtotal)}</span>
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+        <div class="space-y-1 text-[10.5px] pb-2 border-b border-dashed border-gray-300 dark:border-white/20 mb-2">
+            <div class="flex justify-between font-extrabold text-xs text-gray-900 dark:text-white">
+                <span>TOTAL:</span>
+                <span>${posRupiah(sale.total_omzet)}</span>
+            </div>
+            <div class="flex justify-between text-gray-500 dark:text-gray-400 text-[10px]">
+                <span>Metode:</span>
+                <span>${escapeHtml(sale.payment_method || 'CASH')}</span>
+            </div>
+            <div class="flex justify-between text-gray-500 dark:text-gray-400 text-[10px]">
+                <span>Bayar:</span>
+                <span>${posRupiah(bayarVal)}</span>
+            </div>
+            <div class="flex justify-between text-gray-500 dark:text-gray-400 text-[10px]">
+                <span>Kembali:</span>
+                <span>${posRupiah(kembaliVal)}</span>
+            </div>
+        </div>
+        <div class="text-center text-[9px] text-gray-400 dark:text-gray-500 space-y-0.5 pt-1">
+            <div>Terima kasih atas kunjungan Anda</div>
+            <div>Barang yang dibeli tidak dapat ditukar/dikembalikan</div>
+        </div>
+    `;
+
+    modal.classList.remove('hidden');
+}
+
+function posDoPrint() {
+    window.print();
+}
+
+function posCloseReceiptModal() {
+    const modal = document.getElementById('posReceiptModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function posOpenHistoryModal() {
+    const modal = document.getElementById('posHistoryModal');
+    const tbody = document.getElementById('posHistoryList');
+    if (!modal || !tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-400 text-xs"><i class="fa-solid fa-circle-notch fa-spin text-emerald-500"></i> Memuat riwayat struk...</td></tr>';
+    modal.classList.remove('hidden');
+
+    try {
+        const res = await apiGet('/spareparts/sales?limit=30');
+        const sales = (res && res.items) || [];
+        if (sales.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-6 text-center text-gray-400 text-xs">Belum ada riwayat transaksi</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = sales.map(s => {
+            const tgl = (s.created_at || '').replace('T', ' ').slice(0, 16);
+            return `
+                <tr class="hover:bg-gray-50 dark:hover:bg-white/5 transition">
+                    <td class="py-2 px-2.5 font-bold font-mono text-emerald-600 dark:text-emerald-400">${escapeHtml(s.no_transaksi)}</td>
+                    <td class="py-2 px-2.5 text-gray-500">${escapeHtml(tgl)}</td>
+                    <td class="py-2 px-2.5 font-medium">${escapeHtml(s.customer_name || 'Pelanggan Umum')}</td>
+                    <td class="py-2 px-2.5 text-right font-extrabold text-gray-900 dark:text-white tabular-nums">${posRupiah(s.total_omzet)}</td>
+                    <td class="py-2 px-2.5 text-right">
+                        <button type="button" onclick="posPrintFromHistory(${s.id})" class="px-2 py-1 bg-emerald-50 dark:bg-emerald-950/40 hover:bg-emerald-100 text-emerald-700 dark:text-emerald-300 rounded font-semibold text-[11px] inline-flex items-center gap-1 transition">
+                            <i class="fa-solid fa-print"></i>
+                            <span>Cetak</span>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="5" class="py-6 text-center text-rose-500 text-xs">Gagal: ${escapeHtml(err.message || 'Error')}</td></tr>`;
+    }
+}
+
+function posCloseHistoryModal() {
+    const modal = document.getElementById('posHistoryModal');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function posPrintFromHistory(saleId) {
+    try {
+        const sale = await apiGet(`/spareparts/sales/${saleId}`);
+        if (sale) {
+            posShowReceipt(sale, Number(sale.total_omzet), 0);
+        }
+    } catch (err) {
+        toast('Gagal memuat detail transaksi: ' + (err.message || 'Error'), 'danger');
+    }
+}
+
+// Window exports
+window.showPenjualanPart = showPenjualanPart;
+window.renderPenjualanPart = renderPenjualanPart;
+window.posFilterProducts = posFilterProducts;
+window.posAddToCart = posAddToCart;
+window.posUpdateQty = posUpdateQty;
+window.posRemoveFromCart = posRemoveFromCart;
+window.posClearCart = posClearCart;
+window.posCalcChange = posCalcChange;
+window.posSubmitSale = posSubmitSale;
+window.posShowReceipt = posShowReceipt;
+window.posDoPrint = posDoPrint;
+window.posCloseReceiptModal = posCloseReceiptModal;
+window.posOpenHistoryModal = posOpenHistoryModal;
+window.posCloseHistoryModal = posCloseHistoryModal;
+window.posPrintFromHistory = posPrintFromHistory;

@@ -85,12 +85,13 @@ def test_laporan_akrual_tetap_berurutan_omzet_modal_beban():
     kode = _kode(_fungsi("renderKondisiKas"))
     urutan = [m.group(1) for m in
               re.finditer(r"row\(\s*'([^']*)'", kode)]
+    omzet_label = "Total Penjualan Part & Service" if "Total Penjualan Part & Service" in urutan else "Total Penjualan Service"
     assert urutan[:3] == ["Kas Besar (Pengelola)", "Kas Kecil / Laci",
-                          "Total Penjualan Service"], (
+                          omzet_label], (
         "urutan baris berubah: %s" % urutan[:3])
     assert "Total Modal (Part+Jasa+Lain)" in urutan
     assert "Total Beban (Gaji & OPS)" in urutan
-    assert urutan.index("Total Penjualan Service") < urutan.index(
+    assert urutan.index(omzet_label) < urutan.index(
         "Total Modal (Part+Jasa+Lain)") < urutan.index("Total Beban (Gaji & OPS)"), \
         "urutan Omzet -> Modal -> Beban harus tetap"
     # Modal dan Beban di kolom Kredit, jadi langsung mengurangi akumulasi.

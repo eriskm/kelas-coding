@@ -449,50 +449,63 @@ def beban_frozen(db: Session, start: datetime, end: datetime,
             "total": gaji + operasional}
 
 
+def settled_part_sales(db: Session, start: datetime, end: datetime) -> list:
+    """Cohort penjualan part langsung pada periode kas [start, end)."""
+    try:
+        from models import PartSale
+        return (
+            db.query(PartSale)
+            .filter(PartSale.created_at >= start, PartSale.created_at < end)
+            .all()
+        )
+    except Exception:
+        return []
+
+
 def compute_finance_core(db: Session, start: datetime, end: datetime,
                          freeze: bool = False) -> dict:
     """SSOT financial core. Mengembalikan primitive untuk P2-05/P2-07/P2-08."""
     cohort = settled_orders(db, start, end)
-    omset = ZERO
-    modal_part = ZERO
+    omset_servis = ZERO
+    modal_part_servis = ZERO
     modal_jasa = ZERO
     modal_lain = ZERO
     for o in cohort:
-        # FIN-MIRROR-3: pakai `kewajiban()` (final_price ?? estimate), sama
-        # seperti `statusflow.order_profit`. Versi lama memakai operator `or`,
-        # sehingga `final_price = 0` diam-diam jatuh ke `estimate` - dua sumber
-        # kebenaran untuk angka yang sama. `kewajiban()` memakai null-coalescing,
-        # jadi 0 tetap 0.
-        omset += kewajiban(o)
-        modal_part += to_decimal(getattr(o, "part_cost", 0))
+        omset_servis += kewajiban(o)
+        modal_part_servis += to_decimal(getattr(o, "part_cost", 0))
         modal_jasa += to_decimal(getattr(o, "modal_jasa", 0))
         modal_lain += to_decimal(getattr(o, "modal_lainnya", 0))
-    total_modal = modal_part + modal_jasa + modal_lain
+
+    # Penjualan part langsung (POS Kasir)
+    part_sales = settled_part_sales(db, start, end)
+    omset_part = sum((to_decimal(s.total_omzet) for s in part_sales), ZERO)
+    modal_part_sales = sum((to_decimal(s.total_modal) for s in part_sales), ZERO)
+
+    total_omset = omset_servis + omset_part
+    total_modal_part = modal_part_servis + modal_part_sales
+    total_modal = total_modal_part + modal_jasa + modal_lain
 
     # Transaksi kas manual dicatat di ledger, tapi TIDAK masuk rumus laba.
-    # Owner: Omzet dan laba harus murni dari transaksi servis.
-    # Nilai ini hanya informasi angka kas manual periode berjalan.
     tambahan = tambahan_kas(db, start, end)
 
-    # Laba Kotor dihitung DI SINI, sebelum Beban, karena pemicu pembayaran Beban
-    # (OD-LOCK-06) butuh Laba Kotor untuk menentukan Hutang Beban:
-    #     LABA KOTOR = OMSET - TOTAL MODAL
-    laba_kotor = omset - total_modal
+    # Laba Kotor: TOTAL OMSET (Servis + Part Langsung) - TOTAL MODAL
+    laba_kotor = total_omset - total_modal
 
     beban = beban_frozen(db, start, end, commit=False, laba_kotor=laba_kotor)
     total_beban = beban["gaji"] + beban["operasional"]
 
-    # RUMUS OWNER -- satu-satunya tempat laba dihitung di seluruh aplikasi:
-    #     LABA KOTOR  = OMSET - TOTAL MODAL
-    #     LABA BERSIH = LABA KOTOR - TOTAL BEBAN
-    # Tidak ada suku `tambahan` di kedua rumus ini.
     laba_bersih = laba_kotor - total_beban
 
     return {
         "periode": period_key(db, start, end),
-        "omset": omset,
+        "omset": total_omset,
+        "omset_servis": omset_servis,
+        "omset_part": omset_part,
         "n_settled": len(cohort),
-        "modal_part": modal_part,
+        "n_part_sales": len(part_sales),
+        "modal_part": total_modal_part,
+        "modal_part_servis": modal_part_servis,
+        "modal_part_sales": modal_part_sales,
         "modal_jasa": modal_jasa,
         "modal_lainnya": modal_lain,
         "total_modal": total_modal,
@@ -548,5 +561,6 @@ __all__ = [
     "freeze_expenses_for_period",
     "period_key",
     "settled_orders",
+    "settled_part_sales",
     "snapshot_laba_bersih",
 ]

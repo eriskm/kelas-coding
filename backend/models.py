@@ -265,6 +265,70 @@ class Sparepart(Base):
     tanggal = Column(Date)
     created_at = Column(DateTime, default=datetime.now)
 
+    batches = relationship("SparepartBatch", back_populates="sparepart", cascade="all, delete-orphan")
+    sale_items = relationship("PartSaleItem", back_populates="sparepart")
+
+
+class SparepartBatch(Base):
+    """P2-15 — Batch Lot stok sparepart (FIFO inventory tracking).
+
+    Setiap pengadaan barang masuk dicatat sebagai batch tersendiri.
+    Pengurangan stok memprioritaskan batch tertua dengan qty_sisa > 0.
+    """
+    __tablename__ = "sparepart_batches"
+
+    id = Column(Integer, primary_key=True, index=True)
+    sparepart_id = Column(Integer, ForeignKey("spareparts.id"), nullable=False, index=True)
+    supplier = Column(String(120))
+    harga_beli = Column(MONEY, default=Decimal("0"), nullable=False)
+    harga_jual = Column(MONEY, default=Decimal("0"), nullable=False)
+    qty_masuk = Column(Integer, nullable=False, default=0)
+    qty_sisa = Column(Integer, nullable=False, default=0)
+    tanggal_masuk = Column(Date, default=date.today)
+    status = Column(String(20), default="ACTIVE", index=True)  # ACTIVE | DEPLETED
+    created_at = Column(DateTime, default=datetime.now)
+
+    sparepart = relationship("Sparepart", back_populates="batches")
+    sale_items = relationship("PartSaleItem", back_populates="batch")
+
+
+class PartSale(Base):
+    """P2-15 — Transaksi penjualan sparepart / aksesoris langsung (Kasir POS)."""
+    __tablename__ = "part_sales"
+
+    id = Column(Integer, primary_key=True, index=True)
+    no_transaksi = Column(String(50), unique=True, index=True, nullable=False)
+    customer_name = Column(String(120), default="Pelanggan Umum")
+    customer_phone = Column(String(60))
+    total_omzet = Column(MONEY, default=Decimal("0"), nullable=False)
+    total_modal = Column(MONEY, default=Decimal("0"), nullable=False)
+    laba = Column(MONEY, default=Decimal("0"), nullable=False)
+    payment_method = Column(String(30), default="CASH")
+    kasir_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    oleh = Column(String(80))
+    created_at = Column(DateTime, default=datetime.now, index=True)
+
+    items = relationship("PartSaleItem", back_populates="part_sale", cascade="all, delete-orphan")
+    kasir = relationship("User")
+
+
+class PartSaleItem(Base):
+    """P2-15 — Rincian item per transaksi penjualan part langsung."""
+    __tablename__ = "part_sale_items"
+
+    id = Column(Integer, primary_key=True, index=True)
+    part_sale_id = Column(Integer, ForeignKey("part_sales.id"), nullable=False, index=True)
+    sparepart_id = Column(Integer, ForeignKey("spareparts.id"), nullable=False, index=True)
+    batch_id = Column(Integer, ForeignKey("sparepart_batches.id"), nullable=True, index=True)
+    qty = Column(Integer, nullable=False, default=1)
+    harga_beli = Column(MONEY, default=Decimal("0"), nullable=False)
+    harga_jual = Column(MONEY, default=Decimal("0"), nullable=False)
+    subtotal = Column(MONEY, default=Decimal("0"), nullable=False)
+
+    part_sale = relationship("PartSale", back_populates="items")
+    sparepart = relationship("Sparepart", back_populates="sale_items")
+    batch = relationship("SparepartBatch", back_populates="sale_items")
+
 
 class KasEntry(Base):
     """Jurnal kas manual: pemasukan non-servis (cth. jual second, saldo awal)
