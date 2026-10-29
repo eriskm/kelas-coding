@@ -270,7 +270,7 @@
                     </div>
 
                     <!-- Widget: Pusat Tindakan Terpadu (Task Hub: Garansi & Unit Mengendap) -->
-                    <div id="dashPriorityHub" class="hidden px-3 sm:px-5 pb-3 sm:pb-4">
+                    <div id="dashPriorityHub" class="hidden px-3 sm:px-5 pb-3 sm:pb-4" data-cap="ORDER_UPDATE">
                         <div class="p-3.5 sm:p-4 rounded-xl bg-gradient-to-r from-indigo-50/70 via-amber-50/50 to-indigo-50/70 dark:from-indigo-950/20 dark:via-amber-950/20 dark:to-indigo-950/20 border border-indigo-200/80 dark:border-indigo-800/40 shadow-sm">
                             <div class="flex items-center justify-between flex-wrap gap-2 pb-2.5 border-b border-indigo-200/60 dark:border-indigo-800/30">
                                 <div class="flex items-center gap-2.5">
@@ -1794,7 +1794,7 @@
                                     </div>
                                 </section>
 
-                                <form id="kuKasForm" autocomplete="off" class="ku-kas-form">
+                                <form id="kuKasForm" autocomplete="off" class="ku-kas-form" data-cap="KAS_ENTRY_WRITE">
                                     <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] gap-2.5 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
                                         <select class="receive-input" id="kuKasJenis">
                                             <option value="Masuk" selected>Masuk</option>
@@ -1818,7 +1818,7 @@
                                     </div>
                                 </form>
                                 <div class="ku-kas-actions">
-                                    <button type="button" id="kuTutupKasBtn" onclick="kuTutupKas()" class="ku-tutup-btn">
+                                    <button type="button" id="kuTutupKasBtn" onclick="kuTutupKas()" class="ku-tutup-btn" data-cap="KAS_CLOSE">
                                         <i class="fa-solid fa-lock"></i> Proses Tutup Kas & Pindah Arsip (jam 16.00)
                                     </button>
                                 </div>

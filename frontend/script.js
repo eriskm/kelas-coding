@@ -286,7 +286,9 @@ function getSavedPage() {
 //: tidak dianggap satu-satunya lapis.
 const PAGE_CAP = {
     'servisbaru': ['ORDER_CREATE'],
-    'transaksi': ['ORDER_CREATE', 'ORDER_UPDATE'],
+    'penjualanpart': ['PART_SALE_CREATE', 'SPAREPART_WRITE'],
+    'transaksi': ['ORDER_CREATE', 'ORDER_UPDATE', 'REPORT_FULL'],
+    'pelanggan': ['CUSTOMER_WRITE'],
     'garansi': ['CLAIM_WRITE', 'REPORT_FULL'],
     'sparepart': ['SPAREPART_WRITE'],
     'keuangan': ['KAS_CLOSE', 'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'REPORT_FULL',
@@ -296,7 +298,7 @@ const PAGE_CAP = {
 
 function bolehBukaHalaman(key) {
     const butuh = PAGE_CAP[key];
-    if (!butuh) return true;                 // dashboard / pelanggan: semua login
+    if (!butuh) return true; // dashboard: semua login
     return butuh.some(a => can(a));
 }
 
@@ -309,6 +311,7 @@ function navigateTo(key) {
         return;
     }
     if (key === 'transaksi') showTransaksi();
+    else if (key === 'penjualanpart') showPenjualanPart();
     else if (key === 'pelanggan') showPelanggan();
     else if (key === 'garansi') showGaransi();
     else if (key === 'sparepart') showSparepart();
@@ -321,6 +324,10 @@ function navigateTo(key) {
 function showPage(name) {
     // Penanda halaman aktif: hashchange yang dipicu savePage() di bawah
     // tidak boleh menavigasi ulang (mencegah render ganda).
+    if (name && name !== 'dashboard' && !bolehBukaHalaman(name)) {
+        toast('Halaman ini di luar kewenangan role Anda.');
+        name = 'dashboard';
+    }
     window._activePage = name;
     const isDash = name === 'dashboard';
     const isPenjualanPart = name === 'penjualanpart';
@@ -1052,27 +1059,20 @@ const BSSF_CAPS = {
         'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
         'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
         'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'ROLE_CONFIG', 'AUDIT_READ', 'REPORT_FULL',
-        'REPORT_INVESTOR', 'REPORT_SPAREPART'],
+        'REPORT_INVESTOR', 'REPORT_SPAREPART', 'PART_SALE_CREATE', 'SPAREPART_DEFECT_REPORT', 'SPAREPART_DEFECT_RESOLVE'],
     admin: ['SERVICE_PART_USE', 'ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
         'ORDER_STATUS_CLOSING', 'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL',
         'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
         'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
-        'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'AUDIT_READ', 'REPORT_FULL', 'REPORT_INVESTOR', 'REPORT_SPAREPART'],
+        'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'AUDIT_READ', 'REPORT_FULL', 'REPORT_INVESTOR', 'REPORT_SPAREPART',
+        'PART_SALE_CREATE', 'SPAREPART_DEFECT_REPORT', 'SPAREPART_DEFECT_RESOLVE'],
     kasir: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_STATUS_CLOSING',
-        'ORDER_HANDOVER', 'PAYMENT_CREATE', 'EXPENSE_WRITE', 'REFUND_DP', 'FAILED_CANCEL',
-        'SPAREPART_WRITE', 'CLAIM_WRITE'],
-    // ORDER_CREATE (penerimaan unit) TIDAK ada: itu tugas Kasir/CS (OD-LOCK-10).
-    teknisi: ['SERVICE_PART_USE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'CLAIM_WRITE'],
-    // Admin Sparepart: hanya area barang/stok. Tidak boleh menyentuh transaksi
-    // pelanggan, pembayaran, laba, atau Tutup Kas.
-    // Permission sparepart dipisah dari laporan keuangan: Admin Sparepart
-    // boleh laporan persediaan, tapi TIDAK laporan bisnis/keuangan.
-    adminSparepart: ['SERVICE_PART_USE', 'SPAREPART_WRITE', 'REPORT_SPAREPART'],
-    pengelola: ['REPORT_FULL', 'REPORT_SPAREPART'], // Q13: monitoring; boleh lihat + unduh laporan
-    investor: ['REPORT_INVESTOR'], // monitoring investasi; tanpa data pribadi
-    // Role tidak dikenal / kosong = tanpa hak apa pun. Sengaja TIDAK fallback ke
-    // admin: kalau ada typo di kolom Role, akun itu harus terlihat "nyaris
-    // tidak bisa apa-apa", bukan diam-diam dapat akses penuh di tampilan.
+        'ORDER_HANDOVER', 'PAYMENT_CREATE', 'REFUND_DP', 'FAILED_CANCEL',
+        'CLAIM_WRITE', 'CUSTOMER_WRITE', 'PART_SALE_CREATE'],
+    teknisi: ['SERVICE_PART_USE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'CLAIM_WRITE', 'SPAREPART_DEFECT_REPORT'],
+    adminSparepart: ['SERVICE_PART_USE', 'SPAREPART_WRITE', 'REPORT_SPAREPART', 'SPAREPART_DEFECT_REPORT', 'SPAREPART_DEFECT_RESOLVE'],
+    pengelola: ['REPORT_FULL', 'REPORT_SPAREPART'],
+    investor: ['REPORT_INVESTOR'],
     custom: [],
 };
 function bssfCaps() {
@@ -1085,12 +1085,28 @@ function bssfCaps() {
     try { return (window._bssfCaps || BSSF_CAPS.custom); } catch (_) { return BSSF_CAPS.custom; }
 }
 function can(action) { return bssfCaps().indexOf(action) !== -1; }
+function updateNavMenuVisibility() {
+    document.querySelectorAll('.nav-link[data-page], .mobile-nav-item[data-page]').forEach(el => {
+        const page = el.dataset.page;
+        if (!page || page === 'dashboard') return;
+        const ok = bolehBukaHalaman(page);
+        el.classList.toggle('hidden', !ok);
+    });
+    const adminAreaHeader = document.querySelector('.px-3.pb-3.mt-auto .px-3.py-2.text-\\[9\\.5px\\]') ||
+        document.querySelector('.px-3.pb-3.mt-auto div:first-child');
+    if (adminAreaHeader) {
+        adminAreaHeader.classList.toggle('hidden', !can('USER_MANAGE'));
+    }
+}
+window.updateNavMenuVisibility = updateNavMenuVisibility;
+
 function applyRoleUI(root) {
     const scope = root || document;
     scope.querySelectorAll('[data-cap]').forEach(el => {
         const ok = can(el.getAttribute('data-cap'));
         el.classList.toggle('hidden', !ok);
     });
+    updateNavMenuVisibility();
 }
 // v4 #11: siapa boleh melihat SALDO ASET + MASTER KAS (data visibility).
 // CS/Kasir/Teknisi -> hanya SALDO LACI. Admin/Pengelola -> semuanya.
@@ -1300,23 +1316,30 @@ function renderCtoFloat(byKey) {
 
 function renderQuickActions() {
     const actions = [
-        { icon: 'fa-solid fa-plus',                label: 'Servis Baru', desc: 'Buat transaksi service baru', tint: 'qa-red' },
-        { icon: 'fa-solid fa-cash-register',       label: 'Input Kas',   desc: 'Catat pemasukan kas harian',  tint: 'qa-green' },
-        { icon: 'fa-solid fa-money-check-dollar',  label: 'Input Beban', desc: 'Catat pengeluaran operasional', tint: 'qa-amber' },
-        { icon: 'fa-solid fa-microchip',           label: 'Sparepart',   desc: 'Kelola data sparepart',       tint: 'qa-blue' },
+        { icon: 'fa-solid fa-plus', label: 'Servis Baru', desc: 'Buat transaksi service baru', tint: 'qa-red', cap: 'ORDER_CREATE', go: 'openServisBaru()' },
+        { icon: 'fa-solid fa-cash-register', label: 'Input Kas', desc: 'Catat pemasukan kas harian', tint: 'qa-green', cap: 'KAS_ENTRY_WRITE', go: 'openAuditKas()' },
+        { icon: 'fa-solid fa-money-check-dollar', label: 'Input Beban', desc: 'Catat pengeluaran operasional', tint: 'qa-amber', cap: 'EXPENSE_WRITE', go: 'openBeban()' },
+        { icon: 'fa-solid fa-microchip', label: 'Sparepart', desc: 'Kelola data sparepart', tint: 'qa-blue', cap: 'SPAREPART_WRITE', go: 'showSparepart()' },
     ];
 
-    document.getElementById('quickActions').innerHTML = actions.map((a, i) => {
+    const qaEl = document.getElementById('quickActions');
+    if (!qaEl) return;
+    qaEl.innerHTML = actions.map((a, i) => {
         const featured = i === 0 ? ' qa-card-featured' : '';
-        const go = i === 0 ? ' onclick="openServisBaru()"' : i === 1 ? ' onclick="openAuditKas()"' : i === 2 ? ' onclick="openBeban()"' : i === 3 ? ' onclick="showSparepart()"' : '';
         return `
-            <button class="qa-card ${a.tint}${featured}"${go}>
+            <button class="qa-card ${a.tint}${featured}" onclick="${a.go}" data-cap="${a.cap}">
                 <span class="qa-card-icon"><i class="${a.icon}"></i></span>
                 <span class="qa-card-label">${a.label}</span>
                 <span class="qa-card-desc">${a.desc}</span>
             </button>
         `;
     }).join('');
+    applyRoleUI(qaEl);
+    const visibleCards = qaEl.querySelectorAll('.qa-card:not(.hidden)');
+    const parentPanel = qaEl.closest('.panel');
+    if (parentPanel) {
+        parentPanel.classList.toggle('hidden', visibleCards.length === 0);
+    }
 }
 // ─────────────────────────────────────────────
 // RENDER: INSIGHT CARDS (dari API overview)
@@ -1645,6 +1668,10 @@ function initNav() {
         link.addEventListener('click', function (e) {
             e.preventDefault();
             const page = this.dataset.page;
+            if (page && page !== 'dashboard' && !bolehBukaHalaman(page)) {
+                toast('Halaman ini di luar kewenangan role Anda.');
+                return;
+            }
             if (page === 'servisbaru') {
                 showPage('receive');
             } else if (page === 'penjualanpart') {
@@ -1673,9 +1700,13 @@ function initNav() {
     const mobileItems = document.querySelectorAll('.mobile-nav-item');
     mobileItems.forEach(item => {
         item.addEventListener('click', function () {
+            const page = this.dataset.page;
+            if (page && page !== 'dashboard' && !bolehBukaHalaman(page)) {
+                toast('Halaman ini di luar kewenangan role Anda.');
+                return;
+            }
             mobileItems.forEach(i => i.classList.remove('active'));
             this.classList.add('active');
-            const page = this.dataset.page;
             if (page === 'transaksi') {
                 showTransaksi();
             } else if (page === 'pelanggan') {
