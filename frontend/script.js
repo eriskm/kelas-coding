@@ -5364,12 +5364,116 @@ async function spFetchAll(q, my) {
     return _all;
 }
 
+// --- Helper Deteksi Merek & Ekstraksi Grade ---
+function spExtractBrand(s) {
+    const rawName = (s.jenis || '').trim();
+    const brandPatterns = [
+        { brand: 'OLED OG SUPER (FINGERPRINT)', pat: /\bOLED\s+OG\s+SUPER(\s*\([^\)]*\))?/i, cls: 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800/40' },
+        { brand: 'OG SUPER', pat: /\bOG\s+SUPER(\s*\([^\)]*\))?/i, cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/40' },
+        { brand: 'BPE', pat: /\bBPE\b/i, cls: 'bg-sky-50 dark:bg-sky-950/40 text-sky-700 dark:text-sky-300 border-sky-200 dark:border-sky-800/40' },
+        { brand: 'HX PREMIUM', pat: /\bHX\s+PREMIUM\b/i, cls: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/40' },
+        { brand: 'HX', pat: /\bHX\b/i, cls: 'bg-purple-50 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 border-purple-200 dark:border-purple-800/40' },
+        { brand: 'MEETOO', pat: /\bMEETOO\b/i, cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40' },
+        { brand: 'SHINESTAR', pat: /\bSHINESTAR\b/i, cls: 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border-rose-200 dark:border-rose-800/40' },
+        { brand: 'XJE INDONESIA', pat: /\bXJE\s+INDONESIA\b/i, cls: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800/40' },
+        { brand: 'XJE', pat: /\bXJE\b/i, cls: 'bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border-teal-200 dark:border-teal-800/40' },
+        { brand: 'CROWN', pat: /\bCROWN\b/i, cls: 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800/40' },
+        { brand: 'DIAMOND', pat: /\bDIAMOND\b/i, cls: 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800/40' },
+        { brand: 'INCELL', pat: /\bINCELL\b/i, cls: 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-700 dark:text-cyan-300 border-cyan-200 dark:border-cyan-800/40' },
+        { brand: 'OLED', pat: /\bOLED\b/i, cls: 'bg-violet-50 dark:bg-violet-950/40 text-violet-700 dark:text-violet-300 border-violet-200 dark:border-violet-800/40' },
+        { brand: 'ORIGINAL', pat: /\b(ORIGINAL|ORI)\b/i, cls: 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800/40' },
+    ];
+    for (const item of brandPatterns) {
+        if (item.pat.test(rawName)) {
+            return { name: item.brand, cls: item.cls };
+        }
+    }
+    const m = (s.merek || '').trim();
+    if (m && m !== '-' && !['universal', 'hp'].includes(m.toLowerCase())) {
+        return { name: m.toUpperCase(), cls: 'bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10' };
+    }
+    return { name: 'STANDAR', cls: 'bg-gray-100 dark:bg-white/10 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-white/10' };
+}
+
+// --- Helper Pembersihan Nama Induk Tipe ---
+function spExtractBaseTitle(s) {
+    let name = (s.jenis || '').trim();
+    const brandPatterns = [
+        /\b(OLED\s+)?OG\s+SUPER(\s*\([^\)]*\))?/gi,
+        /\bBPE\b/gi,
+        /\bHX(\s+PREMIUM)?\b/gi,
+        /\bMEETOO\b/gi,
+        /\bSHINESTAR\b/gi,
+        /\bXJE(\s+INDONESIA)?\b/gi,
+        /\bCROWN\b/gi,
+        /\bDIAMOND\b/gi,
+        /\bINCELL\b/gi,
+        /\bOLED\b/gi,
+        /\b(HITAM|PUTIH|BLACK|WHITE|GOLD|BLUE|GREY|GRAY)\b/gi,
+        /@\s*[\d\.,]+/g
+    ];
+    for (const pat of brandPatterns) {
+        name = name.replace(pat, ' ');
+    }
+    name = name.replace(/[-/–—\s]+$/, '').replace(/\s{2,}/g, ' ').trim();
+    return name || s.jenis;
+}
+
+// --- Helper Pengelompokan Data Sparepart ---
+function spGroupItems(data) {
+    const map = new Map();
+    for (const s of data) {
+        const baseTitle = spExtractBaseTitle(s);
+        const kat = (s.kategori || 'Part').trim();
+        const groupKey = kat.toLowerCase() + '::' + baseTitle.toLowerCase();
+
+        let group = map.get(groupKey);
+        if (!group) {
+            group = {
+                key: groupKey,
+                kategori: kat,
+                title: baseTitle,
+                device: s.device && s.device !== '-' ? s.device : '',
+                totalQty: 0,
+                minBeli: Infinity,
+                maxBeli: -Infinity,
+                minJual: Infinity,
+                maxJual: -Infinity,
+                variants: []
+            };
+            map.set(groupKey, group);
+        }
+
+        const bInfo = spExtractBrand(s);
+        const qty = Number(s.qty) || 0;
+        const beli = Number(s.beli) || 0;
+        const jual = Number(s.jual) || 0;
+
+        group.totalQty += qty;
+        if (beli < group.minBeli) group.minBeli = beli;
+        if (beli > group.maxBeli) group.maxBeli = beli;
+        if (jual < group.minJual) group.minJual = jual;
+        if (jual > group.maxJual) group.maxJual = jual;
+
+        group.variants.push({
+            id: s.id,
+            brand: bInfo.name,
+            brandCls: bInfo.cls,
+            qty: qty,
+            beli: beli,
+            jual: jual,
+            tgl: s.tgl,
+            raw: s
+        });
+    }
+
+    return Array.from(map.values());
+}
+
 async function renderSparepart() {
     try { spMenuClose(); } catch (_) {}
     const my = ++_spReq;
     try {
-        // Tabel memakai filter q; KPI selalu dari SELURUH stok (tanpa q)
-        // agar tidak ikut menyusut saat mencari.
         _spView = await spFetchAll(_spQuery, my);
         if (_spView === null) return;
         if (_spQuery.trim()) {
@@ -5395,142 +5499,193 @@ async function renderSparepart() {
         return;
     }
     renderSpKpi();
+
+    const container = document.getElementById('spListContainer');
     const body = document.getElementById('spBody');
     const empty = document.getElementById('spEmpty');
     const loading = document.getElementById('spLoading');
     const pagination = document.getElementById('spPagination');
     const info = document.getElementById('spInfo');
     const pageBtns = document.getElementById('spPageBtns');
-    if (!body) return;
 
-    body.innerHTML = '';
-    loading.classList.add('hidden');
-    empty.classList.add('hidden');
+    if (container) container.innerHTML = '';
+    if (body) body.innerHTML = '';
+    if (loading) loading.classList.add('hidden');
+    if (empty) empty.classList.add('hidden');
 
     const data = spFiltered();
-    const total = data.length;
-    const totalPages = Math.max(1, Math.ceil(total / SP_PER_PAGE));
+    const groups = spGroupItems(data);
+    const totalGroups = groups.length;
+    const SP_GROUPS_PER_PAGE = 15;
+    const totalPages = Math.max(1, Math.ceil(totalGroups / SP_GROUPS_PER_PAGE));
     if (_spPage > totalPages) _spPage = totalPages;
     if (_spPage < 1) _spPage = 1;
 
-    if (total === 0) {
-        empty.classList.remove('hidden');
-        empty.innerHTML = _spQuery.trim()
-            ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Sparepart tidak ditemukan.'
-            : '<i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>Belum ada data sparepart.';
-        pagination.classList.add('hidden');
+    if (totalGroups === 0) {
+        if (empty) {
+            empty.classList.remove('hidden');
+            empty.innerHTML = _spQuery.trim()
+                ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Sparepart tidak ditemukan untuk pencarian: "<b>' + escapeHtml(_spQuery) + '</b>".'
+                : '<i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>Belum ada data sparepart.';
+        }
+        if (pagination) pagination.classList.add('hidden');
         if (info) info.textContent = '';
         if (pageBtns) pageBtns.innerHTML = '';
         await loadSparepartMoves();
         return;
     }
 
-    const start = (_spPage - 1) * SP_PER_PAGE;
-    const rows = data.slice(start, start + SP_PER_PAGE);
-    rows.forEach((s, i) => {
-        const meta = spCategoryMeta(s.kategori);
-        const margin = (s.jual || 0) - (s.beli || 0);
-        const marginPct = s.beli > 0 ? Math.round((margin / s.beli) * 100) : 0;
+    if (pagination) pagination.classList.remove('hidden');
+    if (info) {
+        const startIdx = (_spPage - 1) * SP_GROUPS_PER_PAGE + 1;
+        const endIdx = Math.min(_spPage * SP_GROUPS_PER_PAGE, totalGroups);
+        info.textContent = `Menampilkan ${startIdx}-${endIdx} dari ${totalGroups} tipe produk (${data.length} varian stok)`;
+    }
 
-        let stockPill = '';
-        if (s.qty <= 0) {
-            stockPill = `<div class="flex items-center gap-1.5">
-                <span class="text-sm font-extrabold text-rose-600 dark:text-rose-400">0</span>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400 border border-rose-200 dark:border-rose-800/40">
-                    <i class="fa-solid fa-circle-xmark text-[9px]"></i> Habis
-                </span>
-            </div>`;
-        } else if (s.qty <= 5) {
-            stockPill = `<div class="flex items-center gap-1.5">
-                <span class="text-sm font-extrabold text-amber-600 dark:text-amber-400">${s.qty}</span>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40">
-                    <i class="fa-solid fa-triangle-exclamation text-[9px]"></i> Menipis
-                </span>
-            </div>`;
-        } else {
-            stockPill = `<div class="flex items-center gap-1.5">
-                <span class="text-sm font-extrabold text-emerald-600 dark:text-emerald-400">${s.qty}</span>
-                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40">
-                    <i class="fa-solid fa-check text-[9px]"></i> Aman
-                </span>
-            </div>`;
-        }
+    const start = (_spPage - 1) * SP_GROUPS_PER_PAGE;
+    const pageGroups = groups.slice(start, start + SP_GROUPS_PER_PAGE);
 
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td class="text-center text-xs text-gray-400">${start + i + 1}</td>
-            <td>
-                <div class="flex items-center gap-2.5">
-                    <div class="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0 text-sm border ${meta.bg}">
-                        <i class="fa-solid ${meta.icon}"></i>
-                    </div>
-                    <div class="min-w-0">
-                        <div class="font-bold text-gray-900 dark:text-white truncate max-w-[280px]" title="${escapeHtml(s.jenis)}">
-                            ${escapeHtml(s.jenis)}
+    if (container) {
+        container.innerHTML = pageGroups.map(g => {
+            const meta = spCategoryMeta(g.kategori);
+            const totalQty = g.totalQty;
+            const isHabis = totalQty <= 0;
+            const isMenipis = !isHabis && totalQty <= 5;
+            const statusBadgeCls = isHabis
+                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50'
+                : isMenipis
+                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50';
+            const statusTxt = isHabis ? 'Habis (0)' : isMenipis ? 'Stok Menipis' : 'Stok Aman';
+
+            return `
+                <div class="panel p-4 space-y-3 rounded-2xl border border-gray-200/80 dark:border-white/10 hover:border-emerald-500/40 transition shadow-xs">
+                    <!-- Header Induk Tipe -->
+                    <div class="flex items-start justify-between gap-3 flex-wrap border-b border-gray-100 dark:border-white/5 pb-3">
+                        <div class="flex items-start gap-3 flex-1 min-w-[260px]">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-base border ${meta.bg}">
+                                <i class="fa-solid ${meta.icon}"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="inline-flex items-center px-2 py-0.5 rounded text-[10.5px] font-extrabold uppercase tracking-wider bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/70 dark:border-emerald-800/40">
+                                        ${escapeHtml(g.kategori)}
+                                    </span>
+                                    <h3 class="font-extrabold text-sm sm:text-base text-gray-900 dark:text-white leading-snug">
+                                        ${escapeHtml(g.title)}
+                                    </h3>
+                                    <span class="text-[11px] font-semibold text-gray-400 dark:text-gray-500">
+                                        (${g.variants.length} varian merek)
+                                    </span>
+                                </div>
+                                ${g.device ? `
+                                    <div class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-1.5 flex-wrap">
+                                        <i class="fa-solid fa-mobile-screen-button text-[10.5px] text-gray-400"></i>
+                                        <span class="font-medium text-gray-700 dark:text-gray-300">Kompatibel:</span>
+                                        <span>${escapeHtml(g.device)}</span>
+                                    </div>
+                                ` : ''}
+                            </div>
                         </div>
-                        <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-semibold bg-gray-100 dark:bg-white/10 text-gray-700 dark:text-gray-300">
-                                ${escapeHtml(s.merek || '-')}
-                            </span>
-                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10.5px] font-medium bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-gray-400">
-                                ${escapeHtml(s.kategori || '-')}
+                        <div class="flex items-center gap-2.5 sm:self-center">
+                            <div class="text-right">
+                                <div class="text-[10px] uppercase font-bold text-gray-400">Total Stok Fisik</div>
+                                <div class="text-base font-black ${isHabis ? 'text-rose-600 dark:text-rose-400' : isMenipis ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} tabular-nums">
+                                    ${totalQty} Unit
+                                </div>
+                            </div>
+                            <span class="px-2 py-1 rounded-lg text-xs font-bold ${statusBadgeCls}">
+                                ${statusTxt}
                             </span>
                         </div>
                     </div>
-                </div>
-            </td>
-            <td>
-                <div class="min-w-0">
-                    <div class="font-medium text-gray-800 dark:text-gray-200 truncate max-w-[190px]" title="${escapeHtml(s.device)}">
-                        ${escapeHtml(s.device || 'Universal')}
-                    </div>
-                    <div class="text-[11px] text-gray-400 dark:text-gray-500 flex items-center gap-1 mt-0.5">
-                        <i class="fa-regular fa-calendar text-[10px]"></i>
-                        <span>Masuk: ${txDate(s.tgl)}</span>
-                    </div>
-                </div>
-            </td>
-            <td>${stockPill}</td>
-            <td class="text-right">
-                <div class="font-bold text-sm text-emerald-600 dark:text-emerald-400 tabular-nums">
-                    ${spRupiah(s.jual)}
-                </div>
-                <div class="text-[11px] text-gray-500 dark:text-gray-400 tabular-nums mt-0.5 flex items-center justify-end gap-1.5">
-                    <span>Beli: ${spRupiah(s.beli)}</span>
-                    ${s.jual > 0 && s.beli > 0 ? `<span class="text-[10px] px-1 rounded ${margin >= 0 ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-400'} font-semibold">+${marginPct}%</span>` : ''}
-                </div>
-            </td>
-            <td class="text-center">
-                <div class="flex items-center justify-center gap-1">
-                    <button type="button" class="sp-action-btn hover:text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-950/50" onclick="spQuickRestock(${s.id})" title="Catat Stok Masuk" data-cap="SPAREPART_WRITE">
-                        <i class="fa-solid fa-boxes-stacked text-xs"></i>
-                    </button>
-                    <button type="button" class="sp-action-btn hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50" onclick="spEdit(${s.id})" title="Edit Data Part" data-cap="SPAREPART_WRITE">
-                        <i class="fa-solid fa-pen-to-square text-xs"></i>
-                    </button>
-                    <button type="button" class="sp-action-btn hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950/50" onclick="spDel(${s.id})" title="Hapus Sparepart" data-cap="SPAREPART_DELETE">
-                        <i class="fa-solid fa-trash text-xs"></i>
-                    </button>
-                </div>
-            </td>
-        `;
-        body.appendChild(tr);
-    });
 
-    const end = start + rows.length;
-    if (total > SP_PER_PAGE) pagination.classList.remove('hidden');
-    else pagination.classList.add('hidden');
-    if (info) info.textContent = 'Halaman ' + _spPage + '  ' + (start + 1) + ' - ' + end + '  (dari ' + total + ' sparepart)';
+                    <!-- Sub-Tabel Komparasi Varian Merek (Langsung Terbuka) -->
+                    <div class="overflow-x-auto rounded-xl border border-gray-100 dark:border-white/5">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50/70 dark:bg-white/[0.02] text-gray-500 dark:text-gray-400 border-b border-gray-100 dark:border-white/5 font-bold text-[11px]">
+                                    <th class="py-2.5 px-3">Merek / Grade Pabrikan</th>
+                                    <th class="py-2.5 px-3 text-center w-28">Stok Fisik</th>
+                                    <th class="py-2.5 px-3 text-right w-32">Modal Beli</th>
+                                    <th class="py-2.5 px-3 text-right w-36">Harga Jual</th>
+                                    <th class="py-2.5 px-3 text-right w-32">Estimasi Margin</th>
+                                    <th class="py-2.5 px-3 text-center w-36">Aksi Cepat</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                                ${g.variants.map(v => {
+                                    const margin = v.jual - v.beli;
+                                    const marginPct = v.beli > 0 ? Math.round((margin / v.beli) * 100) : 0;
+                                    const vHabis = v.qty <= 0;
+                                    const vMenipis = !vHabis && v.qty <= 3;
+                                    const vPill = vHabis
+                                        ? '<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">0 (Habis)</span>'
+                                        : vMenipis
+                                        ? `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">${v.qty} Unit (Menipis)</span>`
+                                        : `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50">${v.qty} Unit (Aman)</span>`;
 
-    if (pageBtns) {
+                                    return `
+                                        <tr class="hover:bg-gray-50/50 dark:hover:bg-white/[0.02] transition">
+                                            <td class="py-2 px-3">
+                                                <div class="flex items-center gap-2">
+                                                    <span class="inline-flex items-center px-2 py-0.5 rounded-md font-extrabold text-[11px] border ${v.brandCls}">
+                                                        ${escapeHtml(v.brand)}
+                                                    </span>
+                                                    <span class="text-[11px] text-gray-500 dark:text-gray-400 truncate max-w-[280px]" title="${escapeHtml(v.raw.jenis)}">
+                                                        ${escapeHtml(v.raw.jenis)}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td class="py-2 px-3 text-center">
+                                                ${vPill}
+                                            </td>
+                                            <td class="py-2 px-3 text-right font-mono font-medium text-gray-500 dark:text-gray-400">
+                                                ${spRupiah(v.beli)}
+                                            </td>
+                                            <td class="py-2 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                                                ${spRupiah(v.jual)}
+                                            </td>
+                                            <td class="py-2 px-3 text-right font-mono text-[11px] ${margin >= 0 ? 'text-gray-700 dark:text-gray-300' : 'text-rose-500'}">
+                                                +${spRupiah(margin)} <span class="text-gray-400 font-sans text-[10px]">(${marginPct}%)</span>
+                                            </td>
+                                            <td class="py-2 px-3 text-center">
+                                                <div class="flex items-center justify-center gap-1.5" data-cap="SPAREPART_WRITE">
+                                                    <button type="button" onclick="spQuickRestock(${v.id})" class="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Tambah Stok Masuk">
+                                                        <i class="fa-solid fa-plus text-[9px]"></i>
+                                                        <span>Stok</span>
+                                                    </button>
+                                                    <button type="button" onclick="spEdit(${v.id})" class="px-2 py-1 rounded border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-[10.5px] font-semibold transition" title="Edit Part">
+                                                        <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                                                    </button>
+                                                    <button type="button" onclick="spDel(${v.id})" class="p-1 rounded text-gray-400 hover:text-rose-500 text-[10.5px] transition" title="Hapus Part">
+                                                        <i class="fa-solid fa-trash text-[10px]"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+        }).join('');
+    }
+
+    // Pagination buttons generator
+    if (pageBtns && totalPages > 1) {
         pageBtns.innerHTML = '';
-        const mkBtn = (txt, p, disabled, active, label) => {
+        const mkBtn = (html, p, disabled, active, label) => {
             const b = document.createElement('button');
             b.type = 'button';
-            b.innerHTML = txt;
-            if (label) { b.title = label; b.setAttribute('aria-label', label); }
-            b.className = 'tx-page-btn' + (active ? ' active' : '') + (disabled ? ' disabled' : '');
-            if (!disabled) b.addEventListener('click', () => { _spPage = p; renderSparepart(); });
+            b.className = 'w-7 h-7 flex items-center justify-center rounded-lg text-xs font-semibold transition '
+                + (active ? 'bg-brand-500 text-white' : 'border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5');
+            if (disabled) { b.disabled = true; b.classList.add('opacity-40', 'cursor-not-allowed'); }
+            if (label) b.setAttribute('aria-label', label);
+            b.innerHTML = html;
+            b.addEventListener('click', () => { _spPage = p; renderSparepart(); });
             return b;
         };
         pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _spPage - 1, _spPage === 1, false, 'Sebelumnya'));

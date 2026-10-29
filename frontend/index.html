@@ -1398,32 +1398,23 @@
                             </div>
                         </div>
 
-                        <!-- Tabel Inventaris Sparepart (Ramping 6 Kolom) -->
-                        <div class="panel overflow-hidden">
-                            <div class="overflow-x-auto">
-                                <table class="tx-table sp-table w-full text-sm">
-                                    <thead>
-                                        <tr>
-                                            <th class="w-12 text-center">No</th>
-                                            <th>Sparepart &amp; Barang</th>
-                                            <th>Kompatibilitas Device</th>
-                                            <th class="text-left w-36">Stok &amp; Status</th>
-                                            <th class="text-right w-44">Harga (Jual / Modal)</th>
-                                            <th class="text-center w-28">Aksi Cepat</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="spBody"></tbody>
-                                </table>
+                        <!-- Kontainer Inventaris Sparepart: Komparasi Varian & Grup -->
+                        <div class="space-y-3.5">
+                            <div id="spListContainer" class="space-y-3.5">
+                                <!-- Group Cards di-render dinamis via JS -->
                             </div>
-                            <div id="spEmpty" class="hidden text-center py-12 text-sm text-gray-400">
+                            <!-- Tabel fallback tersembunyi agar legacy script tetap aman -->
+                            <table class="hidden"><tbody id="spBody"></tbody></table>
+
+                            <div id="spEmpty" class="hidden text-center py-12 text-sm text-gray-400 panel">
                                 <i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>
                                 <span>Belum ada data sparepart.</span>
                             </div>
-                            <div id="spLoading" class="text-center py-12 text-sm text-gray-400">
-                                <i class="fa-solid fa-circle-notch fa-spin text-xl mb-2 block"></i> Memuat data inventaris...
+                            <div id="spLoading" class="text-center py-12 text-sm text-gray-400 panel">
+                                <i class="fa-solid fa-circle-notch fa-spin text-xl mb-2 block text-brand-500"></i> Memuat data inventaris...
                             </div>
-                            <div id="spPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-white/5">
-                                <div id="spInfo" class="text-xs text-gray-500 dark:text-gray-400 font-medium"></div>
+                            <div id="spPagination" class="hidden flex flex-col sm:flex-row items-center justify-between gap-3 p-3.5 panel text-xs text-gray-500 dark:text-gray-400">
+                                <div id="spInfo" class="font-medium"></div>
                                 <div id="spPageBtns" class="flex items-center gap-1.5"></div>
                             </div>
                         </div>
