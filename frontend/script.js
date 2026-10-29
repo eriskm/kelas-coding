@@ -380,7 +380,11 @@ function showPenjualanPart() {
 function showTransaksi() { showPage('transaksi'); renderTransaksi(); }
 function showPelanggan() { showPage('pelanggan'); renderPelanggan(); }
 function showGaransi() { showPage('garansi'); renderGaransi(); }
-function showSparepart() { _spPage = 1; showPage('sparepart'); renderSparepart(); }
+function showSparepart() {
+    _spPage = 1;
+    showPage('sparepart');
+    switchSparepartSubTab(_spActiveSubTab || 'catalog');
+}
 function showKeuangan() { showPage('keuangan'); renderKeuangan(); }
 
 // ─────────────────────────────────────────────
@@ -4989,6 +4993,12 @@ let _spPage = 1;
 let _spQuery = '';
 let _spStockFilter = 'all';
 let _spCatFilter = '';
+let _spBrandFilter = '';
+let _spActiveSubTab = 'catalog';
+let _spSummaryVisible = true;
+let _spViewMode = (function() {
+    try { return localStorage.getItem('sp_view_mode') || 'table'; } catch(_) { return 'table'; }
+})();
 let _spReq = 0;
 let _spEditId = -1;
 // State real dari backend (GET/POST/PUT/DELETE /api/spareparts). SP_MOCK dipensiunkan.
@@ -5113,6 +5123,17 @@ async function loadSparepartDefects() {
     try {
         const res = await apiGet('/inventory/defects?status=' + (_spDefectFilter || 'ALL'));
         _spDefectsList = res.items || [];
+
+        const countBadge = document.getElementById('spDefectCountBadge');
+        if (countBadge) {
+            const pendingCount = _spDefectsList.filter(d => d.status === 'MENUNGGU' || d.status === 'DIKIRIM').length;
+            if (pendingCount > 0) {
+                countBadge.textContent = pendingCount;
+                countBadge.classList.remove('hidden');
+            } else {
+                countBadge.classList.add('hidden');
+            }
+        }
 
         if (!_spDefectsList.length) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-xs text-gray-400 py-6"><i class="fa-solid fa-box-open text-2xl mb-1.5 block opacity-40"></i>Tidak ada data klaim retur supplier.</td></tr>';
@@ -5464,6 +5485,103 @@ async function txdFailedCancel(orderId) {
     } catch (err) { toast(err.message || 'Gagal proses Failed → Cancel.'); }
 }
 
+function switchSparepartSubTab(tab) {
+    _spActiveSubTab = tab;
+    const tabs = ['catalog', 'moves', 'defects'];
+    tabs.forEach(t => {
+        const btn = document.getElementById('spSubTabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
+        const pane = document.getElementById('spSubTab' + t.charAt(0).toUpperCase() + t.slice(1));
+        if (btn) {
+            if (t === tab) {
+                btn.className = 'sp-sub-tab px-3.5 py-2 rounded-lg text-xs sm:text-sm font-bold flex items-center gap-2 transition bg-brand-500 text-white shadow-xs';
+            } else {
+                btn.className = 'sp-sub-tab px-3.5 py-2 rounded-lg text-xs sm:text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/5 flex items-center gap-2 transition';
+            }
+        }
+        if (pane) {
+            pane.classList.toggle('hidden', t !== tab);
+        }
+    });
+
+    if (tab === 'moves') {
+        loadSparepartMoves();
+    } else if (tab === 'defects') {
+        loadSparepartDefects();
+    } else if (tab === 'catalog') {
+        renderSparepart();
+    }
+}
+window.switchSparepartSubTab = switchSparepartSubTab;
+
+function toggleSparepartSummary() {
+    _spSummaryVisible = !_spSummaryVisible;
+    const sec = document.getElementById('spSummarySection');
+    const txt = document.getElementById('spSummaryBtnText');
+    if (sec) {
+        sec.classList.toggle('hidden', !_spSummaryVisible);
+    }
+    if (txt) {
+        txt.textContent = _spSummaryVisible ? 'Sembunyikan Metrik' : 'Tampilkan Metrik';
+    }
+}
+window.toggleSparepartSummary = toggleSparepartSummary;
+
+function spToggleViewMode() {
+    _spViewMode = (_spViewMode === 'table') ? 'grouped' : 'table';
+    try { localStorage.setItem('sp_view_mode', _spViewMode); } catch (_) {}
+    updateViewModeButton();
+    renderSparepart();
+}
+window.spToggleViewMode = spToggleViewMode;
+
+function updateViewModeButton() {
+    const icon = document.getElementById('spViewModeIcon');
+    const txt = document.getElementById('spViewModeText');
+    const toggleAllBtn = document.getElementById('spToggleAllBtn');
+    if (icon && txt) {
+        if (_spViewMode === 'table') {
+            icon.className = 'fa-solid fa-table-list text-[11px]';
+            txt.textContent = 'Tabel Rapat';
+            if (toggleAllBtn) toggleAllBtn.classList.add('hidden');
+        } else {
+            icon.className = 'fa-solid fa-layer-group text-[11px]';
+            txt.textContent = 'Kartu Grup';
+            if (toggleAllBtn) toggleAllBtn.classList.remove('hidden');
+        }
+    }
+}
+window.updateViewModeButton = updateViewModeButton;
+
+function updateSpBrandOptions(items) {
+    const sel = document.getElementById('spBrandFilter');
+    if (!sel) return;
+    const brands = new Set();
+    (items || []).forEach(s => {
+        if (s.merek && s.merek.trim()) {
+            brands.add(s.merek.trim());
+        }
+        if (s.device && s.device.trim()) {
+            const firstWord = s.device.trim().split(/\s+/)[0];
+            if (firstWord && firstWord.length > 2 && !/^\d+$/.test(firstWord)) {
+                brands.add(firstWord);
+            }
+        }
+    });
+    const sorted = Array.from(brands).sort((a, b) => a.localeCompare(b, 'id'));
+    const curr = _spBrandFilter || sel.value;
+    sel.innerHTML = '<option value="">Semua Merek HP (' + sorted.length + ')</option>' +
+        sorted.map(b => `<option value="${escapeHtml(b)}"${curr.toLowerCase() === b.toLowerCase() ? ' selected' : ''}>${escapeHtml(b)}</option>`).join('');
+
+    if (!sel.dataset.bound) {
+        sel.dataset.bound = '1';
+        sel.addEventListener('change', () => {
+            _spBrandFilter = sel.value;
+            _spPage = 1;
+            renderSparepart();
+        });
+    }
+}
+
 function spAdd() {
     _spEditId = -1;
     document.getElementById('spfTitle').textContent = 'Tambah Sparepart';
@@ -5526,6 +5644,7 @@ function spResetFilters() {
     _spQuery = '';
     _spStockFilter = 'all';
     _spCatFilter = '';
+    _spBrandFilter = '';
     _spPage = 1;
     _spExpandedKeys.clear();
     _spAllExpanded = false;
@@ -5533,6 +5652,8 @@ function spResetFilters() {
     if (search) search.value = '';
     const catSel = document.getElementById('spCatFilter');
     if (catSel) catSel.value = '';
+    const brandSel = document.getElementById('spBrandFilter');
+    if (brandSel) brandSel.value = '';
     const stockSel = document.getElementById('spStockFilter');
     if (stockSel) stockSel.value = 'all';
     renderSparepart(true);
@@ -5595,12 +5716,15 @@ function updateSpCatOptions(data) {
 
 function spFiltered() {
     const q = _spQuery.trim().toLowerCase();
-    // P2-15: cache untuk form pergerakan stok (barang masuk / pemakaian part).
     try { _sparepartsCache = (_spView || []).slice(); } catch (_) {}
     let list = (_spView || []).slice();
     if (q) {
         list = list.filter(s => [s.jenis, s.merek, s.device, s.kategori]
             .some(f => (f || '').toLowerCase().includes(q)));
+    }
+    if (_spBrandFilter) {
+        const bf = _spBrandFilter.toLowerCase();
+        list = list.filter(s => (s.merek || '').toLowerCase() === bf || (s.device || '').toLowerCase().includes(bf));
     }
     if (_spCatFilter) {
         list = list.filter(s => (s.kategori || '').toLowerCase() === _spCatFilter.toLowerCase());
@@ -5865,10 +5989,12 @@ async function renderSparepart(fetchFresh = true) {
                 renderSpKpi(_allKpi);
                 updateSpCatOptions(_allKpi);
                 renderSpCategoryTabs(_allKpi);
+                updateSpBrandOptions(_allKpi);
             } else {
                 renderSpKpi(_spView);
                 updateSpCatOptions(_spView);
                 renderSpCategoryTabs(_spView);
+                updateSpBrandOptions(_spView);
             }
         } catch (err) {
             if (my !== _spReq) return;
@@ -5901,226 +6027,380 @@ async function renderSparepart(fetchFresh = true) {
     if (loading) loading.classList.add('hidden');
     if (empty) empty.classList.add('hidden');
 
+    updateViewModeButton();
+
     const data = spFiltered();
-    const groups = spGroupItems(data);
-    const totalGroups = groups.length;
-    const SP_GROUPS_PER_PAGE = 20;
-    const totalPages = Math.max(1, Math.ceil(totalGroups / SP_GROUPS_PER_PAGE));
-    if (_spPage > totalPages) _spPage = totalPages;
-    if (_spPage < 1) _spPage = 1;
 
-    if (totalGroups === 0) {
-        if (empty) {
-            empty.classList.remove('hidden');
-            empty.innerHTML = _spQuery.trim()
-                ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Sparepart tidak ditemukan untuk pencarian: "<b>' + escapeHtml(_spQuery) + '</b>".'
-                : '<i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>Belum ada data sparepart.';
+    if (_spViewMode === 'table') {
+        const totalItems = data.length;
+        const SP_ITEMS_PER_PAGE = 25;
+        const totalPages = Math.max(1, Math.ceil(totalItems / SP_ITEMS_PER_PAGE));
+        if (_spPage > totalPages) _spPage = totalPages;
+        if (_spPage < 1) _spPage = 1;
+
+        if (totalItems === 0) {
+            if (empty) {
+                empty.classList.remove('hidden');
+                empty.innerHTML = _spQuery.trim()
+                    ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Sparepart tidak ditemukan untuk pencarian: "<b>' + escapeHtml(_spQuery) + '</b>".'
+                    : '<i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>Belum ada data sparepart.';
+            }
+            if (pagination) pagination.classList.add('hidden');
+            if (info) info.textContent = '';
+            if (pageBtns) pageBtns.innerHTML = '';
+            await loadSparepartMoves();
+            try { await loadSparepartDefects(); } catch (_) {}
+            try { await loadRevolvingFundSummary(); } catch (_) {}
+            return;
         }
-        if (pagination) pagination.classList.add('hidden');
-        if (info) info.textContent = '';
-        if (pageBtns) pageBtns.innerHTML = '';
-        await loadSparepartMoves();
-        try { await loadSparepartDefects(); } catch (_) {}
-        try { await loadRevolvingFundSummary(); } catch (_) {}
-        return;
-    }
 
-    if (pagination) pagination.classList.remove('hidden');
-    if (info) {
-        const startIdx = (_spPage - 1) * SP_GROUPS_PER_PAGE + 1;
-        const endIdx = Math.min(_spPage * SP_GROUPS_PER_PAGE, totalGroups);
-        info.textContent = `Menampilkan ${startIdx}-${endIdx} dari ${totalGroups} tipe produk (${data.length} varian stok)`;
-    }
+        if (pagination) pagination.classList.remove('hidden');
+        if (info) {
+            const startIdx = (_spPage - 1) * SP_ITEMS_PER_PAGE + 1;
+            const endIdx = Math.min(_spPage * SP_ITEMS_PER_PAGE, totalItems);
+            info.textContent = `Menampilkan ${startIdx}-${endIdx} dari ${totalItems} item sparepart`;
+        }
 
-    const start = (_spPage - 1) * SP_GROUPS_PER_PAGE;
-    const pageGroups = groups.slice(start, start + SP_GROUPS_PER_PAGE);
+        const start = (_spPage - 1) * SP_ITEMS_PER_PAGE;
+        const pageItems = data.slice(start, start + SP_ITEMS_PER_PAGE);
 
-    const isSearchActive = Boolean(_spQuery.trim());
-    const btnText = document.getElementById('spToggleAllText');
-    if (btnText) {
-        btnText.textContent = (_spAllExpanded || isSearchActive) ? 'Tutup Semua' : 'Buka Semua';
-    }
+        if (container) {
+            container.innerHTML = `
+                <div class="panel overflow-hidden rounded-xl border border-gray-200/80 dark:border-white/10 shadow-2xs">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-xs border-collapse">
+                            <thead>
+                                <tr class="bg-gray-50/80 dark:bg-white/[0.03] text-gray-500 dark:text-gray-400 border-b border-gray-200/80 dark:border-white/10 font-bold text-[10.5px]">
+                                    <th class="py-2.5 px-3">Kategori</th>
+                                    <th class="py-2.5 px-3">Perangkat / Tipe HP</th>
+                                    <th class="py-2.5 px-3">Nama Part &amp; Varian Merek</th>
+                                    <th class="py-2.5 px-3 text-center w-28">Stok Rak</th>
+                                    <th class="py-2.5 px-3 text-right w-28">Modal Beli</th>
+                                    <th class="py-2.5 px-3 text-right w-32">Harga Jual</th>
+                                    <th class="py-2.5 px-3 text-right w-28">Est. Margin</th>
+                                    <th class="py-2.5 px-3 text-center w-36">Aksi Cepat</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                                ${pageItems.map(s => {
+                                    const meta = spCategoryMeta(s.kategori);
+                                    const bInfo = spExtractBrand(s);
+                                    const margin = (s.jual || 0) - (s.beli || 0);
+                                    const marginPct = s.beli > 0 ? Math.round((margin / s.beli) * 100) : 0;
+                                    const isHabis = s.qty <= 0;
+                                    const isMenipis = !isHabis && s.qty <= 3;
+                                    const pill = isHabis
+                                        ? '<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">0 (Habis)</span>'
+                                        : isMenipis
+                                        ? `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">${s.qty} Unit (Menipis)</span>`
+                                        : `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50">${s.qty} Unit (Aman)</span>`;
 
-    if (container) {
-        container.innerHTML = pageGroups.map(g => {
-            const meta = spCategoryMeta(g.kategori);
-            const totalQty = g.totalQty;
-            const isHabis = totalQty <= 0;
-            const isMenipis = !isHabis && totalQty <= 5;
-            const statusBadgeCls = isHabis
-                ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50'
-                : isMenipis
-                ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50'
-                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50';
-            const statusTxt = isHabis ? '0 (Habis)' : isMenipis ? `${totalQty} (Menipis)` : `${totalQty} (Aman)`;
-
-            const isOpen = isSearchActive || totalGroups <= 2 || _spAllExpanded || _spExpandedKeys.has(g.key);
-
-            const minJ = g.minJual === Infinity ? 0 : g.minJual;
-            const maxJ = g.maxJual === -Infinity ? 0 : g.maxJual;
-            const hargaDisplay = minJ === maxJ ? spRupiah(minJ) : `${spRupiah(minJ)} - ${spRupiah(maxJ)}`;
-
-            const tInfo = spFormatDisplayTitle(g.title, g.device);
-
-            // Merek badges
-            const brandBadges = g.variants.map(v => {
-                const qCls = v.qty <= 0 ? 'opacity-40 line-through' : 'font-extrabold';
-                return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${v.brandCls}">
-                    <span class="${qCls}">${escapeHtml(v.brand)}</span>
-                    <span class="text-[9px] opacity-75 font-mono">(${v.qty})</span>
-                </span>`;
-            }).join('');
-
-            return `
-                <div class="panel overflow-hidden rounded-xl border border-gray-200/80 dark:border-white/10 hover:border-emerald-500/40 transition shadow-2xs">
-                    <!-- Baris Header Ramping Accordion (Klik untuk Buka/Tutup) -->
-                    <div class="p-2.5 sm:px-3.5 sm:py-2.5 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer select-none bg-white dark:bg-dark-panel hover:bg-gray-50/80 dark:hover:bg-white/[0.02] transition" onclick="spToggleGroup('${encodeURIComponent(g.key)}')">
-                        <!-- Kolom Kiri: Kategori Badge + Tipe Ringkas + Merek Badges -->
-                        <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 border ${meta.bg}">
-                                <i class="fa-solid ${meta.icon} text-[9.5px]"></i>
-                                <span>${escapeHtml(g.kategori)}</span>
-                            </span>
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-center gap-2 flex-wrap">
-                                    <span class="font-extrabold text-xs sm:text-[13.5px] text-gray-900 dark:text-white leading-tight">
-                                        ${escapeHtml(tInfo.primary)}
-                                    </span>
-                                    <div class="flex items-center gap-1 flex-wrap">
-                                        ${brandBadges}
-                                    </div>
-                                </div>
-                                ${tInfo.sub ? `
-                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title="${escapeHtml(g.title + (g.device ? ' • ' + g.device : ''))}">
-                                        <i class="fa-solid fa-mobile-screen-button text-[9.5px] mr-1 opacity-60"></i>${escapeHtml(tInfo.sub)}
-                                    </div>
-                                ` : ''}
-                            </div>
-                        </div>
-
-                        <!-- Kolom Kanan: Rentang Harga + Total Stok + Tombol Salin WA + Panah Chevron -->
-                        <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                            <div class="text-right hidden sm:block">
-                                <div class="text-[9.5px] uppercase font-bold text-gray-400">Harga Jual</div>
-                                <div class="text-xs sm:text-[13px] font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
-                                    ${hargaDisplay}
-                                </div>
-                            </div>
-                            <div class="text-right min-w-[55px]">
-                                <div class="text-[9.5px] uppercase font-bold text-gray-400">Stok</div>
-                                <span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${statusBadgeCls} tabular-nums">
-                                    ${statusTxt}
-                                </span>
-                            </div>
-                            <button type="button" onclick="event.stopPropagation(); spCopyGroupWA('${encodeURIComponent(g.key)}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition active:scale-95" title="Salin format balasan WhatsApp untuk teknisi">
-                                <i class="fa-brands fa-whatsapp text-sm"></i>
-                                <span class="hidden md:inline">Salin WA</span>
-                            </button>
-                            <div class="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition" title="Buka / Tutup Detail">
-                                <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}"></i>
-                            </div>
-                        </div>
+                                    return `
+                                        <tr class="hover:bg-white dark:hover:bg-white/[0.03] transition">
+                                            <td class="py-2 px-3">
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${meta.bg}">
+                                                    <i class="fa-solid ${meta.icon} text-[9.5px]"></i>
+                                                    <span>${escapeHtml(s.kategori)}</span>
+                                                </span>
+                                            </td>
+                                            <td class="py-2 px-3">
+                                                <div class="font-extrabold text-xs text-gray-900 dark:text-white">
+                                                    ${escapeHtml(s.device && s.device !== '-' ? s.device : '-')}
+                                                </div>
+                                            </td>
+                                            <td class="py-2 px-3">
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-extrabold border ${bInfo.cls}">
+                                                        ${escapeHtml(bInfo.name)}
+                                                    </span>
+                                                    <span class="text-xs font-medium text-gray-800 dark:text-gray-200" title="${escapeHtml(s.jenis)}">
+                                                        ${escapeHtml(s.jenis)}
+                                                    </span>
+                                                </div>
+                                            </td>
+                                            <td class="py-2 px-3 text-center">
+                                                ${pill}
+                                            </td>
+                                            <td class="py-2 px-3 text-right font-mono font-medium text-gray-500 dark:text-gray-400">
+                                                ${spRupiah(s.beli)}
+                                            </td>
+                                            <td class="py-2 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                                                ${spRupiah(s.jual)}
+                                            </td>
+                                            <td class="py-2 px-3 text-right font-mono text-[11px] ${margin >= 0 ? 'text-gray-700 dark:text-gray-300' : 'text-rose-500'}">
+                                                +${spRupiah(margin)} <span class="text-gray-400 font-sans text-[10px]">(${marginPct}%)</span>
+                                            </td>
+                                            <td class="py-2 px-3 text-center">
+                                                <div class="flex items-center justify-center gap-1.5" data-cap="SPAREPART_WRITE">
+                                                    <button type="button" onclick="spCopySingleWA(${s.id})" class="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Salin Format WA Varian Ini">
+                                                        <i class="fa-brands fa-whatsapp text-[10.5px]"></i>
+                                                        <span>WA</span>
+                                                    </button>
+                                                    <button type="button" onclick="spQuickRestock(${s.id})" class="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Tambah Stok Masuk">
+                                                        <i class="fa-solid fa-plus text-[9px]"></i>
+                                                        <span>Stok</span>
+                                                    </button>
+                                                    <button type="button" onclick="spEdit(${s.id})" class="px-2 py-1 rounded border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-[10.5px] font-semibold transition" title="Edit Part">
+                                                        <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                                                    </button>
+                                                    <button type="button" onclick="spDel(${s.id})" class="p-1 rounded text-gray-400 hover:text-rose-500 text-[10.5px] transition" title="Hapus Part">
+                                                        <i class="fa-solid fa-trash text-[10px]"></i>
+                                                    </button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
                     </div>
-
-                    <!-- Sub-Tabel Komparasi Varian Merek (Hanya jika Terbuka) -->
-                    ${isOpen ? `
-                        <div class="border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.015] p-2.5 sm:p-3 overflow-x-auto">
-                            <table class="w-full text-left text-xs border-collapse">
-                                <thead>
-                                    <tr class="text-gray-500 dark:text-gray-400 border-b border-gray-200/60 dark:border-white/5 font-bold text-[10.5px]">
-                                        <th class="py-2 px-3">Merek / Grade Pabrikan</th>
-                                        <th class="py-2 px-3 text-center w-28">Stok Fisik</th>
-                                        <th class="py-2 px-3 text-right w-28">Modal Beli</th>
-                                        <th class="py-2 px-3 text-right w-32">Harga Jual</th>
-                                        <th class="py-2 px-3 text-right w-28">Estimasi Margin</th>
-                                        <th class="py-2 px-3 text-center w-36">Aksi Cepat</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-gray-100 dark:divide-white/5">
-                                    ${g.variants.map(v => {
-                                        const margin = v.jual - v.beli;
-                                        const marginPct = v.beli > 0 ? Math.round((margin / v.beli) * 100) : 0;
-                                        const vHabis = v.qty <= 0;
-                                        const vMenipis = !vHabis && v.qty <= 3;
-                                        const vPill = vHabis
-                                            ? '<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">0 (Habis)</span>'
-                                            : vMenipis
-                                            ? `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">${v.qty} Unit (Menipis)</span>`
-                                            : `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50">${v.qty} Unit (Aman)</span>`;
-
-                                        return `
-                                            <tr class="hover:bg-white dark:hover:bg-white/[0.03] transition">
-                                                <td class="py-2 px-3">
-                                                    <div class="flex items-center gap-2">
-                                                        <span class="inline-flex items-center px-2 py-0.5 rounded-md font-extrabold text-[11px] border ${v.brandCls}">
-                                                            ${escapeHtml(v.brand)}
-                                                        </span>
-                                                        <span class="text-[11px] text-gray-600 dark:text-gray-300 truncate max-w-[280px]" title="${escapeHtml(v.raw.jenis)}">
-                                                            ${escapeHtml(v.raw.jenis)}
-                                                        </span>
-                                                    </div>
-                                                </td>
-                                                <td class="py-2 px-3 text-center">
-                                                    ${vPill}
-                                                </td>
-                                                <td class="py-2 px-3 text-right font-mono font-medium text-gray-500 dark:text-gray-400">
-                                                    ${spRupiah(v.beli)}
-                                                </td>
-                                                <td class="py-2 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
-                                                    ${spRupiah(v.jual)}
-                                                </td>
-                                                <td class="py-2 px-3 text-right font-mono text-[11px] ${margin >= 0 ? 'text-gray-700 dark:text-gray-300' : 'text-rose-500'}">
-                                                    +${spRupiah(margin)} <span class="text-gray-400 font-sans text-[10px]">(${marginPct}%)</span>
-                                                </td>
-                                                <td class="py-2 px-3 text-center">
-                                                    <div class="flex items-center justify-center gap-1.5" data-cap="SPAREPART_WRITE">
-                                                        <button type="button" onclick="spCopySingleWA(${v.id})" class="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Salin Format WA Varian Ini">
-                                                            <i class="fa-brands fa-whatsapp text-[10.5px]"></i>
-                                                            <span>WA</span>
-                                                        </button>
-                                                        <button type="button" onclick="spQuickRestock(${v.id})" class="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Tambah Stok Masuk">
-                                                            <i class="fa-solid fa-plus text-[9px]"></i>
-                                                            <span>Stok</span>
-                                                        </button>
-                                                        <button type="button" onclick="spEdit(${v.id})" class="px-2 py-1 rounded border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-[10.5px] font-semibold transition" title="Edit Part">
-                                                            <i class="fa-solid fa-pen-to-square text-[10px]"></i>
-                                                        </button>
-                                                        <button type="button" onclick="spDel(${v.id})" class="p-1 rounded text-gray-400 hover:text-rose-500 text-[10.5px] transition" title="Hapus Part">
-                                                            <i class="fa-solid fa-trash text-[10px]"></i>
-                                                        </button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-                    ` : ''}
                 </div>
             `;
-        }).join('');
-    }
-
-    // Pagination buttons generator
-    if (pageBtns && totalPages > 1) {
-        pageBtns.innerHTML = '';
-        const mkBtn = (html, p, disabled, active, label) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'w-7 h-7 flex items-center justify-center rounded-lg text-xs font-semibold transition '
-                + (active ? 'bg-brand-500 text-white' : 'border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5');
-            if (disabled) { b.disabled = true; b.classList.add('opacity-40', 'cursor-not-allowed'); }
-            if (label) b.setAttribute('aria-label', label);
-            b.innerHTML = html;
-            b.addEventListener('click', () => { _spPage = p; renderSparepart(false); });
-            return b;
-        };
-        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _spPage - 1, _spPage === 1, false, 'Sebelumnya'));
-        for (let p = 1; p <= totalPages; p++) {
-            pageBtns.appendChild(mkBtn(String(p), p, false, p === _spPage));
         }
-        pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _spPage + 1, _spPage === totalPages, false, 'Berikutnya'));
+
+        // Pagination buttons generator for table mode
+        if (pageBtns && totalPages > 1) {
+            pageBtns.innerHTML = '';
+            const mkBtn = (html, p, disabled, active, label) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'w-7 h-7 flex items-center justify-center rounded-lg text-xs font-semibold transition '
+                    + (active ? 'bg-brand-500 text-white' : 'border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5');
+                if (disabled) { b.disabled = true; b.classList.add('opacity-40', 'cursor-not-allowed'); }
+                if (label) b.setAttribute('aria-label', label);
+                b.innerHTML = html;
+                b.addEventListener('click', () => { _spPage = p; renderSparepart(false); });
+                return b;
+            };
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _spPage - 1, _spPage === 1, false, 'Sebelumnya'));
+            for (let p = 1; p <= totalPages; p++) {
+                pageBtns.appendChild(mkBtn(String(p), p, false, p === _spPage));
+            }
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _spPage + 1, _spPage === totalPages, false, 'Berikutnya'));
+        }
+
+    } else {
+        // Grouped mode (original accordion)
+        const groups = spGroupItems(data);
+        const totalGroups = groups.length;
+        const SP_GROUPS_PER_PAGE = 20;
+        const totalPages = Math.max(1, Math.ceil(totalGroups / SP_GROUPS_PER_PAGE));
+        if (_spPage > totalPages) _spPage = totalPages;
+        if (_spPage < 1) _spPage = 1;
+
+        if (totalGroups === 0) {
+            if (empty) {
+                empty.classList.remove('hidden');
+                empty.innerHTML = _spQuery.trim()
+                    ? '<i class="fa-solid fa-magnifying-glass text-3xl mb-2 block opacity-40"></i>Sparepart tidak ditemukan untuk pencarian: "<b>' + escapeHtml(_spQuery) + '</b>".'
+                    : '<i class="fa-solid fa-box-open text-3xl mb-2 block opacity-40"></i>Belum ada data sparepart.';
+            }
+            if (pagination) pagination.classList.add('hidden');
+            if (info) info.textContent = '';
+            if (pageBtns) pageBtns.innerHTML = '';
+            await loadSparepartMoves();
+            try { await loadSparepartDefects(); } catch (_) {}
+            try { await loadRevolvingFundSummary(); } catch (_) {}
+            return;
+        }
+
+        if (pagination) pagination.classList.remove('hidden');
+        if (info) {
+            const startIdx = (_spPage - 1) * SP_GROUPS_PER_PAGE + 1;
+            const endIdx = Math.min(_spPage * SP_GROUPS_PER_PAGE, totalGroups);
+            info.textContent = `Menampilkan ${startIdx}-${endIdx} dari ${totalGroups} tipe produk (${data.length} varian stok)`;
+        }
+
+        const start = (_spPage - 1) * SP_GROUPS_PER_PAGE;
+        const pageGroups = groups.slice(start, start + SP_GROUPS_PER_PAGE);
+
+        const isSearchActive = Boolean(_spQuery.trim());
+        const btnText = document.getElementById('spToggleAllText');
+        if (btnText) {
+            btnText.textContent = (_spAllExpanded || isSearchActive) ? 'Tutup Semua' : 'Buka Semua';
+        }
+
+        if (container) {
+            container.innerHTML = pageGroups.map(g => {
+                const meta = spCategoryMeta(g.kategori);
+                const totalQty = g.totalQty;
+                const isHabis = totalQty <= 0;
+                const isMenipis = !isHabis && totalQty <= 5;
+                const statusBadgeCls = isHabis
+                    ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50'
+                    : isMenipis
+                    ? 'bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50'
+                    : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50';
+                const statusTxt = isHabis ? '0 (Habis)' : isMenipis ? `${totalQty} (Menipis)` : `${totalQty} (Aman)`;
+
+                const isOpen = isSearchActive || totalGroups <= 2 || _spAllExpanded || _spExpandedKeys.has(g.key);
+
+                const minJ = g.minJual === Infinity ? 0 : g.minJual;
+                const maxJ = g.maxJual === -Infinity ? 0 : g.maxJual;
+                const hargaDisplay = minJ === maxJ ? spRupiah(minJ) : `${spRupiah(minJ)} - ${spRupiah(maxJ)}`;
+
+                const tInfo = spFormatDisplayTitle(g.title, g.device);
+
+                // Merek badges
+                const brandBadges = g.variants.map(v => {
+                    const qCls = v.qty <= 0 ? 'opacity-40 line-through' : 'font-extrabold';
+                    return `<span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border ${v.brandCls}">
+                        <span class="${qCls}">${escapeHtml(v.brand)}</span>
+                        <span class="text-[9px] opacity-75 font-mono">(${v.qty})</span>
+                    </span>`;
+                }).join('');
+
+                return `
+                    <div class="panel overflow-hidden rounded-xl border border-gray-200/80 dark:border-white/10 hover:border-emerald-500/40 transition shadow-2xs">
+                        <!-- Baris Header Ramping Accordion (Klik untuk Buka/Tutup) -->
+                        <div class="p-2.5 sm:px-3.5 sm:py-2.5 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer select-none bg-white dark:bg-dark-panel hover:bg-gray-50/80 dark:hover:bg-white/[0.02] transition" onclick="spToggleGroup('${encodeURIComponent(g.key)}')">
+                            <!-- Kolom Kiri: Kategori Badge + Tipe Ringkas + Merek Badges -->
+                            <div class="flex items-center gap-2.5 min-w-0 flex-1">
+                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 border ${meta.bg}">
+                                    <i class="fa-solid ${meta.icon} text-[9.5px]"></i>
+                                    <span>${escapeHtml(g.kategori)}</span>
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2 flex-wrap">
+                                        <span class="font-extrabold text-xs sm:text-[13.5px] text-gray-900 dark:text-white leading-tight">
+                                            ${escapeHtml(tInfo.primary)}
+                                        </span>
+                                        <div class="flex items-center gap-1 flex-wrap">
+                                            ${brandBadges}
+                                        </div>
+                                    </div>
+                                    ${tInfo.sub ? `
+                                        <div class="text-[11px] text-gray-500 dark:text-gray-400 truncate mt-0.5" title="${escapeHtml(g.title + (g.device ? ' • ' + g.device : ''))}">
+                                            <i class="fa-solid fa-mobile-screen-button text-[9.5px] mr-1 opacity-60"></i>${escapeHtml(tInfo.sub)}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+
+                            <!-- Kolom Kanan: Rentang Harga + Total Stok + Tombol Salin WA + Panah Chevron -->
+                            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                                <div class="text-right hidden sm:block">
+                                    <div class="text-[9.5px] uppercase font-bold text-gray-400">Harga Jual</div>
+                                    <div class="text-xs sm:text-[13px] font-extrabold text-emerald-600 dark:text-emerald-400 font-mono">
+                                        ${hargaDisplay}
+                                    </div>
+                                </div>
+                                <div class="text-right min-w-[55px]">
+                                    <div class="text-[9.5px] uppercase font-bold text-gray-400">Stok</div>
+                                    <span class="px-2 py-0.5 rounded-md text-[11px] font-bold ${statusBadgeCls} tabular-nums">
+                                        ${statusTxt}
+                                    </span>
+                                </div>
+                                <button type="button" onclick="event.stopPropagation(); spCopyGroupWA('${encodeURIComponent(g.key)}')" class="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition active:scale-95" title="Salin format balasan WhatsApp untuk teknisi">
+                                    <i class="fa-brands fa-whatsapp text-sm"></i>
+                                    <span class="hidden md:inline">Salin WA</span>
+                                </button>
+                                <div class="w-6 h-6 rounded-md flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition" title="Buka / Tutup Detail">
+                                    <i class="fa-solid fa-chevron-down text-xs transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}"></i>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sub-Tabel Komparasi Varian Merek (Hanya jika Terbuka) -->
+                        ${isOpen ? `
+                            <div class="border-t border-gray-100 dark:border-white/5 bg-gray-50/50 dark:bg-white/[0.015] p-2.5 sm:p-3 overflow-x-auto">
+                                <table class="w-full text-left text-xs border-collapse">
+                                    <thead>
+                                        <tr class="text-gray-500 dark:text-gray-400 border-b border-gray-200/60 dark:border-white/5 font-bold text-[10.5px]">
+                                            <th class="py-2 px-3">Merek / Grade Pabrikan</th>
+                                            <th class="py-2 px-3 text-center w-28">Stok Fisik</th>
+                                            <th class="py-2 px-3 text-right w-28">Modal Beli</th>
+                                            <th class="py-2 px-3 text-right w-32">Harga Jual</th>
+                                            <th class="py-2 px-3 text-right w-28">Estimasi Margin</th>
+                                            <th class="py-2 px-3 text-center w-36">Aksi Cepat</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100 dark:divide-white/5">
+                                        ${g.variants.map(v => {
+                                            const margin = v.jual - v.beli;
+                                            const marginPct = v.beli > 0 ? Math.round((margin / v.beli) * 100) : 0;
+                                            const vHabis = v.qty <= 0;
+                                            const vMenipis = !vHabis && v.qty <= 3;
+                                            const vPill = vHabis
+                                                ? '<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/50">0 (Habis)</span>'
+                                                : vMenipis
+                                                ? `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-900/50">${v.qty} Unit (Menipis)</span>`
+                                                : `<span class="px-2 py-0.5 rounded text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-900/50">${v.qty} Unit (Aman)</span>`;
+
+                                            return `
+                                                <tr class="hover:bg-white dark:hover:bg-white/[0.03] transition">
+                                                    <td class="py-2 px-3">
+                                                        <div class="flex items-center gap-2">
+                                                            <span class="inline-flex items-center px-2 py-0.5 rounded-md font-extrabold text-[11px] border ${v.brandCls}">
+                                                                ${escapeHtml(v.brand)}
+                                                            </span>
+                                                            <span class="text-[11px] text-gray-600 dark:text-gray-300 truncate max-w-[280px]" title="${escapeHtml(v.raw.jenis)}">
+                                                                ${escapeHtml(v.raw.jenis)}
+                                                            </span>
+                                                        </div>
+                                                    </td>
+                                                    <td class="py-2 px-3 text-center">
+                                                        ${vPill}
+                                                    </td>
+                                                    <td class="py-2 px-3 text-right font-mono font-medium text-gray-500 dark:text-gray-400">
+                                                        ${spRupiah(v.beli)}
+                                                    </td>
+                                                    <td class="py-2 px-3 text-right font-mono font-extrabold text-emerald-600 dark:text-emerald-400">
+                                                        ${spRupiah(v.jual)}
+                                                    </td>
+                                                    <td class="py-2 px-3 text-right font-mono text-[11px] ${margin >= 0 ? 'text-gray-700 dark:text-gray-300' : 'text-rose-500'}">
+                                                        +${spRupiah(margin)} <span class="text-gray-400 font-sans text-[10px]">(${marginPct}%)</span>
+                                                    </td>
+                                                    <td class="py-2 px-3 text-center">
+                                                        <div class="flex items-center justify-center gap-1.5" data-cap="SPAREPART_WRITE">
+                                                            <button type="button" onclick="spCopySingleWA(${v.id})" class="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Salin Format WA Varian Ini">
+                                                                <i class="fa-brands fa-whatsapp text-[10.5px]"></i>
+                                                                <span>WA</span>
+                                                            </button>
+                                                            <button type="button" onclick="spQuickRestock(${v.id})" class="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Tambah Stok Masuk">
+                                                                <i class="fa-solid fa-plus text-[9px]"></i>
+                                                                <span>Stok</span>
+                                                            </button>
+                                                            <button type="button" onclick="spEdit(${v.id})" class="px-2 py-1 rounded border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-[10.5px] font-semibold transition" title="Edit Part">
+                                                                <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                                                            </button>
+                                                            <button type="button" onclick="spDel(${v.id})" class="p-1 rounded text-gray-400 hover:text-rose-500 text-[10.5px] transition" title="Hapus Part">
+                                                                <i class="fa-solid fa-trash text-[10px]"></i>
+                                                            </button>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            `;
+                                        }).join('')}
+                                    </tbody>
+                                </table>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Pagination buttons generator for grouped mode
+        if (pageBtns && totalPages > 1) {
+            pageBtns.innerHTML = '';
+            const mkBtn = (html, p, disabled, active, label) => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'w-7 h-7 flex items-center justify-center rounded-lg text-xs font-semibold transition '
+                    + (active ? 'bg-brand-500 text-white' : 'border border-gray-200 dark:border-white/10 text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/5');
+                if (disabled) { b.disabled = true; b.classList.add('opacity-40', 'cursor-not-allowed'); }
+                if (label) b.setAttribute('aria-label', label);
+                b.innerHTML = html;
+                b.addEventListener('click', () => { _spPage = p; renderSparepart(false); });
+                return b;
+            };
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-left"></i>', _spPage - 1, _spPage === 1, false, 'Sebelumnya'));
+            for (let p = 1; p <= totalPages; p++) {
+                pageBtns.appendChild(mkBtn(String(p), p, false, p === _spPage));
+            }
+            pageBtns.appendChild(mkBtn('<i class="fa-solid fa-chevron-right"></i>', _spPage + 1, _spPage === totalPages, false, 'Berikutnya'));
+        }
     }
 
     await loadSparepartMoves();
