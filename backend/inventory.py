@@ -28,6 +28,14 @@ from money import ZERO, to_decimal
 AKSI_MASUK = "MASUK"
 AKSI_PAKAI = "PAKAI"
 AKSI_BATAL = "BATAL"
+AKSI_RETUR_CACAT = "RETUR_CACAT"
+AKSI_GANTI_SUPPLIER = "GANTI_SUPPLIER"
+
+STATUS_RETUR_MENUNGGU = "MENUNGGU"
+STATUS_RETUR_DIKIRIM = "DIKIRIM"
+STATUS_RETUR_GANTI_BARANG = "GANTI_BARANG"
+STATUS_RETUR_POTONG_NOTA = "POTONG_NOTA"
+STATUS_RETUR_DITOLAK = "DITOLAK"
 
 STATUS_DIPAKAI = "DIPAKAI"
 STATUS_DIBATALKAN = "DIBATALKAN"
@@ -441,5 +449,300 @@ def pemakaian_unit(db: Session, service_order_id: int):
             "note": u.note,
             "oleh": u.oleh,
             "created_at": u.created_at.strftime("%Y-%m-%d %H:%M") if u.created_at else "-"
+        })
+    return out
+
+
+# ---------------- Retur / Garansi Sparepart Cacat Pabrik ----------------
+def catat_retur_cacat(
+    db: Session,
+    sparepart_id: int = None,
+    qty: int = 1,
+    alasan_cacat: str = "",
+    batch_id: int = None,
+    service_order_id: int = None,
+    service_order_part_id: int = None,
+    oleh: str = None
+):
+    """Mencatat part cacat pabrik:
+    - Jika dari service_order_part:
+      * Lepas part dari ServiceOrder (status = 'DIRETUR_CACAT')
+      * Recompute ServiceOrder.part_cost (biaya servis tidak terbebani part rusak)
+    - Jika langsung dari stok fisik toko:
+      * Kurangi Sparepart.qty dan batch FIFO (keluar dari rak siap jual ke karantina retur)
+    - Catat StockMove (aksi = 'RETUR_CACAT')
+    - Buat SparepartDefect (status = 'MENUNGGU')
+    """
+    from datetime import datetime
+    from decimal import Decimal
+    import secrets
+    from models import Sparepart, SparepartBatch, ServiceOrder, ServiceOrderPart, StockMove, SparepartDefect
+    from money import ZERO, to_decimal
+
+    qty = int(qty or 1)
+    if qty <= 0:
+        raise InventoryError("Qty harus lebih dari 0")
+    if not (alasan_cacat or "").strip():
+        raise InventoryError("Alasan / gejala cacat pabrik wajib diisi")
+
+    part = None
+    batch = None
+    unit = None
+    usage = None
+    modal = Decimal("0")
+    supplier_name = None
+
+    if service_order_part_id is not None:
+        usage = db.query(ServiceOrderPart).filter(ServiceOrderPart.id == service_order_part_id).first()
+        if not usage:
+            raise InventoryError("Entri pemakaian part servis tidak ditemukan")
+        if (usage.status or "").upper() != STATUS_DIPAKAI:
+            raise InventoryError(f"Part servis ini sudah berstatus {usage.status}")
+
+        service_order_id = usage.service_order_id
+        unit = db.query(ServiceOrder).filter(ServiceOrder.id == service_order_id).first()
+        if unit and (unit.status or "").upper() == "CASH":
+            raise InventoryError("Tidak dapat retur part pada transaksi yang sudah CASH")
+
+        sparepart_id = usage.sparepart_id
+        batch_id = usage.batch_id
+        modal = to_decimal(usage.modal_beli or 0)
+        qty = usage.qty or 1
+
+        usage.status = "DIRETUR_CACAT"
+        usage.note = (f"{usage.note or ''} [Retur cacat: {alasan_cacat}]").strip()
+        db.flush()
+
+        if unit is not None:
+            active_parts = (db.query(ServiceOrderPart)
+                            .filter(ServiceOrderPart.service_order_id == unit.id,
+                                    ServiceOrderPart.status == STATUS_DIPAKAI).all())
+            tot_cost = sum((to_decimal(p.modal_beli) * p.qty for p in active_parts), ZERO)
+            unit.part_cost = tot_cost
+            db.flush()
+
+    if sparepart_id:
+        part = _part(db, sparepart_id)
+        if not modal:
+            modal = to_decimal(getattr(part, "harga_beli", 0))
+
+    if batch_id:
+        batch = db.query(SparepartBatch).filter(SparepartBatch.id == batch_id).first()
+        if batch:
+            supplier_name = batch.supplier
+            if not modal:
+                modal = to_decimal(batch.harga_beli)
+
+    move = None
+    if service_order_part_id is None and sparepart_id:
+        sebelum = int(part.qty or 0)
+        if qty > sebelum:
+            raise StockConflict(sparepart_id, qty, sebelum)
+
+        if not batch_id:
+            active_batches = (db.query(SparepartBatch)
+                              .filter(SparepartBatch.sparepart_id == sparepart_id,
+                                      SparepartBatch.qty_sisa > 0,
+                                      SparepartBatch.status == "ACTIVE")
+                              .order_by(SparepartBatch.tanggal_masuk.asc(), SparepartBatch.id.asc())
+                              .all())
+            if active_batches:
+                b = active_batches[0]
+                take = min(qty, b.qty_sisa)
+                b.qty_sisa -= take
+                if b.qty_sisa == 0:
+                    b.status = "DEPLETED"
+                batch_id = b.id
+                supplier_name = b.supplier
+                modal = to_decimal(b.harga_beli)
+
+        affected = (db.query(Sparepart)
+                    .filter(Sparepart.id == sparepart_id, Sparepart.qty >= qty)
+                    .update({Sparepart.qty: Sparepart.qty - qty}, synchronize_session=False))
+        if affected != 1:
+            db.rollback()
+            raise StockConflict(sparepart_id, qty, _qty(db, sparepart_id))
+        db.flush()
+
+        move = StockMove(
+            sparepart_id=sparepart_id,
+            aksi=AKSI_RETUR_CACAT,
+            qty=qty,
+            qty_sebelum=sebelum,
+            qty_sesudah=sebelum - qty,
+            selisih=-qty,
+            service_order_id=service_order_id,
+            keterangan=f"Karantina part cacat: {alasan_cacat}",
+            oleh=oleh
+        )
+        db.add(move)
+        db.flush()
+    elif service_order_part_id is not None:
+        p_qty = int(getattr(part, "qty", 0)) if part else 0
+        move = StockMove(
+            sparepart_id=sparepart_id,
+            aksi=AKSI_RETUR_CACAT,
+            qty=qty,
+            qty_sebelum=p_qty,
+            qty_sesudah=p_qty,
+            selisih=0,
+            service_order_id=service_order_id,
+            service_order_part_id=service_order_part_id,
+            keterangan=f"Part cacat servis #{unit.no_servis if unit else service_order_id}: {alasan_cacat}",
+            oleh=oleh
+        )
+        db.add(move)
+        db.flush()
+
+    ts = datetime.now().strftime("%Y%m%d")
+    rnd = secrets.token_hex(2).upper()
+    no_retur = f"RET-{ts}-{rnd}"
+
+    defect = SparepartDefect(
+        no_retur=no_retur,
+        sparepart_id=sparepart_id,
+        batch_id=batch_id,
+        service_order_id=service_order_id,
+        service_order_part_id=service_order_part_id,
+        supplier=supplier_name or getattr(batch, "supplier", None) or "Supplier Umum",
+        qty=qty,
+        modal_satuan=modal,
+        alasan_cacat=alasan_cacat.strip(),
+        status=STATUS_RETUR_MENUNGGU,
+        oleh=oleh,
+        stock_move_id=move.id if move else None,
+        created_at=datetime.now()
+    )
+    db.add(defect)
+    db.flush()
+    db.refresh(defect)
+
+    journal.record(db, journal.DOMAIN_INVENTORY, "SPAREPART_DEFECT_REPORTED",
+                   entity_type="sparepart_defect", entity_id=defect.id, amount=float(modal * qty), actor=oleh,
+                   ref_type="sparepart_defect", ref_code=no_retur,
+                   details={"alasan": alasan_cacat, "qty": qty, "supplier": defect.supplier,
+                            "service_order_id": service_order_id})
+    db.flush()
+    return defect
+
+
+def update_status_retur(db: Session, defect_id: int, status_baru: str, note: str = None, oleh: str = None):
+    from models import SparepartDefect
+    defect = db.query(SparepartDefect).filter(SparepartDefect.id == defect_id).first()
+    if not defect:
+        raise InventoryError("Klaim retur tidak ditemukan")
+    if defect.status in ("GANTI_BARANG", "POTONG_NOTA", "DITOLAK"):
+        raise InventoryError("Klaim retur yang sudah selesai tidak dapat diubah statusnya")
+
+    status_baru = (status_baru or "").upper().strip()
+    if status_baru not in ("MENUNGGU", "DIKIRIM"):
+        raise InventoryError(f"Status tidak valid: {status_baru}")
+
+    defect.status = status_baru
+    if note:
+        defect.resolusi_note = (f"{defect.resolusi_note or ''}\n[{status_baru}] {note}").strip()
+    db.flush()
+    return defect
+
+
+def resolusi_retur(db: Session, defect_id: int, resolusi: str, note: str = None, oleh: str = None):
+    """Menyelesaikan klaim retur:
+    - GANTI_BARANG: Supplier mengganti unit fisik baru. Stok fisik Sparepart.qty bertambah (+qty).
+    - POTONG_NOTA: Supplier mengembalikan uang / memotong nota belanja. Stok fisik tidak bertambah.
+    - DITOLAK: Supplier menolak klaim. Kerugian dicatat.
+    """
+    from datetime import datetime
+    from models import Sparepart, SparepartBatch, StockMove, SparepartDefect
+    from money import ZERO, to_decimal
+
+    defect = db.query(SparepartDefect).filter(SparepartDefect.id == defect_id).first()
+    if not defect:
+        raise InventoryError("Klaim retur tidak ditemukan")
+    if defect.status in ("GANTI_BARANG", "POTONG_NOTA", "DITOLAK"):
+        raise InventoryError("Klaim retur sudah diselesaikan sebelumnya")
+
+    resolusi = (resolusi or "").upper().strip()
+    if resolusi not in ("GANTI_BARANG", "POTONG_NOTA", "DITOLAK"):
+        raise InventoryError(f"Resolusi tidak valid: {resolusi}")
+
+    resolve_move = None
+    if resolusi == "GANTI_BARANG":
+        part = db.query(Sparepart).filter(Sparepart.id == defect.sparepart_id).first()
+        if part:
+            sebelum = int(part.qty or 0)
+            part.qty = sebelum + defect.qty
+
+            if defect.batch_id:
+                b = db.query(SparepartBatch).filter(SparepartBatch.id == defect.batch_id).first()
+                if b:
+                    b.qty_sisa += defect.qty
+                    if b.status == "DEPLETED":
+                        b.status = "ACTIVE"
+            db.flush()
+
+            resolve_move = StockMove(
+                sparepart_id=part.id,
+                aksi=AKSI_GANTI_SUPPLIER,
+                qty=defect.qty,
+                qty_sebelum=sebelum,
+                qty_sesudah=sebelum + defect.qty,
+                selisih=defect.qty,
+                service_order_id=defect.service_order_id,
+                keterangan=f"Ganti unit baru supplier ({defect.no_retur}): {note or 'Unit normal diterima'}",
+                oleh=oleh
+            )
+            db.add(resolve_move)
+            db.flush()
+
+    defect.status = resolusi
+    defect.resolusi_note = (f"{defect.resolusi_note or ''}\n[{resolusi}] {note or ''}").strip()
+    defect.admin_penanggungjawab = oleh
+    defect.resolve_move_id = resolve_move.id if resolve_move else None
+    defect.resolved_at = datetime.now()
+    db.flush()
+
+    journal.record(db, journal.DOMAIN_INVENTORY, f"SPAREPART_DEFECT_{resolusi}",
+                   entity_type="sparepart_defect", entity_id=defect.id, amount=float(defect.modal_satuan * defect.qty),
+                   actor=oleh, ref_type="sparepart_defect", ref_code=defect.no_retur,
+                   details={"resolusi": resolusi, "note": note, "qty": defect.qty})
+    db.flush()
+    return defect
+
+
+def list_defects(db: Session, status: str = None, limit: int = 100):
+    from models import SparepartDefect, Sparepart, ServiceOrder
+    q = db.query(SparepartDefect)
+    if status and status.upper() != "ALL":
+        q = q.filter(SparepartDefect.status == status.upper())
+    rows = q.order_by(SparepartDefect.id.desc()).limit(limit).all()
+
+    out = []
+    for d in rows:
+        p = db.query(Sparepart).filter(Sparepart.id == d.sparepart_id).first()
+        p_label = ("%s %s" % (getattr(p, "merek", "") or "", getattr(p, "jenis", "") or "")).strip() if p else "Part"
+        so_no = None
+        if d.service_order_id:
+            so = db.query(ServiceOrder.no_servis).filter(ServiceOrder.id == d.service_order_id).first()
+            if so:
+                so_no = so[0]
+        out.append({
+            "id": d.id,
+            "no_retur": d.no_retur,
+            "sparepart_id": d.sparepart_id,
+            "sparepart_label": p_label,
+            "supplier": d.supplier or "-",
+            "qty": d.qty,
+            "modal_satuan": float(d.modal_satuan or 0),
+            "total_modal": float((d.modal_satuan or 0) * d.qty),
+            "alasan_cacat": d.alasan_cacat,
+            "status": d.status,
+            "resolusi_note": d.resolusi_note,
+            "service_order_id": d.service_order_id,
+            "service_order_part_id": d.service_order_part_id,
+            "no_servis": so_no,
+            "oleh": d.oleh,
+            "admin_penanggungjawab": d.admin_penanggungjawab,
+            "created_at": d.created_at.strftime("%Y-%m-%d %H:%M") if d.created_at else "-",
+            "resolved_at": d.resolved_at.strftime("%Y-%m-%d %H:%M") if d.resolved_at else None
         })
     return out

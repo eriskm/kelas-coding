@@ -333,6 +333,37 @@ class PartSaleItem(Base):
     batch = relationship("SparepartBatch", back_populates="sale_items")
 
 
+class SparepartDefect(Base):
+    """P2-16 — Pencatatan sparepart cacat pabrik / retur garansi ke supplier.
+    Status siklus klaim: MENUNGGU | DIKIRIM | GANTI_BARANG | POTONG_NOTA | DITOLAK
+    """
+    __tablename__ = "sparepart_defects"
+
+    id = Column(Integer, primary_key=True, index=True)
+    no_retur = Column(String(40), unique=True, index=True, nullable=False)
+    sparepart_id = Column(Integer, ForeignKey("spareparts.id"), nullable=False, index=True)
+    batch_id = Column(Integer, ForeignKey("sparepart_batches.id"), nullable=True, index=True)
+    service_order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=True, index=True)
+    service_order_part_id = Column(Integer, ForeignKey("service_order_parts.id"), nullable=True, index=True)
+    supplier = Column(String(120), nullable=True)
+    qty = Column(Integer, nullable=False, default=1)
+    modal_satuan = Column(MONEY, default=Decimal("0"), nullable=False)
+    alasan_cacat = Column(String(255), nullable=False)
+    status = Column(String(30), default="MENUNGGU", index=True, nullable=False)
+    resolusi_note = Column(Text, nullable=True)
+    oleh = Column(String(120))  # Pelapor (teknisi / admin)
+    admin_penanggungjawab = Column(String(120), nullable=True)
+    stock_move_id = Column(Integer, nullable=True)
+    resolve_move_id = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.now, index=True)
+    resolved_at = Column(DateTime, nullable=True)
+
+    sparepart = relationship("Sparepart")
+    batch = relationship("SparepartBatch")
+    service_order = relationship("ServiceOrder")
+    service_order_part = relationship("ServiceOrderPart")
+
+
 class KasEntry(Base):
     """Jurnal kas manual: pemasukan non-servis (cth. jual second, saldo awal)
     dan penyesuaian kas yang tidak punya rumah di service_orders/expenses.

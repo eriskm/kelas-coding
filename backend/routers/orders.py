@@ -1473,3 +1473,60 @@ def remove_order_part(
         "message": "Part berhasil dibatalkan dan stok dikembalikan.",
         "order_part_cost": 0 if is_tech else float(order.part_cost or 0)
     }
+
+
+
+class ServiceOrderPartReturCreate(BaseModel):
+    alasan_cacat: str
+
+
+@router.post("/{order_id}/parts/{item_id}/retur", status_code=201)
+def retur_order_part(
+    order_id: int,
+    item_id: int,
+    data: ServiceOrderPartReturCreate,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.SPAREPART_DEFECT_REPORT))
+):
+    """Lapor part cacat pabrik langsung dari unit servis:
+    - Part dilepas dari servis (part_cost servis dikurangi).
+    - Part masuk karantina retur ke supplier.
+    """
+    order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
+    if (order.status or "").upper() == "CASH":
+        raise HTTPException(status_code=400, detail="Tidak dapat retur part pada transaksi yang sudah CASH")
+
+    from models import ServiceOrderPart
+    part_item = (db.query(ServiceOrderPart)
+                 .filter(ServiceOrderPart.id == item_id,
+                         ServiceOrderPart.service_order_id == order_id).first())
+    if not part_item:
+        raise HTTPException(status_code=404, detail="Part tidak ditemukan pada order ini")
+
+    import inventory as inv_mod
+    oleh = user.display_name or user.username
+    try:
+        defect = inv_mod.catat_retur_cacat(
+            db=db,
+            service_order_part_id=item_id,
+            alasan_cacat=data.alasan_cacat,
+            oleh=oleh
+        )
+        db.commit()
+    except inv_mod.InventoryError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    db.refresh(order)
+    is_tech = (user.role or "").upper() == "TEKNISI"
+    return {
+        "success": True,
+        "no_retur": defect.no_retur,
+        "message": "Part cacat berhasil dicatat ke karantina retur supplier.",
+        "order_part_cost": 0 if is_tech else float(order.part_cost or 0)
+    }

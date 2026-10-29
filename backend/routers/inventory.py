@@ -163,3 +163,141 @@ def pemakaian(service_order_id: int, db: Session = Depends(get_db_session),
     """Riwayat pemakaian sparepart untuk satu unit (read-only)."""
     return {"service_order_id": service_order_id,
             "items": inv_mod.pemakaian_unit(db, service_order_id)}
+
+
+# ---------------- Retur Cacat Pabrik (Defective Parts) ----------------
+from pydantic import BaseModel
+from typing import Optional
+
+
+class DefectReportCreate(BaseModel):
+    sparepart_id: Optional[int] = None
+    qty: int = 1
+    alasan_cacat: str
+    batch_id: Optional[int] = None
+    service_order_id: Optional[int] = None
+    service_order_part_id: Optional[int] = None
+
+
+class DefectStatusUpdate(BaseModel):
+    status: str
+    note: Optional[str] = None
+
+
+class DefectResolveCreate(BaseModel):
+    resolusi: str  # GANTI_BARANG | POTONG_NOTA | DITOLAK
+    note: Optional[str] = None
+
+
+@router.post("/defects", status_code=201)
+def lapor_part_cacat(
+    data: DefectReportCreate,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.SPAREPART_DEFECT_REPORT))
+):
+    """Lapor sparepart cacat pabrik:
+    - Bisa dilaporkan oleh Teknisi saat servis unit, atau Admin Sparepart saat kelola stok.
+    """
+    oleh = user.display_name or user.username
+    try:
+        defect = inv_mod.catat_retur_cacat(
+            db=db,
+            sparepart_id=data.sparepart_id,
+            qty=data.qty,
+            alasan_cacat=data.alasan_cacat,
+            batch_id=data.batch_id,
+            service_order_id=data.service_order_id,
+            service_order_part_id=data.service_order_part_id,
+            oleh=oleh
+        )
+        db.commit()
+    except inv_mod.StockConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc))
+    except inv_mod.InventoryError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    return {
+        "success": True,
+        "id": defect.id,
+        "no_retur": defect.no_retur,
+        "sparepart_id": defect.sparepart_id,
+        "supplier": defect.supplier,
+        "qty": defect.qty,
+        "modal_satuan": float(defect.modal_satuan or 0),
+        "status": defect.status
+    }
+
+
+@router.get("/defects")
+def list_part_cacat(
+    status: Optional[str] = Query(None, description="Filter status: MENUNGGU, DIKIRIM, GANTI_BARANG, POTONG_NOTA, DITOLAK, ALL"),
+    limit: int = Query(DEFAULT_LIMIT),
+    db: Session = Depends(get_db_session),
+    user: User = Depends(get_authenticated_user)
+):
+    """Daftar riwayat klaim part cacat ke supplier."""
+    items = inv_mod.list_defects(db, status=status, limit=min(MAX_LIMIT, max(1, limit)))
+    return {"items": items}
+
+
+@router.put("/defects/{defect_id}/status")
+def update_status_cacat(
+    defect_id: int,
+    data: DefectStatusUpdate,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.SPAREPART_DEFECT_RESOLVE))
+):
+    """Update status kirim part cacat ke supplier (mis. MENUNGGU -> DIKIRIM)."""
+    oleh = user.display_name or user.username
+    try:
+        defect = inv_mod.update_status_retur(
+            db=db,
+            defect_id=defect_id,
+            status_baru=data.status,
+            note=data.note,
+            oleh=oleh
+        )
+        db.commit()
+    except inv_mod.InventoryError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"success": True, "id": defect.id, "status": defect.status}
+
+
+@router.post("/defects/{defect_id}/resolve")
+def selesaikan_klaim_cacat(
+    defect_id: int,
+    data: DefectResolveCreate,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.SPAREPART_DEFECT_RESOLVE))
+):
+    """Menyelesaikan klaim retur:
+    - GANTI_BARANG: Unit fisik baru dari supplier tiba -> stok fisik bertambah.
+    - POTONG_NOTA: Uang dikembalikan / nota belanja dipotong -> stok tidak bertambah.
+    - DITOLAK: Supplier menolak garansi -> dicatat rugi.
+    """
+    oleh = user.display_name or user.username
+    try:
+        defect = inv_mod.resolusi_retur(
+            db=db,
+            defect_id=defect_id,
+            resolusi=data.resolusi,
+            note=data.note,
+            oleh=oleh
+        )
+        db.commit()
+    except inv_mod.InventoryError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {
+        "success": True,
+        "id": defect.id,
+        "no_retur": defect.no_retur,
+        "status": defect.status,
+        "resolusi_note": defect.resolusi_note
+    }

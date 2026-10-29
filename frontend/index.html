@@ -1491,6 +1491,58 @@
                                     </table>
                                 </div>
                             </div>
+                            <!-- Panel Klaim Retur Supplier (Garansi Part Cacat Pabrik) -->
+                            <div class="mt-8 pt-6 border-t border-gray-100 dark:border-white/5 space-y-4">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm font-bold">
+                                            <i class="fa-solid fa-boxes-packing"></i>
+                                        </div>
+                                        <div>
+                                            <h3 class="text-sm sm:text-base font-bold text-gray-800 dark:text-white">Klaim Retur Supplier (Garansi Part Cacat Pabrik)</h3>
+                                            <p class="text-xs text-gray-500 dark:text-gray-400">Pantau part cacat bawaan pabrik untuk klaim ganti unit baru atau potong nota belanja</p>
+                                        </div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="loadSparepartDefects()" class="receive-back-btn text-xs" title="Muat ulang klaim retur">
+                                            <i class="fa-solid fa-rotate"></i> Refresh Retur
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Filter Status Tabs -->
+                                <div class="flex items-center gap-1.5 overflow-x-auto pb-1 text-xs" id="spDefectFilterTabs">
+                                    <button type="button" onclick="spFilterDefects('ALL')" class="sp-defect-chip active px-3 py-1 rounded-full border border-gray-200 dark:border-white/10 font-medium transition" data-status="ALL">Semua</button>
+                                    <button type="button" onclick="spFilterDefects('MENUNGGU')" class="sp-defect-chip px-3 py-1 rounded-full border border-gray-200 dark:border-white/10 font-medium transition" data-status="MENUNGGU">Menunggu Klaim</button>
+                                    <button type="button" onclick="spFilterDefects('DIKIRIM')" class="sp-defect-chip px-3 py-1 rounded-full border border-gray-200 dark:border-white/10 font-medium transition" data-status="DIKIRIM">Sedang Dikirim</button>
+                                    <button type="button" onclick="spFilterDefects('GANTI_BARANG')" class="sp-defect-chip px-3 py-1 rounded-full border border-gray-200 dark:border-white/10 font-medium transition" data-status="GANTI_BARANG">Ganti Unit Baru</button>
+                                    <button type="button" onclick="spFilterDefects('POTONG_NOTA')" class="sp-defect-chip px-3 py-1 rounded-full border border-gray-200 dark:border-white/10 font-medium transition" data-status="POTONG_NOTA">Potong Nota Belanja</button>
+                                    <button type="button" onclick="spFilterDefects('DITOLAK')" class="sp-defect-chip px-3 py-1 rounded-full border border-gray-200 dark:border-white/10 font-medium transition" data-status="DITOLAK">Ditolak</button>
+                                </div>
+
+                                <!-- Tabel Klaim Retur Supplier -->
+                                <div class="overflow-x-auto rounded-lg border border-gray-100 dark:border-white/5">
+                                    <table class="tx-table w-full text-xs sm:text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th class="w-32">No. Retur</th>
+                                                <th>Sparepart &amp; Supplier</th>
+                                                <th class="w-16 text-center">Qty</th>
+                                                <th class="w-28 text-right">Modal Klaim</th>
+                                                <th>Gejala Cacat</th>
+                                                <th class="w-28 text-center">Status</th>
+                                                <th class="w-32 text-center" data-cap="SPAREPART_WRITE">Aksi</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="spDefectBody">
+                                            <tr>
+                                                <td colspan="7" class="text-center text-xs text-gray-400 py-6">Memuat data retur...</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
                         </div>
                     </section>
 
@@ -3390,6 +3442,52 @@
                     </button>
                     <button type="submit" id="btnUsPartSubmit" class="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white shadow-sm flex items-center gap-1.5">
                         <i class="fa-solid fa-check"></i> Pasang ke Unit
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ========== MODAL RESOLUSI RETUR SUPPLIER ========== -->
+    <div id="modalResolveDefect" class="fixed inset-0 z-[9850] bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white dark:bg-gray-900 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-800 w-full max-w-md overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div class="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-800/40">
+                <div class="flex items-center gap-2.5">
+                    <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm font-bold">
+                        <i class="fa-solid fa-handshake"></i>
+                    </div>
+                    <h3 class="text-sm font-bold text-gray-800 dark:text-white" id="modalResolveTitle">Selesaikan Klaim Retur Supplier</h3>
+                </div>
+                <button type="button" onclick="spCloseResolveModal()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-base p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <form id="formResolveDefect" onsubmit="spSubmitResolveDefect(event)" class="p-5 space-y-4">
+                <input type="hidden" id="resolveDefectId">
+                <div id="resolveDefectInfo" class="text-xs p-3 rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300">
+                    <!-- Populated via JS -->
+                </div>
+                <div class="field">
+                    <label class="field-label" for="resolveChoice">Pilih Hasil Penyelesaian Supplier <span class="text-red-500">*</span></label>
+                    <select id="resolveChoice" class="receive-input" required onchange="spOnResolveChoiceChanged()">
+                        <option value="GANTI_BARANG">Ganti Unit Fisik Baru (Stok Rak Otomatis Bertambah)</option>
+                        <option value="POTONG_NOTA">Potong Nota Belanja Berikutnya / Refund Kas Modal</option>
+                        <option value="DITOLAK">Ditolak Supplier (Dicatat sebagai Kerugian Toko)</option>
+                    </select>
+                </div>
+                <div id="resolveImpactNote" class="text-xs p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300">
+                    Unit baru pengganti dari supplier akan langsung dimasukkan kembali ke stok rak toko.
+                </div>
+                <div class="field">
+                    <label class="field-label" for="resolveNote">Keterangan / No. Faktur Pengganti / Bukti</label>
+                    <input type="text" id="resolveNote" class="receive-input" placeholder="mis. Diterima dari Sales Toko B / Faktur #INV-001">
+                </div>
+                <div class="flex items-center justify-end gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
+                    <button type="button" onclick="spCloseResolveModal()" class="px-4 py-2 text-xs font-semibold text-gray-600 hover:text-gray-800 dark:text-gray-300 dark:hover:text-white">
+                        Batal
+                    </button>
+                    <button type="submit" id="btnSubmitResolve" class="px-4 py-2 text-xs font-semibold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5">
+                        <i class="fa-solid fa-check"></i> Simpan Penyelesaian
                     </button>
                 </div>
             </form>

@@ -5097,6 +5097,179 @@ function spQuickRestock(id) {
 }
 
 // ── P2-12: pergerakan stok (barang masuk + riwayat) ──
+
+// ============================================================================
+// KLAIM RETUR SUPPLIER (GARANSI PART CACAT PABRIK)
+// ============================================================================
+let _spDefectsList = [];
+let _spDefectFilter = 'ALL';
+
+async function loadSparepartDefects() {
+    const tbody = document.getElementById('spDefectBody');
+    if (!tbody) return;
+
+    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-xs text-gray-400 py-6"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat data retur...</td></tr>';
+
+    try {
+        const res = await apiGet('/inventory/defects?status=' + (_spDefectFilter || 'ALL'));
+        _spDefectsList = res.items || [];
+
+        if (!_spDefectsList.length) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-xs text-gray-400 py-6"><i class="fa-solid fa-box-open text-2xl mb-1.5 block opacity-40"></i>Tidak ada data klaim retur supplier.</td></tr>';
+            return;
+        }
+
+        tbody.innerHTML = _spDefectsList.map(d => {
+            let badge = '';
+            if (d.status === 'MENUNGGU') {
+                badge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400 border border-amber-200 dark:border-amber-800/40"><i class="fa-solid fa-hourglass-half text-[9px]"></i> Menunggu</span>';
+            } else if (d.status === 'DIKIRIM') {
+                badge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400 border border-blue-200 dark:border-blue-800/40"><i class="fa-solid fa-truck text-[9px]"></i> Dikirim</span>';
+            } else if (d.status === 'GANTI_BARANG') {
+                badge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800/40"><i class="fa-solid fa-check text-[9px]"></i> Ganti Unit</span>';
+            } else if (d.status === 'POTONG_NOTA') {
+                badge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-400 border border-purple-200 dark:border-purple-800/40"><i class="fa-solid fa-receipt text-[9px]"></i> Potong Nota</span>';
+            } else if (d.status === 'DITOLAK') {
+                badge = '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400 border border-red-200 dark:border-red-800/40"><i class="fa-solid fa-xmark text-[9px]"></i> Ditolak</span>';
+            }
+
+            let aksiBtns = '';
+            if (d.status === 'MENUNGGU') {
+                aksiBtns = `
+                    <div class="flex items-center justify-center gap-1">
+                        <button type="button" onclick="spUpdateDefectStatus(${d.id}, 'DIKIRIM')" class="px-2 py-1 rounded bg-blue-50 hover:bg-blue-100 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 text-[11px] font-semibold border border-blue-200 dark:border-blue-800" title="Ubah status menjadi sedang dibawa/dikirim ke supplier">
+                            <i class="fa-solid fa-paper-plane"></i> Kirim
+                        </button>
+                        <button type="button" onclick="spOpenResolveModal(${d.id})" class="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 text-[11px] font-semibold border border-emerald-200 dark:border-emerald-800" title="Selesaikan klaim retur">
+                            <i class="fa-solid fa-handshake"></i> Solusi
+                        </button>
+                    </div>`;
+            } else if (d.status === 'DIKIRIM') {
+                aksiBtns = `
+                    <div class="flex items-center justify-center">
+                        <button type="button" onclick="spOpenResolveModal(${d.id})" class="px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 text-[11px] font-semibold border border-emerald-200 dark:border-emerald-800" title="Selesaikan klaim retur">
+                            <i class="fa-solid fa-handshake"></i> Selesaikan
+                        </button>
+                    </div>`;
+            } else {
+                aksiBtns = `<span class="text-[10.5px] text-gray-400 font-mono">${escapeHtml(d.resolved_at ? d.resolved_at.slice(0, 10) : 'Selesai')}</span>`;
+            }
+
+            return `<tr>
+                <td>
+                    <div class="font-mono font-bold text-gray-800 dark:text-gray-100">${escapeHtml(d.no_retur)}</div>
+                    <div class="text-[10px] text-gray-400">${escapeHtml(d.created_at)}</div>
+                </td>
+                <td class="max-w-[200px]">
+                    <div class="font-medium text-gray-900 dark:text-gray-100 truncate" title="${escapeHtml(d.sparepart_label)}">${escapeHtml(d.sparepart_label)}</div>
+                    <div class="text-[10.5px] text-brand-600 dark:text-brand-400 font-medium">Supplier: ${escapeHtml(d.supplier || '-')}</div>
+                </td>
+                <td class="text-center font-bold text-gray-800 dark:text-gray-200">${d.qty}</td>
+                <td class="text-right font-mono font-bold text-gray-900 dark:text-white">Rp ${Number(d.total_modal || 0).toLocaleString('id-ID')}</td>
+                <td class="max-w-[200px]">
+                    <div class="text-xs text-red-600 dark:text-red-400 font-medium truncate" title="${escapeHtml(d.alasan_cacat)}">${escapeHtml(d.alasan_cacat)}</div>
+                    ${d.no_servis ? `<div class="text-[10px] text-gray-400 font-mono">Unit: #${escapeHtml(d.no_servis)} • ${escapeHtml(d.oleh || '')}</div>` : `<div class="text-[10px] text-gray-400">Stok Toko • ${escapeHtml(d.oleh || '')}</div>`}
+                </td>
+                <td class="text-center">${badge}</td>
+                <td class="text-center" data-cap="SPAREPART_WRITE">${aksiBtns}</td>
+            </tr>`;
+        }).join('');
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="7" class="text-center text-xs text-red-400 py-6">Gagal memuat klaim retur: ' + escapeHtml(err.message || 'Error') + '</td></tr>';
+    }
+}
+
+function spFilterDefects(status) {
+    _spDefectFilter = status;
+    const chips = document.querySelectorAll('.sp-defect-chip');
+    chips.forEach(btn => {
+        btn.classList.toggle('active', btn.getAttribute('data-status') === status);
+    });
+    loadSparepartDefects();
+}
+
+async function spUpdateDefectStatus(defectId, newStatus) {
+    if (!confirm('Ubah status barang retur ini menjadi SEDANG DIKIRIM ke supplier?')) return;
+    try {
+        await apiPut(`/inventory/defects/${defectId}/status`, { status: newStatus });
+        await loadSparepartDefects();
+        if (typeof showToast === 'function') showToast('Status retur berhasil diperbarui ke DIKIRIM.', 'success');
+    } catch (err) {
+        alert('Gagal update status: ' + (err.message || 'Error'));
+    }
+}
+
+function spOpenResolveModal(defectId) {
+    const item = _spDefectsList.find(d => d.id === defectId);
+    if (!item) return;
+
+    document.getElementById('resolveDefectId').value = defectId;
+    document.getElementById('resolveDefectInfo').innerHTML = `
+        <div class="font-bold text-gray-800 dark:text-gray-100">${escapeHtml(item.no_retur)} — ${escapeHtml(item.sparepart_label)}</div>
+        <div class="text-[11px] text-gray-500 mt-1">Supplier: <b>${escapeHtml(item.supplier)}</b> • Modal: <b>Rp ${Number(item.total_modal || 0).toLocaleString('id-ID')}</b></div>
+        <div class="text-[11px] text-red-500 mt-0.5">Gejala Cacat: ${escapeHtml(item.alasan_cacat)}</div>
+    `;
+    document.getElementById('resolveChoice').value = 'GANTI_BARANG';
+    document.getElementById('resolveNote').value = '';
+    spOnResolveChoiceChanged();
+    document.getElementById('modalResolveDefect').classList.remove('hidden');
+}
+
+function spCloseResolveModal() {
+    const m = document.getElementById('modalResolveDefect');
+    if (m) m.classList.add('hidden');
+}
+
+function spOnResolveChoiceChanged() {
+    const choice = document.getElementById('resolveChoice').value;
+    const noteEl = document.getElementById('resolveImpactNote');
+    if (!noteEl) return;
+
+    if (choice === 'GANTI_BARANG') {
+        noteEl.className = 'text-xs p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300';
+        noteEl.innerHTML = '<i class="fa-solid fa-boxes-stacked mr-1"></i> <b>Ganti Unit Fisik Baru</b>: Stok fisik rak toko otomatis bertambah kembali (+1 pcs) tanpa pengeluaran kas baru.';
+    } else if (choice === 'POTONG_NOTA') {
+        noteEl.className = 'text-xs p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-purple-800 dark:text-purple-300';
+        noteEl.innerHTML = '<i class="fa-solid fa-receipt mr-1"></i> <b>Potong Nota Belanja / Kas</b>: Supplier memotong nilai modal pada nota belanja berikutnya atau mengembalikan uang kas modal. Stok fisik tidak bertambah.';
+    } else if (choice === 'DITOLAK') {
+        noteEl.className = 'text-xs p-2.5 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-red-800 dark:text-red-300';
+        noteEl.innerHTML = '<i class="fa-solid fa-triangle-exclamation mr-1"></i> <b>Klaim Ditolak Supplier</b>: Dicatat resmi sebagai kerugian barang rusak / write-off toko.';
+    }
+}
+
+async function spSubmitResolveDefect(event) {
+    event.preventDefault();
+    const defectId = parseInt(document.getElementById('resolveDefectId').value, 10);
+    const resolusi = document.getElementById('resolveChoice').value;
+    const note = document.getElementById('resolveNote').value.trim() || null;
+
+    const btn = document.getElementById('btnSubmitResolve');
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Menyimpan...';
+    }
+
+    try {
+        await apiPost(`/inventory/defects/${defectId}/resolve`, { resolusi, note });
+        spCloseResolveModal();
+        await loadSparepartDefects();
+        await loadSparepartMoves(); try { await loadSparepartDefects(); } catch (_) {}
+        if (typeof renderSparepart === 'function') await renderSparepart();
+        if (typeof showToast === 'function') {
+            showToast('Klaim retur berhasil diselesaikan!', 'success');
+        } else {
+            alert('Klaim retur berhasil diselesaikan!');
+        }
+    } catch (err) {
+        alert('Gagal menyelesaikan klaim retur: ' + (err.message || 'Error'));
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-check"></i> Simpan Penyelesaian';
+        }
+    }
+}
+
 async function loadSparepartMoves() {
     const body = document.getElementById('spMoveBody');
     const sel = document.getElementById('spMovePart');
@@ -5715,6 +5888,7 @@ async function renderSparepart(fetchFresh = true) {
         if (info) info.textContent = '';
         if (pageBtns) pageBtns.innerHTML = '';
         await loadSparepartMoves();
+        try { await loadSparepartDefects(); } catch (_) {}
         return;
     }
 
@@ -5917,6 +6091,7 @@ async function renderSparepart(fetchFresh = true) {
     }
 
     await loadSparepartMoves();
+    try { await loadSparepartDefects(); } catch (_) {}
     applyRoleUI(document.getElementById('pageSparepart') || document);
 }
 
@@ -9381,9 +9556,14 @@ async function usPartsLoad(serviceId, orderStatus) {
                 }
 
                 const delBtn = isCash ? '<span class="text-gray-300 dark:text-gray-600 cursor-not-allowed" title="Terkunci saat CASH"><i class="fa-solid fa-lock text-xs"></i></span>'
-                    : `<button type="button" onclick="usRemovePart(${serviceId}, ${item.id}, '${escapeHtml(item.part_name || 'Part')}')" class="text-red-500 hover:text-red-700 p-1 text-xs" title="Lepas part (kembalikan stok ke rak)">
-                        <i class="fa-solid fa-rotate-left"></i>
-                    </button>`;
+                    : `<div class="flex items-center justify-center gap-1.5">
+                        <button type="button" onclick="usReportDefectPart(${serviceId}, ${item.id}, '${escapeHtml(item.part_name || 'Part')}')" class="text-amber-500 hover:text-amber-600 p-1 text-xs" title="Lapor part cacat pabrik / retur ke supplier">
+                            <i class="fa-solid fa-shield-virus"></i>
+                        </button>
+                        <button type="button" onclick="usRemovePart(${serviceId}, ${item.id}, '${escapeHtml(item.part_name || 'Part')}')" class="text-red-500 hover:text-red-700 p-1 text-xs" title="Lepas part (kembalikan stok ke rak)">
+                            <i class="fa-solid fa-rotate-left"></i>
+                        </button>
+                    </div>`;
 
                 return `<tr>
                     <td class="py-2.5 px-3">
@@ -9586,6 +9766,29 @@ async function usRemovePart(orderId, itemId, partName) {
         alert('Gagal melepas sparepart: ' + (err.message || 'Error'));
     }
 }
+window.usRemovePart = usRemovePart;
+
+async function usReportDefectPart(orderId, itemId, partName) {
+    const alasan = prompt(`Part "${partName}" cacat bawaan pabrik?\n\nPart akan dilepas dari servis (modal nota dikurangi) dan dialihkan ke Karantina Retur Supplier.\n\nMasukkan rincian gejala cacat:`, 'Touchscreen ghost touch / tidak normal');
+    if (alasan === null) return;
+    if (!alasan.trim()) {
+        alert('Gejala kerusakan wajib diisi.');
+        return;
+    }
+
+    try {
+        const res = await apiPost(`/orders/${orderId}/parts/${itemId}/retur`, { alasan_cacat: alasan.trim() });
+        await usPartsLoad(orderId, _usStatusInit);
+        if (typeof showToast === 'function') {
+            showToast(`Part cacat dicatat ke retur (${res.no_retur}). Modal servis dikurangi.`, 'info');
+        } else {
+            alert(`Part cacat dicatat ke retur (${res.no_retur}). Modal servis dikurangi.`);
+        }
+    } catch (err) {
+        alert('Gagal lapor part cacat: ' + (err.message || 'Error'));
+    }
+}
+window.usReportDefectPart = usReportDefectPart;
 
 async function usLoadClaimHistory(serviceId) {
     const box = document.getElementById('usClaimHistory');
