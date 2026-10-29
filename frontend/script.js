@@ -5470,6 +5470,75 @@ function spGroupItems(data) {
     return Array.from(map.values());
 }
 
+// --- Helper Salin Format WA untuk Teknisi / Toko Servis ---
+function spCopyText(text, successMsg) {
+    if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text).then(() => {
+            toast(successMsg || 'Format balasan WA berhasil disalin!', 'success');
+        }).catch(() => {
+            spFallbackCopyText(text, successMsg);
+        });
+    } else {
+        spFallbackCopyText(text, successMsg);
+    }
+}
+
+function spFallbackCopyText(text, successMsg) {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    try {
+        document.execCommand('copy');
+        toast(successMsg || 'Format balasan WA berhasil disalin!', 'success');
+    } catch (_) {
+        toast('Gagal menyalin teks ke clipboard.', 'danger');
+    }
+    document.body.removeChild(ta);
+}
+
+function spCopyGroupWA(encodedKey) {
+    const groupKey = decodeURIComponent(encodedKey);
+    const groups = spGroupItems(spFiltered());
+    const g = groups.find(x => x.key === groupKey);
+    if (!g || !g.variants || g.variants.length === 0) {
+        toast('Tidak ada data varian untuk disalin.', 'warning');
+        return;
+    }
+
+    const readyVars = g.variants.filter(v => v.qty > 0);
+    const targetVars = readyVars.length > 0 ? readyVars : g.variants;
+
+    const lines = ['Ready stok:'];
+    for (const v of targetVars) {
+        const fullDesc = (v.raw.jenis || '').trim();
+        const hargaFormatted = 'Rp ' + (Number(v.jual) || 0).toLocaleString('id-ID');
+        const stokInfo = v.qty > 0 ? `(Stok: ${v.qty})` : '(Stok Habis)';
+        lines.push(`• ${fullDesc} @ ${hargaFormatted} ${stokInfo}`);
+    }
+
+    const textToCopy = lines.join('\n');
+    spCopyText(textToCopy, `Format balasan WA (${targetVars.length} item) disalin!`);
+}
+
+function spCopySingleWA(partId) {
+    const item = (_spView || []).find(x => x && x.id === partId);
+    if (!item) {
+        toast('Part tidak ditemukan.', 'warning');
+        return;
+    }
+    const fullDesc = (item.jenis || '').trim();
+    const hargaFormatted = 'Rp ' + (Number(item.jual) || 0).toLocaleString('id-ID');
+    const stokInfo = item.qty > 0 ? `(Stok: ${item.qty})` : '(Stok Habis)';
+    const textToCopy = `Ready stok:\n• ${fullDesc} @ ${hargaFormatted} ${stokInfo}`;
+    spCopyText(textToCopy, 'Format WA part berhasil disalin!');
+}
+
+window.spCopyGroupWA = spCopyGroupWA;
+window.spCopySingleWA = spCopySingleWA;
+
 async function renderSparepart() {
     try { spMenuClose(); } catch (_) {}
     const my = ++_spReq;
@@ -5587,7 +5656,7 @@ async function renderSparepart() {
                                 ` : ''}
                             </div>
                         </div>
-                        <div class="flex items-center gap-2.5 sm:self-center">
+                        <div class="flex items-center gap-2 sm:gap-2.5 sm:self-center flex-wrap justify-end">
                             <div class="text-right">
                                 <div class="text-[10px] uppercase font-bold text-gray-400">Total Stok Fisik</div>
                                 <div class="text-base font-black ${isHabis ? 'text-rose-600 dark:text-rose-400' : isMenipis ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'} tabular-nums">
@@ -5597,6 +5666,10 @@ async function renderSparepart() {
                             <span class="px-2 py-1 rounded-lg text-xs font-bold ${statusBadgeCls}">
                                 ${statusTxt}
                             </span>
+                            <button type="button" onclick="spCopyGroupWA('${encodeURIComponent(g.key)}')" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-extrabold flex items-center gap-1.5 shadow-2xs transition active:scale-95" title="Salin format balasan WhatsApp untuk teknisi">
+                                <i class="fa-brands fa-whatsapp text-sm"></i>
+                                <span>Salin WA</span>
+                            </button>
                         </div>
                     </div>
 
@@ -5651,6 +5724,10 @@ async function renderSparepart() {
                                             </td>
                                             <td class="py-2 px-3 text-center">
                                                 <div class="flex items-center justify-center gap-1.5" data-cap="SPAREPART_WRITE">
+                                                    <button type="button" onclick="spCopySingleWA(${v.id})" class="px-2 py-1 rounded bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Salin Format WA Varian Ini">
+                                                        <i class="fa-brands fa-whatsapp text-[10.5px]"></i>
+                                                        <span>WA</span>
+                                                    </button>
                                                     <button type="button" onclick="spQuickRestock(${v.id})" class="px-2 py-1 rounded bg-brand-50 hover:bg-brand-100 dark:bg-brand-950/40 dark:hover:bg-brand-900/50 text-brand-700 dark:text-brand-300 font-bold text-[10.5px] flex items-center gap-1 transition" title="Tambah Stok Masuk">
                                                         <i class="fa-solid fa-plus text-[9px]"></i>
                                                         <span>Stok</span>
