@@ -241,6 +241,11 @@ def _migrate_schema():
         ("service_orders", "unit_status", "VARCHAR(10)"),
         ("service_orders", "taken_at", "DATETIME"),
         ("payments", "kind", "VARCHAR(10)"),
+        ("service_order_parts", "batch_id", "INTEGER"),
+        ("service_order_parts", "modal_beli", "FLOAT"),
+        ("service_order_parts", "is_external", "BOOLEAN"),
+        ("service_order_parts", "part_name", "VARCHAR(150)"),
+        ("service_order_parts", "note", "VARCHAR(200)"),
     ]
 
     def ddl(dtype):
@@ -279,6 +284,57 @@ def _migrate_schema():
         conn.execute(text("UPDATE service_orders SET laba_bersih = 0 WHERE laba_bersih IS NULL"))
         conn.execute(text("UPDATE service_orders SET unit_status = 'DI TOKO' WHERE unit_status IS NULL"))
         conn.execute(text("UPDATE payments SET kind = 'PELUNASAN' WHERE kind IS NULL"))
+
+        # service_order_parts.sparepart_id harus NULLable untuk part luar / kanibal
+        try:
+            if IS_SQLITE:
+                table_info = conn.execute(text("PRAGMA table_info(service_order_parts)")).fetchall()
+                sp_col = next((c for c in table_info if c[1] == "sparepart_id"), None)
+                if sp_col and sp_col[3] == 1:  # notnull == 1
+                    conn.execute(text("""
+                        CREATE TABLE service_order_parts_new (
+                            id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                            service_order_id INTEGER NOT NULL,
+                            sparepart_id INTEGER NULL,
+                            batch_id INTEGER NULL,
+                            part_name VARCHAR(150),
+                            qty INTEGER NOT NULL DEFAULT 1,
+                            modal_beli NUMERIC(18, 2) NOT NULL DEFAULT 0,
+                            harga_satuan NUMERIC(18, 2) DEFAULT 0,
+                            is_external BOOLEAN NOT NULL DEFAULT 0,
+                            note VARCHAR(200),
+                            status VARCHAR(20) NOT NULL DEFAULT 'DIPAKAI',
+                            stock_move_id INTEGER,
+                            cancel_move_id INTEGER,
+                            oleh VARCHAR(120),
+                            created_at DATETIME,
+                            FOREIGN KEY(service_order_id) REFERENCES service_orders (id),
+                            FOREIGN KEY(sparepart_id) REFERENCES spareparts (id),
+                            FOREIGN KEY(batch_id) REFERENCES sparepart_batches (id)
+                        )
+                    """))
+                    conn.execute(text("""
+                        INSERT INTO service_order_parts_new (
+                            id, service_order_id, sparepart_id, batch_id, part_name, qty,
+                            modal_beli, harga_satuan, is_external, note, status,
+                            stock_move_id, cancel_move_id, oleh, created_at
+                        )
+                        SELECT id, service_order_id, sparepart_id, batch_id, part_name, qty,
+                               COALESCE(modal_beli, 0), harga_satuan, COALESCE(is_external, 0),
+                               note, status, stock_move_id, cancel_move_id, oleh, created_at
+                        FROM service_order_parts
+                    """))
+                    conn.execute(text("DROP TABLE service_order_parts"))
+                    conn.execute(text("ALTER TABLE service_order_parts_new RENAME TO service_order_parts"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_service_order_parts_id ON service_order_parts (id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_service_order_parts_service_order_id ON service_order_parts (service_order_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_service_order_parts_sparepart_id ON service_order_parts (sparepart_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_service_order_parts_batch_id ON service_order_parts (batch_id)"))
+                    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_service_order_parts_status ON service_order_parts (status)"))
+            else:
+                conn.execute(text("ALTER TABLE service_order_parts ALTER COLUMN sparepart_id DROP NOT NULL"))
+        except Exception as _e:
+            _log("[migrasi] sparepart_id nullable dilewati: %s" % _e)
 
 
 def _log(msg):

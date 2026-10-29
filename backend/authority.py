@@ -146,7 +146,8 @@ class Action:
     REPORT_INVESTOR = "REPORT_INVESTOR"
     REPORT_SPAREPART = "REPORT_SPAREPART"
     ORDER_UPDATE_MODAL = "ORDER_UPDATE_MODAL"
-    PART_SALE_CREATE = "PART_SALE_CREATE" 
+    PART_SALE_CREATE = "PART_SALE_CREATE"
+    SERVICE_PART_USE = "SERVICE_PART_USE"  
 
 
 AUTHORITY_MATRIX = {
@@ -167,6 +168,7 @@ AUTHORITY_MATRIX = {
     # -- uang ---------------------------------------------------------------
     Action.PAYMENT_CREATE: {ROLE_SUPER, ROLE_ADMIN, ROLE_KASIR},
     Action.PART_SALE_CREATE: {ROLE_SUPER, ROLE_ADMIN, ROLE_KASIR},
+    Action.SERVICE_PART_USE: {ROLE_SUPER, ROLE_ADMIN, ROLE_TEKNISI, ROLE_ADMIN_SPAREPART},
     Action.PAYMENT_CANCEL: {ROLE_SUPER, ROLE_ADMIN},
     # Beban. Kasir TIDAK boleh: tugasnya pembayaran & nota, bukan mencatat
     # beban (Owner: "tidak boleh mengubah ... konfigurasi keuangan").
@@ -253,6 +255,7 @@ DEFAULT_MESSAGES = {
     Action.REFUND_GARANSI: "Refund klaim garansi adalah keputusan Admin.",
     Action.FAILED_CANCEL: "Hanya Admin/Kasir yang boleh membatalkan unit.",
     Action.SPAREPART_WRITE: "Hanya Super Admin/Admin/Admin Sparepart yang boleh mengelola sparepart.",
+    Action.SERVICE_PART_USE: "Hanya Teknisi/Admin/Super Admin yang boleh memasang part pada servis.",
     Action.SPAREPART_DELETE: "Hanya Super Admin/Admin yang boleh menghapus sparepart.",
     Action.CLAIM_WRITE: "Hanya Admin/Kasir yang boleh mengelola klaim garansi.",
     Action.USER_MANAGE: "Hanya Admin yang boleh mengelola akun.",

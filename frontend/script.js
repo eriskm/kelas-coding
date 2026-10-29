@@ -995,6 +995,20 @@ async function apiGet(path) {
 
 class AuthError extends Error {}
 
+async function apiDelete(path) {
+    const headers = {};
+    const token = getToken();
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    const res = await fetch(API_BASE + path, { method: 'DELETE', headers });
+    if (res.status === 401) { throw new AuthError('Sesi tidak valid'); }
+    if (!res.ok) {
+        let detail = 'Gagal menghapus data (HTTP ' + res.status + ')';
+        try { const j = await res.json(); if (j.detail) detail = j.detail; } catch (_) {}
+        throw new Error(detail);
+    }
+    return res.json();
+}
+
 async function apiPost(path, body, opts) {
     const headers = { 'Content-Type': 'application/json' };
     const token = getToken();
@@ -1029,13 +1043,13 @@ function newIdemKey() {
 // P2-15: CAPABILITY (cermin authority matrix B yang sudah LOCKED)
 // Tampilan hanya menawarkan aksi yang diizinkan role; backend tetap penjaga utama.
 const BSSF_CAPS = {
-    superadmin: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
+    superadmin: ['SERVICE_PART_USE', 'ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
         'ORDER_STATUS_CLOSING', 'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL',
         'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
         'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
         'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'ROLE_CONFIG', 'AUDIT_READ', 'REPORT_FULL',
         'REPORT_INVESTOR'],
-    admin: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
+    admin: ['SERVICE_PART_USE', 'ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
         'ORDER_STATUS_CLOSING', 'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL',
         'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
         'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
@@ -1044,12 +1058,12 @@ const BSSF_CAPS = {
         'ORDER_HANDOVER', 'PAYMENT_CREATE', 'EXPENSE_WRITE', 'REFUND_DP', 'FAILED_CANCEL',
         'SPAREPART_WRITE', 'CLAIM_WRITE'],
     // ORDER_CREATE (penerimaan unit) TIDAK ada: itu tugas Kasir/CS (OD-LOCK-10).
-    teknisi: ['ORDER_UPDATE', 'ORDER_HANDOVER', 'CLAIM_WRITE'],
+    teknisi: ['SERVICE_PART_USE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'CLAIM_WRITE'],
     // Admin Sparepart: hanya area barang/stok. Tidak boleh menyentuh transaksi
     // pelanggan, pembayaran, laba, atau Tutup Kas.
     // Permission sparepart dipisah dari laporan keuangan: Admin Sparepart
     // boleh laporan persediaan, tapi TIDAK laporan bisnis/keuangan.
-    adminSparepart: ['SPAREPART_WRITE', 'REPORT_SPAREPART'],
+    adminSparepart: ['SERVICE_PART_USE', 'SPAREPART_WRITE', 'REPORT_SPAREPART'],
     pengelola: ['REPORT_FULL'], // Q13: monitoring; boleh lihat + unduh laporan
     investor: ['REPORT_INVESTOR'], // monitoring investasi; tanpa data pribadi
     // Role tidak dikenal / kosong = tanpa hak apa pun. Sengaja TIDAK fallback ke
@@ -3091,6 +3105,7 @@ function openUpdateServis(o) {
     document.getElementById('pageUpdateServis').classList.add('open');
     loadUpdateTechnicians();
     try { usLoadClaimHistory(o.id); } catch (_) {}
+    try { usPartsLoad(o.id, o.status); } catch (_) {}
 }
 
 function closeUpdateServis() {
@@ -5108,7 +5123,10 @@ async function loadSparepartMoves() {
                 const dt = String(m.waktu || '').replace('T', ' ').slice(0, 16);
                 return `<tr>
                     <td class="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">${escapeHtml(dt)}</td>
-                    <td class="font-medium text-gray-800 dark:text-gray-200 max-w-[200px] truncate" title="${escapeHtml(m.sparepart_label || '-')}">${escapeHtml(m.sparepart_label || '-')}</td>
+                    <td class="font-medium text-gray-800 dark:text-gray-200 max-w-[220px]">
+                        <div class="truncate" title="${escapeHtml(m.sparepart_label || '-')}">${escapeHtml(m.sparepart_label || '-')}</div>
+                        ${m.no_servis ? `<div class="text-[10.5px] text-brand-600 dark:text-brand-400 font-mono">Servis #${escapeHtml(m.no_servis)}${m.oleh ? ' • ' + escapeHtml(m.oleh) : ''}</div>` : (m.keterangan ? `<div class="text-[10px] text-gray-400 truncate">${escapeHtml(m.keterangan)}</div>` : '')}
+                    </td>
                     <td class="text-center">${badge}</td>
                     <td class="text-right font-bold tabular-nums ${m.aksi === 'MASUK' ? 'text-emerald-600 dark:text-emerald-400' : 'text-gray-700 dark:text-gray-300'}">${m.aksi === 'MASUK' ? '+' : ''}${m.qty}</td>
                     <td class="text-right font-extrabold tabular-nums text-gray-900 dark:text-white">${m.qty_sesudah}</td>
@@ -9287,6 +9305,285 @@ function usClaimNew() {
         const s = document.getElementById('clrSearch');
         if (s) s.value = keyword;
         claimRSearch();
+    }
+}
+
+
+// ============================================================================
+// PEMAKAIAN SPAREPART PADA UNIT SERVIS (INTEGRASI FIFO & TEKNISI)
+// ============================================================================
+let _usCurrentOrderParts = [];
+let _usAvailableStoreParts = [];
+
+async function usPartsLoad(serviceId, orderStatus) {
+    const tbody = document.getElementById('usPartsTableBody');
+    if (!tbody || !serviceId) return;
+
+    const currentRole = (window._currentUser && window._currentUser.role || localStorage.getItem('bsf_user_role') || '').toUpperCase();
+    const isTech = currentRole === 'TEKNISI';
+    const isCash = (orderStatus || _usStatusInit || '').toUpperCase() === 'CASH';
+
+    // Header modal column
+    const thModal = document.getElementById('thUsPartModal');
+    if (thModal) {
+        thModal.textContent = isTech ? 'Modal' : 'Modal (Rp)';
+    }
+
+    // Role Teknisi: tidak boleh input part luar
+    const btnExt = document.getElementById('btnUsAddExtPart');
+    if (btnExt) {
+        btnExt.classList.toggle('hidden', isTech);
+    }
+
+    // Status CASH notice
+    const cashNotice = document.getElementById('usPartsCashNotice');
+    if (cashNotice) {
+        cashNotice.classList.toggle('hidden', !isCash);
+    }
+    const btnStore = document.getElementById('btnUsAddStorePart');
+    if (btnStore) btnStore.disabled = isCash;
+    if (btnExt) btnExt.disabled = isCash;
+
+    // Field usFinPart: Teknisi dilarang otak-atik manual
+    const finPartInput = document.getElementById('usFinPart');
+    if (finPartInput) {
+        if (isTech) {
+            finPartInput.readOnly = true;
+            finPartInput.classList.add('bg-gray-100', 'cursor-not-allowed');
+            finPartInput.title = 'Modal part dihitung otomatis oleh sistem';
+        } else {
+            finPartInput.readOnly = false;
+            finPartInput.classList.remove('bg-gray-100', 'cursor-not-allowed');
+        }
+    }
+
+    tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400 italic"><i class="fa-solid fa-circle-notch fa-spin"></i> Memuat daftar sparepart...</td></tr>';
+
+    try {
+        const res = await apiGet('/orders/' + serviceId + '/parts');
+        _usCurrentOrderParts = res.items || [];
+
+        if (!_usCurrentOrderParts.length) {
+            tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-gray-400 italic">Belum ada sparepart yang terpasang pada unit ini.</td></tr>';
+        } else {
+            tbody.innerHTML = _usCurrentOrderParts.map(item => {
+                const isExt = !!item.is_external;
+                const sourceBadge = isExt
+                    ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300">Part Luar / Kanibal</span>'
+                    : '<span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300">Stok Toko' + (item.batch_id ? ' (Batch #' + item.batch_id + ')' : '') + '</span>';
+
+                let modalText = '-';
+                if (!isTech) {
+                    const totalModal = (Number(item.modal_beli) || 0) * (Number(item.qty) || 1);
+                    modalText = 'Rp ' + Number(totalModal).toLocaleString('id-ID');
+                } else {
+                    modalText = '<span class="text-gray-400 italic text-[11px]">Dilindungi</span>';
+                }
+
+                const delBtn = isCash ? '<span class="text-gray-300 dark:text-gray-600 cursor-not-allowed" title="Terkunci saat CASH"><i class="fa-solid fa-lock text-xs"></i></span>'
+                    : `<button type="button" onclick="usRemovePart(${serviceId}, ${item.id}, '${escapeHtml(item.part_name || 'Part')}')" class="text-red-500 hover:text-red-700 p-1 text-xs" title="Lepas part (kembalikan stok ke rak)">
+                        <i class="fa-solid fa-rotate-left"></i>
+                    </button>`;
+
+                return `<tr>
+                    <td class="py-2.5 px-3">
+                        <div class="font-medium text-gray-900 dark:text-gray-100">${escapeHtml(item.part_name || '-')}</div>
+                        ${item.note ? '<div class="text-[10.5px] text-gray-400">' + escapeHtml(item.note) + '</div>' : ''}
+                    </td>
+                    <td class="py-2.5 px-2 text-center">${sourceBadge}</td>
+                    <td class="py-2.5 px-2 text-center font-bold text-gray-800 dark:text-gray-200">${item.qty}</td>
+                    <td class="py-2.5 px-3 text-right font-mono font-medium">${modalText}</td>
+                    <td class="py-2.5 px-2 text-center">${delBtn}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        // Sinkronisasi modal part ke form
+        if (!isTech && res.part_cost !== undefined && finPartInput) {
+            finPartInput.value = res.part_cost;
+            usFinUpdate();
+        }
+    } catch (err) {
+        tbody.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-red-400 italic">Gagal memuat sparepart: ' + escapeHtml(err.message || 'Error') + '</td></tr>';
+    }
+}
+
+async function usOpenAddPartModal(isExternal) {
+    if ((_usStatusInit || '').toUpperCase() === 'CASH') {
+        alert('Unit servis ini sudah CASH. Pemakaian sparepart terkunci.');
+        return;
+    }
+
+    const modal = document.getElementById('modalUsAddPart');
+    if (!modal) return;
+
+    document.getElementById('usPartIsExternal').value = isExternal ? 'true' : 'false';
+    document.getElementById('modalUsPartTitle').textContent = isExternal ? 'Input Part Luar / Kanibal' : 'Pasang Sparepart dari Stok Toko';
+    document.getElementById('modalUsPartIcon').className = isExternal ? 'fa-solid fa-screwdriver-wrench' : 'fa-solid fa-microchip';
+
+    const secStore = document.getElementById('sectionUsPartStore');
+    const secExt = document.getElementById('sectionUsPartExt');
+    const selStore = document.getElementById('usPartSelect');
+    const extName = document.getElementById('usPartExtName');
+    const extModal = document.getElementById('usPartExtModal');
+
+    if (isExternal) {
+        if (secStore) secStore.classList.add('hidden');
+        if (secExt) secExt.classList.remove('hidden');
+        if (selStore) selStore.required = false;
+        if (extName) { extName.required = true; extName.value = ''; }
+        if (extModal) { extModal.required = true; extModal.value = ''; }
+    } else {
+        if (secStore) secStore.classList.remove('hidden');
+        if (secExt) secExt.classList.add('hidden');
+        if (selStore) selStore.required = true;
+        if (extName) extName.required = false;
+        if (extModal) extModal.required = false;
+        document.getElementById('usPartSearch').value = '';
+        await usLoadStorePartsForSelect();
+    }
+
+    document.getElementById('usPartQty').value = 1;
+    document.getElementById('usPartNote').value = '';
+    modal.classList.remove('hidden');
+}
+
+function usCloseAddPartModal() {
+    const modal = document.getElementById('modalUsAddPart');
+    if (modal) modal.classList.add('hidden');
+}
+
+async function usLoadStorePartsForSelect() {
+    const sel = document.getElementById('usPartSelect');
+    const badge = document.getElementById('usPartStockBadge');
+    if (!sel) return;
+
+    sel.innerHTML = '<option value="" disabled selected>Memuat stok sparepart...</option>';
+    try {
+        const res = await apiGet('/spareparts');
+        const items = Array.isArray(res) ? res : (res.items || []);
+        _usAvailableStoreParts = items.filter(p => (Number(p.qty) || 0) > 0);
+        usFilterStoreParts('');
+    } catch (err) {
+        sel.innerHTML = '<option value="" disabled selected>Gagal memuat stok sparepart</option>';
+        if (badge) badge.textContent = 'Error: ' + (err.message || 'Gagal koneksi');
+    }
+}
+
+function usFilterStoreParts(query) {
+    const sel = document.getElementById('usPartSelect');
+    const badge = document.getElementById('usPartStockBadge');
+    if (!sel) return;
+
+    const q = (query || '').toLowerCase().trim();
+    const filtered = _usAvailableStoreParts.filter(p => {
+        if (!q) return true;
+        const text = `${p.kategori || ''} ${p.merek || ''} ${p.jenis || ''} ${p.device || ''}`.toLowerCase();
+        return text.includes(q);
+    });
+
+    if (!filtered.length) {
+        sel.innerHTML = '<option value="" disabled selected>Tidak ada sparepart yang cocok / stok kosong</option>';
+        if (badge) badge.textContent = 'Tidak ditemukan sparepart dengan stok tersedia.';
+        return;
+    }
+
+    sel.innerHTML = filtered.map(p => {
+        const label = `[${p.kategori || 'Part'}] ${p.merek ? p.merek + ' - ' : ''}${p.jenis || ''} (Stok: ${p.qty})`;
+        return `<option value="${p.id}" data-qty="${p.qty}" data-harga="${p.harga_jual || 0}">${escapeHtml(label)}</option>`;
+    }).join('');
+
+    sel.selectedIndex = 0;
+    usOnPartSelected();
+}
+
+function usOnPartSelected() {
+    const sel = document.getElementById('usPartSelect');
+    const badge = document.getElementById('usPartStockBadge');
+    if (!sel || !sel.selectedOptions.length) return;
+
+    const opt = sel.selectedOptions[0];
+    const qty = opt.getAttribute('data-qty') || 0;
+    const harga = Number(opt.getAttribute('data-harga') || 0);
+
+    if (badge) {
+        badge.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-semibold"><i class="fa-solid fa-boxes-stacked"></i> Stok Tersedia: <b>${qty} pcs</b></span>
+        <span class="text-gray-400 mx-1">|</span>
+        <span>Harga Standar: <b>Rp ${harga.toLocaleString('id-ID')}</b></span>`;
+    }
+}
+
+async function usSubmitAddPart(event) {
+    event.preventDefault();
+    if (!_txEditId) {
+        alert('ID order tidak valid');
+        return;
+    }
+
+    const isExternal = document.getElementById('usPartIsExternal').value === 'true';
+    const qty = parseInt(document.getElementById('usPartQty').value, 10) || 1;
+    const note = document.getElementById('usPartNote').value.trim() || null;
+
+    let payload = { qty, note, is_external: isExternal };
+
+    if (isExternal) {
+        const partName = document.getElementById('usPartExtName').value.trim();
+        const modalBeli = parseFloat(document.getElementById('usPartExtModal').value) || 0;
+        if (!partName) {
+            alert('Nama part luar wajib diisi');
+            return;
+        }
+        payload.part_name = partName;
+        payload.modal_beli = modalBeli;
+    } else {
+        const sel = document.getElementById('usPartSelect');
+        const spId = parseInt(sel.value, 10);
+        if (!spId) {
+            alert('Pilih sparepart dari daftar');
+            return;
+        }
+        payload.sparepart_id = spId;
+    }
+
+    const btnSubmit = document.getElementById('btnUsPartSubmit');
+    if (btnSubmit) {
+        btnSubmit.disabled = true;
+        btnSubmit.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Memproses...';
+    }
+
+    try {
+        await apiPost('/orders/' + _txEditId + '/parts', payload);
+        usCloseAddPartModal();
+        await usPartsLoad(_txEditId, _usStatusInit);
+        if (typeof showToast === 'function') {
+            showToast('Sparepart berhasil dipasang ke unit!', 'success');
+        } else {
+            alert('Sparepart berhasil dipasang!');
+        }
+    } catch (err) {
+        alert('Gagal memasang sparepart: ' + (err.message || 'Error'));
+    } finally {
+        if (btnSubmit) {
+            btnSubmit.disabled = false;
+            btnSubmit.innerHTML = '<i class="fa-solid fa-check"></i> Pasang ke Unit';
+        }
+    }
+}
+
+async function usRemovePart(orderId, itemId, partName) {
+    const alasan = prompt(`Lepas "${partName}" dari unit servis ini?\nStok fisik akan dikembalikan ke rak & batch asal.\n\nMasukkan alasan pembatalan:`, 'Batal ganti part');
+    if (alasan === null) return;
+
+    try {
+        await apiDelete(`/orders/${orderId}/parts/${itemId}?alasan=${encodeURIComponent(alasan || 'Dilepas teknisi')}`);
+        await usPartsLoad(orderId, _usStatusInit);
+        if (typeof showToast === 'function') {
+            showToast('Sparepart berhasil dilepas dan stok dikembalikan.', 'info');
+        } else {
+            alert('Sparepart berhasil dilepas!');
+        }
+    } catch (err) {
+        alert('Gagal melepas sparepart: ' + (err.message || 'Error'));
     }
 }
 

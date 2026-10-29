@@ -3,7 +3,7 @@ from typing import Optional
 import random
 from datetime import date, datetime
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
@@ -1332,3 +1332,144 @@ def order_history_timeline(order_id: int, db: Session = Depends(get_db_session))
         .order_by(StatusHistory.waktu.asc(), StatusHistory.id.asc())
         .all()
     )
+
+
+# ==================== Service Order Parts Integration ====================
+from decimal import Decimal
+from pydantic import BaseModel
+from typing import Optional
+
+class ServiceOrderPartCreate(BaseModel):
+    sparepart_id: Optional[int] = None
+    qty: int = 1
+    modal_beli: Optional[Decimal] = None
+    harga_satuan: Optional[Decimal] = None
+    is_external: bool = False
+    part_name: Optional[str] = None
+    note: Optional[str] = None
+
+
+@router.get("/{order_id}/parts")
+def list_order_parts(
+    order_id: int,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(get_authenticated_user)
+):
+    """Ambil rincian sparepart yang terpasang pada service order."""
+    order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
+    import inventory as inv_mod
+    items = inv_mod.pemakaian_unit(db, order_id)
+    is_tech = (user.role or "").upper() == "TEKNISI"
+    for it in items:
+        if is_tech:
+            it["modal_beli"] = 0
+    return {"order_id": order_id, "part_cost": float(order.part_cost or 0) if not is_tech else 0, "items": items}
+
+
+@router.post("/{order_id}/parts", status_code=201)
+def add_order_part(
+    order_id: int,
+    data: ServiceOrderPartCreate,
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.SERVICE_PART_USE))
+):
+    """Pasang sparepart ke unit servis:
+    - Bila dari stok: potong stok fisik & batch FIFO, catat modal otomatis.
+    - Bila part luar: butuh wewenang ORDER_UPDATE_MODAL (Admin/Super).
+    - Otomatis update ServiceOrder.part_cost.
+    """
+    order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
+    if (order.status or "").upper() == "CASH":
+        raise HTTPException(status_code=400, detail="Tidak dapat menambah part pada transaksi yang sudah CASH")
+
+    if data.is_external:
+        from authority import check
+        check(user, Action.ORDER_UPDATE_MODAL)
+
+    import inventory as inv_mod
+    oleh = user.display_name or user.username
+    try:
+        res = inv_mod.catat_pakai(
+            db=db,
+            sparepart_id=data.sparepart_id,
+            qty=data.qty,
+            service_order_id=order_id,
+            harga_satuan=data.harga_satuan,
+            modal_beli=data.modal_beli,
+            is_external=data.is_external,
+            part_name=data.part_name,
+            note=data.note,
+            oleh=oleh
+        )
+        db.commit()
+    except inv_mod.StockConflict as exc:
+        db.rollback()
+        raise HTTPException(status_code=409, detail=str(exc))
+    except inv_mod.InventoryError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    db.refresh(order)
+    usage = res.get("usage")
+    is_tech = (user.role or "").upper() == "TEKNISI"
+    return {
+        "success": True,
+        "part_id": getattr(usage, "id", None),
+        "part_name": getattr(usage, "part_name", None),
+        "qty": getattr(usage, "qty", 1),
+        "modal_beli": 0 if is_tech else float(getattr(usage, "modal_beli", 0)),
+        "order_part_cost": 0 if is_tech else float(order.part_cost or 0)
+    }
+
+
+@router.delete("/{order_id}/parts/{item_id}")
+def remove_order_part(
+    order_id: int,
+    item_id: int,
+    alasan: str = Query("", description="Alasan batal pasang"),
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.SERVICE_PART_USE))
+):
+    """Batalkan/lepas part dari unit servis:
+    - Stok dan batch FIFO dikembalikan utuh ke rak.
+    - Otomatis kurangi ServiceOrder.part_cost.
+    """
+    order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
+    if (order.status or "").upper() == "CASH":
+        raise HTTPException(status_code=400, detail="Tidak dapat membatalkan part pada transaksi yang sudah CASH")
+
+    from models import ServiceOrderPart
+    part_item = (db.query(ServiceOrderPart)
+                 .filter(ServiceOrderPart.id == item_id,
+                         ServiceOrderPart.service_order_id == order_id).first())
+    if not part_item:
+        raise HTTPException(status_code=404, detail="Part tidak ditemukan pada order ini")
+
+    import inventory as inv_mod
+    oleh = user.display_name or user.username
+    try:
+        res = inv_mod.batalkan_pakai(db=db, service_order_part_id=item_id, oleh=oleh, alasan=alasan)
+        db.commit()
+    except inv_mod.InventoryError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    db.refresh(order)
+    is_tech = (user.role or "").upper() == "TEKNISI"
+    return {
+        "success": True,
+        "message": "Part berhasil dibatalkan dan stok dikembalikan.",
+        "order_part_cost": 0 if is_tech else float(order.part_cost or 0)
+    }

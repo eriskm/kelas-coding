@@ -117,27 +117,96 @@ def catat_masuk(db: Session, sparepart_id: int, qty: int, keterangan: str = None
 
 
 # ---------------- Pemakaian part (decrement ATOMIK) ----------------
-def catat_pakai(db: Session, sparepart_id: int, qty: int, service_order_id: int = None,
-                harga_satuan=None, keterangan: str = None, oleh: str = None):
-    """Pemakaian sparepart: decrement ATOMIK (hanya bila qty cukup) + link unit.
+def catat_pakai(db: Session, sparepart_id: int = None, qty: int = 1, service_order_id: int = None,
+                harga_satuan=None, modal_beli=None, is_external: bool = False,
+                part_name: str = None, note: str = None, oleh: str = None):
+    """Pemakaian sparepart untuk unit servis (decrement ATOMIK & batch FIFO)."""
+    from models import ServiceOrder, ServiceOrderPart, Sparepart, SparepartBatch, StockMove
+    from money import ZERO, to_decimal
 
-    Mengikuti Project A: guard `qty >= n` di level query; bila tidak ada baris yang
-    terpengaruh → StockConflict (409).
-    """
     qty = int(qty or 0)
     if qty <= 0:
         raise InventoryError("Qty harus lebih dari 0")
-    part = _part(db, sparepart_id)
+
+    unit = None
     if service_order_id is not None:
-        from models import ServiceOrder
         unit = db.query(ServiceOrder).filter(ServiceOrder.id == service_order_id).first()
         if unit is None:
-            raise InventoryError("Unit tidak ditemukan")
+            raise InventoryError("Unit servis tidak ditemukan")
+        if (unit.status or "").upper() == "CASH":
+            raise InventoryError("Tidak dapat menambah part pada transaksi yang sudah CASH")
+
+    if is_external:
+        if not (part_name or "").strip():
+            raise InventoryError("Nama part luar wajib diisi")
+        modal = to_decimal(modal_beli or 0)
+        harga = to_decimal(harga_satuan or 0)
+        usage = ServiceOrderPart(
+            service_order_id=service_order_id,
+            sparepart_id=None,
+            batch_id=None,
+            part_name=(part_name or "").strip(),
+            qty=qty,
+            modal_beli=modal,
+            harga_satuan=harga,
+            is_external=True,
+            note=note,
+            status=STATUS_DIPAKAI,
+            oleh=oleh
+        )
+        db.add(usage)
+        db.flush()
+
+        if unit is not None:
+            active_parts = (db.query(ServiceOrderPart)
+                            .filter(ServiceOrderPart.service_order_id == unit.id,
+                                    ServiceOrderPart.status == STATUS_DIPAKAI).all())
+            tot_cost = sum(to_decimal(p.modal_beli) * p.qty for p in active_parts)
+            unit.part_cost = tot_cost
+            if getattr(unit, "tanpa_modal", False) and tot_cost > ZERO:
+                unit.tanpa_modal = False
+            db.flush()
+
+        return {
+            "move": None,
+            "usage": usage,
+            "part_cost": unit.part_cost if unit else modal * qty,
+            "qty_sebelum": 0,
+            "qty_sesudah": 0
+        }
+
+    # Kasus normal: dari inventaris toko
+    if not sparepart_id:
+        raise InventoryError("Sparepart toko wajib dipilih")
+
+    part = _part(db, sparepart_id)
     sebelum = int(part.qty or 0)
     if qty > sebelum:
         raise StockConflict(sparepart_id, qty, sebelum)
 
-    from models import Sparepart, StockMove
+    # FIFO Batch Depletion
+    batch_id = None
+    modal = to_decimal(getattr(part, "harga_beli", 0))
+
+    batches = (db.query(SparepartBatch)
+               .filter(SparepartBatch.sparepart_id == sparepart_id,
+                       SparepartBatch.qty_sisa > 0,
+                       SparepartBatch.status == "ACTIVE")
+               .order_by(SparepartBatch.tanggal_masuk.asc(), SparepartBatch.id.asc())
+               .all())
+
+    if batches:
+        b = batches[0]
+        take = min(qty, b.qty_sisa)
+        b.qty_sisa -= take
+        if b.qty_sisa == 0:
+            b.status = "DEPLETED"
+        batch_id = b.id
+        modal = to_decimal(b.harga_beli)
+    elif modal_beli is not None:
+        modal = to_decimal(modal_beli)
+
+    # Decrement atomik pada master sparepart
     affected = (db.query(Sparepart)
                 .filter(Sparepart.id == sparepart_id, Sparepart.qty >= qty)
                 .update({Sparepart.qty: Sparepart.qty - qty}, synchronize_session=False))
@@ -146,24 +215,53 @@ def catat_pakai(db: Session, sparepart_id: int, qty: int, service_order_id: int 
         raise StockConflict(sparepart_id, qty, _qty(db, sparepart_id))
     db.flush()
 
-    move = StockMove(sparepart_id=sparepart_id, aksi=AKSI_PAKAI, qty=qty,
-                     qty_sebelum=sebelum, qty_sesudah=sebelum - qty, selisih=-qty,
-                     service_order_id=service_order_id,
-                     keterangan=keterangan or ("Pemakaian part x%d" % qty), oleh=oleh)
+    ket = note or ("Pemakaian part servis x%d" % qty if service_order_id else "Pemakaian part x%d" % qty)
+    move = StockMove(
+        sparepart_id=sparepart_id,
+        aksi=AKSI_PAKAI,
+        qty=qty,
+        qty_sebelum=sebelum,
+        qty_sesudah=sebelum - qty,
+        selisih=-qty,
+        service_order_id=service_order_id,
+        keterangan=ket,
+        oleh=oleh
+    )
     db.add(move)
     db.flush()
 
     usage = None
+    p_name = (part_name or part.jenis or "").strip()
+    harga = to_decimal(harga_satuan) if harga_satuan is not None else to_decimal(getattr(part, "harga_jual", 0))
+
     if service_order_id is not None:
-        from models import ServiceOrderPart
-        harga = to_decimal(harga_satuan) if harga_satuan is not None else to_decimal(
-            getattr(part, "harga_jual", 0))
-        usage = ServiceOrderPart(service_order_id=service_order_id, sparepart_id=sparepart_id,
-                                 qty=qty, harga_satuan=harga, status=STATUS_DIPAKAI,
-                                 stock_move_id=move.id, oleh=oleh)
+        usage = ServiceOrderPart(
+            service_order_id=service_order_id,
+            sparepart_id=sparepart_id,
+            batch_id=batch_id,
+            part_name=p_name,
+            qty=qty,
+            modal_beli=modal,
+            harga_satuan=harga,
+            is_external=False,
+            note=note,
+            status=STATUS_DIPAKAI,
+            stock_move_id=move.id,
+            oleh=oleh
+        )
         db.add(usage)
         db.flush()
         move.service_order_part_id = usage.id
+
+        if unit is not None:
+            active_parts = (db.query(ServiceOrderPart)
+                            .filter(ServiceOrderPart.service_order_id == unit.id,
+                                    ServiceOrderPart.status == STATUS_DIPAKAI).all())
+            tot_cost = sum(to_decimal(p.modal_beli) * p.qty for p in active_parts)
+            unit.part_cost = tot_cost
+            if getattr(unit, "tanpa_modal", False) and tot_cost > ZERO:
+                unit.tanpa_modal = False
+            db.flush()
 
     journal.record(db, journal.DOMAIN_INVENTORY, EVENT_PAKAI,
                    entity_type="stock_move", entity_id=move.id, amount=None, actor=oleh,
@@ -171,69 +269,115 @@ def catat_pakai(db: Session, sparepart_id: int, qty: int, service_order_id: int 
                    details={"aksi": AKSI_PAKAI, "qty": qty, "qty_sebelum": sebelum,
                             "qty_sesudah": sebelum - qty,
                             "service_order_id": service_order_id,
+                            "batch_id": batch_id,
+                            "modal_beli": float(modal),
                             "service_order_part_id": getattr(usage, "id", None)})
     db.flush()
     db.refresh(move)
-    return {"move": move, "usage": usage, "qty_sebelum": sebelum,
-            "qty_sesudah": sebelum - qty}
+    return {
+        "move": move,
+        "usage": usage,
+        "part_cost": unit.part_cost if unit else modal * qty,
+        "qty_sebelum": sebelum,
+        "qty_sesudah": sebelum - qty
+    }
 
 
 # ---------------- Pembatalan pemakaian (IDEMPOTEN) ----------------
 def batalkan_pakai(db: Session, service_order_part_id: int, oleh: str = None,
-                   alasan: str = None):
-    """Batalkan pemakaian: qty kembali + jurnal BATAL. **Idempoten**.
+                    alasan: str = None):
+    """Batalkan pemakaian: qty kembali ke stok & batch + recompute part_cost."""
+    from models import ServiceOrder, ServiceOrderPart, Sparepart, SparepartBatch, StockMove
+    from money import ZERO, to_decimal
 
-    Bila pemakaian sudah DIBATALKAN, fungsi mengembalikan hasil yang sama tanpa
-    menambah qty lagi (A: hanya baris berstatus 'Dipakai' yang diproses).
-    """
-    from models import ServiceOrderPart, Sparepart, StockMove
     usage = (db.query(ServiceOrderPart)
              .filter(ServiceOrderPart.id == service_order_part_id).first())
     if usage is None:
         raise InventoryError("Entri pemakaian tidak ditemukan")
-    if (usage.status or "").upper() == STATUS_DIBATALKAN and usage.cancel_move_id:
-        move = db.query(StockMove).filter(StockMove.id == usage.cancel_move_id).first()
+    if (usage.status or "").upper() == STATUS_DIBATALKAN:
+        move = db.query(StockMove).filter(StockMove.id == usage.cancel_move_id).first() if usage.cancel_move_id else None
         return {"idempotent": True, "move": move, "usage": usage,
                 "qty_sebelum": getattr(move, "qty_sebelum", None),
                 "qty_sesudah": getattr(move, "qty_sesudah", None),
                 "pengembalian": 0}
 
-    part = _part(db, usage.sparepart_id)
-    sebelum = int(part.qty or 0)
-    qty = int(usage.qty or 0)
-    affected = (db.query(Sparepart)
-                .filter(Sparepart.id == usage.sparepart_id)
-                .update({Sparepart.qty: Sparepart.qty + qty}, synchronize_session=False))
-    if affected != 1:
-        db.rollback()
-        raise StockConflict(usage.sparepart_id, qty, sebelum)
+    unit = None
+    if usage.service_order_id:
+        unit = db.query(ServiceOrder).filter(ServiceOrder.id == usage.service_order_id).first()
+        if unit and (unit.status or "").upper() == "CASH":
+            raise InventoryError("Tidak dapat membatalkan part pada transaksi yang sudah CASH")
+
+    move = None
+    sebelum = 0
+    qty = int(usage.qty or 1)
+
+    if not usage.is_external and usage.sparepart_id:
+        part = _part(db, usage.sparepart_id)
+        sebelum = int(part.qty or 0)
+
+        # Restore batch
+        if usage.batch_id:
+            b = db.query(SparepartBatch).filter(SparepartBatch.id == usage.batch_id).first()
+            if b:
+                b.qty_sisa += qty
+                b.status = "ACTIVE"
+                db.flush()
+
+        # Increment master part
+        db.query(Sparepart).filter(Sparepart.id == usage.sparepart_id).update(
+            {Sparepart.qty: Sparepart.qty + qty}, synchronize_session=False
+        )
+        db.flush()
+
+        move = StockMove(
+            sparepart_id=usage.sparepart_id,
+            aksi=AKSI_BATAL,
+            qty=qty,
+            qty_sebelum=sebelum,
+            qty_sesudah=sebelum + qty,
+            selisih=qty,
+            service_order_id=usage.service_order_id,
+            service_order_part_id=usage.id,
+            pakai_move_id=usage.stock_move_id,
+            keterangan=alasan or "Batal pasang part servis",
+            oleh=oleh
+        )
+        db.add(move)
+        db.flush()
+        usage.cancel_move_id = move.id
+
+    usage.status = STATUS_DIBATALKAN
     db.flush()
 
-    move = StockMove(sparepart_id=usage.sparepart_id, aksi=AKSI_BATAL, qty=qty,
-                     qty_sebelum=sebelum, qty_sesudah=sebelum + qty, selisih=qty,
-                     service_order_id=usage.service_order_id,
-                     service_order_part_id=usage.id, pakai_move_id=usage.stock_move_id,
-                     keterangan=(alasan or ("Batal pakai part x%d" % qty)), oleh=oleh)
-    db.add(move)
-    db.flush()
-    usage.status = STATUS_DIBATALKAN
-    usage.cancel_move_id = move.id
+    if unit is not None:
+        active_parts = (db.query(ServiceOrderPart)
+                        .filter(ServiceOrderPart.service_order_id == unit.id,
+                                ServiceOrderPart.status == STATUS_DIPAKAI).all())
+        tot_cost = sum(to_decimal(p.modal_beli) * p.qty for p in active_parts)
+        unit.part_cost = tot_cost
+        db.flush()
 
     journal.record(db, journal.DOMAIN_INVENTORY, EVENT_BATAL,
-                   entity_type="stock_move", entity_id=move.id, amount=None, actor=oleh,
+                   entity_type="stock_move", entity_id=move.id if move else None, amount=None, actor=oleh,
                    ref_type="service_order_part", ref_code=str(usage.id),
-                   details={"aksi": AKSI_BATAL, "qty": qty, "qty_sebelum": sebelum,
-                            "qty_sesudah": sebelum + qty,
+                   details={"aksi": AKSI_BATAL, "qty": qty,
+                            "service_order_id": usage.service_order_id,
                             "pakai_move_id": usage.stock_move_id, "alasan": alasan})
     db.flush()
-    db.refresh(move)
-    return {"idempotent": False, "move": move, "usage": usage,
-            "qty_sebelum": sebelum, "qty_sesudah": sebelum + qty, "pengembalian": qty}
+    return {
+        "idempotent": False,
+        "move": move,
+        "usage": usage,
+        "part_cost": unit.part_cost if unit else Decimal("0"),
+        "qty_sebelum": sebelum,
+        "qty_sesudah": sebelum + qty,
+        "pengembalian": qty
+    }
 
 
 # ---------------- Riwayat (read-only) ----------------
 def moves(db: Session, sparepart_id=None, service_order_id=None, limit: int = 100):
-    from models import StockMove
+    from models import StockMove, ServiceOrder, Sparepart
     q = db.query(StockMove)
     if sparepart_id is not None:
         q = q.filter(StockMove.sparepart_id == sparepart_id)
@@ -242,33 +386,60 @@ def moves(db: Session, sparepart_id=None, service_order_id=None, limit: int = 10
     rows = q.order_by(StockMove.id.desc()).limit(limit).all()
     out = []
     for m in rows:
-        p = _part(db, m.sparepart_id)
-        out.append({"id": m.id, "sparepart_id": m.sparepart_id,
-                    "sparepart_label": "%s %s" % (getattr(p, "merek", "") or "",
-                                                   getattr(p, "jenis", "") or ""),
-                    "aksi": m.aksi, "qty": m.qty, "qty_sebelum": m.qty_sebelum,
-                    "qty_sesudah": m.qty_sesudah, "selisih": m.selisih,
-                    "service_order_id": m.service_order_id,
-                    "service_order_part_id": m.service_order_part_id,
-                    "pakai_move_id": m.pakai_move_id, "keterangan": m.keterangan,
-                    "oleh": m.oleh, "waktu": m.waktu})
+        p = db.query(Sparepart).filter(Sparepart.id == m.sparepart_id).first() if m.sparepart_id else None
+        p_label = ("%s %s" % (getattr(p, "merek", "") or "", getattr(p, "jenis", "") or "")).strip() if p else (m.keterangan or "Part")
+        so_no = None
+        if m.service_order_id:
+            so = db.query(ServiceOrder.no_servis).filter(ServiceOrder.id == m.service_order_id).first()
+            if so:
+                so_no = so[0]
+        out.append({
+            "id": m.id,
+            "sparepart_id": m.sparepart_id,
+            "sparepart_label": p_label,
+            "aksi": m.aksi,
+            "qty": m.qty,
+            "qty_sebelum": m.qty_sebelum,
+            "qty_sesudah": m.qty_sesudah,
+            "selisih": m.selisih,
+            "service_order_id": m.service_order_id,
+            "no_servis": so_no,
+            "service_order_part_id": m.service_order_part_id,
+            "pakai_move_id": m.pakai_move_id,
+            "keterangan": m.keterangan or (f"Servis #{so_no}" if so_no else "-"),
+            "oleh": m.oleh,
+            "waktu": m.waktu.strftime("%Y-%m-%d %H:%M") if getattr(m, "waktu", None) else "-"
+        })
     return out
 
 
 def pemakaian_unit(db: Session, service_order_id: int):
     """Riwayat pemakaian part untuk satu unit (ADAPT `servis_part`)."""
-    from models import ServiceOrderPart
+    from models import ServiceOrderPart, Sparepart
     rows = (db.query(ServiceOrderPart)
             .filter(ServiceOrderPart.service_order_id == service_order_id)
-            .order_by(ServiceOrderPart.id.desc()).all())
+            .order_by(ServiceOrderPart.id.asc()).all())
     out = []
     for u in rows:
-        p = _part(db, u.sparepart_id)
-        out.append({"id": u.id, "service_order_id": u.service_order_id,
-                    "sparepart_id": u.sparepart_id,
-                    "label": "%s %s" % (getattr(p, "merek", "") or "",
-                                        getattr(p, "jenis", "") or ""),
-                    "qty": u.qty, "harga_satuan": u.harga_satuan, "status": u.status,
-                    "stock_move_id": u.stock_move_id, "cancel_move_id": u.cancel_move_id,
-                    "oleh": u.oleh, "created_at": u.created_at})
+        p = db.query(Sparepart).filter(Sparepart.id == u.sparepart_id).first() if u.sparepart_id else None
+        p_name = u.part_name or (("%s %s" % (getattr(p, "merek", "") or "", getattr(p, "jenis", "") or "")).strip() if p else "Part Manual")
+        out.append({
+            "id": u.id,
+            "service_order_id": u.service_order_id,
+            "sparepart_id": u.sparepart_id,
+            "batch_id": u.batch_id,
+            "label": p_name,
+            "part_name": p_name,
+            "merek": getattr(p, "merek", "-") if p else "Luar/Manual",
+            "qty": u.qty,
+            "modal_beli": float(u.modal_beli or 0),
+            "harga_satuan": float(u.harga_satuan or 0),
+            "is_external": bool(u.is_external),
+            "status": u.status,
+            "stock_move_id": u.stock_move_id,
+            "cancel_move_id": u.cancel_move_id,
+            "note": u.note,
+            "oleh": u.oleh,
+            "created_at": u.created_at.strftime("%Y-%m-%d %H:%M") if u.created_at else "-"
+        })
     return out

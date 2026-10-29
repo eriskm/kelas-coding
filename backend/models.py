@@ -114,6 +114,7 @@ class ServiceOrder(Base):
 
     customer = relationship("Customer", back_populates="service_orders")
     payments = relationship("Payment", back_populates="service_order", cascade="all, delete-orphan")
+    order_parts = relationship("ServiceOrderPart", back_populates="service_order", cascade="all, delete-orphan")
     status_history = relationship("StatusHistory", back_populates="service_order",
                                   cascade="all, delete-orphan")
 
@@ -267,6 +268,7 @@ class Sparepart(Base):
 
     batches = relationship("SparepartBatch", back_populates="sparepart", cascade="all, delete-orphan")
     sale_items = relationship("PartSaleItem", back_populates="sparepart")
+    order_parts = relationship("ServiceOrderPart", back_populates="sparepart")
 
 
 class SparepartBatch(Base):
@@ -290,6 +292,7 @@ class SparepartBatch(Base):
 
     sparepart = relationship("Sparepart", back_populates="batches")
     sale_items = relationship("PartSaleItem", back_populates="batch")
+    order_parts = relationship("ServiceOrderPart", back_populates="batch")
 
 
 class PartSale(Base):
@@ -563,14 +566,23 @@ class ServiceOrderPart(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     service_order_id = Column(Integer, ForeignKey("service_orders.id"), nullable=False, index=True)
-    sparepart_id = Column(Integer, ForeignKey("spareparts.id"), nullable=False, index=True)
-    qty = Column(Integer, nullable=False)
+    sparepart_id = Column(Integer, ForeignKey("spareparts.id"), nullable=True, index=True)
+    batch_id = Column(Integer, ForeignKey("sparepart_batches.id"), nullable=True, index=True)
+    part_name = Column(String(150), nullable=True)
+    qty = Column(Integer, nullable=False, default=1)
+    modal_beli = Column(MONEY, default=Decimal("0"), nullable=False)
     harga_satuan = Column(MONEY, default=Decimal("0"))
+    is_external = Column(Boolean, default=False, nullable=False, server_default="0")
+    note = Column(String(200), nullable=True)
     status = Column(String(20), nullable=False, default="DIPAKAI", index=True)
     stock_move_id = Column(Integer, index=True)      # movement PAKAI
     cancel_move_id = Column(Integer, index=True)    # movement BATAL
     oleh = Column(String(120))
     created_at = Column(DateTime, default=datetime.now, index=True)
+
+    service_order = relationship("ServiceOrder", back_populates="order_parts")
+    sparepart = relationship("Sparepart", back_populates="order_parts")
+    batch = relationship("SparepartBatch", back_populates="order_parts")
 
 
 class Notification(Base):

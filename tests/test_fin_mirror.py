@@ -357,9 +357,10 @@ def test_omset_konsisten_antara_core_dan_order_profit(db):
     db.flush()
     cohort = finance.settled_orders(db, s0, e0)
     assert len(cohort) >= 3
-    total_core = to_decimal(finance.compute_finance_core(db, s0, e0)["omset"])
+    core = finance.compute_finance_core(db, s0, e0)
     total_order = sum((to_decimal(statusflow.kewajiban(o)) for o in cohort), to_decimal(0))
-    assert total_core == total_order
+    assert to_decimal(core["omset_servis"]) == total_order
+    assert to_decimal(core["omset"]) == total_order + to_decimal(core.get("omset_part", 0))
 
 
 def test_laba_bersih_empat_pengurang(db):
@@ -387,10 +388,13 @@ def test_laba_bersih_empat_pengurang(db):
     # Laba dihitung dari kohorot yang benar-benar masuk periode ini (test lain
     # bisa saja sudah commit unit CASH, jadi expected diturunkan dari kohorot).
     cohort = finance.settled_orders(db, s0, e0)
-    expect = sum((to_decimal(statusflow.kewajiban(o))
-                  - to_decimal(o.part_cost)
-                  - to_decimal(o.modal_jasa)
-                  - to_decimal(o.modal_lainnya) for o in cohort), to_decimal(0))
+    part_sales = finance.settled_part_sales(db, s0, e0)
+    expect_servis = sum((to_decimal(statusflow.kewajiban(o))
+                         - to_decimal(o.part_cost)
+                         - to_decimal(o.modal_jasa)
+                         - to_decimal(o.modal_lainnya) for o in cohort), to_decimal(0))
+    expect_part = sum((to_decimal(s.laba) for s in part_sales), to_decimal(0))
+    expect = expect_servis + expect_part
     assert to_decimal(core["laba_bersih"]) == expect - beban
 
 
