@@ -1398,9 +1398,20 @@
                             </div>
                         </div>
 
-                        <!-- Kontainer Inventaris Sparepart: Komparasi Varian & Grup -->
-                        <div class="space-y-3.5">
-                            <div id="spListContainer" class="space-y-3.5">
+
+                        <!-- Category Quick Tabs & View Controls -->
+                        <div class="flex items-center justify-between gap-3 flex-wrap">
+                            <div id="spCategoryTabs" class="flex items-center gap-1.5 overflow-x-auto py-1 scrollbar-none flex-1 min-w-[280px]"></div>
+                            <div class="flex items-center gap-1.5 flex-shrink-0">
+                                <button type="button" id="spToggleAllBtn" onclick="spToggleAllGroups()" class="px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-semibold flex items-center gap-1.5 transition" title="Buka / Tutup Semua Rincian">
+                                    <i class="fa-solid fa-up-down text-[11px]"></i>
+                                    <span id="spToggleAllText">Buka Semua</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="space-y-2">
+                            <div id="spListContainer" class="space-y-2">
                                 <!-- Group Cards di-render dinamis via JS -->
                             </div>
                             <!-- Tabel fallback tersembunyi agar legacy script tetap aman -->
