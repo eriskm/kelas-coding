@@ -4187,7 +4187,7 @@ function updateGrWidgets(unclaimedData) {
     }
 
     if (hubEl) {
-        if (totalToday === 0 && ucTotal === 0) {
+        if (!can('ORDER_UPDATE') || (totalToday === 0 && ucTotal === 0)) {
             hubEl.classList.add('hidden');
         } else {
             hubEl.classList.remove('hidden');
