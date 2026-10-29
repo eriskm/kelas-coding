@@ -1113,6 +1113,14 @@ function applyRoleUI(root) {
         const ok = can(el.getAttribute('data-cap'));
         el.classList.toggle('hidden', !ok);
     });
+    const qaEl = document.getElementById('quickActions');
+    if (qaEl) {
+        const visibleCards = qaEl.querySelectorAll('.qa-card:not(.hidden)');
+        const parentPanel = qaEl.closest('.panel');
+        if (parentPanel) {
+            parentPanel.classList.toggle('hidden', visibleCards.length === 0);
+        }
+    }
     updateNavMenuVisibility();
 }
 // v4 #11: siapa boleh melihat SALDO ASET + MASTER KAS (data visibility).
@@ -1142,6 +1150,7 @@ function setRoleCapabilities(role) {
     // tapi tampilannya menyesatkan -- dan `canViewAset()` ikut jadi true.
     const k = map[key] || 'custom';
     try { window._bssfCaps = BSSF_CAPS[k]; window._bssfRoleKey = k; } catch (_) {}
+    try { renderQuickActions(); } catch (_) {}
     applyRoleUI(document);
 }
 
@@ -2160,6 +2169,7 @@ async function loadRepairAging() {
 window.loadRepairAging = loadRepairAging;
 
 async function loadDashboard() {
+    try { renderQuickActions(); } catch (_) {}
     await Promise.all([renderStarCards(), renderInsights(), initCharts(), renderStatusMini(), renderDamageSection()]);
     try { await renderDashGaransiTask(); } catch (_) {}
     try { await updateStatusBar(); } catch (_) {}
