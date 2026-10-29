@@ -20,6 +20,8 @@ backup-*.sql
 # isinya tetap data pelanggan. Jangan pernah di-commit.
 *.db.bak*
 *.db.*.bak*
+*.db.backup*
+*.db.*.backup*
 
 # Env
 .env
