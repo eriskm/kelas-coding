@@ -4498,6 +4498,56 @@ select.range-pill.range-select option { color: #0f172a; }
     background: rgba(220, 38, 38, 0.25);
 }
 
+/* Quick Damage & Plan Chips */
+.rc-chip-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 5px;
+}
+.rc-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 500;
+    color: #475569;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 6px;
+    padding: 3px 8px;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.15s ease;
+}
+.rc-chip:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+    border-color: #cbd5e1;
+}
+.rc-chip.is-active {
+    background: #eff6ff;
+    color: #1d4ed8;
+    border-color: #93c5fd;
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(29, 78, 216, 0.08);
+}
+.dark .rc-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.09);
+    color: #cbd5e1;
+}
+.dark .rc-chip:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+    border-color: rgba(255, 255, 255, 0.18);
+}
+.dark .rc-chip.is-active {
+    background: rgba(59, 130, 246, 0.2);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.4);
+}
+
 /* ============================================
    KEUANGAN: SEGMENTED TABS & MODERN KPI
    ============================================ */

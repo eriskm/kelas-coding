@@ -775,6 +775,13 @@ function openServisBaru() {
     updateReceiveSteps();
     try { updateReceiveCalc(); } catch (_) {}
     loadSmartHistory();
+    try {
+        const _p = document.getElementById('rcPhone');
+        if (_p) updateRcPhoneFeedback(_p.value.trim());
+        updateRcChipStates('rcDamage', 'rcDamageChips');
+        updateRcChipStates('rcPlan', 'rcPlanChips');
+        populateDeviceDatalist();
+    } catch (_) {}
     setActiveNav('servisbaru', document.querySelectorAll('.nav-link'));
     setActiveNav(null, document.querySelectorAll('.mobile-nav-item'));
     const first = document.getElementById('rcName');
@@ -8181,6 +8188,168 @@ async function checkServer() {
 // SERVIS BARU — stepper, shortcut, histori states (UI-only, tanpa ubah payload/API)
 // ─────────────────────────────────────────────
 
+// ─────────────────────────────────────────────
+// SERVIS BARU: SMART HELPERS (Phone Formatter, Autocomplete, Quick Chips)
+// ─────────────────────────────────────────────
+
+const RC_DEFAULT_DEVICES = [
+    // Apple
+    'iPhone 11', 'iPhone 11 Pro', 'iPhone 11 Pro Max',
+    'iPhone 12', 'iPhone 12 Mini', 'iPhone 12 Pro', 'iPhone 12 Pro Max',
+    'iPhone 13', 'iPhone 13 Mini', 'iPhone 13 Pro', 'iPhone 13 Pro Max',
+    'iPhone 14', 'iPhone 14 Plus', 'iPhone 14 Pro', 'iPhone 14 Pro Max',
+    'iPhone 15', 'iPhone 15 Plus', 'iPhone 15 Pro', 'iPhone 15 Pro Max',
+    'iPhone 16', 'iPhone 16 Plus', 'iPhone 16 Pro', 'iPhone 16 Pro Max',
+    'iPhone XR', 'iPhone XS', 'iPhone XS Max', 'iPhone X',
+    // Samsung
+    'Samsung Galaxy A03', 'Samsung Galaxy A04', 'Samsung Galaxy A05', 'Samsung Galaxy A05s',
+    'Samsung Galaxy A13', 'Samsung Galaxy A14', 'Samsung Galaxy A15', 'Samsung Galaxy A23',
+    'Samsung Galaxy A24', 'Samsung Galaxy A25', 'Samsung Galaxy A33', 'Samsung Galaxy A34',
+    'Samsung Galaxy A53', 'Samsung Galaxy A54', 'Samsung Galaxy A55',
+    'Samsung Galaxy S20', 'Samsung Galaxy S21', 'Samsung Galaxy S22', 'Samsung Galaxy S23', 'Samsung Galaxy S24',
+    // Xiaomi / Redmi / Poco
+    'Redmi 9A', 'Redmi 9C', 'Redmi 10A', 'Redmi 10C', 'Redmi 12', 'Redmi 12C', 'Redmi 13C',
+    'Redmi Note 9', 'Redmi Note 10', 'Redmi Note 11', 'Redmi Note 12', 'Redmi Note 13',
+    'Poco X3 Pro', 'Poco X5 Pro', 'Poco M5', 'Poco F5',
+    // Oppo
+    'Oppo A16', 'Oppo A17', 'Oppo A18', 'Oppo A38', 'Oppo A57', 'Oppo A58', 'Oppo A78',
+    'Oppo Reno 6', 'Oppo Reno 7', 'Oppo Reno 8', 'Oppo Reno 10', 'Oppo Reno 11',
+    // Vivo
+    'Vivo Y02', 'Vivo Y16', 'Vivo Y17', 'Vivo Y20', 'Vivo Y21', 'Vivo Y22', 'Vivo Y27', 'Vivo Y36',
+    'Vivo V25', 'Vivo V27', 'Vivo V29', 'Vivo V30',
+    // Infinix
+    'Infinix Smart 7', 'Infinix Smart 8', 'Infinix Hot 11', 'Infinix Hot 20', 'Infinix Hot 30', 'Infinix Hot 40',
+    'Infinix Note 12', 'Infinix Note 30', 'Infinix Note 40',
+    // Realme
+    'Realme C11', 'Realme C21Y', 'Realme C31', 'Realme C33', 'Realme C35', 'Realme C51', 'Realme C53', 'Realme C55', 'Realme C67',
+    'Realme 10', 'Realme 11'
+];
+
+const RC_DAMAGE_PRESETS = [
+    { label: 'Layar Pecah / Retak', icon: 'fa-mobile-screen' },
+    { label: 'Layar Garis / Blank', icon: 'fa-table-cells' },
+    { label: 'Baterai Drop / Kembung', icon: 'fa-battery-quarter' },
+    { label: 'Tidak Bisa Cas', icon: 'fa-plug-circle-xmark' },
+    { label: 'Mati Total (Matot)', icon: 'fa-power-off' },
+    { label: 'Lupa Pola / Sandi', icon: 'fa-lock' },
+    { label: 'Bootloop / Restart', icon: 'fa-arrows-rotate' },
+    { label: 'Kena Air (Water Damage)', icon: 'fa-droplet' },
+    { label: 'Sinyal Hilang', icon: 'fa-triangle-exclamation' },
+    { label: 'Mic / Speaker Rusak', icon: 'fa-volume-xmark' },
+    { label: 'Kamera Blank', icon: 'fa-camera' }
+];
+
+const RC_PLAN_PRESETS = [
+    { label: 'Ganti LCD', icon: 'fa-wrench' },
+    { label: 'Ganti Baterai', icon: 'fa-battery-full' },
+    { label: 'Ganti Konektor Cas', icon: 'fa-bolt' },
+    { label: 'Pembersihan Korosi / Air', icon: 'fa-soap' },
+    { label: 'Flashing / Reset OS', icon: 'fa-compact-disc' },
+    { label: 'Cek Jalur / Reball IC', icon: 'fa-microchip' }
+];
+
+function cleanRcPhone(val) {
+    if (!val) return '';
+    let cleaned = val.trim();
+    if (cleaned.startsWith('+62')) {
+        cleaned = '0' + cleaned.slice(3);
+    } else if (cleaned.startsWith('62')) {
+        cleaned = '0' + cleaned.slice(2);
+    }
+    cleaned = cleaned.replace(/\D/g, '');
+    if (cleaned.startsWith('8') && cleaned.length >= 9) {
+        cleaned = '0' + cleaned;
+    }
+    return cleaned;
+}
+
+function updateRcPhoneFeedback(val) {
+    const fb = document.getElementById('rcPhoneFeedback');
+    if (!fb) return;
+    const len = (val || '').length;
+    if (len === 0) {
+        fb.classList.add('hidden');
+        fb.innerHTML = '';
+        return;
+    }
+    fb.classList.remove('hidden');
+    if (!val.startsWith('08')) {
+        fb.innerHTML = '<span class="text-amber-600 dark:text-amber-400 font-medium"><i class="fa-solid fa-circle-info mr-1"></i>Format WhatsApp: sebaiknya diawali 08 (cth: 081234567890)</span>';
+    } else if (len < 10) {
+        fb.innerHTML = `<span class="text-amber-600 dark:text-amber-400 font-medium"><i class="fa-solid fa-circle-info mr-1"></i>Format belum lengkap: ${len} digit (minimal 10 digit)</span>`;
+    } else if (len > 14) {
+        fb.innerHTML = `<span class="text-rose-500 font-semibold"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Nomor terlalu panjang: ${len} digit (maksimal 14 digit)</span>`;
+    } else {
+        fb.innerHTML = `<span class="text-emerald-600 dark:text-emerald-400 font-semibold"><i class="fa-solid fa-circle-check mr-1"></i>Nomor WhatsApp valid (${len} digit)</span>`;
+    }
+}
+
+function populateDeviceDatalist() {
+    const listEl = document.getElementById('rcDeviceList');
+    if (!listEl) return;
+    const set = new Set(RC_DEFAULT_DEVICES);
+    try {
+        const pool = Array.isArray(window._spView) && window._spView.length ? window._spView : (Array.isArray(window._sparepartsCache) ? window._sparepartsCache : []);
+        pool.forEach(sp => {
+            if (sp.device && typeof sp.device === 'string') {
+                const dev = sp.device.trim();
+                if (dev && dev.length >= 2) set.add(dev);
+            }
+        });
+    } catch (_) {}
+    const sorted = Array.from(set).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+    listEl.innerHTML = sorted.map(d => `<option value="${escapeHtml(d)}">`).join('');
+}
+
+function renderRcChips(containerId, inputId, presets) {
+    const container = document.getElementById(containerId);
+    const input = document.getElementById(inputId);
+    if (!container || !input) return;
+
+    let html = '';
+    presets.forEach(p => {
+        html += `<button type="button" class="rc-chip" data-label="${escapeHtml(p.label)}" onclick="rcToggleChip('${inputId}', '${escapeHtml(p.label)}', '${containerId}')">`
+            + `<i class="fa-solid ${p.icon} text-[10px]"></i>`
+            + `<span>${escapeHtml(p.label)}</span>`
+            + `</button>`;
+    });
+    container.innerHTML = html;
+    updateRcChipStates(inputId, containerId);
+}
+
+function rcToggleChip(inputId, label, containerId) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    let val = (input.value || '').trim();
+    let parts = val ? val.split(',').map(s => s.trim()).filter(Boolean) : [];
+    const idx = parts.findIndex(p => p.toLowerCase() === label.toLowerCase());
+    if (idx >= 0) {
+        parts.splice(idx, 1);
+    } else {
+        parts.push(label);
+    }
+    input.value = parts.join(', ');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    updateRcChipStates(inputId, containerId);
+}
+window.rcToggleChip = rcToggleChip;
+
+function updateRcChipStates(inputId, containerId) {
+    const input = document.getElementById(inputId);
+    const container = document.getElementById(containerId);
+    if (!input || !container) return;
+    const val = (input.value || '').toLowerCase();
+    container.querySelectorAll('.rc-chip').forEach(chip => {
+        const lbl = (chip.dataset.label || '').toLowerCase();
+        if (lbl && val.includes(lbl)) {
+            chip.classList.add('is-active');
+        } else {
+            chip.classList.remove('is-active');
+        }
+    });
+}
+
 function updateReceiveSteps() {
     const steps = document.querySelectorAll('#rcSteps .rc-step');
     if (!steps.length) return;
@@ -8209,9 +8378,18 @@ function updateReceiveCalc() {
 
     const est = parseFloat(estEl.value) || 0;
     const dp = parseFloat(dpEl.value) || 0;
+    const dpFeedback = document.getElementById('rcDpFeedback');
+    const submitBtn = document.getElementById('receiveSubmitBtn');
 
     if (est <= 0 && dp <= 0) {
         bar.classList.add('hidden');
+        if (dpFeedback) dpFeedback.classList.add('hidden');
+        dpEl.classList.remove('border-rose-500', 'ring-1', 'ring-rose-500');
+        if (submitBtn && submitBtn.dataset.blockedByDp) {
+            delete submitBtn.dataset.blockedByDp;
+            submitBtn.disabled = false;
+            submitBtn.removeAttribute('title');
+        }
         return;
     }
 
@@ -8225,9 +8403,34 @@ function updateReceiveCalc() {
     if (estValEl) estValEl.textContent = formatRupiah(est);
     if (dpValEl) dpValEl.textContent = formatRupiah(dp);
 
+    const isDpOver = (est > 0 && dp > est);
+
+    if (dpFeedback) {
+        if (isDpOver) {
+            dpFeedback.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> DP tidak boleh melebihi estimasi biaya (OD-LOCK-04).';
+            dpFeedback.classList.remove('hidden');
+            dpEl.classList.add('border-rose-500', 'ring-1', 'ring-rose-500');
+        } else {
+            dpFeedback.classList.add('hidden');
+            dpEl.classList.remove('border-rose-500', 'ring-1', 'ring-rose-500');
+        }
+    }
+
+    if (submitBtn) {
+        if (isDpOver) {
+            submitBtn.dataset.blockedByDp = '1';
+            submitBtn.disabled = true;
+            submitBtn.title = 'Perbaiki DP terlebih dahulu (DP melebihi estimasi)';
+        } else if (submitBtn.dataset.blockedByDp) {
+            delete submitBtn.dataset.blockedByDp;
+            submitBtn.disabled = false;
+            submitBtn.removeAttribute('title');
+        }
+    }
+
     if (badge) {
         badge.classList.remove('is-sisa', 'is-lunas', 'is-invalid');
-        if (est > 0 && dp > est) {
+        if (isDpOver) {
             badge.classList.add('is-invalid');
             if (sisaText) sisaText.textContent = 'Peringatan: DP Melebihi Estimasi!';
             if (sisaVal) sisaVal.textContent = '';
@@ -8474,15 +8677,49 @@ async function loadReceiveTechnicians() {
 async function initReceivePage() {
     // Guard anti double-binding: listener submit/input dipasang sekali saja.
     // Pemanggilan ulang hanya me-restore draft (tanpa dobel POST/history).
-    if (window._initReceiveBound) { restoreReceiveDraft(); loadReceiveTechnicians(); try { updateReceiveCalc(); } catch (_) {} return; }
+    if (window._initReceiveBound) {
+        restoreReceiveDraft();
+        loadReceiveTechnicians();
+        try {
+            updateReceiveCalc();
+            const _p = document.getElementById('rcPhone');
+            if (_p) updateRcPhoneFeedback(_p.value.trim());
+            updateRcChipStates('rcDamage', 'rcDamageChips');
+            updateRcChipStates('rcPlan', 'rcPlanChips');
+            populateDeviceDatalist();
+        } catch (_) {}
+        return;
+    }
     window._initReceiveBound = true;
     renderChecklist('rc', 'rcCheckGroups', null, { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
     restoreReceiveDraft();
     await loadReceiveTechnicians();
 
+    renderRcChips('rcDamageChips', 'rcDamage', RC_DAMAGE_PRESETS);
+    renderRcChips('rcPlanChips', 'rcPlan', RC_PLAN_PRESETS);
+    populateDeviceDatalist();
+
+    const dmgEl = document.getElementById('rcDamage');
+    if (dmgEl) dmgEl.addEventListener('input', () => updateRcChipStates('rcDamage', 'rcDamageChips'));
+    const planEl = document.getElementById('rcPlan');
+    if (planEl) planEl.addEventListener('input', () => updateRcChipStates('rcPlan', 'rcPlanChips'));
+
     const phoneEl = document.getElementById('rcPhone');
-    phoneEl.addEventListener('change', loadSmartHistory);
+    phoneEl.addEventListener('input', function () {
+        const cur = this.value;
+        const formatted = cleanRcPhone(cur);
+        if (cur !== formatted && (cur.includes('+') || cur.includes('-') || cur.includes(' ') || cur.startsWith('62') || (cur.startsWith('8') && cur.length >= 9))) {
+            this.value = formatted;
+        }
+        updateRcPhoneFeedback(this.value.trim());
+        if (this.value.trim().length >= 4) loadSmartHistory();
+    });
+    phoneEl.addEventListener('change', function () {
+        this.value = cleanRcPhone(this.value);
+        updateRcPhoneFeedback(this.value.trim());
+        loadSmartHistory();
+    });
     phoneEl.addEventListener('keyup', function () { if (this.value.trim().length >= 4) loadSmartHistory(); });
     const nameEl = document.getElementById('rcName');
     if (nameEl) nameEl.addEventListener('input', function () { if (!phoneEl.value.trim()) loadSmartHistory(); });
@@ -8603,6 +8840,11 @@ async function initReceivePage() {
             if (_nb2) _nb2.classList.remove('hidden');
             this.reset();
             clearReceiveDraft();
+            try {
+                updateRcPhoneFeedback('');
+                updateRcChipStates('rcDamage', 'rcDamageChips');
+                updateRcChipStates('rcPlan', 'rcPlanChips');
+            } catch (_) {}
             _rcPathManual = false;
             try { rcApplyPath(); } catch (_) {}
             applyChecklist('rc', { fisik: [], len: ['unit_saja'] });

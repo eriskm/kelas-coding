@@ -2521,6 +2521,7 @@
                                     <div class="field">
                                         <label class="field-label" for="rcPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
                                         <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="tel" autocomplete="off" required>
+                                        <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
                                     </div>
                                 </div>
                             </div>
@@ -2539,7 +2540,8 @@
                                 <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
                                     <div class="field">
                                         <label class="field-label" for="rcDevice">Perangkat / Model HP <b class="text-red-500">*</b></label>
-                                        <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" required>
+                                        <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" list="rcDeviceList" autocomplete="off" required>
+                                        <datalist id="rcDeviceList"></datalist>
                                     </div>
                                     <div class="field">
                                         <label class="field-label" for="rcPassword">Kunci Layar / Pola</label>
@@ -2562,10 +2564,18 @@
                                     <div class="field">
                                         <label class="field-label" for="rcDamage">Keluhan <b class="text-red-500">*</b></label>
                                         <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi" required></textarea>
+                                        <div class="mt-1.5">
+                                            <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Pilihan Cepat Keluhan:</span>
+                                            <div id="rcDamageChips" class="rc-chip-group"></div>
+                                        </div>
                                     </div>
                                     <div class="field">
                                         <label class="field-label" for="rcPlan" id="rcPlanLabel">Rencana Perbaikan</label>
                                         <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
+                                        <div class="mt-1.5">
+                                            <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Pilihan Cepat Tindakan:</span>
+                                            <div id="rcPlanChips" class="rc-chip-group"></div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2593,6 +2603,7 @@
                                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
                                             <input class="receive-input pl-9" type="number" id="rcDp" min="0" placeholder="100000">
                                         </div>
+                                        <div id="rcDpFeedback" class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 hidden flex items-center gap-1"></div>
                                     </div>
                                     <div class="field hidden" id="rcFinalWrap">
                                         <label class="field-label" for="rcFinal" id="rcFinalLabel">Harga Final</label>
