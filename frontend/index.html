@@ -1372,6 +1372,51 @@
                         <!-- KPI Metrics: 5 Cards Grid Full-Width Interactive -->
                         <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5 sm:gap-3" id="spKpi"></div>
 
+                        <!-- Revolving Fund & Valuasi Kas Part (Point 3) -->
+                        <div class="panel p-4 bg-gradient-to-r from-slate-50 to-indigo-50/30 dark:from-slate-900/40 dark:to-indigo-950/20 border border-slate-200/80 dark:border-slate-800" data-cap="REPORT_SPAREPART" id="spRevolvingFundPanel">
+                            <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+                                <div class="flex items-center gap-2">
+                                    <div class="w-7 h-7 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center text-indigo-600 dark:text-indigo-400 text-sm">
+                                        <i class="fa-solid fa-arrows-rotate"></i>
+                                    </div>
+                                    <div>
+                                        <h3 class="text-xs sm:text-sm font-bold text-gray-800 dark:text-gray-100 flex items-center gap-2">
+                                            Dana Perputaran Sparepart (Revolving Fund) & Valuasi
+                                        </h3>
+                                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Rekonsiliasi modal disetor dari kasir, belanja pengadaan supplier, dan valuasi stok fisik aktif</p>
+                                    </div>
+                                </div>
+                                <button type="button" onclick="loadRevolvingFundSummary()" class="text-[11px] px-2.5 py-1 rounded bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-slate-700 font-medium">
+                                    <i class="fa-solid fa-rotate text-[10px]"></i> Refresh
+                                </button>
+                            </div>
+                            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                                <div class="bg-white/80 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60 shadow-xs">
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Modal Disetor (Servis + POS)</div>
+                                    <div class="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono mt-0.5" id="rfModalDisetor">Rp 0</div>
+                                    <div class="text-[10px] text-gray-400 mt-1 flex justify-between">
+                                        <span>Servis: <b id="rfModalServis">Rp 0</b></span>
+                                        <span>POS: <b id="rfModalPos">Rp 0</b></span>
+                                    </div>
+                                </div>
+                                <div class="bg-white/80 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60 shadow-xs">
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Total Belanja Batch Masuk</div>
+                                    <div class="text-base sm:text-lg font-bold text-blue-600 dark:text-blue-400 font-mono mt-0.5" id="rfBelanjaBatch">Rp 0</div>
+                                    <div class="text-[10px] text-gray-400 mt-1">Pengadaan stok baru ke supplier</div>
+                                </div>
+                                <div class="bg-white/80 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60 shadow-xs">
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Valuasi Fisik Stok di Rak</div>
+                                    <div class="text-base sm:text-lg font-bold text-indigo-600 dark:text-indigo-400 font-mono mt-0.5" id="rfValuasiStok">Rp 0</div>
+                                    <div class="text-[10px] text-gray-400 mt-1"><span id="rfTotalStokUnit">0</span> unit barang aktif siap pakai</div>
+                                </div>
+                                <div class="bg-white/80 dark:bg-slate-800/80 p-3 rounded-lg border border-slate-200/60 dark:border-slate-700/60 shadow-xs">
+                                    <div class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">Estimasi Saldo Kas Part</div>
+                                    <div class="text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono mt-0.5" id="rfSaldoKasPart">Rp 0</div>
+                                    <div class="text-[10px] text-gray-400 mt-1">Dana modal siap belanja restok</div>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Search & Filter Bar -->
                         <div class="panel p-3">
                             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">

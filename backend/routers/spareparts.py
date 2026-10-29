@@ -216,6 +216,13 @@ def create_part_sale(
             )
         )
 
+    db.flush()
+    try:
+        from cash import catat_part_sale
+        catat_part_sale(db, sale, actor=user.display_name or user.username)
+    except Exception:
+        pass
+
     db.commit()
     db.refresh(sale)
 
@@ -422,3 +429,75 @@ def delete_sparepart(sparepart_id: int, db: Session = Depends(get_db_session),
     db.delete(row)
     db.commit()
     return {"ok": True}
+
+
+# ---------- Revolving Fund (Dana Perputaran Sparepart & Valuasi Stok) ----------
+@router.get("/revolving-fund/summary")
+def get_revolving_fund_summary(
+    db: Session = Depends(get_db_session),
+    user: User = Depends(require_authority(Action.REPORT_SPAREPART))
+):
+    """Ringkasan dana perputaran sparepart (Revolving Fund & Valuasi Stok Fisik):
+    - Modal part yang sudah disetor kembali dari unit servis (CASH)
+    - Modal part yang sudah disetor kembali dari penjualan langsung POS
+    - Total belanja pengadaan batch stok baru
+    - Estimasi nilai modal barang fisik yang aktif di rak (valuasi stok)
+    - Sisa dana berputar di kas pengadaan sparepart
+    """
+    from models import ServiceOrder, PartSale, SparepartBatch, Sparepart, PartSaleItem, ServiceOrderPart
+    from sqlalchemy import func
+    from money import to_decimal, ZERO
+
+    m_servis = (
+        db.query(func.sum(ServiceOrder.part_cost))
+        .filter(ServiceOrder.status == "CASH")
+        .scalar()
+    ) or Decimal("0")
+
+    m_sales = (
+        db.query(func.sum(PartSale.total_modal))
+        .scalar()
+    ) or Decimal("0")
+
+    total_modal_disetor = to_decimal(m_servis) + to_decimal(m_sales)
+
+    batches = db.query(SparepartBatch).all()
+    total_belanja_batch = sum(
+        (to_decimal(b.qty_masuk) * to_decimal(b.harga_beli) for b in batches),
+        ZERO
+    )
+
+    valuasi_stok_aktif = sum(
+        (to_decimal(b.qty_sisa) * to_decimal(b.harga_beli) for b in batches if (b.qty_sisa or 0) > 0),
+        ZERO
+    )
+
+    batch_part_ids = {b.sparepart_id for b in batches}
+    legacy_parts = db.query(Sparepart).filter(~Sparepart.id.in_(batch_part_ids)).all() if batch_part_ids else db.query(Sparepart).all()
+    valuasi_legacy = sum(
+        (to_decimal(sp.qty or 0) * to_decimal(sp.harga_beli or 0) for sp in legacy_parts if (sp.qty or 0) > 0),
+        ZERO
+    )
+    total_valuasi_stok = valuasi_stok_aktif + valuasi_legacy
+
+    sisa_dana_kas_part = total_modal_disetor - total_belanja_batch
+
+    total_unit_terjual_pos = (db.query(func.sum(PartSaleItem.qty)).scalar()) or 0
+    total_unit_terpakai_servis = (
+        db.query(func.sum(ServiceOrderPart.qty))
+        .filter(ServiceOrderPart.status == "DIPAKAI")
+        .scalar()
+    ) or 0
+    total_stok_fisik_unit = (db.query(func.sum(Sparepart.qty)).scalar()) or 0
+
+    return {
+        "modal_disetor_servis": float(m_servis),
+        "modal_disetor_penjualan": float(m_sales),
+        "total_modal_disetor": float(total_modal_disetor),
+        "total_belanja_pengadaan": float(total_belanja_batch),
+        "valuasi_stok_aktif": float(total_valuasi_stok),
+        "sisa_dana_kas_part": float(sisa_dana_kas_part),
+        "total_unit_terjual_pos": int(total_unit_terjual_pos),
+        "total_unit_terpakai_servis": int(total_unit_terpakai_servis),
+        "total_stok_fisik_unit": int(total_stok_fisik_unit),
+    }

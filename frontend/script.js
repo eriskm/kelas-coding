@@ -1048,12 +1048,12 @@ const BSSF_CAPS = {
         'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
         'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
         'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'ROLE_CONFIG', 'AUDIT_READ', 'REPORT_FULL',
-        'REPORT_INVESTOR'],
+        'REPORT_INVESTOR', 'REPORT_SPAREPART'],
     admin: ['SERVICE_PART_USE', 'ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_UPDATE_MODAL',
         'ORDER_STATUS_CLOSING', 'ORDER_HANDOVER', 'ORDER_DELETE', 'PAYMENT_CREATE', 'PAYMENT_CANCEL',
         'EXPENSE_WRITE', 'KAS_ENTRY_WRITE', 'KAS_CLOSE', 'KAS_ASET_INJEKSI', 'REFUND_DP', 'REFUND_GARANSI',
         'FAILED_CANCEL', 'SPAREPART_WRITE', 'CLAIM_WRITE', 'EXPENSE_DEBT_WRITE', 'USER_MANAGE',
-        'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'AUDIT_READ', 'REPORT_FULL', 'REPORT_INVESTOR'],
+        'CUSTOMER_WRITE', 'CUSTOMER_DELETE', 'AUDIT_READ', 'REPORT_FULL', 'REPORT_INVESTOR', 'REPORT_SPAREPART'],
     kasir: ['ORDER_CREATE', 'ORDER_UPDATE', 'ORDER_UPDATE_FINANCE', 'ORDER_STATUS_CLOSING',
         'ORDER_HANDOVER', 'PAYMENT_CREATE', 'EXPENSE_WRITE', 'REFUND_DP', 'FAILED_CANCEL',
         'SPAREPART_WRITE', 'CLAIM_WRITE'],
@@ -1064,7 +1064,7 @@ const BSSF_CAPS = {
     // Permission sparepart dipisah dari laporan keuangan: Admin Sparepart
     // boleh laporan persediaan, tapi TIDAK laporan bisnis/keuangan.
     adminSparepart: ['SERVICE_PART_USE', 'SPAREPART_WRITE', 'REPORT_SPAREPART'],
-    pengelola: ['REPORT_FULL'], // Q13: monitoring; boleh lihat + unduh laporan
+    pengelola: ['REPORT_FULL', 'REPORT_SPAREPART'], // Q13: monitoring; boleh lihat + unduh laporan
     investor: ['REPORT_INVESTOR'], // monitoring investasi; tanpa data pribadi
     // Role tidak dikenal / kosong = tanpa hak apa pun. Sengaja TIDAK fallback ke
     // admin: kalau ada typo di kolom Role, akun itu harus terlihat "nyaris
@@ -5270,6 +5270,38 @@ async function spSubmitResolveDefect(event) {
     }
 }
 
+async function loadRevolvingFundSummary() {
+    const panel = document.getElementById('spRevolvingFundPanel');
+    if (!panel) return;
+
+    try {
+        const res = await apiGet('/spareparts/revolving-fund/summary');
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+
+        setVal('rfModalDisetor', spRupiah(res.total_modal_disetor || 0));
+        setVal('rfModalServis', spRupiah(res.modal_disetor_servis || 0));
+        setVal('rfModalPos', spRupiah(res.modal_disetor_penjualan || 0));
+        setVal('rfBelanjaBatch', spRupiah(res.total_belanja_pengadaan || 0));
+        setVal('rfValuasiStok', spRupiah(res.valuasi_stok_aktif || 0));
+        setVal('rfTotalStokUnit', Number(res.total_stok_fisik_unit || 0).toLocaleString('id-ID'));
+
+        const saldoEl = document.getElementById('rfSaldoKasPart');
+        if (saldoEl) {
+            const s = Number(res.sisa_dana_kas_part || 0);
+            saldoEl.textContent = spRupiah(s);
+            if (s < 0) {
+                saldoEl.className = 'text-base sm:text-lg font-bold text-amber-600 dark:text-amber-400 font-mono mt-0.5';
+            } else {
+                saldoEl.className = 'text-base sm:text-lg font-bold text-purple-600 dark:text-purple-400 font-mono mt-0.5';
+            }
+        }
+    } catch (_) {}
+}
+window.loadRevolvingFundSummary = loadRevolvingFundSummary;
+
 async function loadSparepartMoves() {
     const body = document.getElementById('spMoveBody');
     const sel = document.getElementById('spMovePart');
@@ -5889,6 +5921,7 @@ async function renderSparepart(fetchFresh = true) {
         if (pageBtns) pageBtns.innerHTML = '';
         await loadSparepartMoves();
         try { await loadSparepartDefects(); } catch (_) {}
+        try { await loadRevolvingFundSummary(); } catch (_) {}
         return;
     }
 
@@ -6092,6 +6125,7 @@ async function renderSparepart(fetchFresh = true) {
 
     await loadSparepartMoves();
     try { await loadSparepartDefects(); } catch (_) {}
+    try { await loadRevolvingFundSummary(); } catch (_) {}
     applyRoleUI(document.getElementById('pageSparepart') || document);
 }
 

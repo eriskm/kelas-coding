@@ -71,6 +71,7 @@ SUMBER_HUTANG_BEBAN = "HUTANG_BEBAN"
 #: Laci ke Kas Aset (bukan sekadar penanda), jadi dicatat sebagai mutasi berpasangan
 #: di dua layer. Berbeda dari `TRANSFER` biasa, ini bersumber dari laba periode.
 SUMBER_DISTRIBUSI_ASET = "DISTRIBUSI_ASET"
+SUMBER_PART_SALE = "PART_SALE"
 
 #: Sumber yang boleh masuk ARUS KAS AKRUAL (`compute_finance` -> total_masuk /
 #: total_keluar). Harus SEMPIT: apa pun yang sudah tercakup di `omset`,
@@ -115,6 +116,7 @@ SUMBER_BARIS_KAS = frozenset({
     SUMBER_REFUND_GARANSI, SUMBER_FAILED_CANCEL, SUMBER_TRANSFER,
     SUMBER_INJEKSI, SUMBER_REKONSILIASI, SUMBER_PENYESUAIAN,
     SUMBER_HUTANG_BEBAN, SUMBER_DISTRIBUSI_ASET, SUMBER_BEBAN,
+    SUMBER_PART_SALE,
 })
 
 KATEGORI = {
@@ -131,6 +133,7 @@ KATEGORI = {
     SUMBER_PENYESUAIAN: "Penyesuaian Laci",
     SUMBER_HUTANG_BEBAN: "Hutang Beban",
     SUMBER_DISTRIBUSI_ASET: "Setoran Hak Kas Aset (Distribusi)",
+    SUMBER_PART_SALE: "Penjualan Part",
 }
 
 EVENT_TRANSFER = "KAS_ASET_DITRANSFER"
@@ -645,6 +648,64 @@ def catat_modal_selisih(db: Session, order, actor: str = None) -> list:
                           "modal_sekarang": str(pristine),
                           "selisih": str(selisih)})
         out.append(mut)
+    return out
+
+
+# ---------------------------------------------------------------- 2b) REVOLVING FUND PART (Point 3)
+def catat_part_sale(db: Session, sale, actor: str = None) -> list:
+    """Catat mutasi Laci untuk Penjualan Part Langsung (POS - Point 3 Revolving Fund):
+    1. Masuk: Penerimaan kas omzet penjualan part ke Laci.
+    2. Keluar: Modal part dikeluarkan dari Laci disetor ke Dana Belanja Part (OD-LOCK-01).
+    Net balance Laci bertambah sebesar Laba Bersih Transaksi (omzet - modal).
+    Idempoten via mutasi_tersimpan.
+    """
+    if not sale:
+        return []
+
+    out = []
+    actor = actor or getattr(sale, "oleh", "Kasir")
+    omzet = quantize(_num(getattr(sale, "total_omzet", 0)))
+    modal = quantize(_num(getattr(sale, "total_modal", 0)))
+
+    # 1. Penerimaan Omzet ke Laci
+    if omzet > ZERO:
+        if not mutasi_tersimpan(db, LAYER_LACI, SUMBER_PART_SALE, "part_sale", sale.id):
+            mut_in = catat_mutasi(
+                db, LAYER_LACI, "Masuk", KATEGORI[SUMBER_PART_SALE],
+                "Penjualan Part %s (%s)" % (
+                    getattr(sale, "no_transaksi", sale.id),
+                    getattr(sale, "customer_name", "Umum") or "Umum"
+                ),
+                omzet,
+                sumber=SUMBER_PART_SALE,
+                ref_type="part_sale",
+                ref_id=sale.id,
+                oleh=actor,
+                check_saldo=False
+            )
+            _journal(db, EVENT_OPERASIONAL, mut_in, actor=actor,
+                     details={"event": "PART_SALE_OMZET", "part_sale_id": sale.id})
+            out.append(mut_in)
+
+    # 2. Pengeluaran Modal Part dari Laci (Disetor ke Dana Belanja Part)
+    if modal > ZERO:
+        if not mutasi_tersimpan(db, LAYER_LACI, SUMBER_MODAL, "part_sale_modal", sale.id):
+            mut_out = catat_mutasi(
+                db, LAYER_LACI, "Keluar", KATEGORI[SUMBER_MODAL],
+                "Modal Part %s disetor ke Dana Belanja Part" % (
+                    getattr(sale, "no_transaksi", sale.id)
+                ),
+                modal,
+                sumber=SUMBER_MODAL,
+                ref_type="part_sale_modal",
+                ref_id=sale.id,
+                oleh=actor,
+                check_saldo=False
+            )
+            _journal(db, EVENT_OPERASIONAL, mut_out, actor=actor,
+                     details={"event": "PART_SALE_MODAL", "part_sale_id": sale.id})
+            out.append(mut_out)
+
     return out
 
 
