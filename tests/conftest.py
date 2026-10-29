@@ -90,6 +90,7 @@ def db(app_env, client):
                                    expires_at=datetime.now() + timedelta(days=2)))
             s.commit()
         else:
+            tok.user_id = u.id
             tok.expires_at = datetime.now() + timedelta(days=2)
             s.commit()
         if s.query(models.Customer).filter(

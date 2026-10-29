@@ -448,9 +448,16 @@ def get_revolving_fund_summary(
     from sqlalchemy import func
     from money import to_decimal, ZERO
 
+    # Modal dari unit servis yang menggunakan part stok toko (ServiceOrderPart berstatus DIPAKAI & non-eksternal)
     m_servis = (
-        db.query(func.sum(ServiceOrder.part_cost))
-        .filter(ServiceOrder.status == "CASH")
+        db.query(func.sum(ServiceOrderPart.modal_beli * ServiceOrderPart.qty))
+        .join(ServiceOrder, ServiceOrderPart.service_order_id == ServiceOrder.id)
+        .filter(
+            ServiceOrder.status == "CASH",
+            ServiceOrderPart.status == "DIPAKAI",
+            ServiceOrderPart.is_external == False,
+            ServiceOrderPart.sparepart_id.isnot(None)
+        )
         .scalar()
     ) or Decimal("0")
 

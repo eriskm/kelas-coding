@@ -63,8 +63,10 @@ def _token(db):
         db.add(models.AuthToken(token="pytest-token-admin", user_id=u.id,
                                 expires_at=datetime.now() + timedelta(days=2)))
         db.commit()
-    elif t.expires_at is None or t.expires_at <= datetime.now():
-        t.expires_at = datetime.now() + timedelta(days=2)
+    else:
+        t.user_id = u.id
+        if t.expires_at is None or t.expires_at <= datetime.now():
+            t.expires_at = datetime.now() + timedelta(days=2)
         db.commit()
     db.expunge_all()
     return {"Authorization": "Bearer pytest-token-admin"}

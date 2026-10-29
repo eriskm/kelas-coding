@@ -1,4 +1,4 @@
-﻿# -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 """Penanda "Tanpa Modal (sengaja 0)".
 
 Owner menetapkan: unit CASH yang Part/Jasa/Lain semuanya 0 BELUM masuk
@@ -106,6 +106,11 @@ def _token(db):
     if t is None:
         db.add(models.AuthToken(token="pytest-token-admin", user_id=u.id,
                                 expires_at=datetime.now() + timedelta(days=2)))
+        db.commit()
+    else:
+        t.user_id = u.id
+        if t.expires_at is None or t.expires_at <= datetime.now():
+            t.expires_at = datetime.now() + timedelta(days=2)
         db.commit()
     db.expunge_all()
     return {"Authorization": "Bearer pytest-token-admin"}
