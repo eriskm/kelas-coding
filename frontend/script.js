@@ -379,6 +379,7 @@ function showPage(name) {
 function showDashboard() {
     showPage('dashboard');
     try { renderDashGaransiTask(); } catch (_) {}
+    try { checkMorningBriefingAutoPopup(); } catch (_) {}
 }
 function showPenjualanPart() {
     showPage('penjualanpart');
@@ -2095,7 +2096,7 @@ function updateHeaderNotif() {
     // 5. Peringatan Stok Sparepart Menipis / Habis (Aspek B)
     const lowParts = Array.isArray(window._lowStockParts) ? window._lowStockParts : [];
     if (lowParts.length > 0) {
-        const habisCount = lowParts.filter(p => (Number(p.stok) || 0) <= 0).length;
+        const habisCount = lowParts.filter(p => (Number(p.qty !== undefined ? p.qty : p.stok) || 0) <= 0).length;
         const menipisCount = lowParts.length - habisCount;
         let descTxt = '';
         if (habisCount > 0 && menipisCount > 0) {
@@ -2151,8 +2152,9 @@ async function loadLowStockSpareparts() {
     try {
         const data = await apiGet('/spareparts?limit=100');
         if (data && Array.isArray(data.items)) {
-            window._lowStockParts = data.items.filter(p => (Number(p.stok) || 0) <= 3);
+            window._lowStockParts = data.items.filter(p => (Number(p.qty !== undefined ? p.qty : p.stok) || 0) <= 3);
             if (typeof updateHeaderNotif === 'function') updateHeaderNotif();
+            if (typeof renderMorningBriefingModal === 'function') renderMorningBriefingModal();
         }
     } catch (_) {}
 }
@@ -2164,6 +2166,7 @@ async function loadRepairAging() {
         const data = await apiGet('/orders/repair-aging');
         window._lastRepairAgingData = data;
         updateHeaderNotif();
+        if (typeof renderMorningBriefingModal === 'function') renderMorningBriefingModal();
     } catch (_) {}
 }
 window.loadRepairAging = loadRepairAging;
@@ -2176,6 +2179,7 @@ async function loadDashboard() {
     try { await loadRepairAging(); } catch (_) {}
     try { await loadLowStockSpareparts(); } catch (_) {}
     try { updateHeaderNotif(); } catch (_) {}
+    try { checkMorningBriefingAutoPopup(); } catch (_) {}
 }
 
 // ─────────────────────────────────────────────
@@ -4142,6 +4146,7 @@ async function loadWarrantyData(force = false) {
             teknisi: g.teknisi,
             riwayat_klaim: Array.isArray(g.riwayat_klaim) ? g.riwayat_klaim : [],
         }));
+        window._grAll = _grAll;
         return _grAll;
     } catch (err) {
         return _grAll || [];
@@ -4306,8 +4311,239 @@ function updateGrWidgets(unclaimedData) {
             }).join('');
         }
     }
+    try { renderMorningBriefingModal(); } catch (_) {}
     try { updateHeaderNotif(); } catch (_) {}
 }
+
+// ─────────────────────────────────────────────
+// BRIEFING RUTIN BUKA TOKO (MORNING BRIEFING MODAL)
+// ─────────────────────────────────────────────
+
+function getTodayBriefingKey() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return 'bsf_morning_briefing_dismissed_' + y + '-' + m + '-' + d;
+}
+
+function isMorningBriefingDismissedToday() {
+    try {
+        return localStorage.getItem(getTodayBriefingKey()) === '1';
+    } catch (_) {
+        return false;
+    }
+}
+
+function closeMorningBriefingModal(dismissForToday) {
+    const modal = document.getElementById('modalMorningBriefing');
+    if (modal) modal.classList.add('hidden');
+    if (dismissForToday) {
+        try {
+            localStorage.setItem(getTodayBriefingKey(), '1');
+            toast('Briefing toko selesai. Selamat bertugas!', 'info');
+        } catch (_) {}
+    }
+}
+window.closeMorningBriefingModal = closeMorningBriefingModal;
+
+function showMorningBriefingModal() {
+    renderMorningBriefingModal();
+    const modal = document.getElementById('modalMorningBriefing');
+    if (modal) modal.classList.remove('hidden');
+}
+window.showMorningBriefingModal = showMorningBriefingModal;
+
+function renderMorningBriefingModal() {
+    const modal = document.getElementById('modalMorningBriefing');
+    if (!modal) return;
+
+    // 1. Garansi Hari Ini
+    const allWarranties = (Array.isArray(_grAll) && _grAll.length > 0) ? _grAll : (Array.isArray(window._grAll) ? window._grAll : []);
+    const todayUnits = allWarranties.filter(g => grState(g).key === 'hari_ini');
+    const doneUnits = todayUnits.filter(g => isGrWaDone(g));
+    const pendingUnits = todayUnits.filter(g => !isGrWaDone(g));
+    const grBadge = document.getElementById('mbGaransiBadge');
+    const grList = document.getElementById('mbGaransiList');
+    const grSum = document.getElementById('mbGaransiSummaryTxt');
+
+    if (grBadge) grBadge.textContent = todayUnits.length + ' Unit';
+    if (grSum) {
+        grSum.textContent = todayUnits.length === 0
+            ? 'Tidak ada garansi berakhir hari ini'
+            : doneUnits.length === todayUnits.length
+                ? 'Semua ' + todayUnits.length + ' unit telah disapa'
+                : pendingUnits.length + ' dari ' + todayUnits.length + ' unit belum disapa';
+    }
+
+    if (grList) {
+        if (todayUnits.length === 0) {
+            grList.innerHTML = '<div class="text-center py-2.5 text-gray-500 dark:text-gray-400">Tidak ada garansi servis yang berakhir hari ini.</div>';
+        } else {
+            const sorted = [...todayUnits].sort((a, b) => (isGrWaDone(a) ? 1 : 0) - (isGrWaDone(b) ? 1 : 0));
+            grList.innerHTML = sorted.map(g => {
+                const done = isGrWaDone(g);
+                const rowBg = done ? 'bg-white/60 dark:bg-surface-700/50 opacity-75' : 'bg-white dark:bg-surface-700 shadow-2xs';
+                return `
+                    <div class="p-2.5 rounded-lg border border-emerald-200/70 dark:border-emerald-800/40 ${rowBg} flex items-center justify-between flex-wrap gap-2 transition">
+                        <div class="min-w-0 flex-1">
+                            <div class="flex items-center gap-1.5 flex-wrap">
+                                <span class="font-bold text-gray-800 dark:text-gray-100 ${done ? 'line-through text-gray-500' : ''}">${escapeHtml(g.nama || '-')}</span>
+                                <span class="text-[10px] font-mono text-gray-500 dark:text-gray-400">#${escapeHtml(g.no || '-')}</span>
+                                <span class="text-[11px] text-gray-500 dark:text-gray-400">&bull; ${escapeHtml(g.device || '-')}</span>
+                            </div>
+                            <div class="text-[10.5px] text-gray-500 dark:text-gray-400 flex items-center gap-2 mt-0.5">
+                                <span><i class="fa-brands fa-whatsapp text-emerald-500"></i> ${escapeHtml(g.phone || 'tanpa no. WA')}</span>
+                                ${done
+                                    ? '<span class="text-emerald-600 dark:text-emerald-400 font-semibold"><i class="fa-solid fa-check"></i> Sudah disapa</span>'
+                                    : '<span class="text-amber-600 dark:text-amber-400 font-semibold"><i class="fa-solid fa-clock"></i> Belum disapa</span>'
+                                }
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-1.5 flex-shrink-0">
+                            <button type="button" onclick="closeMorningBriefingModal(false); grWaOpenByOrder(${g.service_order_id})" class="px-2.5 py-1 rounded-md ${done ? 'bg-gray-100 hover:bg-emerald-50 hover:text-emerald-700 text-gray-600 dark:bg-white/5 dark:text-gray-300' : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs'} text-xs font-semibold flex items-center gap-1 transition-colors" title="Kirim Pesan WhatsApp">
+                                <i class="fa-brands fa-whatsapp"></i>
+                                <span>${done ? 'Kirim Ulang' : 'Kirim WA'}</span>
+                            </button>
+                            <button type="button" onclick="toggleGrWaDone('${escapeHtml(g.no)}', ${g.service_order_id})" class="px-2 py-1 rounded-md text-xs font-medium text-gray-500 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-white/5 transition-colors" title="${done ? 'Batalkan status sudah di-WA' : 'Tandai sudah dihubungi tanpa buka WA'}">
+                                <i class="fa-solid ${done ? 'fa-rotate-left' : 'fa-check'}"></i>
+                                <span>${done ? 'Batal' : 'Tandai'}</span>
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+    }
+
+    // 2. Unit Mengendap
+    const uc = window._lastUnclaimedData;
+    const s1 = uc ? (Number(uc.stage_1) || 0) : 0;
+    const s2 = uc ? (Number(uc.stage_2) || 0) : 0;
+    const s3 = uc ? (Number(uc.stage_3) || 0) : 0;
+    const s4 = uc ? (Number(uc.stage_4) || 0) : 0;
+    const ucTotal = uc ? (Number(uc.total) || 0) : (s1 + s2 + s3 + s4);
+
+    const ucBadge = document.getElementById('mbUnclaimedBadge');
+    if (ucBadge) ucBadge.textContent = ucTotal + ' Unit';
+    const c1 = document.getElementById('mbUcCnt1'); if (c1) c1.textContent = s1;
+    const c2 = document.getElementById('mbUcCnt2'); if (c2) c2.textContent = s2;
+    const c3 = document.getElementById('mbUcCnt3'); if (c3) c3.textContent = s3;
+    const c4 = document.getElementById('mbUcCnt4'); if (c4) c4.textContent = s4;
+
+    const ucNote = document.getElementById('mbUnclaimedNote');
+    if (ucNote) {
+        if (s4 > 0) {
+            ucNote.innerHTML = '<span class="text-rose-600 dark:text-rose-400 font-bold">' + s4 + ' unit >90 hari (kritis final, hubungi pemilik segera)</span>';
+        } else if (s3 > 0) {
+            ucNote.innerHTML = '<span class="text-pink-600 dark:text-pink-400 font-bold">' + s3 + ' unit >60 hari (perlu penawaran solusi)</span>';
+        } else if (ucTotal > 0) {
+            ucNote.textContent = ucTotal + ' unit selesai/gagal belum diambil pemilik.';
+        } else {
+            ucNote.textContent = 'Tidak ada unit mengendap tertahan di toko saat ini.';
+        }
+    }
+
+    // 3. Stok Sparepart Menipis / Habis
+    const lowParts = Array.isArray(window._lowStockParts) ? window._lowStockParts : [];
+    const spBadge = document.getElementById('mbSparepartBadge');
+    const spList = document.getElementById('mbSparepartList');
+    const spSum = document.getElementById('mbSparepartSummaryTxt');
+
+    if (spBadge) spBadge.textContent = lowParts.length + ' Item';
+    if (spSum) {
+        spSum.textContent = lowParts.length === 0
+            ? 'Semua stok sparepart aman'
+            : lowParts.length + ' sparepart perlu restock segera';
+    }
+
+    if (spList) {
+        if (lowParts.length === 0) {
+            spList.innerHTML = '<div class="text-center py-2.5 text-gray-500 dark:text-gray-400">Semua stok sparepart dalam batas aman.</div>';
+        } else {
+            const topParts = lowParts.slice(0, 5);
+            spList.innerHTML = topParts.map(p => {
+                const stok = Number(p.qty !== undefined ? p.qty : p.stok) || 0;
+                const isOut = stok <= 0;
+                const namaPart = [p.merek, p.jenis].filter(Boolean).join(' ') + (p.device ? ' - ' + p.device : '');
+                const namaDisplay = namaPart || p.nama || 'Sparepart';
+                const kategoriDisplay = p.kategori || 'Komponen';
+                return `
+                    <div class="p-2 rounded-lg border border-blue-200/70 dark:border-blue-800/40 bg-white dark:bg-surface-700 shadow-2xs flex items-center justify-between gap-2">
+                        <div class="min-w-0 flex-1">
+                            <div class="font-bold text-gray-800 dark:text-gray-100 truncate">${escapeHtml(namaDisplay)}</div>
+                            <div class="text-[10px] text-gray-500 dark:text-gray-400 font-mono">${escapeHtml(kategoriDisplay)}</div>
+                        </div>
+                        <div class="text-right flex-shrink-0">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isOut ? 'bg-rose-100 text-rose-700 dark:bg-rose-950 dark:text-rose-300' : 'bg-amber-100 text-amber-700 dark:bg-amber-950 dark:text-amber-300'}">
+                                ${isOut ? 'HABIS (0)' : 'Sisa ' + stok}
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('') + (lowParts.length > 5 ? `<div class="text-center text-[10.5px] text-gray-400 dark:text-gray-500 pt-1">+ ${lowParts.length - 5} item lainnya di katalog...</div>` : '');
+        }
+    }
+
+    // 4. Servis Aging Kritis (>= 7 Hari)
+    const aging = window._lastRepairAgingData;
+    const agingCard = document.getElementById('mbCardAging');
+    const agingBadge = document.getElementById('mbAgingBadge');
+    const agingDesc = document.getElementById('mbAgingDesc');
+
+    if (agingCard) {
+        if (aging && Number(aging.kritis_count) > 0) {
+            agingCard.classList.remove('hidden');
+            if (agingBadge) agingBadge.textContent = aging.kritis_count + ' Servis';
+            if (agingDesc) {
+                agingDesc.textContent = aging.kritis_count + ' unit servis sedang dalam perbaikan selama >= 7 hari. Mohon periksa kendala teknis atau sparepart yang tertunda agar pengerjaan segera selesai.';
+            }
+        } else {
+            agingCard.classList.add('hidden');
+        }
+    }
+
+    // Total Attention Badge
+    const totalTasks = pendingUnits.length + (s3 + s4) + lowParts.length + (aging && Number(aging.kritis_count) > 0 ? Number(aging.kritis_count) : 0);
+    const totalBadge = document.getElementById('mbBadgeTotal');
+    if (totalBadge) {
+        totalBadge.textContent = totalTasks > 0 ? (totalTasks + ' Perhatian') : 'Semua Siap';
+        totalBadge.className = totalTasks > 0
+            ? 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
+            : 'text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200';
+    }
+}
+window.renderMorningBriefingModal = renderMorningBriefingModal;
+
+function checkMorningBriefingAutoPopup() {
+    // Cek role: hanya operasional toko (SUPERADMIN, ADMIN, KASIR, DEV, DEVELOPER)
+    const user = window._currentUser;
+    const role = (user && user.role) ? String(user.role).trim().toUpperCase() : '';
+    const allowedRoles = ['SUPERADMIN', 'ADMIN', 'KASIR', 'DEVELOPER', 'DEV'];
+    if (!allowedRoles.includes(role)) return;
+
+    // Jika sudah di-dismiss untuk hari ini, jangan munculkan otomatis
+    if (isMorningBriefingDismissedToday()) return;
+
+    // Hitung apakah ada tugas / perhatian
+    const todayUnits = Array.isArray(window._grAll) ? window._grAll.filter(g => grState(g).key === 'hari_ini') : [];
+    const pendingUnits = todayUnits.filter(g => !isGrWaDone(g));
+    const uc = window._lastUnclaimedData;
+    const s3 = uc ? (Number(uc.stage_3) || 0) : 0;
+    const s4 = uc ? (Number(uc.stage_4) || 0) : 0;
+    const ucTotal = uc ? (Number(uc.total) || 0) : 0;
+    const lowParts = Array.isArray(window._lowStockParts) ? window._lowStockParts : [];
+    const aging = window._lastRepairAgingData;
+    const agingKritis = aging ? (Number(aging.kritis_count) || 0) : 0;
+
+    const totalAlerts = pendingUnits.length + (s3 + s4) + (ucTotal > 0 ? 1 : 0) + lowParts.length + agingKritis;
+
+    // Jika ada perhatian atau data penting toko hari ini, munculkan popup briefing
+    if (totalAlerts > 0) {
+        showMorningBriefingModal();
+    }
+}
+window.checkMorningBriefingAutoPopup = checkMorningBriefingAutoPopup;
 
 async function renderDashGaransiTask() {
     await loadWarrantyData();
