@@ -1274,23 +1274,80 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
 @router.delete("/{order_id}")
 def delete_order(order_id: int, db: Session = Depends(get_db_session),
                  admin: User = Depends(require_authority(Action.ORDER_DELETE))):
-    """Hapus order — khusus Admin. Diblokir bila sudah ada uang/klaim/status
-    status terminal (DONE/CASH/FAILED/CANCEL) — gunakan alur riwayat/arsip, bukan hapus, agar jurnal aman)."""
+    """Hapus order.
+
+    - Khusus Admin toko: Diblokir bila sudah ada uang/klaim/status terminal (DONE/CASH/FAILED/CANCEL).
+    - Khusus Superadmin/Developer: Diberikan wewenang cascade cleanup untuk maintenance data produksi.
+    """
     order = db.query(ServiceOrder).filter(ServiceOrder.id == order_id).first()
     if not order:
         raise HTTPException(status_code=404, detail="Service order tidak ditemukan")
+
+    from authority import ROLE_SUPERADMIN, canonical_role
+    is_super = canonical_role(admin) == ROLE_SUPERADMIN
+
     n_pay = db.query(Payment).filter(Payment.service_order_id == order.id).count()
-    if n_pay:
-        raise HTTPException(status_code=409,
-                            detail="Order sudah memiliki %d pembayaran tercatat, tidak dapat dihapus" % n_pay)
     n_claim = db.query(WarrantyClaim).filter(
         WarrantyClaim.service_order_id == order.id).count()
-    if n_claim:
-        raise HTTPException(status_code=409,
-                            detail="Order memiliki klaim garansi, tidak dapat dihapus")
-    if (order.status or "") in TERMINAL_STATUSES or (order.status or "") == "DONE":
-        raise HTTPException(status_code=409,
-                            detail="Order %s tidak dapat dihapus (gunakan riwayat/arsip)" % order.status)
+
+    if not is_super:
+        if n_pay:
+            raise HTTPException(status_code=409,
+                                detail="Order sudah memiliki %d pembayaran tercatat, tidak dapat dihapus" % n_pay)
+        if n_claim:
+            raise HTTPException(status_code=409,
+                                detail="Order memiliki klaim garansi, tidak dapat dihapus")
+        if (order.status or "") in TERMINAL_STATUSES or (order.status or "") == "DONE":
+            raise HTTPException(status_code=409,
+                                detail="Order %s tidak dapat dihapus (gunakan riwayat/arsip)" % order.status)
+
+    if is_super:
+        import journal
+        from models import KasEntry, ServiceOrderPart
+        pay_rows = db.query(Payment).filter(Payment.service_order_id == order.id).all()
+        pay_ids = [p.id for p in pay_rows]
+
+        # 1. Bersihkan entri kas terkait payments order ini
+        if pay_ids:
+            db.query(KasEntry).filter(
+                KasEntry.ref_type == "payment",
+                KasEntry.ref_id.in_(pay_ids)
+            ).delete(synchronize_session=False)
+
+            # Hitung ulang running balance LACI
+            running = Decimal("0")
+            for ke in db.query(KasEntry).filter(KasEntry.layer == cash.LAYER_LACI).order_by(KasEntry.id.asc()).all():
+                running += to_decimal(ke.nominal) if (ke.jenis or "").lower() == "masuk" else -to_decimal(ke.nominal)
+                ke.saldo_setelah = running
+
+        # 2. Bersihkan pembayaran
+        if pay_rows:
+            db.query(Payment).filter(Payment.service_order_id == order.id).delete(synchronize_session=False)
+
+        # 3. Bersihkan klaim garansi
+        if n_claim:
+            db.query(WarrantyClaim).filter(WarrantyClaim.service_order_id == order.id).delete(synchronize_session=False)
+
+        # 4. Bersihkan status history
+        db.query(StatusHistory).filter(StatusHistory.service_order_id == order.id).delete(synchronize_session=False)
+
+        # 5. Bersihkan pemakaian sparepart
+        db.query(ServiceOrderPart).filter(ServiceOrderPart.service_order_id == order.id).delete(synchronize_session=False)
+
+        # 6. Catat journal audit
+        journal.record(
+            db, domain="SERVICE", event="ORDER_DELETE",
+            entity_type="service_order", entity_id=order.id,
+            actor=admin.username,
+            details={
+                "no_servis": order.no_servis,
+                "customer_id": order.customer_id,
+                "status": order.status,
+                "payments_removed": len(pay_ids),
+                "is_superadmin_cascade": True
+            }
+        )
+
     db.delete(order)
     db.commit()
     return {"ok": True}
