@@ -332,7 +332,7 @@ def warranty_summary(db: Session = Depends(get_db_session)):
         db.query(ServiceOrder)
         .filter(ServiceOrder.status == "CASH", ServiceOrder.warranty_months != 0)
         .order_by(ServiceOrder.lunas_date.desc().nullslast(), ServiceOrder.id.desc())
-        .limit(400)
+        .limit(1000)
         .all()
     )
     # Saring LUNAS via jurnal payments (derive, bukan status).
@@ -342,7 +342,7 @@ def warranty_summary(db: Session = Depends(get_db_session)):
     for p in pays:
         by_order.setdefault(p.service_order_id, []).append(p)
     lunas = [o for o in candidates
-             if payment_summary(o, by_order.get(o.id, []))["payment_status"] == "LUNAS"][:200]
+             if payment_summary(o, by_order.get(o.id, []))["payment_status"] == "LUNAS"][:1000]
     # Saring lagi: hanya periode kas yang sudah CLOSED.
     closed_periods = db.query(KasPeriod).filter(
         KasPeriod.status == "CLOSED").all()
