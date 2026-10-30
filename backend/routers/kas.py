@@ -150,6 +150,9 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
                 "ref_id": p.id,
             })
         else:
+            # Non-DP (PELUNASAN): abaikan data impor arsip garansi historis (SF_WEB)
+            if '(SF_WEB)' in (getattr(p, 'note', '') or ''):
+                continue
             # PELUNASAN: hanya masuk Mutasi Kalau OMSET-eligible
             if o and _boleh_masuk_omzet(o):
                 kategori = "Pelunasan"
