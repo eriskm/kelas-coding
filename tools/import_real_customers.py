@@ -178,36 +178,30 @@ def run_import():
 
     db = SessionLocal()
     try:
-        # 1. Pastikan ada akun placeholder ID 1 untuk service_orders lama (QA/Uji Coba)
-        placeholder = db.query(models.Customer).filter(models.Customer.id == 1).first()
-        if not placeholder:
-            placeholder = models.Customer(
-                id=1,
-                name="Pelanggan Uji Coba (Histori QA)",
-                phone="080000000000",
-                created_at=datetime(2026, 10, 19, 0, 0, 0),
-            )
-            db.add(placeholder)
-            db.flush()
-
-        # Re-link order lama yang mereferensikan customer_id lain ke ID 1 agar foreign key tetap valid
         from sqlalchemy import text
-        db.execute(text("UPDATE service_orders SET customer_id = 1 WHERE customer_id != 1"))
-        db.commit()
 
-        # 2. Hapus customer selain ID 1 untuk idempoten
-        db.execute(text("DELETE FROM customers WHERE id > 1"))
-        db.commit()
+        # 1. Hapus customer placeholder ID 1 jika ada
+        placeholder = db.query(models.Customer).filter(models.Customer.id == 1).first()
+        if placeholder and "Uji Coba" in (placeholder.name or ""):
+            db.delete(placeholder)
+            db.commit()
 
-        # 3. Masukkan 466 pelanggan riil
+        # 2. Ambil phone yang sudah ada
+        existing_phones = {c.phone for c in db.query(models.Customer).all() if c.phone}
+
+        # 3. Masukkan pelanggan riil yang belum ada
         inserted_count = 0
         for item in real_customers:
+            if item["phone"] in existing_phones:
+                continue
             cust = models.Customer(
                 name=item["name"],
                 phone=item["phone"],
                 created_at=item["created_at"],
             )
             db.add(cust)
+            existing_phones.add(item["phone"])
+            inserted_count += 1
             inserted_count += 1
 
         db.flush()
