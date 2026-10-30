@@ -26,7 +26,9 @@ from database import SessionLocal
 import models
 import journal
 
-SOURCE_DB = os.path.join(PROJECT_ROOT, "docs", "db", "sukabumi_flasher_full_12_tabel.db")
+PRIMARY_DB = os.path.join(PROJECT_ROOT, "docs", "db", "sukabumi_flasher_full_12_tabel.db")
+BACKUP_DB = r"D:\BACKUP_DB_LAMA_SUKABUMI_FLASHER\sukabumi_flasher_full_12_tabel.db"
+SOURCE_DB = PRIMARY_DB if os.path.exists(PRIMARY_DB) else BACKUP_DB
 
 
 def clean_phone(p):

@@ -31,7 +31,9 @@ import journal
 from statusflow import LEGACY_STATUS_MAP
 from money import to_decimal
 
-SOURCE_DB = os.path.join(PROJECT_ROOT, "docs", "db", "sukabumi_flasher_full_12_tabel.db")
+PRIMARY_DB = os.path.join(PROJECT_ROOT, "docs", "db", "sukabumi_flasher_full_12_tabel.db")
+BACKUP_DB = r"D:\BACKUP_DB_LAMA_SUKABUMI_FLASHER\sukabumi_flasher_full_12_tabel.db"
+SOURCE_DB = PRIMARY_DB if os.path.exists(PRIMARY_DB) else BACKUP_DB
 MIGRATION_TAG = "Migrasi Antrean Servis Aktif Toko (SF_WEB)"
 
 
