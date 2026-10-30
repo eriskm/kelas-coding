@@ -74,9 +74,13 @@ def run_import():
             hb_dec = to_decimal(hb or 0)
             hj_dec = to_decimal(hj or 0)
 
+            kat_clean = (kat or "").strip()
+            if kat_clean.lower() == "batre":
+                kat_clean = "Baterai"
+
             # 1. Master Sparepart
             sp = models.Sparepart(
-                kategori=(kat or "").strip() or None,
+                kategori=kat_clean or None,
                 merek=(mrk or "").strip() or None,
                 jenis=(jns or "").strip(),
                 device=(dev or "").strip() or None,
