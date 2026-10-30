@@ -5732,7 +5732,6 @@ function renderSpCategoryTabs(data) {
         const meta = spCategoryMeta(cat);
         html += `
             <button type="button" onclick="spSelectCategoryTab('${escapeHtml(cat)}')" class="px-2.5 py-1 rounded-lg text-xs font-bold transition flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 ${isAct ? 'bg-emerald-600 text-white shadow-2xs' : 'bg-white dark:bg-white/5 border border-gray-200 dark:border-white/10 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-white/10'}">
-                <i class="fa-solid ${meta.icon} text-[10px]"></i>
                 <span>${escapeHtml(cat)}</span>
                 <span class="text-[10px] px-1.5 py-0.2 rounded-full ${isAct ? 'bg-emerald-700/70 text-white' : 'bg-gray-100 dark:bg-white/10 text-gray-500 dark:text-gray-400'}">${counts[cat]}</span>
             </button>
@@ -6146,8 +6145,7 @@ async function renderSparepart(fetchFresh = true) {
                                     return `
                                         <tr class="hover:bg-white dark:hover:bg-white/[0.03] transition">
                                             <td class="py-2 px-3">
-                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${meta.bg}">
-                                                    <i class="fa-solid ${meta.icon} text-[9.5px]"></i>
+                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider border ${meta.bg}">
                                                     <span>${escapeHtml(s.kategori)}</span>
                                                 </span>
                                             </td>
@@ -6304,8 +6302,7 @@ async function renderSparepart(fetchFresh = true) {
                         <div class="p-2.5 sm:px-3.5 sm:py-2.5 flex items-center justify-between gap-2.5 sm:gap-3 cursor-pointer select-none bg-white dark:bg-dark-panel hover:bg-gray-50/80 dark:hover:bg-white/[0.02] transition" onclick="spToggleGroup('${encodeURIComponent(g.key)}')">
                             <!-- Kolom Kiri: Kategori Badge + Tipe Ringkas + Merek Badges -->
                             <div class="flex items-center gap-2.5 min-w-0 flex-1">
-                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 border ${meta.bg}">
-                                    <i class="fa-solid ${meta.icon} text-[9.5px]"></i>
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 border ${meta.bg}">
                                     <span>${escapeHtml(g.kategori)}</span>
                                 </span>
                                 <div class="min-w-0 flex-1">
