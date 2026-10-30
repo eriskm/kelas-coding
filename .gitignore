@@ -14,6 +14,7 @@ venv/
 # Dump/backup database: berisi data pelanggan (nama + nomor HP).
 # Backup resmi tetap ada di server & di luar repo.
 backup-*.sql
+*.sql
 *.sql.gz
 # Backup DB lokal yang dinamai ulang, mis. "servisku.db.bak_modal_20261019_165716".
 # Namanya tidak berakhiran .db, jadi aturan di atas TIDAK menutupnya - padahal
