@@ -2842,6 +2842,85 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .ku-block-sub { font-size: 10.5px; color: #6b7280; margin-top: 1px; line-height: 1.4; }
 .dark .ku-block-sub { color: #9ca3af; }
 
+/* Tooltip info untuk judul blok keuangan */
+.ku-info-tip {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    margin-left: 3px;
+    outline: none;
+}
+.ku-info-tip > i {
+    color: #94a3b8 !important;
+    font-size: 12px !important;
+    transition: color 0.15s ease, transform 0.15s ease;
+}
+.ku-info-tip:hover > i,
+.ku-info-tip:focus-visible > i {
+    color: #475569 !important;
+    transform: scale(1.1);
+}
+.dark .ku-info-tip > i {
+    color: #64748b !important;
+}
+.dark .ku-info-tip:hover > i,
+.dark .ku-info-tip:focus-visible > i {
+    color: #cbd5e1 !important;
+}
+.ku-info-bubble {
+    visibility: hidden;
+    opacity: 0;
+    position: absolute;
+    bottom: calc(100% + 7px);
+    left: -12px;
+    width: 270px;
+    max-width: min(290px, calc(100vw - 48px));
+    padding: 7px 10px;
+    background: #1e293b;
+    color: #f1f5f9;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.45;
+    letter-spacing: normal;
+    text-transform: none;
+    border-radius: 7px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.22);
+    z-index: 60;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s ease;
+    transform: translateY(4px);
+    text-align: left;
+    white-space: normal;
+}
+.dark .ku-info-bubble {
+    background: #0f172a;
+    color: #e2e8f0;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.ku-info-bubble::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 17px;
+    border-width: 5px;
+    border-style: solid;
+    border-color: #1e293b transparent transparent transparent;
+}
+.dark .ku-info-bubble::after {
+    border-color: #0f172a transparent transparent transparent;
+}
+.ku-info-tip:hover .ku-info-bubble,
+.ku-info-tip:focus .ku-info-bubble,
+.ku-info-tip:focus-visible .ku-info-bubble {
+    visibility: visible;
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+}
+
 @media (max-width: 640px) {
     .ku-block-title { font-size: 12px; }
 }
