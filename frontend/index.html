@@ -2392,194 +2392,210 @@
                         <form id="receiveForm" autocomplete="off" class="rc-form-shell">
                             <div class="float-body rc-float-scroll">
 
-                            <!-- PROGRESS STEPPER -->
-                            <ol id="rcSteps" class="rc-steps" aria-label="Alur penerimaan unit">
-                                <li class="rc-step is-active" data-step="1"><span class="rc-dot">1</span><span class="rc-step-label">Data Pelanggan</span></li>
-                                <li class="rc-step" data-step="2"><span class="rc-dot">2</span><span class="rc-step-label">Diagnostik</span></li>
-                                <li class="rc-step" data-step="3"><span class="rc-dot">3</span><span class="rc-step-label">Estimasi &amp; Penugasan</span></li>
-                                <li class="rc-step" data-step="4"><span class="rc-dot">4</span><span class="rc-step-label">Siap Eksekusi</span></li>
-                            </ol>
+                            <!-- TOP CONTROLS: Stepper & Posisi Servis Berdampingan -->
+                            <div class="rc-topbar">
+                                <!-- PROGRESS STEPPER -->
+                                <ol id="rcSteps" class="rc-steps" aria-label="Alur penerimaan unit">
+                                    <li class="rc-step is-active" data-step="1"><span class="rc-dot">1</span><span class="rc-step-label">Data Pelanggan</span></li>
+                                    <li class="rc-step" data-step="2"><span class="rc-dot">2</span><span class="rc-step-label">Diagnostik</span></li>
+                                    <li class="rc-step" data-step="3"><span class="rc-dot">3</span><span class="rc-step-label">Estimasi &amp; Penugasan</span></li>
+                                    <li class="rc-step" data-step="4"><span class="rc-dot">4</span><span class="rc-step-label">Siap Eksekusi</span></li>
+                                </ol>
 
-                            <!-- POSISI SERVIS (header selector, bukan status bebas) -->
-                            <div class="rc-posbar" role="radiogroup" aria-label="Posisi Servis">
-                                <div class="rc-posbar-head">
-                                    <span class="rc-posbar-title"><i class="fa-solid fa-route"></i> Posisi Servis</span>
-                                    <span class="rc-posbar-badge" id="rcPathBadge" title="Terdeteksi otomatis dari data">AUTO</span>
-                                </div>
-                                <div class="rc-posbar-opts" id="rcPathGroup">
-                                    <label class="rc-pos" title="Penerimaan unit awal untuk antrean pengecekan">
-                                        <input type="radio" name="rcPath" value="TITIP" checked>
-                                        <span class="rc-pos-ico"><i class="fa-solid fa-inbox"></i></span>
-                                        <div class="rc-pos-body">
-                                            <span class="rc-pos-txt">Titip Unit</span>
-                                            <span class="rc-pos-sub">Antrean awal</span>
-                                        </div>
-                                    </label>
-                                    <label class="rc-pos" title="Diagnosa awal jelas, langsung dikerjakan teknisi">
-                                        <input type="radio" name="rcPath" value="PERBAIKAN">
-                                        <span class="rc-pos-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
-                                        <div class="rc-pos-body">
-                                            <span class="rc-pos-txt">Perbaikan</span>
-                                            <span class="rc-pos-sub">Langsung kerja</span>
-                                        </div>
-                                    </label>
-                                    <label class="rc-pos" title="Perlu menunggu pemesanan atau kedatangan suku cadang">
-                                        <input type="radio" name="rcPath" value="SPAREPART">
-                                        <span class="rc-pos-ico"><i class="fa-solid fa-hourglass-half"></i></span>
-                                        <div class="rc-pos-body">
-                                            <span class="rc-pos-txt">Sparepart</span>
-                                            <span class="rc-pos-sub">Tunggu part</span>
-                                        </div>
-                                    </label>
-                                    <label class="rc-pos" title="Servis kilat langsung selesai ditunggu konsumen">
-                                        <input type="radio" name="rcPath" value="TUNGGU">
-                                        <span class="rc-pos-ico"><i class="fa-solid fa-bolt"></i></span>
-                                        <div class="rc-pos-body">
-                                            <span class="rc-pos-txt">Tunggu</span>
-                                            <span class="rc-pos-sub">Servis kilat</span>
-                                        </div>
-                                    </label>
+                                <!-- POSISI SERVIS (header selector, bukan status bebas) -->
+                                <div class="rc-posbar" role="radiogroup" aria-label="Posisi Servis">
+                                    <div class="rc-posbar-head">
+                                        <span class="rc-posbar-title"><i class="fa-solid fa-route"></i> Posisi Servis</span>
+                                        <span class="rc-posbar-badge" id="rcPathBadge" title="Terdeteksi otomatis dari data">AUTO</span>
+                                    </div>
+                                    <div class="rc-posbar-opts" id="rcPathGroup">
+                                        <label class="rc-pos" title="Penerimaan unit awal untuk antrean pengecekan">
+                                            <input type="radio" name="rcPath" value="TITIP" checked>
+                                            <span class="rc-pos-ico"><i class="fa-solid fa-inbox"></i></span>
+                                            <div class="rc-pos-body">
+                                                <span class="rc-pos-txt">Titip Unit</span>
+                                                <span class="rc-pos-sub">Antrean awal</span>
+                                            </div>
+                                        </label>
+                                        <label class="rc-pos" title="Diagnosa awal jelas, langsung dikerjakan teknisi">
+                                            <input type="radio" name="rcPath" value="PERBAIKAN">
+                                            <span class="rc-pos-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
+                                            <div class="rc-pos-body">
+                                                <span class="rc-pos-txt">Perbaikan</span>
+                                                <span class="rc-pos-sub">Langsung kerja</span>
+                                            </div>
+                                        </label>
+                                        <label class="rc-pos" title="Perlu menunggu pemesanan atau kedatangan suku cadang">
+                                            <input type="radio" name="rcPath" value="SPAREPART">
+                                            <span class="rc-pos-ico"><i class="fa-solid fa-hourglass-half"></i></span>
+                                            <div class="rc-pos-body">
+                                                <span class="rc-pos-txt">Sparepart</span>
+                                                <span class="rc-pos-sub">Tunggu part</span>
+                                            </div>
+                                        </label>
+                                        <label class="rc-pos" title="Servis kilat langsung selesai ditunggu konsumen">
+                                            <input type="radio" name="rcPath" value="TUNGGU">
+                                            <span class="rc-pos-ico"><i class="fa-solid fa-bolt"></i></span>
+                                            <div class="rc-pos-body">
+                                                <span class="rc-pos-txt">Tunggu</span>
+                                                <span class="rc-pos-sub">Servis kilat</span>
+                                            </div>
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="rc-layout">
-                            <div class="rc-main">
+                                <!-- KOLOM KIRI: Identitas Konsumen & Detail Fisik Perangkat -->
+                                <div class="rc-col rc-col-left">
 
-                            <!-- PANEL 1: Data Pelanggan -->
-                            <div class="panel receive-panel">
-                                <div class="receive-panel-head">
-                                    <span class="receive-head-ico"><i class="fa-solid fa-user-check"></i></span>
-                                    <div>
-                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Data Pelanggan</h3>
-                                        <span class="text-[10.5px] text-gray-400">Nomor WhatsApp digunakan untuk Histori Cerdas</span>
+                                    <!-- PANEL 1: Data Pelanggan -->
+                                    <div class="panel receive-panel">
+                                        <div class="receive-panel-head">
+                                            <span class="receive-head-ico"><i class="fa-solid fa-user-check"></i></span>
+                                            <div>
+                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Data Pelanggan</h3>
+                                                <span class="text-[10.5px] text-gray-400">Nomor WhatsApp digunakan untuk Histori Cerdas</span>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                                            <div class="field">
+                                                <label class="field-label" for="rcName">Nama Pelanggan <b class="text-red-500">*</b></label>
+                                                <input class="receive-input" type="text" id="rcName" placeholder="cth. Andi Pratama" required>
+                                            </div>
+                                            <div class="field">
+                                                <label class="field-label" for="rcPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
+                                                <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="tel" autocomplete="off" required>
+                                                <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
-                                    <div class="field">
-                                        <label class="field-label" for="rcName">Nama Pelanggan <b class="text-red-500">*</b></label>
-                                        <input class="receive-input" type="text" id="rcName" placeholder="cth. Andi Pratama" required>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
-                                        <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="tel" autocomplete="off" required>
-                                        <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
-                                    </div>
-                                </div>
-                            </div>
 
-                            <!-- Histori Cerdas: panel samping (rc-side) -->
+                                    <!-- PANEL 2: Informasi & Kondisi Unit -->
+                                    <div class="panel receive-panel">
+                                        <div class="receive-panel-head">
+                                            <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
+                                            <div>
+                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Informasi &amp; Kondisi Unit</h3>
+                                                <span class="text-[10.5px] text-gray-400">Data fisik unit saat diterima</span>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
+                                            <div class="field">
+                                                <label class="field-label" for="rcDevice">Perangkat / Model HP <b class="text-red-500">*</b></label>
+                                                <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" list="rcDeviceList" autocomplete="off" required>
+                                                <datalist id="rcDeviceList"></datalist>
+                                            </div>
+                                            <div class="field">
+                                                <label class="field-label" for="rcPassword">Kunci Layar / Pola</label>
+                                                <div class="relative">
+                                                    <input class="receive-input pr-10" type="password" id="rcPassword" placeholder="cth. 1234" autocomplete="off">
+                                                    <button type="button" id="rcPwToggle" class="rc-pw-toggle" aria-label="Tampilkan password"><i class="fa-solid fa-eye"></i></button>
+                                                </div>
+                                            </div>
+                                            <div class="field">
+                                                <label class="field-label" for="rcImei">IMEI / Serial Number</label>
+                                                <input class="receive-input" type="text" id="rcImei" placeholder="cth. 356938035643809" inputmode="numeric" autocomplete="off">
+                                            </div>
+                                        </div>
+                                        <div class="rc-check-wrap">
+                                            <p class="field-label rc-check-title">Kondisi &amp; Kelengkapan Unit</p>
+                                            <div class="rc-check-groups" id="rcCheckGroups"></div>
+                                        </div>
+                                    </div>
 
-                            <!-- PANEL 2: Informasi & Kondisi Unit -->
-                            <div class="panel receive-panel">
-                                <div class="receive-panel-head">
-                                    <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
-                                    <div>
-                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Informasi & Kondisi Unit</h3>
-                                        <span class="text-[10.5px] text-gray-400">Data unit sebagaimana diterima oleh teknisi</span>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5 pt-1">
-                                    <div class="field">
-                                        <label class="field-label" for="rcDevice">Perangkat / Model HP <b class="text-red-500">*</b></label>
-                                        <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" list="rcDeviceList" autocomplete="off" required>
-                                        <datalist id="rcDeviceList"></datalist>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcPassword">Kunci Layar / Pola</label>
-                                        <div class="relative">
-                                            <input class="receive-input pr-10" type="password" id="rcPassword" placeholder="cth. 1234" autocomplete="off">
-                                            <button type="button" id="rcPwToggle" class="rc-pw-toggle" aria-label="Tampilkan password"><i class="fa-solid fa-eye"></i></button>
-                                        </div>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcImei">IMEI / Serial Number</label>
-                                        <input class="receive-input" type="text" id="rcImei" placeholder="cth. 356938035643809" inputmode="numeric" autocomplete="off">
-                                    </div>
-                                </div>
-                                <div class="rc-check-wrap">
-                                    <p class="field-label rc-check-title">Kondisi & Kelengkapan Unit</p>
-                                    <div class="rc-check-groups" id="rcCheckGroups"></div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3">
-                                    <p class="field-label sm:col-span-2" style="margin-bottom:-6px">Keluhan & Rencana Perbaikan</p>
-                                    <div class="field">
-                                        <label class="field-label" for="rcDamage">Keluhan <b class="text-red-500">*</b></label>
-                                        <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi" required></textarea>
-                                        <div class="mt-1.5">
-                                            <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Pilihan Cepat Keluhan:</span>
-                                            <div id="rcDamageChips" class="rc-chip-group"></div>
-                                        </div>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcPlan" id="rcPlanLabel">Rencana Perbaikan</label>
-                                        <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
-                                        <div class="mt-1.5">
-                                            <span class="text-[10px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Pilihan Cepat Tindakan:</span>
-                                            <div id="rcPlanChips" class="rc-chip-group"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
+                                </div><!-- /rc-col-left -->
 
-                            <!-- PANEL 3: Estimasi Biaya & Penanggung Jawab -->
-                            <div class="panel receive-panel">
-                                <div class="receive-panel-head">
-                                    <span class="receive-head-ico"><i class="fa-solid fa-calculator"></i></span>
-                                    <div>
-                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">Estimasi Biaya & Penanggung Jawab</h3>
-                                        <span class="text-[10.5px] text-gray-400">Estimasi biaya, DP & teknisi penanggung jawab</span>
-                                    </div>
-                                </div>
-                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 pt-1">
-                                    <div class="field">
-                                        <label class="field-label" for="rcEstimate" id="rcEstimateLabel">Estimasi Biaya</label>
-                                        <div class="relative">
-                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcEstimate" placeholder="500.000">
-                                        </div>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcDp">DP (Uang Muka)</label>
-                                        <div class="relative">
-                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcDp" placeholder="100.000">
-                                        </div>
-                                        <div id="rcDpFeedback" class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 hidden flex items-center gap-1"></div>
-                                    </div>
-                                    <div class="field hidden" id="rcFinalWrap">
-                                        <label class="field-label" for="rcFinal" id="rcFinalLabel">Harga Final</label>
-                                        <div class="relative">
-                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcFinal" placeholder="500.000">
-                                        </div>
-                                    </div>
-                                    <div class="field">
-                                        <label class="field-label" for="rcTechnician" id="rcTechnicianLabel">Teknisi Penanggung Jawab</label>
-                                        <select class="receive-input" id="rcTechnician">
-                                            <option value="">— Pilih Teknisi —</option>
-                                        </select>
-                                    </div>
-                                    <input type="hidden" id="rcStatus" value="DITERIMA">
-                                </div>
-                            </div>
+                                <!-- KOLOM KANAN: Histori Cerdas, Keluhan/Diagnostik & Estimasi Finansial -->
+                                <div class="rc-col rc-col-right">
 
-                            </div><!-- /rc-main -->
-                            <aside class="rc-side">
-                                <!-- HISTORI CERDAS -->
-                                <div id="smartHistory" class="panel receive-panel receive-panel-glow rc-hist">
-                                    <div class="receive-panel-head">
-                                        <span class="receive-head-ico history-ico"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
-                                        <div>
-                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Cerdas</h3>
-                                            <span class="text-[10.5px] text-gray-400">Histori Cerdas Pelanggan</span>
+                                    <!-- HISTORI CERDAS -->
+                                    <div id="smartHistory" class="panel receive-panel receive-panel-glow rc-hist">
+                                        <div class="receive-panel-head">
+                                            <span class="receive-head-ico history-ico"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
+                                            <div>
+                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Cerdas</h3>
+                                                <span class="text-[10.5px] text-gray-400">Histori Cerdas Pelanggan</span>
+                                            </div>
+                                            <span id="smartHistoryState" class="rc-hist-state">Kosong</span>
                                         </div>
-                                        <span id="smartHistoryState" class="rc-hist-state">Kosong</span>
+                                        <div id="smartHistoryList" class="mt-1">
+                                            <div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> Ketik Nama / Nomor WhatsApp untuk cek histori pelanggan.</div>
+                                        </div>
                                     </div>
-                                    <div id="smartHistoryList" class="mt-2">
-                                        <div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> Ketik Nama / Nomor WhatsApp untuk cek histori pelanggan.</div>
+
+                                    <!-- PANEL 3: Keluhan & Rencana Perbaikan -->
+                                    <div class="panel receive-panel">
+                                        <div class="receive-panel-head">
+                                            <span class="receive-head-ico"><i class="fa-solid fa-clipboard-list"></i></span>
+                                            <div>
+                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Keluhan &amp; Rencana Tindakan</h3>
+                                                <span class="text-[10.5px] text-gray-400">Diagnostik awal dan rencana perbaikan</span>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                            <div class="field">
+                                                <label class="field-label" for="rcDamage">Keluhan <b class="text-red-500">*</b></label>
+                                                <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi" required></textarea>
+                                                <div class="mt-1">
+                                                    <span class="text-[9.5px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Cepat Keluhan:</span>
+                                                    <div id="rcDamageChips" class="rc-chip-group"></div>
+                                                </div>
+                                            </div>
+                                            <div class="field">
+                                                <label class="field-label" for="rcPlan" id="rcPlanLabel">Rencana Perbaikan</label>
+                                                <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
+                                                <div class="mt-1">
+                                                    <span class="text-[9.5px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Cepat Tindakan:</span>
+                                                    <div id="rcPlanChips" class="rc-chip-group"></div>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
-                                </div>
-                                </aside>
+
+                                    <!-- PANEL 4: Estimasi Biaya & Penugasan -->
+                                    <div class="panel receive-panel">
+                                        <div class="receive-panel-head">
+                                            <span class="receive-head-ico"><i class="fa-solid fa-calculator"></i></span>
+                                            <div>
+                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Estimasi Biaya &amp; Penugasan</h3>
+                                                <span class="text-[10.5px] text-gray-400">Estimasi biaya, DP &amp; teknisi penanggung jawab</span>
+                                            </div>
+                                        </div>
+                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                                            <div class="field">
+                                                <label class="field-label" for="rcEstimate" id="rcEstimateLabel">Estimasi Biaya</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                    <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcEstimate" placeholder="500.000">
+                                                </div>
+                                            </div>
+                                            <div class="field">
+                                                <label class="field-label" for="rcDp">DP (Uang Muka)</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                    <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcDp" placeholder="100.000">
+                                                </div>
+                                                <div id="rcDpFeedback" class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 hidden flex items-center gap-1"></div>
+                                            </div>
+                                            <div class="field hidden sm:col-span-2" id="rcFinalWrap">
+                                                <label class="field-label" for="rcFinal" id="rcFinalLabel">Harga Final</label>
+                                                <div class="relative">
+                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                    <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcFinal" placeholder="500.000">
+                                                </div>
+                                            </div>
+                                            <div class="field sm:col-span-2">
+                                                <label class="field-label" for="rcTechnician" id="rcTechnicianLabel">Teknisi Penanggung Jawab</label>
+                                                <select class="receive-input" id="rcTechnician">
+                                                    <option value="">— Pilih Teknisi —</option>
+                                                </select>
+                                            </div>
+                                            <input type="hidden" id="rcStatus" value="DITERIMA">
+                                        </div>
+                                    </div>
+
+                                </div><!-- /rc-col-right -->
                             </div><!-- /rc-layout -->
                             </div><!-- /float-body -->
 

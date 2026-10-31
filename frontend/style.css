@@ -2082,6 +2082,60 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageReceive .float-body,
 #pageUpdateServis .float-body { zoom: 0.9; }
 
+/* Compact layout refinement khusus Servis Baru agar muat 1 layar */
+#pageReceive { width: min(1180px, calc(100vw - 24px)); }
+#pageReceive .float-titlebar { padding: 7px 14px; }
+#pageReceive .float-title { font-size: 15px; }
+#pageReceive .float-sub { font-size: 11px; }
+#pageReceive .float-body { padding: 6px 12px 8px; }
+#pageReceive .receive-panel { padding: 6px 10px; border-radius: 9px; }
+#pageReceive .receive-panel-head { margin-bottom: 4px; padding-bottom: 4px; gap: 5px; }
+#pageReceive .receive-panel-head h3 { font-size: 12.5px; font-weight: 700; }
+#pageReceive .receive-panel-head > div > span { font-size: 9.5px; }
+#pageReceive .receive-head-ico { width: 22px; height: 22px; font-size: 10px; border-radius: 5px; }
+#pageReceive .rc-topbar { display: flex; align-items: stretch; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
+#pageReceive .rc-topbar .rc-steps { flex: 1 1 48%; margin: 0; min-width: 0; }
+#pageReceive .rc-topbar .rc-posbar { flex: 1 1 52%; margin: 0; min-width: 0; }
+#pageReceive .rc-posbar { padding: 2px 5px; min-height: 32px; border-radius: 7px; }
+#pageReceive .rc-posbar-head { gap: 4px; }
+#pageReceive .rc-posbar-title { font-size: 10.5px; }
+#pageReceive .rc-posbar-badge { font-size: 8.5px; padding: 1px 4px; }
+#pageReceive .rc-pos { padding: 2px 5px; gap: 4px; border-radius: 5px; }
+#pageReceive .rc-pos-ico { width: 19px; height: 19px; font-size: 9px; }
+#pageReceive .rc-pos-txt { font-size: 10px; font-weight: 700; line-height: 1.1; }
+#pageReceive .rc-pos-sub { font-size: 8px; line-height: 1.1; }
+#pageReceive .rc-steps { padding: 2px 6px; border-radius: 7px; }
+#pageReceive .rc-step { gap: 4px; }
+#pageReceive .rc-dot { width: 17px; height: 17px; font-size: 9px; }
+#pageReceive .rc-step.is-done .rc-dot::after { font-size: 10.5px; }
+#pageReceive .rc-step-label { font-size: 10px; font-weight: 600; }
+#pageReceive .rc-step + .rc-step::before { height: 1.5px; }
+#pageReceive .field-label { font-size: 10.5px; margin-bottom: 2px; font-weight: 600; }
+#pageReceive .receive-input { height: 32px; padding: 3px 8px; font-size: 12px; border-radius: 6px; }
+#pageReceive textarea.receive-input { min-height: 34px; height: 34px; padding: 3px 8px; line-height: 1.2; font-size: 11.5px; }
+#pageReceive .history-empty { padding: 6px 10px; font-size: 10.5px; border-radius: 7px; gap: 5px; }
+#pageReceive .history-ico { font-size: 10px; }
+#pageReceive .rc-hist-state { font-size: 9px; padding: 1px 5px; }
+#pageReceive .rc-check-wrap { margin-top: 3px; padding-top: 3px; border-top: 1px dashed rgba(226,232,240,0.8); }
+#pageReceive .rc-check-title { margin-bottom: 2px; font-size: 10px; }
+#pageReceive #rcCheckGroups .rc-check { padding: 2px 6px; font-size: 10px; }
+#pageReceive .rc-chip-group { gap: 3px; margin-top: 2px; }
+#pageReceive .rc-chip { padding: 1.5px 5px; font-size: 9px; border-radius: 4px; }
+#pageReceive .rc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; align-items: start; }
+#pageReceive .rc-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+#pageReceive .rc-col .receive-panel { margin: 0; }
+#pageReceive .rc-sticky-footer { padding: 7px 14px; }
+#pageReceive .rc-footer-chip { padding: 3px 8px; font-size: 11px; }
+#pageReceive .receive-submit-btn { padding: 8px 18px; font-size: 12.5px; border-radius: 10px; }
+
+@media (max-width: 900px) {
+    #pageReceive .rc-topbar { flex-direction: column; gap: 5px; }
+    #pageReceive .rc-topbar .rc-steps { flex: 1 1 auto; width: 100%; overflow-x: auto; padding: 4px 8px; }
+    #pageReceive .rc-topbar .rc-posbar { flex: 1 1 auto; width: 100%; overflow-x: auto; }
+    #pageReceive .rc-layout { grid-template-columns: 1fr; }
+}
+
+
 /* Typography Servis Baru: +5–10% khusus #pageReceive (zoom 0.9 tetap).
    Hanya font-size/weight — layout, spacing, container tidak berubah. */
 #pageReceive .rc-step { font-size: 12.5px; }
@@ -2469,7 +2523,7 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 /* Layout 2 kolom */
 .rc-layout {
     display: grid;
-    grid-template-columns: minmax(0, 7fr) minmax(0, 3fr);
+    grid-template-columns: minmax(0, 58fr) minmax(0, 42fr);
     gap: 12px;
     align-items: start;
 }
