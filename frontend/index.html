@@ -2392,53 +2392,43 @@
                         <form id="receiveForm" autocomplete="off" class="rc-form-shell">
                             <div class="float-body rc-float-scroll">
 
-                            <!-- TOP CONTROLS: Stepper & Posisi Servis Berdampingan -->
-                            <div class="rc-topbar">
-                                <!-- PROGRESS STEPPER -->
-                                <ol id="rcSteps" class="rc-steps" aria-label="Alur penerimaan unit">
-                                    <li class="rc-step is-active" data-step="1"><span class="rc-dot">1</span><span class="rc-step-label">Data Pelanggan</span></li>
-                                    <li class="rc-step" data-step="2"><span class="rc-dot">2</span><span class="rc-step-label">Diagnostik</span></li>
-                                    <li class="rc-step" data-step="3"><span class="rc-dot">3</span><span class="rc-step-label">Estimasi &amp; Penugasan</span></li>
-                                    <li class="rc-step" data-step="4"><span class="rc-dot">4</span><span class="rc-step-label">Siap Eksekusi</span></li>
-                                </ol>
-
-                                <!-- POSISI SERVIS (header selector, bukan status bebas) -->
-                                <div class="rc-posbar" role="radiogroup" aria-label="Posisi Servis">
+                            <!-- TOP CONTROL: Posisi Servis Penuh (Keputusan Pertama Kasir) -->
+                            <div class="rc-topbar rc-topbar-full">
+                                <div class="rc-posbar rc-posbar-full" role="radiogroup" aria-label="Posisi Servis">
                                     <div class="rc-posbar-head">
-                                        <span class="rc-posbar-title"><i class="fa-solid fa-route"></i> Posisi Servis</span>
-                                        <span class="rc-posbar-badge" id="rcPathBadge" title="Terdeteksi otomatis dari data">AUTO</span>
+                                        <span class="rc-posbar-title"><i class="fa-solid fa-route text-red-600"></i> Posisi Servis:</span>
                                     </div>
                                     <div class="rc-posbar-opts" id="rcPathGroup">
-                                        <label class="rc-pos" title="Penerimaan unit awal untuk antrean pengecekan">
+                                        <label class="rc-pos" title="Penerimaan unit awal untuk antrean pengecekan / ditinggal konsumen">
                                             <input type="radio" name="rcPath" value="TITIP" checked>
                                             <span class="rc-pos-ico"><i class="fa-solid fa-inbox"></i></span>
                                             <div class="rc-pos-body">
                                                 <span class="rc-pos-txt">Titip Unit</span>
-                                                <span class="rc-pos-sub">Antrean awal</span>
+                                                <span class="rc-pos-sub">Antre / Ditinggal (Default)</span>
                                             </div>
                                         </label>
-                                        <label class="rc-pos" title="Diagnosa awal jelas, langsung dikerjakan teknisi">
+                                        <label class="rc-pos" title="Diagnosa awal jelas, langsung masuk meja perbaikan teknisi">
                                             <input type="radio" name="rcPath" value="PERBAIKAN">
                                             <span class="rc-pos-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
                                             <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Perbaikan</span>
-                                                <span class="rc-pos-sub">Langsung kerja</span>
+                                                <span class="rc-pos-txt">Siap Kerjakan</span>
+                                                <span class="rc-pos-sub">Langsung ke teknisi</span>
                                             </div>
                                         </label>
                                         <label class="rc-pos" title="Perlu menunggu pemesanan atau kedatangan suku cadang">
                                             <input type="radio" name="rcPath" value="SPAREPART">
                                             <span class="rc-pos-ico"><i class="fa-solid fa-hourglass-half"></i></span>
                                             <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Sparepart</span>
-                                                <span class="rc-pos-sub">Tunggu part</span>
+                                                <span class="rc-pos-txt">Inden Sparepart</span>
+                                                <span class="rc-pos-sub">Menunggu part toko/pesan</span>
                                             </div>
                                         </label>
-                                        <label class="rc-pos" title="Servis kilat langsung selesai ditunggu konsumen">
+                                        <label class="rc-pos" title="Servis kilat langsung selesai ditunggu konsumen di toko">
                                             <input type="radio" name="rcPath" value="TUNGGU">
                                             <span class="rc-pos-ico"><i class="fa-solid fa-bolt"></i></span>
                                             <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Tunggu</span>
-                                                <span class="rc-pos-sub">Servis kilat</span>
+                                                <span class="rc-pos-txt">Servis Kilat</span>
+                                                <span class="rc-pos-sub">Ditunggu &amp; selesai di tempat</span>
                                             </div>
                                         </label>
                                     </div>

@@ -2110,23 +2110,57 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageReceive .receive-panel-head h3 { font-size: 12.5px; font-weight: 700; }
 #pageReceive .receive-panel-head > div > span { font-size: 9.5px; }
 #pageReceive .receive-head-ico { width: 22px; height: 22px; font-size: 10px; border-radius: 5px; }
-#pageReceive .rc-topbar { display: flex; align-items: stretch; justify-content: space-between; gap: 8px; margin-bottom: 5px; }
-#pageReceive .rc-topbar .rc-steps { flex: 1 1 48%; margin: 0; min-width: 0; }
-#pageReceive .rc-topbar .rc-posbar { flex: 1 1 52%; margin: 0; min-width: 0; }
-#pageReceive .rc-posbar { padding: 2px 5px; min-height: 32px; border-radius: 7px; }
-#pageReceive .rc-posbar-head { gap: 4px; }
-#pageReceive .rc-posbar-title { font-size: 10.5px; }
-#pageReceive .rc-posbar-badge { font-size: 8.5px; padding: 1px 4px; }
-#pageReceive .rc-pos { padding: 2px 5px; gap: 4px; border-radius: 5px; }
-#pageReceive .rc-pos-ico { width: 19px; height: 19px; font-size: 9px; }
-#pageReceive .rc-pos-txt { font-size: 10px; font-weight: 700; line-height: 1.1; }
-#pageReceive .rc-pos-sub { font-size: 8px; line-height: 1.1; }
-#pageReceive .rc-steps { padding: 2px 6px; border-radius: 7px; }
-#pageReceive .rc-step { gap: 4px; }
-#pageReceive .rc-dot { width: 17px; height: 17px; font-size: 9px; }
-#pageReceive .rc-step.is-done .rc-dot::after { font-size: 10.5px; }
-#pageReceive .rc-step-label { font-size: 10px; font-weight: 600; }
-#pageReceive .rc-step + .rc-step::before { height: 1.5px; }
+#pageReceive .rc-topbar { display: flex; width: 100%; margin-bottom: 7px; }
+#pageReceive .rc-posbar {
+    width: 100%;
+    margin: 0;
+    padding: 3.5px 10px;
+    min-height: 38px;
+    border-radius: 9px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+#pageReceive .rc-posbar-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+#pageReceive .rc-posbar-title {
+    font-size: 11px;
+    font-weight: 800;
+    white-space: nowrap;
+}
+#pageReceive .rc-posbar-opts {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    flex: 1 1 auto;
+    min-width: 0;
+}
+#pageReceive .rc-pos {
+    padding: 3.5px 8px;
+    gap: 6px;
+    border-radius: 7px;
+    min-width: 0;
+    justify-content: flex-start;
+}
+#pageReceive .rc-pos-ico {
+    width: 22px;
+    height: 22px;
+    font-size: 10px;
+    border-radius: 6px;
+}
+#pageReceive .rc-pos-txt {
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1.15;
+}
+#pageReceive .rc-pos-sub {
+    font-size: 8.5px;
+    line-height: 1.15;
+}
 #pageReceive .field-label { font-size: 10.5px; margin-bottom: 2px; font-weight: 600; }
 #pageReceive .receive-input { height: 32px; padding: 3px 8px; font-size: 12px; border-radius: 6px; }
 #pageReceive textarea.receive-input { min-height: 34px; height: 34px; padding: 3px 8px; line-height: 1.2; font-size: 11.5px; }
@@ -2192,8 +2226,8 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 
 @media (max-width: 900px) {
     #pageReceive .rc-topbar { flex-direction: column; gap: 5px; }
-    #pageReceive .rc-topbar .rc-steps { flex: 1 1 auto; width: 100%; overflow-x: auto; padding: 4px 8px; }
-    #pageReceive .rc-topbar .rc-posbar { flex: 1 1 auto; width: 100%; overflow-x: auto; }
+    #pageReceive .rc-posbar { flex-wrap: wrap; padding: 6px 8px; }
+    #pageReceive .rc-posbar-opts { grid-template-columns: 1fr 1fr; gap: 6px; width: 100%; }
     #pageReceive .rc-layout { grid-template-columns: 1fr; }
 }
 

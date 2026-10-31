@@ -109,18 +109,8 @@ function rcGetPath() {
 let _rcPathManual = false;
 
 function rcAutoPath() {
-    try {
-        if (_rcPathManual) return;
-        const filled = id => ((document.getElementById(id) || {}).value || '').trim() !== '';
-        const numFilled = id => rcNum(id) > 0;
-        let want = 'TITIP';
-        if (filled('rcFinal') && filled('rcPlan') && filled('rcTechnician')) want = 'TUNGGU';
-        else if (filled('rcPlan') && numFilled('rcEstimate') && filled('rcTechnician')) want = 'REPAIR';
-        if (want !== rcGetPath()) {
-            const r = document.querySelector('input[name="rcPath"][value="' + want + '"]');
-            if (r) { r.checked = true; rcApplyPath(); try { rcPosAnimate(want, true); } catch (_) {} }
-        }
-    } catch (_) {}
+    // Dinonaktifkan: Pilihan Posisi Servis dilakukan secara sadar oleh kasir di awal (default: Titip Unit).
+    // Sistem tidak lagi mengubah posisi servis diam-diam di latar belakang saat mengetik.
 }
 
 function rcApplyPath() {
@@ -128,14 +118,17 @@ function rcApplyPath() {
     const hid = document.getElementById('rcStatus');
     if (hid) hid.value = RC_PATH_TARGET[path];
     const fw = document.getElementById('rcFinalWrap');
-    if (fw) fw.classList.toggle('hidden', path !== 'TUNGGU');
-    const badge = document.getElementById('rcPathBadge');
-    if (badge) {
-        const manual = !!_rcPathManual;
-        badge.textContent = manual ? 'MANUAL' : 'AUTO';
-        badge.classList.toggle('is-manual', manual);
-        badge.title = manual ? 'Pilihan manual — deteksi otomatis berhenti'
-            : 'Terdeteksi otomatis dari data — klik icon untuk ubah';
+    if (fw) {
+        fw.classList.toggle('hidden', path !== 'TUNGGU');
+        // Jika beralih ke Servis Kilat dan Harga Final masih kosong, salin dari Estimasi jika ada
+        if (path === 'TUNGGU') {
+            const finEl = document.getElementById('rcFinal');
+            const estEl = document.getElementById('rcEstimate');
+            if (finEl && !finEl.value && estEl && estEl.value) {
+                finEl.value = estEl.value;
+                rcFormatMoneyInput(finEl);
+            }
+        }
     }
     try { rcMarkReq(); } catch (_) {}
     ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
