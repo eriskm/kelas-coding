@@ -1813,8 +1813,13 @@
                              Notifikasi jadi icon lonceng di baris Riwayat Transaksi. -->
                         <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                             <div class="panel ku-kas-panel" id="kuMasterPanel">
-                                <h3 class="panel-title" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
-                                <p class="ku-sub" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas.</p>
+                                <div class="flex items-center gap-2 mb-2.5">
+                                    <h3 class="panel-title m-0" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
+                                    <span class="ku-info-tip" id="kuMasterTip" tabindex="0" role="button" aria-label="Informasi Kas Aset">
+                                        <i class="fa-solid fa-circle-question"></i>
+                                        <span class="ku-info-bubble" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung.</span>
+                                    </span>
+                                </div>
                                 <div class="ku-summary" id="kuAsetSummary"></div>
                                 <div class="overflow-x-auto mt-2 ku-mutasi-scroll">
                                     <table class="tx-table cash-table w-full text-sm">
@@ -1890,11 +1895,16 @@
                             </div>
 
                             <div class="panel ku-hutang-panel">
-                                <h3 class="panel-title"><i class="fa-solid fa-file-circle-exclamation"></i> Hutang Beban</h3>
-                                <p class="ku-sub">Terpisah dari Buku Kas &mdash; defisit beban yang tidak tertutup kas toko dicatat sebagai hutang (carry forward) dan dapat dilunasi dari Kas Aset.</p>
+                                <div class="flex items-center gap-2 mb-2.5">
+                                    <h3 class="panel-title m-0"><i class="fa-solid fa-file-circle-exclamation"></i> Hutang Beban</h3>
+                                    <span class="ku-info-tip" tabindex="0" role="button" aria-label="Informasi Hutang Beban">
+                                        <i class="fa-solid fa-circle-question"></i>
+                                        <span class="ku-info-bubble">Terpisah dari Buku Kas &mdash; defisit beban yang tidak tertutup kas toko dicatat sebagai hutang (carry forward) dan dapat dilunasi dari Kas Aset.</span>
+                                    </span>
+                                </div>
                                 
                                 <!-- Ringkasan & Status Kecukupan Dana -->
-                                <div class="ku-summary mt-2" id="kuDebtSummary"></div>
+                                <div class="ku-summary mt-0" id="kuDebtSummary"></div>
                                 <div id="kuDebtStatusBanner" class="mt-2.5"></div>
 
                                 <!-- Tabel Riwayat Periode Hutang -->

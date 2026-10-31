@@ -6910,6 +6910,8 @@ async function loadKuAset() {
             : '<i class="fa-solid fa-wallet"></i> Kas Kecil (Laci)';
     }
     const _d = document.getElementById('kuMasterDesc');
+    const _tip = document.getElementById('kuMasterTip');
+    if (_tip) _tip.classList.toggle('hidden', !lihatAset);
     if (_d) {
         _d.classList.toggle('hidden', !lihatAset);
         if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci ↔ Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung.';

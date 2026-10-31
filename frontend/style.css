@@ -2875,8 +2875,8 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     position: absolute;
     bottom: calc(100% + 7px);
     left: -12px;
-    width: 270px;
-    max-width: min(290px, calc(100vw - 48px));
+    width: 285px;
+    max-width: min(320px, calc(100vw - 48px));
     padding: 7px 10px;
     background: #1e293b;
     color: #f1f5f9;
@@ -4239,13 +4239,14 @@ select.range-pill.range-select option { color: #0f172a; }
 .ku-titipan-panel .cash-num { font-variant-numeric: tabular-nums; }
 
 /* ---------- 2 & 3. Panel Kas Aset + Hutang Beban ---------- */
-.ku-kas-panel > .panel-title,
-.ku-hutang-panel > .panel-title {
+.ku-kas-panel .panel-title,
+.ku-hutang-panel .panel-title {
     display: flex; align-items: center; gap: 8px;
     font-size: 13.5px; letter-spacing: -0.01em;
+    margin-bottom: 0;
 }
-.ku-kas-panel > .panel-title i,
-.ku-hutang-panel > .panel-title i { width: 15px; text-align: center; font-size: 13px; }
+.ku-kas-panel .panel-title i,
+.ku-hutang-panel .panel-title i { width: 15px; text-align: center; font-size: 13px; }
 .ku-kas-panel > .ku-sub,
 .ku-hutang-panel > .ku-sub {
     margin-top: 2px; margin-bottom: 10px;
