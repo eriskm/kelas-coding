@@ -3033,16 +3033,154 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .al-row { cursor: pointer; }
 #histSummary .rc-cust { margin-bottom: 0; }
 
-/* Sticky action area */
-.rc-submit {
-    position: sticky;
-    bottom: -16px;
-    background: linear-gradient(180deg, rgba(255,255,255,0), #ffffff 32%);
-    padding-top: 14px;
-    padding-bottom: 4px;
-    z-index: 5;
+/* Sticky action area & Form Shell (Ide A) */
+.rc-form-shell {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
 }
-.dark .rc-submit { background: linear-gradient(180deg, rgba(20,20,28,0), #14141c 32%); }
+.rc-float-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+.rc-sticky-footer {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 16px;
+    background: #f8fafc;
+    border-top: 1px solid #e2e8f0;
+    box-shadow: 0 -3px 12px rgba(0, 0, 0, 0.05);
+    z-index: 40;
+}
+.dark .rc-sticky-footer {
+    background: #111118;
+    border-top-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.35);
+}
+.rc-footer-summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.rc-footer-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #475569;
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 4px 10px;
+    line-height: 1.2;
+}
+.dark .rc-footer-chip {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+.rc-footer-chip b {
+    color: #0f172a;
+    font-weight: 700;
+}
+.dark .rc-footer-chip b {
+    color: #f8fafc;
+}
+.rc-footer-chip.is-sisa {
+    background: #eff6ff;
+    border-color: #bfdbfe;
+    color: #1d4ed8;
+}
+.dark .rc-footer-chip.is-sisa {
+    background: rgba(37, 99, 235, 0.18);
+    border-color: rgba(59, 130, 246, 0.3);
+    color: #93c5fd;
+}
+.rc-footer-chip.is-sisa b {
+    color: #1e40af;
+}
+.rc-footer-chip.is-lunas {
+    background: #ecfdf5;
+    border-color: #a7f3d0;
+    color: #047857;
+}
+.dark .rc-footer-chip.is-lunas {
+    background: rgba(16, 185, 129, 0.18);
+    border-color: rgba(16, 185, 129, 0.3);
+    color: #6ee7b7;
+}
+.rc-footer-chip.is-lunas b {
+    color: #065f46;
+}
+.dark .rc-footer-chip.is-lunas b {
+    color: #a7f3d0;
+}
+.dark .rc-footer-chip.is-sisa b {
+    color: #bfdbfe;
+}
+.rc-footer-chip.is-over {
+    background: #fef2f2;
+    border-color: #fecaca;
+    color: #dc2626;
+}
+.dark .rc-footer-chip.is-over {
+    background: rgba(220, 38, 38, 0.18);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #fca5a5;
+}
+.rc-footer-chip.is-over b {
+    color: #991b1b;
+}
+.dark .rc-footer-chip.is-over b {
+    color: #fecaca;
+}
+.rc-footer-actions {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-left: auto;
+}
+@media (max-width: 640px) {
+    .rc-sticky-footer {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+        padding: 8px 12px;
+    }
+    .rc-footer-summary {
+        justify-content: space-between;
+        width: 100%;
+    }
+    .rc-footer-actions {
+        width: 100%;
+        margin-left: 0;
+    }
+    .rc-footer-actions .receive-submit-btn {
+        width: 100%;
+        justify-content: center;
+    }
+    .rc-shortcut-fab,
+    .rc-shortcut-pop {
+        display: none !important;
+    }
+}
+@media (min-width: 641px) {
+    .rc-shortcut-fab {
+        bottom: 68px !important;
+    }
+    .rc-shortcut-pop {
+        bottom: 118px !important;
+    }
+}
 
 /* Posisi Servis — COMPACT workflow selector / header control (refinement + micro-animation) */
 .rc-posbar { margin: 0 0 8px; padding: 6px 10px; border: 1px solid #e5e7eb; border-radius: 10px; background: #f8fafc; display: flex; align-items: center; gap: 10px; min-height: 52px; }

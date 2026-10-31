@@ -112,7 +112,7 @@ function rcAutoPath() {
     try {
         if (_rcPathManual) return;
         const filled = id => ((document.getElementById(id) || {}).value || '').trim() !== '';
-        const numFilled = id => (parseFloat((document.getElementById(id) || {}).value) || 0) > 0;
+        const numFilled = id => rcNum(id) > 0;
         let want = 'TITIP';
         if (filled('rcFinal') && filled('rcPlan') && filled('rcTechnician')) want = 'TUNGGU';
         else if (filled('rcPlan') && numFilled('rcEstimate') && filled('rcTechnician')) want = 'REPAIR';
@@ -138,6 +138,10 @@ function rcApplyPath() {
             : 'Terdeteksi otomatis dari data — klik icon untuk ubah';
     }
     try { rcMarkReq(); } catch (_) {}
+    ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && el.value) rcFormatMoneyInput(el);
+    });
     try { updateReceiveSteps(); } catch (_) {}
     try { scheduleReceiveDraft(); } catch (_) {}
 }
@@ -782,6 +786,14 @@ function openServisBaru() {
         updateRcChipStates('rcDamage', 'rcDamageChips');
         updateRcChipStates('rcPlan', 'rcPlanChips');
         populateDeviceDatalist();
+
+    ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el && !el.dataset.moneyBound) {
+            el.dataset.moneyBound = '1';
+            el.addEventListener('input', function () { rcFormatMoneyInput(this); });
+        }
+    });
     } catch (_) {}
     setActiveNav('servisbaru', document.querySelectorAll('.nav-link'));
     setActiveNav(null, document.querySelectorAll('.mobile-nav-item'));
@@ -8601,13 +8613,31 @@ function updateRcChipStates(inputId, containerId) {
     });
 }
 
+function rcNum(target) {
+    const el = typeof target === 'string' ? document.getElementById(target) : target;
+    if (!el) return 0;
+    const v = String(el.value || '').replace(/[^\d]/g, '');
+    return v ? parseInt(v, 10) : 0;
+}
+
+function rcFormatMoneyInput(el) {
+    if (!el) return;
+    const raw = String(el.value || '').replace(/[^\d]/g, '');
+    if (!raw) {
+        el.value = '';
+    } else {
+        const num = parseInt(raw, 10);
+        el.value = num.toLocaleString('id-ID');
+    }
+}
+
 function updateReceiveSteps() {
     const steps = document.querySelectorAll('#rcSteps .rc-step');
     if (!steps.length) return;
     const val = id => { const el = document.getElementById(id); return el ? (el.value || '') : ''; };
     const s1 = val('rcName').trim() !== '' && val('rcPhone').trim() !== '';
     const s2 = s1 && val('rcDevice').trim() !== '' && val('rcDamage').trim() !== '';
-    const s3 = s1 && s2 && ((parseFloat(val('rcEstimate')) || 0) > 0 || (parseFloat(val('rcDp')) || 0) > 0 || val('rcTechnician').trim() !== '');
+    const s3 = s1 && s2 && (rcNum('rcEstimate') > 0 || rcNum('rcDp') > 0 || val('rcTechnician').trim() !== '');
     const done = [s1, s2, s3];
     steps.forEach((li, idx) => {
         const n = idx + 1;
@@ -8627,8 +8657,8 @@ function updateReceiveCalc() {
     const bar = document.getElementById('rcCalcBar');
     if (!estEl || !dpEl || !bar) return;
 
-    const est = parseFloat(estEl.value) || 0;
-    const dp = parseFloat(dpEl.value) || 0;
+    const est = rcNum(estEl);
+    const dp = rcNum(dpEl);
     const dpFeedback = document.getElementById('rcDpFeedback');
     const submitBtn = document.getElementById('receiveSubmitBtn');
 
@@ -8692,7 +8722,7 @@ function updateReceiveCalc() {
         } else {
             const sisa = Math.max(0, est - dp);
             badge.classList.add('is-sisa');
-            if (sisaText) sisaText.textContent = 'Sisa Pelunasan:';
+            if (sisaText) sisaText.textContent = 'Sisa:';
             if (sisaVal) sisaVal.textContent = formatRupiah(sisa);
         }
     }
@@ -9014,7 +9044,7 @@ async function initReceivePage() {
             const _rcMissing = [];
             if (_rcPath === 'REPAIR' || _rcPath === 'WAIT PART') {
                 if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana Perbaikan', 'rcPlan']);
-                if (!((parseFloat((document.getElementById('rcEstimate') || {}).value) || 0) > 0)) _rcMissing.push(['Estimasi Biaya', 'rcEstimate']);
+                if (!(rcNum('rcEstimate') > 0)) _rcMissing.push(['Estimasi Biaya', 'rcEstimate']);
                 if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi Penanggung Jawab', 'rcTechnician']);
             } else if (_rcPath === 'TUNGGU') {
                 if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana/Tindakan Perbaikan', 'rcPlan']);
@@ -9034,8 +9064,8 @@ async function initReceivePage() {
             // OD-LOCK-04 (Owner, LOCKED): DP tidak boleh lebih besar daripada
             // estimasi biaya. Divalidasi di sini agar user dapat umpan balik
             // SEBELUM disimpan; backend tetap menjadi pengaman utama.
-            const _rcEst = parseFloat((document.getElementById('rcEstimate') || {}).value) || 0;
-            const _rcDp = parseFloat((document.getElementById('rcDp') || {}).value) || 0;
+            const _rcEst = rcNum('rcEstimate');
+            const _rcDp = rcNum('rcDp');
             if (_rcEst > 0 && _rcDp > _rcEst) {
                 fb.classList.remove('hidden');
                 fb.classList.add('error');
@@ -9060,9 +9090,9 @@ async function initReceivePage() {
                 check_len: _rcCheck.len,
                 damagetype: document.getElementById('rcDamage').value.trim(),
                 repair_plan: document.getElementById('rcPlan').value.trim(),
-                estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
-                dp: parseFloat(document.getElementById('rcDp').value) || 0,
-                final_price: _rcFinalRaw === '' ? null : (parseFloat(_rcFinalRaw) || 0),
+                estimate: rcNum('rcEstimate'),
+                dp: rcNum('rcDp'),
+                final_price: _rcFinalRaw === '' ? null : rcNum('rcFinal'),
                 technician: document.getElementById('rcTechnician').value,
                 status: _rcTarget,
                 initial_path: _rcPath,
@@ -9078,8 +9108,8 @@ async function initReceivePage() {
                 device: document.getElementById('rcDevice').value.trim(),
                 damage: document.getElementById('rcDamage').value.trim(),
                 plan: document.getElementById('rcPlan').value.trim(),
-                estimate: parseFloat(document.getElementById('rcEstimate').value) || 0,
-                dp: parseFloat(document.getElementById('rcDp').value) || 0,
+                estimate: rcNum('rcEstimate'),
+                dp: rcNum('rcDp'),
                 technician: document.getElementById('rcTechnician').value || '',
                 status: document.getElementById('rcStatus').value,
                 imei: (document.getElementById('rcImei') || {}).value || '',

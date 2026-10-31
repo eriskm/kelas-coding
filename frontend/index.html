@@ -2389,8 +2389,8 @@
                             </button>
                         </div>
 
-                        <div class="float-body">
-                        <form id="receiveForm" autocomplete="off">
+                        <form id="receiveForm" autocomplete="off" class="rc-form-shell">
+                            <div class="float-body rc-float-scroll">
 
                             <!-- PROGRESS STEPPER -->
                             <ol id="rcSteps" class="rc-steps" aria-label="Alur penerimaan unit">
@@ -2535,14 +2535,14 @@
                                         <label class="field-label" for="rcEstimate" id="rcEstimateLabel">Estimasi Biaya</label>
                                         <div class="relative">
                                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="number" id="rcEstimate" min="0" placeholder="500000">
+                                            <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcEstimate" placeholder="500.000">
                                         </div>
                                     </div>
                                     <div class="field">
                                         <label class="field-label" for="rcDp">DP (Uang Muka)</label>
                                         <div class="relative">
                                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="number" id="rcDp" min="0" placeholder="100000">
+                                            <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcDp" placeholder="100.000">
                                         </div>
                                         <div id="rcDpFeedback" class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 hidden flex items-center gap-1"></div>
                                     </div>
@@ -2550,7 +2550,7 @@
                                         <label class="field-label" for="rcFinal" id="rcFinalLabel">Harga Final</label>
                                         <div class="relative">
                                             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="number" id="rcFinal" min="0" placeholder="500000">
+                                            <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcFinal" placeholder="500.000">
                                         </div>
                                     </div>
                                     <div class="field">
@@ -2561,30 +2561,6 @@
                                     </div>
                                     <input type="hidden" id="rcStatus" value="DITERIMA">
                                 </div>
-                                <!-- Live Financial Summary Chip / Bar -->
-                                <div id="rcCalcBar" class="rc-calc-bar hidden">
-                                    <div class="rc-calc-inner">
-                                        <div class="rc-calc-breakdown">
-                                            <span class="rc-calc-chip" id="rcCalcChipEst"><i class="fa-solid fa-receipt"></i> Estimasi: <b id="rcCalcEstVal">Rp 0</b></span>
-                                            <span class="rc-calc-chip" id="rcCalcChipDp"><i class="fa-solid fa-hand-holding-dollar"></i> DP: <b id="rcCalcDpVal">Rp 0</b></span>
-                                        </div>
-                                        <div id="rcCalcSisaBadge" class="rc-calc-badge is-sisa">
-                                            <i class="fa-solid fa-calculator"></i> <span id="rcCalcSisaText">Sisa Pelunasan:</span> <b id="rcCalcSisaVal">Rp 0</b>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <!-- submit + feedback -->
-                            <div class="rc-submit flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-1">
-                                <button type="submit" id="receiveSubmitBtn" class="receive-submit-btn">
-                                    <i class="fa-solid fa-check-double"></i>
-                                    <span id="receiveSubmitText">Terima & Daftarkan Servis</span>
-                                </button>
-                                <div id="receiveFeedback" class="hidden receive-feedback"></div>
-                                <button type="button" id="receiveNotaBtn" onclick="openNota()" class="hidden receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
-                                    <i class="fa-solid fa-receipt"></i> Cetak Nota
-                                </button>
                             </div>
 
                             </div><!-- /rc-main -->
@@ -2605,9 +2581,29 @@
                                 </div>
                                 </aside>
                             </div><!-- /rc-layout -->
+                            </div><!-- /float-body -->
 
+                            <!-- STICKY FOOTER BAR (IDE A) -->
+                            <footer class="rc-sticky-footer">
+                                <div id="rcCalcBar" class="rc-footer-summary hidden">
+                                    <span class="rc-footer-chip" id="rcCalcChipEst"><i class="fa-solid fa-receipt"></i> Est: <b id="rcCalcEstVal">Rp 0</b></span>
+                                    <span class="rc-footer-chip" id="rcCalcChipDp"><i class="fa-solid fa-hand-holding-dollar"></i> DP: <b id="rcCalcDpVal">Rp 0</b></span>
+                                    <span class="rc-footer-chip is-sisa" id="rcCalcSisaBadge">
+                                        <i class="fa-solid fa-calculator"></i> <span id="rcCalcSisaText">Sisa:</span> <b id="rcCalcSisaVal">Rp 0</b>
+                                    </span>
+                                </div>
+                                <div class="rc-footer-actions">
+                                    <div id="receiveFeedback" class="hidden receive-feedback"></div>
+                                    <button type="button" id="receiveNotaBtn" onclick="openNota()" class="hidden receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
+                                        <i class="fa-solid fa-receipt"></i> Cetak Nota
+                                    </button>
+                                    <button type="submit" id="receiveSubmitBtn" class="receive-submit-btn">
+                                        <i class="fa-solid fa-check-double"></i>
+                                        <span id="receiveSubmitText">Terima & Daftarkan Servis</span>
+                                    </button>
+                                </div>
+                            </footer>
                         </form>
-                        </div><!-- /float-body -->
                         <!-- FLOATING SHORTCUT: icon saja default, panel muncul saat diklik -->
                         <button type="button" id="rcShortcutFab" class="rc-shortcut-fab" title="Shortcut Input Cepat" aria-label="Shortcut Input Cepat" onclick="rcShortcutToggle(event)">
                             <i class="fa-solid fa-keyboard"></i>
