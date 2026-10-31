@@ -11,9 +11,9 @@ from dependencies import get_db_session
 from finance import compute_finance_core
 import cash
 from money import HUNDRED, PCT_10, PCT_30, ZERO, quantize, to_decimal
-from models import Expense, KasEntry, KasPeriod, Payment, Refund, ServiceOrder, User
+from models import Expense, KasEntry, KasPeriod, Payment, Refund, ServiceOrder, StatusHistory, User
 from routers.auth import get_authenticated_user
-from statusflow import kewajiban, lunas_moment, payment_summary
+from statusflow import cash_moment, kewajiban, lunas_moment, payment_summary
 import schemas
 
 router = APIRouter(prefix="/api", tags=["dashboard"])
@@ -607,22 +607,76 @@ def get_overview(db: Session = Depends(get_db_session),
                  user: User = Depends(get_authenticated_user)):
     """Data untuk star cards + insight. Finansial = agregat periode kas aktif."""
     period = get_active_period(db)
-    fin = compute_finance(db, *batas_periode(period),
+    p_start, p_end = batas_periode(period)
+    if p_start is None:
+        p_start = datetime.min
+    if p_end is None:
+        p_end = datetime.max
+
+    fin = compute_finance(db, p_start, p_end,
                           lihat_kas_besar=boleh_lihat_kas_besar(user))
 
     orders = db.query(ServiceOrder).all()
     total = len(orders)
-    selesai = sum(1 for o in orders if o.status == "DONE")
-    # P2-15: status kanonis baru (DIAGNOSAlegacy == ANALISA, tidak aktif lagi).
-    aktif = sum(1 for o in orders if o.status in ("DITERIMA", "ANALISA", "KONFIRMASI",
-                                                 "WAIT PART", "REPAIR"))
+
+    # Helper normalisasi momen masuknya unit servis
+    def _order_entry_moment(o):
+        m = getattr(o, "created_at", None)
+        if m is not None:
+            return m
+        d = getattr(o, "service_date", None)
+        if d is not None:
+            return datetime(d.year, d.month, d.day, 12, 0, 0)
+        return None
+
+    # (1) Unit Masuk: unit yang masuk pada periode kas saat itu
+    unit_masuk = sum(
+        1 for o in orders
+        if (m := _order_entry_moment(o)) is not None and (p_start <= m < p_end)
+    )
+
+    # (2) Unit Selesai: unit yang statusnya DONE pada periode itu
+    done_hist_rows = (
+        db.query(StatusHistory.service_order_id, StatusHistory.waktu)
+        .filter(StatusHistory.ke_status == "DONE")
+        .order_by(StatusHistory.waktu.desc())
+        .all()
+    )
+    done_time_by_order = {}
+    for sid, w in done_hist_rows:
+        if sid not in done_time_by_order:
+            done_time_by_order[sid] = w
+
+    done_in_period_ids = set()
+    for sid, w in done_hist_rows:
+        if p_start <= w < p_end:
+            done_in_period_ids.add(sid)
+
+    for o in orders:
+        if (getattr(o, "status", "") or "") == "DONE":
+            m_done = done_time_by_order.get(o.id) or _order_entry_moment(o)
+            if m_done and (p_start <= m_done < p_end):
+                done_in_period_ids.add(o.id)
+
+    unit_selesai = len(done_in_period_ids)
+
+    # (3) Unit Lunas: unit yang statusnya CASH pada periode itu
+    unit_lunas = sum(
+        1 for o in orders
+        if (getattr(o, "status", "") or "") == "CASH"
+        and (m := cash_moment(o)) is not None
+        and (p_start <= m < p_end)
+    )
+
+    # (4) Unit Aktif: unit pendingan yang masih status Repair, Wait Part, Konfirmasi, dan Analisa
+    # (termasuk DITERIMA di front desk yang belum selesai)
+    PENDING_STATUSES = ("REPAIR", "WAIT PART", "KONFIRMASI", "ANALISA", "DITERIMA")
+    unit_aktif = sum(
+        1 for o in orders
+        if (getattr(o, "status", "") or "") in PENDING_STATUSES
+    )
+
     gagal_batal = sum(1 for o in orders if o.status in ("FAILED", "CANCEL"))
-    _all_pays = db.query(Payment).all()
-    _by_order = {}
-    for _p in _all_pays:
-        _by_order.setdefault(_p.service_order_id, []).append(_p)
-    lunas = sum(1 for o in orders
-                if payment_summary(o, _by_order.get(o.id, []))["payment_status"] == "LUNAS")
 
     def pct_txt(p, ok):
         return "TERCAPAI" if ok else (str(p).replace(".", ",") + "%")
@@ -661,13 +715,13 @@ def get_overview(db: Session = Depends(get_db_session),
              "sub": pct_txt(fin["cto_progress"], fin["cto_tercapai"]) + " dari gaji+ops"},
         ],
         "insight": [
-            {"value": total, "label": "Unit Masuk", "color": "text-cyan-600"},
-            {"value": selesai, "label": "Unit Selesai", "color": "text-green-600"},
-            {"value": lunas, "label": "Unit Lunas", "color": "text-emerald-600"},
-            {"value": aktif, "label": "Unit Aktif", "color": "text-amber-600"},
+            {"value": unit_masuk, "label": "Unit Masuk", "color": "text-cyan-600"},
+            {"value": unit_selesai, "label": "Unit Selesai", "color": "text-green-600"},
+            {"value": unit_lunas, "label": "Unit Lunas", "color": "text-emerald-600"},
+            {"value": unit_aktif, "label": "Unit Aktif", "color": "text-amber-600"},
         ],
-        "stats": {"total": total, "selesai": selesai, "aktif": aktif,
-                  "gagal_batal": gagal_batal, "lunas": lunas},
+        "stats": {"total": total, "selesai": unit_selesai, "aktif": unit_aktif,
+                  "gagal_batal": gagal_batal, "lunas": unit_lunas, "unit_masuk": unit_masuk},
     }
 
 
