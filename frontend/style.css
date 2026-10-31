@@ -3087,6 +3087,107 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 .al-row { cursor: pointer; }
 #histSummary .rc-cust { margin-bottom: 0; }
 
+
+/* Compact 1-line Smart History (Option 1) */
+.rc-cust-compact {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 3px 8px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 7px;
+    font-size: 11px;
+    min-height: 32px;
+}
+.dark .rc-cust-compact {
+    background: rgba(255, 255, 255, 0.03);
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.rc-cust-c-left {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    flex: 1 1 auto;
+    overflow: hidden;
+    white-space: nowrap;
+}
+.rc-cust-c-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1.5px 6px;
+    border-radius: 5px;
+    background: #dbeafe;
+    color: #1d4ed8;
+    flex-shrink: 0;
+}
+.dark .rc-cust-c-badge {
+    background: #1e3a8a;
+    color: #93c5fd;
+}
+.rc-cust-c-name {
+    font-weight: 700;
+    color: #0f172a;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex-shrink: 0;
+    max-width: 140px;
+}
+.dark .rc-cust-c-name {
+    color: #f8fafc;
+}
+.rc-cust-c-meta {
+    font-size: 10px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.rc-cust-c-actions {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+}
+.rc-c-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2.5px 7px;
+    font-size: 9.5px;
+    font-weight: 600;
+    border-radius: 5px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.rc-c-btn-use {
+    background: #e0e7ff;
+    color: #4338ca;
+}
+.rc-c-btn-use:hover {
+    background: #c7d2fe;
+}
+.dark .rc-c-btn-use {
+    background: #312e81;
+    color: #c7d2fe;
+}
+.rc-c-btn-detail {
+    background: #0284c7;
+    color: #ffffff;
+}
+.rc-c-btn-detail:hover {
+    background: #0369a1;
+}
+.dark .rc-c-btn-detail {
+    background: #0369a1;
+    color: #ffffff;
+}
+
 /* Sticky action area & Form Shell (Ide A) */
 .rc-form-shell {
     display: flex;

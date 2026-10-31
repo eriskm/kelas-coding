@@ -233,6 +233,7 @@ def order_history(phone: str, db: Session = Depends(get_db_session)):
     cids = [c.id for c in customers]
     return (
         db.query(ServiceOrder)
+        .options(joinedload(ServiceOrder.customer))
         .filter(ServiceOrder.customer_id.in_(cids))
         .order_by(ServiceOrder.created_at.desc())
         .limit(20)

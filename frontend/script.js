@@ -8819,6 +8819,103 @@ function historyItemsHtml(rows) {
     `).join('');
 }
 
+
+function renderCustSummaryCompact(o) {
+    const canUseName = o.name && o.name !== 'Pelanggan';
+    const lastDevice = o.device ? escapeHtml(o.device) : '-';
+    const lastPrice = o.price != null ? ' • ' + formatRupiah(o.price) : '';
+    return `<div class="rc-cust-compact">
+        <div class="rc-cust-c-left">
+            <span class="rc-cust-c-badge"><i class="fa-solid fa-clock-rotate-left"></i> ${o.total}×</span>
+            <span class="rc-cust-c-name" title="${escapeHtml(o.name)}">${escapeHtml(o.name)}</span>
+            <span class="rc-cust-c-meta text-gray-500 dark:text-gray-400">Terakhir: <b>${lastDevice}</b>${lastPrice}</span>
+        </div>
+        <div class="rc-cust-c-actions">
+            ${canUseName ? `<button type="button" class="rc-c-btn rc-c-btn-use" onclick="rcUseCustName('${escapeHtml(o.name)}')" title="Gunakan nama ini di formulir"><i class="fa-solid fa-user-check"></i> Gunakan Nama</button>` : ''}
+            <button type="button" class="rc-c-btn rc-c-btn-detail" onclick="openCustomerHistoryModal()" title="Buka rincian lengkap servis pelanggan"><i class="fa-solid fa-rectangle-list"></i> Riwayat Lengkap (${o.total})</button>
+        </div>
+    </div>`;
+}
+
+function openCustomerHistoryModal() {
+    const modal = document.getElementById('modalCustomerHistory');
+    if (!modal) return;
+    const rows = window._smartHistoryRows || [];
+    const cust = window._smartHistoryCust || {};
+    
+    const badgeTotal = document.getElementById('custHistBadgeTotal');
+    const sub = document.getElementById('custHistModalSub');
+    const body = document.getElementById('custHistModalBody');
+    
+    if (badgeTotal) badgeTotal.textContent = `${rows.length} Riwayat Servis`;
+    if (sub) sub.textContent = `${cust.name || 'Pelanggan'} • ${cust.phone || '-'} • Riwayat lengkap servis unit`;
+    
+    if (body) {
+        if (!rows.length) {
+            body.innerHTML = '<div class="text-center py-8 text-gray-400 text-xs">Belum ada riwayat servis untuk nomor ini.</div>';
+        } else {
+            body.innerHTML = rows.map((o, idx) => {
+                const dateStr = o.created_at ? new Date(o.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : '-';
+                const stClass = (o.status || '').toLowerCase().replace(/ /g, '');
+                const planOrDamage = o.repair_plan || o.damagetype || '-';
+                const estPrice = o.estimate != null ? formatRupiah(o.estimate) : '-';
+                return `
+                <div class="p-3 rounded-xl border border-gray-200 dark:border-white/10 bg-gray-50/60 dark:bg-surface-700/40 hover:bg-white dark:hover:bg-surface-700 transition">
+                    <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs font-bold text-gray-800 dark:text-gray-100 font-mono">${escapeHtml(o.no_servis)}</span>
+                            <span class="text-[10px] text-gray-400"><i class="fa-regular fa-calendar"></i> ${dateStr}</span>
+                        </div>
+                        <span class="history-status st-${stClass}">${escapeHtml(o.status || '-')}</span>
+                    </div>
+                    <div class="flex items-center justify-between text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                        <div class="flex items-center gap-1.5 min-w-0">
+                            <i class="fa-solid fa-mobile-screen-button text-gray-400"></i>
+                            <span class="truncate">${escapeHtml(o.device || '')}${o.model ? ' - ' + escapeHtml(o.model) : ''}</span>
+                        </div>
+                        ${o.device ? `<button type="button" class="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-800 hover:underline flex items-center gap-1 flex-shrink-0 ml-2" onclick="useHistoryDevice('${escapeHtml(o.device)}')" title="Gunakan tipe HP ini di formulir"><i class="fa-solid fa-arrow-down-left-and-up-right-to-center"></i> Pakai Tipe HP Ini</button>` : ''}
+                    </div>
+                    <div class="text-[11.5px] text-gray-600 dark:text-gray-300 mb-1.5">
+                        <span class="text-gray-400 font-medium">Tindakan / Kerusakan:</span> ${escapeHtml(planOrDamage)}
+                    </div>
+                    <div class="flex items-center justify-between pt-1.5 border-t border-gray-200/60 dark:border-white/5 text-[11px]">
+                        <span class="text-gray-500">Estimasi / Biaya: <b class="text-gray-800 dark:text-gray-200">${estPrice}</b></span>
+                        ${o.technician ? `<span class="text-gray-400">Teknisi: <b class="text-gray-600 dark:text-gray-300">${escapeHtml(o.technician)}</b></span>` : ''}
+                    </div>
+                </div>`;
+            }).join('');
+        }
+    }
+    
+    modal.classList.remove('hidden');
+}
+
+function useHistoryDevice(devName) {
+    const el = document.getElementById('rcDevice');
+    if (el && devName) {
+        el.value = devName;
+        try { updateReceiveSteps(); } catch (_) {}
+        try { scheduleReceiveDraft(); } catch (_) {}
+    }
+    closeCustomerHistoryModal();
+}
+
+function closeCustomerHistoryModal() {
+    const modal = document.getElementById('modalCustomerHistory');
+    if (modal) modal.classList.add('hidden');
+}
+
+// Close customer history modal on Escape key
+window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        const m = document.getElementById('modalCustomerHistory');
+        if (m && !m.classList.contains('hidden')) {
+            e.stopPropagation();
+            closeCustomerHistoryModal();
+        }
+    }
+});
+
 async function loadSmartHistory() {
     const phoneEl = document.getElementById('rcPhone');
     const nameEl = document.getElementById('rcName');
@@ -8862,7 +8959,9 @@ async function loadSmartHistory() {
             plan: first.repair_plan || first.damagetype,
             price: first.estimate,
         };
-        list.innerHTML = renderCustSummary(cust) + historyItemsHtml(rows.slice(0, 3));
+        window._smartHistoryRows = rows;
+        window._smartHistoryCust = cust;
+        list.innerHTML = renderCustSummaryCompact(cust);
     } catch (e) {
         list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-triangle-exclamation"></i> Gagal memuat riwayat</div>`;
         setBadge('Gagal', 'error');
