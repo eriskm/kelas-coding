@@ -8919,27 +8919,49 @@ window.addEventListener('keydown', (e) => {
 async function loadSmartHistory() {
     const phoneEl = document.getElementById('rcPhone');
     const nameEl = document.getElementById('rcName');
+    const pillBtn = document.getElementById('rcHistPillBtn');
+    const pillTxt = document.getElementById('rcHistPillTxt');
     const list = document.getElementById('smartHistoryList');
     const badge = document.getElementById('smartHistoryState');
-    if (!phoneEl || !list) return;
+    if (!phoneEl) return;
     const setBadge = (txt, mode) => { if (badge) { badge.textContent = txt; badge.dataset.mode = mode || ''; } };
     const phone = phoneEl.value.trim();
-    if (!phone) {
-        const hint = (nameEl && nameEl.value.trim())
-            ? 'Ketik Nomor WhatsApp untuk Histori Cerdas.'
-            : 'Ketik Nama / Nomor WhatsApp untuk cek histori pelanggan.';
-        list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> ${hint}</div>`;
+    if (!phone || phone.length < 4) {
+        if (pillBtn) pillBtn.classList.add('hidden');
+        if (list) {
+            const hint = (nameEl && nameEl.value.trim())
+                ? 'Ketik Nomor WhatsApp untuk Histori Cerdas.'
+                : 'Ketik Nama / Nomor WhatsApp untuk cek histori pelanggan.';
+            list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> ${hint}</div>`;
+        }
         setBadge('Kosong', 'empty');
+        window._smartHistoryRows = [];
+        window._smartHistoryCust = null;
         return;
     }
-    list.innerHTML = `<div class="history-empty rc-searching"><i class="fa-solid fa-circle-notch fa-spin"></i> Mencari histori...</div>`;
+    
+    if (pillBtn) {
+        pillBtn.classList.remove('hidden');
+        pillBtn.classList.add('is-new');
+        if (pillTxt) pillTxt.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Cek riwayat...';
+        pillBtn.title = 'Mengecek histori nomor ini...';
+    }
+    if (list) list.innerHTML = `<div class="history-empty rc-searching"><i class="fa-solid fa-circle-notch fa-spin"></i> Mencari histori...</div>`;
     setBadge('Mencari...', 'search');
     try {
         const rows = await apiGet('/orders/history/' + encodeURIComponent(phone));
         if (phoneEl.value.trim() !== phone) return; // hasil basi, abaikan
         if (!rows.length) {
-            list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-plus"></i> Pelanggan baru — belum memiliki histori servis.</div>`;
+            if (pillBtn) {
+                pillBtn.classList.remove('hidden');
+                pillBtn.classList.add('is-new');
+                if (pillTxt) pillTxt.textContent = 'Pelanggan Baru';
+                pillBtn.title = 'Nomor ini belum memiliki catatan riwayat servis';
+            }
+            if (list) list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-user-plus"></i> Pelanggan baru — belum memiliki histori servis.</div>`;
             setBadge('Baru', 'new');
+            window._smartHistoryRows = [];
+            window._smartHistoryCust = null;
             return;
         }
         setBadge('Ditemukan ' + rows.length, 'found');
@@ -8961,9 +8983,16 @@ async function loadSmartHistory() {
         };
         window._smartHistoryRows = rows;
         window._smartHistoryCust = cust;
-        list.innerHTML = renderCustSummaryCompact(cust);
+        
+        if (pillBtn) {
+            pillBtn.classList.remove('hidden', 'is-new');
+            if (pillTxt) pillTxt.textContent = `${rows.length} Riwayat Servis (Lihat)`;
+            pillBtn.title = `Ditemukan ${rows.length} riwayat servis konsumen ini. Klik untuk melihat riwayat lengkap`;
+        }
+        if (list) list.innerHTML = renderCustSummaryCompact(cust);
     } catch (e) {
-        list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-triangle-exclamation"></i> Gagal memuat riwayat</div>`;
+        if (pillBtn) pillBtn.classList.add('hidden');
+        if (list) list.innerHTML = `<div class="history-empty"><i class="fa-solid fa-triangle-exclamation"></i> Gagal memuat riwayat</div>`;
         setBadge('Gagal', 'error');
     }
 }

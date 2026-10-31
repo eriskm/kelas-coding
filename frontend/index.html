@@ -2464,7 +2464,12 @@
                                                 <input class="receive-input" type="text" id="rcName" placeholder="cth. Andi Pratama" required>
                                             </div>
                                             <div class="field">
-                                                <label class="field-label" for="rcPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
+                                                <div class="flex items-center justify-between mb-1">
+                                                    <label class="field-label mb-0" for="rcPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
+                                                    <button type="button" id="rcHistPillBtn" class="rc-hist-pill-btn hidden" onclick="openCustomerHistoryModal()" title="Klik untuk melihat riwayat servis lengkap">
+                                                        <i class="fa-solid fa-clock-rotate-left"></i> <span id="rcHistPillTxt">Riwayat Servis</span>
+                                                    </button>
+                                                </div>
                                                 <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="tel" autocomplete="off" required>
                                                 <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
                                             </div>
@@ -2472,7 +2477,7 @@
                                     </div>
 
                                     <!-- PANEL 2: Informasi & Kondisi Unit -->
-                                    <div class="panel receive-panel">
+                                    <div class="panel receive-panel rc-panel-unit">
                                         <div class="receive-panel-head">
                                             <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
                                             <div>
@@ -2506,23 +2511,8 @@
 
                                 </div><!-- /rc-col-left -->
 
-                                <!-- KOLOM KANAN: Histori Cerdas, Keluhan/Diagnostik & Estimasi Finansial -->
+                                <!-- KOLOM KANAN: Keluhan/Diagnostik & Estimasi Finansial -->
                                 <div class="rc-col rc-col-right">
-
-                                    <!-- HISTORI CERDAS -->
-                                    <div id="smartHistory" class="panel receive-panel receive-panel-glow rc-hist">
-                                        <div class="receive-panel-head">
-                                            <span class="receive-head-ico history-ico"><i class="fa-solid fa-wand-magic-sparkles"></i></span>
-                                            <div>
-                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Histori Cerdas</h3>
-                                                <span class="text-[10.5px] text-gray-400">Histori Cerdas Pelanggan</span>
-                                            </div>
-                                            <span id="smartHistoryState" class="rc-hist-state">Kosong</span>
-                                        </div>
-                                        <div id="smartHistoryList" class="mt-1">
-                                            <div class="history-empty"><i class="fa-solid fa-user-magnifying-glass"></i> Ketik Nama / Nomor WhatsApp untuk cek histori pelanggan.</div>
-                                        </div>
-                                    </div>
 
                                     <!-- PANEL 3: Keluhan & Rencana Perbaikan -->
                                     <div class="panel receive-panel">

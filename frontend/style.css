@@ -2138,9 +2138,54 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageReceive #rcCheckGroups .rc-check { padding: 2px 6px; font-size: 10px; }
 #pageReceive .rc-chip-group { gap: 3px; margin-top: 2px; }
 #pageReceive .rc-chip { padding: 1.5px 5px; font-size: 9px; border-radius: 4px; }
-#pageReceive .rc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 7px; align-items: start; }
-#pageReceive .rc-col { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+#pageReceive .rc-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: stretch; }
+#pageReceive .rc-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 #pageReceive .rc-col .receive-panel { margin: 0; }
+#pageReceive .rc-col-left .rc-panel-unit { flex: 1; display: flex; flex-direction: column; }
+#pageReceive .rc-col-left .rc-check-wrap { flex: 1; display: flex; flex-direction: column; justify-content: center; }
+
+/* Opsi 2 Histori Cerdas: Pill interaktif di samping WhatsApp */
+.rc-hist-pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+    padding: 2.5px 8.5px;
+    border-radius: 999px;
+    background: #eff6ff;
+    color: #1d4ed8;
+    border: 1px solid #bfdbfe;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(29, 78, 216, 0.08);
+    transition: all 0.15s ease;
+}
+.rc-hist-pill-btn:hover {
+    background: #dbeafe;
+    border-color: #93c5fd;
+    transform: translateY(-0.5px);
+}
+.rc-hist-pill-btn.is-new {
+    background: #f8fafc;
+    color: #64748b;
+    border-color: #e2e8f0;
+    box-shadow: none;
+    cursor: default;
+}
+.dark .rc-hist-pill-btn {
+    background: rgba(59, 130, 246, 0.18);
+    color: #93c5fd;
+    border-color: rgba(59, 130, 246, 0.35);
+}
+.dark .rc-hist-pill-btn:hover {
+    background: rgba(59, 130, 246, 0.28);
+}
+.dark .rc-hist-pill-btn.is-new {
+    background: rgba(255, 255, 255, 0.05);
+    color: #94a3b8;
+    border-color: rgba(255, 255, 255, 0.1);
+}
 #pageReceive .rc-sticky-footer { padding: 7px 14px; }
 #pageReceive .rc-footer-chip { padding: 3px 8px; font-size: 11px; }
 #pageReceive .receive-submit-btn { padding: 8px 18px; font-size: 12.5px; border-radius: 10px; }
@@ -2630,13 +2675,13 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     display: inline-flex;
     align-items: center;
     gap: 6px;
-    font-size: 11px;
+    font-size: 11.5px;
     font-weight: 600;
     color: #475569;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    padding: 3px 8px;
-    border-radius: 6px;
+    padding: 4px 9px;
+    border-radius: 6.5px;
     cursor: pointer;
     transition: all 0.15s ease;
     user-select: none;
