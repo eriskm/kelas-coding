@@ -118,10 +118,12 @@ function rcApplyPath() {
     const hid = document.getElementById('rcStatus');
     if (hid) hid.value = RC_PATH_TARGET[path];
     const fw = document.getElementById('rcFinalWrap');
+    const tw = document.getElementById('rcTechWrap');
+    const isTunggu = path === 'TUNGGU';
     if (fw) {
-        fw.classList.toggle('hidden', path !== 'TUNGGU');
+        fw.classList.toggle('hidden', !isTunggu);
         // Jika beralih ke Servis Kilat dan Harga Final masih kosong, salin dari Estimasi jika ada
-        if (path === 'TUNGGU') {
+        if (isTunggu) {
             const finEl = document.getElementById('rcFinal');
             const estEl = document.getElementById('rcEstimate');
             if (finEl && !finEl.value && estEl && estEl.value) {
@@ -129,6 +131,9 @@ function rcApplyPath() {
                 rcFormatMoneyInput(finEl);
             }
         }
+    }
+    if (tw) {
+        tw.classList.toggle('sm:col-span-2', !isTunggu);
     }
     try { rcMarkReq(); } catch (_) {}
     ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
