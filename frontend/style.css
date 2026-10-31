@@ -2076,18 +2076,35 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
    SERVIS BARU — stepper + 2 kolom + checklist
    ============================================ */
 
-#pageReceive { width: min(1100px, calc(100vw - 24px)); }
+#pageReceive {
+    width: min(1280px, calc(100vw - 20px));
+    max-height: calc(100vh - 16px);
+    max-height: calc(100dvh - 16px);
+}
 
-/* Skala 90%: Servis Baru & Update Data Servis 10% lebih ringkas */
-#pageReceive .float-body,
+/* Skala 90%: Update Data Servis 10% lebih ringkas */
 #pageUpdateServis .float-body { zoom: 0.9; }
 
-/* Compact layout refinement khusus Servis Baru agar muat 1 layar */
-#pageReceive { width: min(1180px, calc(100vw - 24px)); }
+/* Servis Baru: Ukuran diperbesar 20% lebih terbaca & responsif tanpa scroll */
 #pageReceive .float-titlebar { padding: 7px 14px; }
 #pageReceive .float-title { font-size: 15px; }
 #pageReceive .float-sub { font-size: 11px; }
-#pageReceive .float-body { padding: 6px 12px 8px; }
+#pageReceive .float-body {
+    zoom: 1.02;
+    padding: 6px 14px 8px;
+}
+
+@media (min-height: 820px) {
+    #pageReceive {
+        width: min(1320px, calc(100vw - 32px));
+        max-height: calc(100vh - 24px);
+        max-height: calc(100dvh - 24px);
+    }
+    #pageReceive .float-body {
+        zoom: 1.08;
+        padding: 8px 16px 10px;
+    }
+}
 #pageReceive .receive-panel { padding: 6px 10px; border-radius: 9px; }
 #pageReceive .receive-panel-head { margin-bottom: 4px; padding-bottom: 4px; gap: 5px; }
 #pageReceive .receive-panel-head h3 { font-size: 12.5px; font-weight: 700; }
