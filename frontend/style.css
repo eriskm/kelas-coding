@@ -2110,28 +2110,40 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageReceive .receive-panel-head h3 { font-size: 12.5px; font-weight: 700; }
 #pageReceive .receive-panel-head > div > span { font-size: 9.5px; }
 #pageReceive .receive-head-ico { width: 22px; height: 22px; font-size: 10px; border-radius: 5px; }
+/* Posisi Servis: Top Control Bar & Tombol Tab Interaktif */
 #pageReceive .rc-topbar { display: flex; width: 100%; margin-bottom: 7px; }
 #pageReceive .rc-posbar {
     width: 100%;
     margin: 0;
-    padding: 3.5px 10px;
-    min-height: 38px;
-    border-radius: 9px;
+    padding: 5px 10px;
+    min-height: 42px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     gap: 12px;
+    background: #f1f5f9;
+    border: 1.5px solid #cbd5e1;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.03);
+}
+.dark #pageReceive .rc-posbar {
+    background: rgba(15, 23, 42, 0.65);
+    border-color: rgba(255,255,255,0.1);
 }
 #pageReceive .rc-posbar-head {
     display: flex;
     align-items: center;
     gap: 6px;
     flex-shrink: 0;
+    padding: 0 2px;
 }
 #pageReceive .rc-posbar-title {
     font-size: 11px;
     font-weight: 800;
+    color: #334155;
     white-space: nowrap;
 }
+.dark #pageReceive .rc-posbar-title { color: #e2e8f0; }
+
 #pageReceive .rc-posbar-opts {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -2139,28 +2151,110 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
     flex: 1 1 auto;
     min-width: 0;
 }
+
+/* Kartu Tombol Tab Interaktif (Jelas Terlihat Sebagai Tombol) */
 #pageReceive .rc-pos {
-    padding: 3.5px 8px;
-    gap: 6px;
-    border-radius: 7px;
+    background: #ffffff;
+    border: 1.5px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 4px 10px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    cursor: pointer;
+    transition: all 0.16s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 8px;
     min-width: 0;
     justify-content: flex-start;
 }
+.dark #pageReceive .rc-pos {
+    background: #1e293b;
+    border-color: rgba(255,255,255,0.12);
+}
+
+#pageReceive .rc-pos:hover {
+    background: #f8fafc;
+    border-color: #94a3b8;
+    transform: translateY(-1.5px);
+    box-shadow: 0 3px 6px rgba(0,0,0,0.08);
+}
+.dark #pageReceive .rc-pos:hover {
+    background: #334155;
+    border-color: rgba(255,255,255,0.25);
+}
+
+#pageReceive .rc-pos:active {
+    transform: translateY(0);
+}
+
 #pageReceive .rc-pos-ico {
-    width: 22px;
-    height: 22px;
-    font-size: 10px;
-    border-radius: 6px;
-}
-#pageReceive .rc-pos-txt {
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+    color: #64748b;
     font-size: 11px;
-    font-weight: 700;
-    line-height: 1.15;
+    transition: all 0.16s ease;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
+.dark #pageReceive .rc-pos-ico {
+    background: #0f172a;
+    border-color: rgba(255,255,255,0.1);
+    color: #94a3b8;
+}
+
+#pageReceive .rc-pos-txt {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #334155;
+    line-height: 1.2;
+}
+.dark #pageReceive .rc-pos-txt { color: #f1f5f9; }
+
 #pageReceive .rc-pos-sub {
     font-size: 8.5px;
-    line-height: 1.15;
+    font-weight: 500;
+    color: #64748b;
+    line-height: 1.2;
 }
+.dark #pageReceive .rc-pos-sub { color: #94a3b8; }
+
+/* State Terpilih / Tab Aktif (Kontras Tegas & Berkarakter) */
+#pageReceive .rc-pos:has(input:checked) {
+    background: #fff5f5;
+    border-color: #dc2626;
+    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.18), inset 0 0 0 1px #dc2626;
+    transform: translateY(0);
+}
+.dark #pageReceive .rc-pos:has(input:checked) {
+    background: rgba(220, 38, 38, 0.18);
+    border-color: #ef4444;
+    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.3);
+}
+
+#pageReceive .rc-pos input:checked + .rc-pos-ico {
+    background: #dc2626;
+    border-color: #dc2626;
+    color: #ffffff;
+    box-shadow: 0 2px 4px rgba(220, 38, 38, 0.25);
+}
+
+#pageReceive .rc-pos input:checked ~ .rc-pos-body .rc-pos-txt {
+    color: #b91c1c;
+    font-weight: 800;
+}
+.dark #pageReceive .rc-pos input:checked ~ .rc-pos-body .rc-pos-txt { color: #fca5a5; }
+
+#pageReceive .rc-pos input:checked ~ .rc-pos-body .rc-pos-sub {
+    color: #dc2626;
+    font-weight: 600;
+}
+.dark #pageReceive .rc-pos input:checked ~ .rc-pos-body .rc-pos-sub { color: #f87171; }
 #pageReceive .field-label { font-size: 10.5px; margin-bottom: 2px; font-weight: 600; }
 #pageReceive .receive-input { height: 32px; padding: 3px 8px; font-size: 12px; border-radius: 6px; }
 #pageReceive textarea.receive-input { min-height: 34px; height: 34px; padding: 3px 8px; line-height: 1.2; font-size: 11.5px; }
