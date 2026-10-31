@@ -1627,11 +1627,15 @@
                             </div>
                         </div>
 
-                        <!-- Segmented Navigation Bar: 3 Tabs -->
+                        <!-- Segmented Navigation Bar: 4 Tabs -->
                         <div class="ku-tabs-nav" role="tablist" aria-label="Navigasi Halaman Keuangan">
                             <button type="button" class="ku-tab-btn is-active" id="kuTabBtnOperasional" onclick="kuSwitchTab('operasional')" role="tab" aria-selected="true">
                                 <i class="fa-solid fa-cash-register"></i>
                                 <span>Operasional &amp; Kas</span>
+                            </button>
+                            <button type="button" class="ku-tab-btn" id="kuTabBtnTitipan" onclick="kuSwitchTab('titipan')" role="tab" aria-selected="false">
+                                <i class="fa-solid fa-hand-holding-dollar"></i>
+                                <span>Laporan Titipan DP</span>
                             </button>
                             <button type="button" class="ku-tab-btn" id="kuTabBtnAset" onclick="kuSwitchTab('aset')" role="tab" aria-selected="false">
                                 <i class="fa-solid fa-vault"></i>
@@ -1763,38 +1767,41 @@
                             </div>
                         </div>
 
-                        <!-- TITIPAN DP PELANGGAN — panel terpisah dari Kondisi Kas / Arus Kas.
-                             Pencatatan & pelacakan saja: tidak memengaruhi omzet, laba,
-                             distribusi profit, maupun saldo Kas Laci pada Kondisi Kas. -->
-                        <div class="panel ku-titipan-panel" id="kuTitipanPanel">
-                            <div class="ku-titipan">
-                                <div class="ku-tp-head">
-                                    <span><i class="fa-solid fa-hand-holding-dollar"></i> Laporan Titipan DP</span>
-                                    <span class="ku-tp-note">pencatatan terpisah &middot; bukan Omzet</span>
-                                </div>
-                                <div class="ku-tp-grid" id="kuTitipanGrid"></div>
-                            </div>
-                            <div class="overflow-x-auto mt-2">
-                                <table class="tx-table cash-table w-full text-sm">
-                                    <thead>
-                                        <tr>
-                                            <th>Tanggal</th>
-                                            <th>No. Servis</th>
-                                            <th>Pelanggan / Unit</th>
-                                            <th>Jenis Mutasi</th>
-                                            <th class="numeric-r cash-num">Masuk</th>
-                                            <th class="numeric-r cash-num">Keluar</th>
-                                            <th class="numeric-r cash-num">Saldo Titipan</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="kuTitipanBody"></tbody>
-                                </table>
-                            </div>
-                        </div>
-
                         </div><!-- /#kuTabPaneOperasional -->
 
-                        <!-- TAB 2: BRANKAS & HUTANG (KAS ASET) -->
+                        <!-- TAB 2: LAPORAN TITIPAN DP -->
+                        <div id="kuTabPaneTitipan" class="space-y-4 hidden">
+                            <!-- TITIPAN DP PELANGGAN — panel terpisah dari Kondisi Kas / Arus Kas.
+                                 Pencatatan & pelacakan saja: tidak memengaruhi omzet, laba,
+                                 distribusi profit, maupun saldo Kas Laci pada Kondisi Kas. -->
+                            <div class="panel ku-titipan-panel" id="kuTitipanPanel">
+                                <div class="ku-titipan">
+                                    <div class="ku-tp-head">
+                                        <span><i class="fa-solid fa-hand-holding-dollar"></i> Laporan Titipan DP</span>
+                                        <span class="ku-tp-note">pencatatan terpisah &middot; bukan Omzet</span>
+                                    </div>
+                                    <div class="ku-tp-grid" id="kuTitipanGrid"></div>
+                                </div>
+                                <div class="overflow-x-auto mt-2">
+                                    <table class="tx-table cash-table w-full text-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Tanggal</th>
+                                                <th>No. Servis</th>
+                                                <th>Pelanggan / Unit</th>
+                                                <th>Jenis Mutasi</th>
+                                                <th class="numeric-r cash-num">Masuk</th>
+                                                <th class="numeric-r cash-num">Keluar</th>
+                                                <th class="numeric-r cash-num">Saldo Titipan</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="kuTitipanBody"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div><!-- /#kuTabPaneTitipan -->
+
+                        <!-- TAB 3: BRANKAS & HUTANG (KAS ASET) -->
                         <div id="kuTabPaneAset" class="space-y-4 hidden">
                         <!-- P2-15: Kas Aset - Distribusi - Hutang Beban - Notifikasi.
                              Panel Distribusi Laba dihapus (duplikat Alokasi Profit),

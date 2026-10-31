@@ -6782,24 +6782,30 @@ function kuSwitchTab(tab) {
     _kuActiveTab = tab || 'operasional';
 
     const btnOp = document.getElementById('kuTabBtnOperasional');
+    const btnTp = document.getElementById('kuTabBtnTitipan');
     const btnAs = document.getElementById('kuTabBtnAset');
     const btnRi = document.getElementById('kuTabBtnRiwayat');
 
     if (btnOp) { btnOp.classList.toggle('is-active', _kuActiveTab === 'operasional'); btnOp.setAttribute('aria-selected', _kuActiveTab === 'operasional' ? 'true' : 'false'); }
+    if (btnTp) { btnTp.classList.toggle('is-active', _kuActiveTab === 'titipan'); btnTp.setAttribute('aria-selected', _kuActiveTab === 'titipan' ? 'true' : 'false'); }
     if (btnAs) { btnAs.classList.toggle('is-active', _kuActiveTab === 'aset'); btnAs.setAttribute('aria-selected', _kuActiveTab === 'aset' ? 'true' : 'false'); }
     if (btnRi) { btnRi.classList.toggle('is-active', _kuActiveTab === 'riwayat'); btnRi.setAttribute('aria-selected', _kuActiveTab === 'riwayat' ? 'true' : 'false'); }
 
     const paneOp = document.getElementById('kuTabPaneOperasional');
+    const paneTp = document.getElementById('kuTabPaneTitipan');
     const paneAs = document.getElementById('kuTabPaneAset');
     const paneRi = document.getElementById('kuRiwayatView');
     const tWrap = document.getElementById('kuRiwayatToggleWrap');
 
     if (paneOp) paneOp.classList.toggle('hidden', _kuActiveTab !== 'operasional');
+    if (paneTp) paneTp.classList.toggle('hidden', _kuActiveTab !== 'titipan');
     if (paneAs) paneAs.classList.toggle('hidden', _kuActiveTab !== 'aset');
     if (paneRi) paneRi.classList.toggle('hidden', _kuActiveTab !== 'riwayat');
     if (tWrap) tWrap.classList.add('hidden');
 
-    if (_kuActiveTab === 'riwayat') {
+    if (_kuActiveTab === 'titipan') {
+        renderKuTitipan();
+    } else if (_kuActiveTab === 'riwayat') {
         renderRiwayat();
         renderKuArsip();
     }
@@ -7594,13 +7600,13 @@ function renderKuTitipan() {
             { k: 'DP Masih Ditahan', v: 0, c: 'v-saldo' },
         ] : [
             { k: 'DP Masuk', v: ditahan, c: 'v-in' },
-            { k: 'Jumlah Unit Bertitipan', v: rows.length, c: '' },
+            { k: 'Jumlah Unit Bertitipan', v: rows.length, c: '', isUnit: true },
             { k: 'Saldo Titipan Berjalan', v: ditahan, c: 'v-saldo' },
         ];
         grid.innerHTML = cells.map(c => `
             <div class="ku-tp-cell">
                 <span class="ku-tp-label">${escapeHtml(c.k)}</span>
-                <span class="ku-tp-val ${c.c}">${c.v && Number(c.v).toLocaleString('id-ID') ? kuRupiah(c.v) : c.v}</span>
+                <span class="ku-tp-val ${c.c}">${c.isUnit ? (c.v + ' Unit') : kuRupiah(c.v)}</span>
             </div>`).join('');
     }
 
