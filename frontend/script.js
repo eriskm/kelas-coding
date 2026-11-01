@@ -972,7 +972,7 @@ function initFloatDrag() {
     makeFloatDraggable('pageTxDetail', 'txDetailTitlebar', closeTxDetail);
     makeFloatDraggable('pageClaimReceive', 'claimReceiveTitlebar', closeClaimReceive);
     // CTO floating: pakai mekanisme drag existing (clamp viewport); Escape = noop (non-modal).
-    makeFloatDraggable('ctoFloat', 'ctoFloatHead', () => {});
+    if (document.getElementById('ctoFloat')) { makeFloatDraggable('ctoFloat', 'ctoFloatHead', () => {}); }
 }
 
 // ─────────────────────────────────────────────
@@ -1224,15 +1224,99 @@ const STAR_META = {
 
 const kpiRupiah = v => 'Rp ' + (Number(v) || 0).toLocaleString('en-US');
 
-// Visibility Card Target Operasional (CTO):
-// - CTS < 100% (belum tercapai) → HIDDEN
-// - CTS tercapai & CTO belum → SHOW
-// - CTO tercapai → HIDDEN
-// Memakai flag `tercapai` dari API (hasil formula laba vs target yg sudah ada).
-function shouldShowCto(byKey) {
-    const ctsOk = byKey['cts'] ? !!byKey['cts'].tercapai : true;
-    const ctoOk = byKey['cto'] ? !!byKey['cto'].tercapai : false;
-    return ctsOk && !ctoOk;
+// ─────────────────────────────────────────────
+// RENDER: DYNAMIC MILESTONE CARD (OPSI 1A: TARGET GAJI CTS & BEP CTO)
+// Menggantikan card statis CTS dan floating CTO widget.
+// Berevolusi dinamis dalam 3 fase bisnis:
+// - Fase 1: Pagi / Belum Lolos Gaji (CTS)
+// - Fase 2: Gaji Lolos, Mengejar BEP Operasional (CTO)
+// - Fase 3: Target Tuntas! Bagi Hasil Aktif (10/30/30/30)
+// ─────────────────────────────────────────────
+
+function renderTargetMilestoneCard(fin) {
+    fin = fin || {};
+    const labaKotor = Number(fin.laba_kotor) || 0;
+    const ctsTarget = Number(fin.cts_target) || 0;
+    const ctoTarget = Number(fin.cto_target) || 0;
+    const ctsTercapai = fin.cts_tercapai !== undefined ? !!fin.cts_tercapai : (ctsTarget === 0 || labaKotor >= ctsTarget);
+    const ctoTercapai = fin.cto_tercapai !== undefined ? !!fin.cto_tercapai : (ctoTarget === 0 ? labaKotor > 0 : labaKotor >= ctoTarget);
+
+    // Fase 3: Target Tuntas! Bagi Hasil Aktif
+    if (ctoTercapai) {
+        return `
+        <div class="star-card kpi-target-celebrate col-span-2 sm:col-span-1">
+            <div class="kpi-top">
+                <span class="text-[11px] font-extrabold text-white flex items-center gap-1.5 tracking-wide">
+                    <i class="fa-solid fa-trophy text-amber-300"></i>
+                    TARGET TUNTAS: BAGI HASIL
+                </span>
+                <span class="pill-badge bg-emerald-300/20 text-emerald-100 border border-emerald-300/30">100% BEP LOLOS</span>
+            </div>
+            <div class="flex items-baseline justify-between mt-1">
+                <div class="text-xl font-extrabold text-white">BAGI HASIL AKTIF</div>
+                <span class="text-xs font-extrabold text-emerald-200"><i class="fa-solid fa-circle-check"></i> TERCAPAI</span>
+            </div>
+            <div class="kpi-progress bg-emerald-950/40">
+                <i class="is-done" style="width: 100%"></i>
+            </div>
+            <div class="text-[10.5px] text-emerald-100 mt-1 flex items-center justify-between font-semibold">
+                <span>Distribusi: <b>10/30/30/30</b></span>
+                <span class="text-emerald-200">Bonus Tim Mengalir</span>
+            </div>
+        </div>`;
+    }
+
+    // Fase 2: Gaji Aman, Mengejar Beban Operasional Toko (CTO)
+    if (ctsTercapai) {
+        const pct = Math.max(0, Math.min(100, Number(fin.cto_progress) || (ctoTarget > 0 ? (labaKotor / ctoTarget * 100) : 0)));
+        const gap = Math.max(0, ctoTarget - labaKotor);
+        return `
+        <div class="star-card kpi-target border-sky-300 dark:border-sky-800/70 shadow-sm col-span-2 sm:col-span-1">
+            <div class="kpi-top">
+                <span class="text-[11px] font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                    <i class="fa-solid fa-scale-balanced text-sky-500"></i>
+                    TARGET 2: BEP TOKO (CTO)
+                </span>
+                <span class="pill-badge pill-cyan"><i class="fa-solid fa-check text-[9px]"></i> Gaji Lolos</span>
+            </div>
+            <div class="flex items-baseline justify-between mt-1">
+                <div class="text-xl font-extrabold text-slate-900 dark:text-white">${kpiRupiah(ctoTarget)}</div>
+                <span class="text-xs font-bold text-sky-600 dark:text-sky-400 font-mono">${Math.round(pct)}%</span>
+            </div>
+            <div class="kpi-progress">
+                <i class="is-cyan" style="width: ${pct}%"></i>
+            </div>
+            <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between font-medium">
+                <span>Laba: <b class="text-slate-800 dark:text-slate-200">${kpiRupiah(labaKotor)}</b></span>
+                <span class="text-sky-600 dark:text-sky-400 font-bold">Kurang ${kpiRupiah(gap)}</span>
+            </div>
+        </div>`;
+    }
+
+    // Fase 1: Pagi / Belum Tembus Gaji (CTS)
+    const pct = Math.max(0, Math.min(100, Number(fin.cts_progress) || (ctsTarget > 0 ? (labaKotor / ctsTarget * 100) : 0)));
+    const gap = Math.max(0, ctsTarget - labaKotor);
+    return `
+    <div class="star-card kpi-target border-amber-200 dark:border-amber-900/40 col-span-2 sm:col-span-1">
+        <div class="kpi-top">
+            <span class="text-[11px] font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                <i class="fa-solid fa-bullseye text-amber-500"></i>
+                TARGET 1: GAJI (CTS)
+            </span>
+            <span class="pill-badge pill-amber">Fase 1/2</span>
+        </div>
+        <div class="flex items-baseline justify-between mt-1">
+            <div class="text-xl font-extrabold text-slate-900 dark:text-white">${kpiRupiah(ctsTarget)}</div>
+            <span class="text-xs font-bold text-amber-600 dark:text-amber-400 font-mono">${Math.round(pct)}%</span>
+        </div>
+        <div class="kpi-progress">
+            <i class="is-amber" style="width: ${pct}%"></i>
+        </div>
+        <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-1 flex items-center justify-between font-medium">
+            <span>Laba: <b class="text-slate-800 dark:text-slate-200">${kpiRupiah(labaKotor)}</b></span>
+            <span class="text-amber-600 dark:text-amber-400 font-bold">Kurang ${kpiRupiah(gap)}</span>
+        </div>
+    </div>`;
 }
 
 function kpiProgressBar(pct, tercapai) {
@@ -1276,11 +1360,14 @@ async function renderStarCards() {
     const data = await apiGet('/overview');
     const byKey = {};
     (data.star_cards || []).forEach(c => { if (c && c.key) byKey[c.key] = c; });
-    // 5 card utama tetap di layout (CTO bukan bagian grid — dirender floating).
-    // Sumber data & formula tidak diubah.
     renderPeriodeWarning(data.period);
-    const order = ['omset', 'laba_kotor', 'beban', 'laba_bersih', 'cts'];
+
+    // 5 card utama: 4 finansial solid + 1 Dynamic Target Milestone
+    const order = ['omset', 'laba_kotor', 'beban', 'laba_bersih', 'milestone'];
     const cards = order.map(key => {
+        if (key === 'milestone') {
+            return renderTargetMilestoneCard(data.finance);
+        }
         const c = byKey[key];
         if (!c) return '';
         const m = STAR_META[key] || {};
@@ -1295,15 +1382,6 @@ async function renderStarCards() {
                 ${c.sub ? `<div class="kpi-caption kpi-caption-light">${escapeHtml(c.sub)}</div>` : ''}
             </div>`;
         }
-        if (key === 'cts') {
-            return `
-            <div class="star-card kpi-target col-span-2 sm:col-span-1">
-                <div class="kpi-top"><span class="kpi-label-dark"><i class="${m.icon || 'fa-solid fa-bullseye'} text-brand-600 mr-1.5"></i>${escapeHtml(c.label)}</span></div>
-                <div class="kpi-value-dark">${cvalue}</div>
-                ${kpiProgressBar(c.progress, c.tercapai)}
-                ${c.sub ? `<div class="kpi-caption">${escapeHtml(c.sub)}</div>` : ''}
-            </div>`;
-        }
         return `
             <div class="star-card ${m.tint} kpi-solid">
                 <div class="kpi-top"><span class="kpi-label">${escapeHtml(c.label)}</span><span class="kpi-emoji">${iconHtml}</span></div>
@@ -1315,41 +1393,10 @@ async function renderStarCards() {
     renderCtoFloat(byKey);
 }
 
-// ─────────────────────────────────────────────
-// RENDER: CTO FLOATING CARD (non-blocking, draggable)
-// Visibility = shouldShowCto (CTS tercapai & CTO belum) — formula tak diubah.
-// Posisi drag milik user tidak direset saat re-render (hanya isi yang diganti).
-// ─────────────────────────────────────────────
 function renderCtoFloat(byKey) {
     const el = document.getElementById('ctoFloat');
-    const body = document.getElementById('ctoFloatBody');
-    if (!el || !body) return;
-    if (!shouldShowCto(byKey) || !byKey['cto']) {
-        el.classList.remove('open');
-        return;
-    }
-    const c = byKey['cto'];
-    const pct = Math.max(0, Math.min(100, Number(c.progress) || 0));
-    const pctTxt = String(Number(c.progress) || 0).replace('.', ',') + '%';
-    const cvalue = typeof c.value === 'number' ? kpiRupiah(c.value) : c.value;
-    // Card ini sengaja TIDAK memakai `kpiProgressBar` + `c.sub`: keduanya
-    // menampilkan persentase yang sama, jadi tampilannya jadi dobel dan
-    // card tumbuh ke bawah. Cukup: angka target, badge persen, bar, 1 catatan.
-    body.innerHTML = `
-        <div class="cto-float-row">
-            <div class="cto-float-val">${escapeHtml(cvalue)}</div>
-            <span class="cto-pct">${escapeHtml(pctTxt)}</span>
-        </div>
-        <div class="kpi-progress cto-bar"><i class="is-run" style="width:${pct}%"></i></div>
-        <div class="cto-float-note">
-            <i class="fa-solid fa-scale-balanced"></i> dari beban gaji + operasional
-        </div>`;
-    el.classList.add('open');
+    if (el) el.classList.remove('open');
 }
-
-// ─────────────────────────────────────────────
-// RENDER: QUICK ACTIONS
-// ─────────────────────────────────────────────
 
 function renderQuickActions() {
     const actions = [

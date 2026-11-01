@@ -291,6 +291,43 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
     background: #16171d;
     border-color: rgba(255,255,255,0.08);
 }
+.star-card.kpi-target-celebrate {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 4px;
+    background: linear-gradient(135deg, #064e3b 0%, #065f46 60%, #047857 100%) !important;
+    border: 1px solid #10b981 !important;
+    box-shadow: 0 10px 25px rgba(5, 150, 105, 0.25) !important;
+    color: #fff !important;
+}
+.dark .star-card.kpi-target-celebrate {
+    background: linear-gradient(135deg, #022c22 0%, #064e3b 60%, #065f46 100%) !important;
+    border-color: #059669 !important;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5) !important;
+}
+
+.kpi-progress > i.is-amber { background: linear-gradient(90deg, #f59e0b, #d97706); }
+.kpi-progress > i.is-cyan  { background: linear-gradient(90deg, #06b6d4, #0284c7); }
+
+.pill-badge {
+    font-size: 9.5px;
+    font-weight: 700;
+    padding: 2px 7px;
+    border-radius: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.pill-amber { background: #fef3c7; color: #b45309; }
+.dark .pill-amber { background: rgba(180, 83, 9, 0.25); color: #fde68a; }
+
+.pill-cyan { background: #e0f2fe; color: #0369a1; }
+.dark .pill-cyan { background: rgba(2, 132, 199, 0.25); color: #7dd3fc; }
+
+.pill-green { background: #dcfce7; color: #15803d; }
+.dark .pill-green { background: rgba(21, 128, 61, 0.25); color: #86efac; }
 /* CTO FLOATING CARD — non-blocking, draggable (drag via header).
    Muncul hanya saat CTS tercapai & CTO belum (logic di shouldShowCto).
    position:fixed tidak pernah memicu scrollbar body. z-index di bawah overlay.
