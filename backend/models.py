@@ -37,6 +37,7 @@ class User(Base):
     passcode_hash = Column(String(255), nullable=False)
     passcode_salt = Column(String(64), nullable=False)
     active = Column(Integer, default=1)
+    gaji_harian = Column(MONEY, default=Decimal("0"))
     last_login = Column(DateTime)
     created_at = Column(DateTime, default=datetime.now)
 
@@ -448,6 +449,7 @@ class ExpensePeriod(Base):
     nilai = Column(MONEY, nullable=False, default=Decimal("0"))
     dibebankan_pada = Column(DateTime, default=datetime.now)
     expense_id = Column(Integer, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True, index=True)
 
 
 class Distribution(Base):
@@ -657,3 +659,21 @@ class IdempotencyRecord(Base):
     response_json = Column(Text)
     actor = Column(String(120))
     created_at = Column(DateTime, default=datetime.now, index=True)
+
+
+
+class UserAttendance(Base):
+    """Kehadiran harian karyawan per periode kas untuk penentuan Beban Gaji toko."""
+    __tablename__ = "user_attendances"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kas_period_id = Column(Integer, ForeignKey("kas_periods.id"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    hadir = Column(Boolean, default=True, nullable=False)
+    gaji_nominal = Column(MONEY, default=Decimal("0"), nullable=False)
+    keterangan = Column(String(120), default="Hadir")
+    updated_by = Column(String(120))
+    updated_at = Column(DateTime, default=datetime.now)
+
+    user = relationship("User")
+    kas_period = relationship("KasPeriod")

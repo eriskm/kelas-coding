@@ -2222,6 +2222,7 @@
                                             <th class="w-10 text-center">No</th>
                                             <th>Pengguna</th>
                                             <th class="text-center">Role</th>
+                                            <th class="text-right">Gaji Harian</th>
                                             <th class="text-center">Status</th>
                                             <th>Terakhir Login</th>
                                             <th class="text-center w-28">Aksi</th>
@@ -2357,6 +2358,14 @@
                                                 <option value="Aktif" selected>Aktif</option>
                                                 <option value="Nonaktif">Nonaktif</option>
                                             </select>
+                                        </div>
+                                        <div class="field sm:col-span-2">
+                                            <label class="field-label" for="akGaji">Gaji Pokok Harian (Rp)</label>
+                                            <div class="relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 select-none">Rp</span>
+                                                <input class="receive-input pl-9 font-semibold" type="number" id="akGaji" placeholder="0" min="0" step="5000">
+                                            </div>
+                                            <p class="text-[10.5px] text-gray-500 dark:text-gray-400 mt-1">Otomatis masuk ke Beban Gaji harian toko saat karyawan Hadir</p>
                                         </div>
                                     </div>
                                 </div>
@@ -3245,6 +3254,28 @@
                     <button type="button" onclick="bebanPickChip('Uang Makan Teknisi', 'Gaji')" class="beban-chip" title="Pilih Uang Makan Teknisi (Gaji)"><i class="fa-solid fa-user-gear text-indigo-500"></i> Makan Teknisi</button>
                     <button type="button" onclick="bebanPickChip('Bensin &amp; Kurir Part', 'Operasional')" class="beban-chip" title="Pilih Bensin &amp; Kurir (Operasional)"><i class="fa-solid fa-motorcycle text-emerald-500"></i> Bensin/Kurir</button>
                     <button type="button" onclick="bebanPickChip('Kebersihan &amp; Sampah', 'Operasional')" class="beban-chip" title="Pilih Kebersihan (Operasional)"><i class="fa-solid fa-broom text-teal-500"></i> Kebersihan</button>
+                </div>
+            </div>
+
+            <!-- Bagian Presensi & Beban Gaji Karyawan -->
+            <div class="mt-2.5 p-3 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/30 text-left" id="bebanAttendanceSection">
+                <div class="flex items-center justify-between mb-2 pb-1.5 border-b border-purple-200/50 dark:border-purple-800/30">
+                    <div class="flex items-center gap-2">
+                        <span class="w-6 h-6 rounded-md bg-purple-100 text-purple-600 dark:bg-purple-900/40 dark:text-purple-300 flex items-center justify-center text-xs font-bold">
+                            <i class="fa-solid fa-user-check"></i>
+                        </span>
+                        <div>
+                            <h4 class="text-xs font-bold text-gray-800 dark:text-gray-100">Presensi &amp; Beban Gaji Karyawan</h4>
+                            <p class="text-[10px] text-gray-500 dark:text-gray-400">Klik tombol status bila karyawan tidak masuk (gaji hari itu menjadi Rp 0)</p>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <span class="text-[9.5px] uppercase font-bold text-purple-600 dark:text-purple-400 block">Total Gaji Hadir</span>
+                        <span class="text-xs font-bold text-purple-700 dark:text-purple-300" id="bebanAttTotalGaji">Rp 0</span>
+                    </div>
+                </div>
+                <div class="space-y-1.5 max-h-44 overflow-y-auto pr-1" id="bebanAttendanceList">
+                    <div class="text-[11px] text-gray-400 py-1 text-center">Memuat presensi karyawan...</div>
                 </div>
             </div>
 

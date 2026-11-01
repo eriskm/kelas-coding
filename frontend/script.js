@@ -425,6 +425,7 @@ function akNorm(r) {
         username: r.username || '-',
         role: r.role || 'Teknisi',
         status: active ? 'Aktif' : 'Nonaktif',
+        gaji_harian: Number(r.gaji_harian) || 0,
         login: login,
     };
 }
@@ -647,6 +648,7 @@ async function renderAkun() {
                     </div>
                 </td>
                 <td class="text-center">${akRoleBadge(a.role)}</td>
+                <td class="text-right font-mono font-medium text-xs text-gray-700 dark:text-gray-300">${a.gaji_harian > 0 ? ('Rp ' + a.gaji_harian.toLocaleString('id-ID')) : '<span class="text-gray-400">-</span>'}</td>
                 <td class="text-center">${akStatusBadge(a.status)}</td>
                 <td class="text-gray-500 dark:text-gray-400 text-xs">${escapeHtml(a.login)}</td>
                 <td class="text-center">
@@ -689,6 +691,8 @@ function akEdit(id) {
     document.getElementById('akPassword').placeholder = 'Kosongkan bila tidak diganti';
     document.getElementById('akRole').value = a.role || 'Teknisi';
     document.getElementById('akStatus').value = a.status || 'Aktif';
+    const _gEl = document.getElementById('akGaji');
+    if (_gEl) _gEl.value = a.gaji_harian || 0;
     tampilkanRoleHint();
     openFormAkun();
 }
@@ -732,6 +736,8 @@ function initAkunForm() {
         const nama = document.getElementById('akNama').value.trim();
         const username = document.getElementById('akUsername').value.trim();
         const passcode = document.getElementById('akPassword').value;
+        const _gInput = document.getElementById('akGaji');
+        const gajiHarian = _gInput ? (Number(_gInput.value) || 0) : 0;
         if (!nama || !username) return;
         try {
             if (_akEditId >= 0) {
@@ -739,6 +745,7 @@ function initAkunForm() {
                     display_name: nama,
                     role: document.getElementById('akRole').value,
                     active: document.getElementById('akStatus').value === 'Aktif' ? 1 : 0,
+                    gaji_harian: gajiHarian,
                 };
                 if (passcode) payload.passcode = passcode;
                 await apiPut('/auth/users/' + _akEditId, payload);
@@ -754,6 +761,7 @@ function initAkunForm() {
                     role: document.getElementById('akRole').value,
                     passcode: passcode,
                     active: document.getElementById('akStatus').value === 'Aktif' ? 1 : 0,
+                    gaji_harian: gajiHarian,
                 });
             }
             renderAkun();
@@ -848,6 +856,8 @@ function showFormAkun() {
     _akEditId = -1;
     document.getElementById('akFormTitle').textContent = 'Tambah Akun';
     document.getElementById('akunForm').reset();
+    const _gReset = document.getElementById('akGaji');
+    if (_gReset) _gReset.value = '0';
     document.getElementById('akUsername').disabled = false;
     const pwEl = document.getElementById('akPassword');
     if (pwEl) {
@@ -11822,6 +11832,7 @@ async function openBeban() {
     _bebanEditIdx = -1;
     _bebanDeleted = [];
     initBebanInputs();
+    loadAttendanceToday();
     const kat = document.getElementById('bebanKategori');
     const nama = document.getElementById('bebanNama');
     const nilai = document.getElementById('bebanNilai');
@@ -11897,6 +11908,10 @@ function bebanRender() {
         if (String(b.kategori || '').toLowerCase().includes('gaji')) totalGaji += v;
         else totalOps += v;
     });
+    // Gaji terintegrasi dari presensi karyawan aktif hari ini
+    if (_attendanceToday && _attendanceToday.total_beban_gaji) {
+        totalGaji += Number(_attendanceToday.total_beban_gaji) || 0;
+    }
     const total = totalOps + totalGaji;
 
     const subOpsEl = document.getElementById('bebanSubOps');
@@ -12792,3 +12807,72 @@ window.posCloseReceiptModal = posCloseReceiptModal;
 window.posOpenHistoryModal = posOpenHistoryModal;
 window.posCloseHistoryModal = posCloseHistoryModal;
 window.posPrintFromHistory = posPrintFromHistory;
+
+// ─── INTEGRASI PRESENSI & BEBAN GAJI KARYAWAN ────────────────────────
+let _attendanceToday = null;
+
+async function loadAttendanceToday() {
+    try {
+        const res = await apiGet('/attendance/today');
+        _attendanceToday = res;
+        renderAttendanceBeban();
+        bebanRender();
+    } catch (e) {
+        console.warn('loadAttendanceToday gagal:', e);
+    }
+}
+
+async function toggleAttendance(userId, hadir) {
+    try {
+        const res = await apiPost('/attendance/toggle', { user_id: userId, hadir: hadir });
+        _attendanceToday = res;
+        renderAttendanceBeban();
+        bebanRender();
+        if (typeof loadFinanceOverview === 'function') loadFinanceOverview();
+        if (typeof renderKondisiKas === 'function') renderKondisiKas();
+        toast(hadir ? 'Presensi diubah: HADIR (Beban gaji aktif)' : 'Presensi diubah: TIDAK MASUK (Beban gaji Rp 0)');
+    } catch (e) {
+        toast((e && e.message) || 'Gagal mengubah presensi');
+        renderAttendanceBeban();
+    }
+}
+
+function renderAttendanceBeban() {
+    const listEl = document.getElementById('bebanAttendanceList');
+    const totGajiEl = document.getElementById('bebanAttTotalGaji');
+    if (!listEl) return;
+    if (!_attendanceToday || !_attendanceToday.items || !_attendanceToday.items.length) {
+        listEl.innerHTML = '<div class="text-[11px] text-gray-400 py-1.5 text-center">Belum ada karyawan aktif terdaftar di Kelola Akun.</div>';
+        if (totGajiEl) totGajiEl.textContent = 'Rp 0';
+        return;
+    }
+    if (totGajiEl) totGajiEl.textContent = bebanRupiah(_attendanceToday.total_beban_gaji || 0);
+
+    listEl.innerHTML = _attendanceToday.items.map(it => {
+        const isHadir = Boolean(it.hadir);
+        const gajiHarian = Number(it.gaji_harian) || 0;
+        return `
+        <div class="flex items-center justify-between p-2 rounded-lg bg-white dark:bg-white/5 border border-purple-100 dark:border-white/5 transition-all">
+            <div class="flex items-center gap-2 min-w-0">
+                <span class="w-2.5 h-2.5 rounded-full ${isHadir ? 'bg-emerald-500' : 'bg-gray-300 dark:bg-gray-600'} flex-shrink-0"></span>
+                <div class="min-w-0">
+                    <div class="text-xs font-bold text-gray-800 dark:text-gray-100 truncate">
+                        ${escapeHtml(it.display_name)} <span class="text-[10px] font-normal text-gray-400">(${escapeHtml(it.role)})</span>
+                    </div>
+                    <div class="text-[10.5px] ${isHadir ? 'text-purple-600 dark:text-purple-400 font-semibold' : 'text-gray-400 line-through'}">
+                        Gaji: ${bebanRupiah(gajiHarian)} / hari ${!isHadir ? '<span class="text-amber-600 font-semibold no-underline ml-1">(Rp 0 hari ini)</span>' : ''}
+                    </div>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <button type="button" onclick="toggleAttendance(${it.user_id}, ${!isHadir})" class="px-2.5 py-1 text-[10.5px] font-bold rounded-lg border transition-all ${
+                    isHadir
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:text-emerald-300 dark:border-emerald-800'
+                        : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-gray-200 dark:bg-white/10 dark:text-gray-400 dark:border-white/10'
+                }">
+                    <i class="fa-solid ${isHadir ? 'fa-check' : 'fa-xmark'} mr-1"></i>${isHadir ? 'HADIR' : 'LIBUR / TIDAK MASUK'}
+                </button>
+            </div>
+        </div>`;
+    }).join('');
+}

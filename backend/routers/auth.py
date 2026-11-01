@@ -10,9 +10,11 @@ from fastapi import APIRouter, Depends, HTTPException, Header
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 from typing import Optional
+from decimal import Decimal
 
 from dependencies import get_db_session
 from models import AuthToken, User
+from money import to_decimal
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -366,6 +368,7 @@ class UserAdminOut(BaseModel):
     display_name: str
     role: str
     active: int
+    gaji_harian: Decimal = Decimal("0")
     last_login: Optional[datetime] = None
 
 
@@ -375,6 +378,7 @@ class UserCreate(BaseModel):
     role: str = "Teknisi"
     passcode: str = ""
     active: int = 1
+    gaji_harian: Decimal = Decimal("0")
 
 
 class UserUpdate(BaseModel):
@@ -382,6 +386,7 @@ class UserUpdate(BaseModel):
     role: Optional[str] = None
     active: Optional[int] = None
     passcode: Optional[str] = None
+    gaji_harian: Optional[Decimal] = None
 
 
 @router.get("/users", response_model=list[UserAdminOut])
@@ -410,13 +415,15 @@ def create_user(payload: UserCreate, admin: User = Depends(_matrix_user(USER_MAN
     user = User(username=username, display_name=nama,
                 role=(payload.role or "Teknisi").strip() or "Teknisi",
                 passcode_hash=hash_passcode(payload.passcode, salt),
-                passcode_salt=salt, active=1 if payload.active else 0)
+                passcode_salt=salt, active=1 if payload.active else 0,
+                gaji_harian=to_decimal(payload.gaji_harian or 0))
     db.add(user)
     db.commit()
     db.refresh(user)
     _catat_jurnal_akun(db, EVENT_AKUN_DIBUAT, user, admin,
                        {}, {"role": user.role, "active": user.active,
-                            "display_name": user.display_name})
+                            "display_name": user.display_name,
+                            "gaji_harian": float(user.gaji_harian or 0)})
     db.commit()
     return user
 
@@ -441,6 +448,7 @@ def update_user(user_id: int, payload: UserUpdate,
     # kembali -- Owner: perubahan harus tercatat, tidak boleh diam-diam.
     sebelum = {"role": user.role, "active": user.active,
                "display_name": user.display_name,
+               "gaji_harian": float(getattr(user, "gaji_harian", 0) or 0),
                "passcode": "diubah" if (payload.passcode or "") else None}
     data = payload.model_dump(exclude_unset=True)
     if "display_name" in data:
@@ -451,6 +459,8 @@ def update_user(user_id: int, payload: UserUpdate,
         user.role = (data["role"] or "").strip() or user.role
     if "active" in data and data["active"] is not None:
         user.active = 1 if data["active"] else 0
+    if "gaji_harian" in data and data["gaji_harian"] is not None:
+        user.gaji_harian = to_decimal(data["gaji_harian"])
     if "passcode" in data and data["passcode"]:
         if len(data["passcode"]) < 4:
             raise HTTPException(status_code=400, detail="Passcode minimal 4 karakter")
@@ -461,6 +471,7 @@ def update_user(user_id: int, payload: UserUpdate,
     db.refresh(user)
     sesudah = {"role": user.role, "active": user.active,
                "display_name": user.display_name,
+               "gaji_harian": float(getattr(user, "gaji_harian", 0) or 0),
                "passcode": sebelum["passcode"]}
     _catat_jurnal_akun(db, EVENT_AKUN_DIUBAH, user, admin, sebelum, sesudah)
     db.commit()

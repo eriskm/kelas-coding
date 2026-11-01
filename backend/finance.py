@@ -363,10 +363,81 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
             expense_id=e.id,
         ))
         dibuat += 1
+    # 2. Beban Gaji dari Kehadiran Karyawan (UserAttendance)
+    kas_p = _kas_period_untuk(db, start)
+    if kas_p:
+        try:
+            from models import UserAttendance, User
+            atts = db.query(UserAttendance).filter(UserAttendance.kas_period_id == kas_p.id).all()
+            if atts:
+                user_map = {u.id: u for u in db.query(User).all()}
+            for att in atts:
+                if att.hadir and to_decimal(att.gaji_nominal) > ZERO:
+                    u = user_map.get(att.user_id)
+                    nama = u.display_name if u else f"Karyawan #{att.user_id}"
+                    db.add(ExpensePeriod(
+                        periode=key,
+                        kategori="Gaji",
+                        nama_beban=f"Gaji: {nama}",
+                        nilai=to_decimal(att.gaji_nominal),
+                        dibebankan_pada=datetime.now(),
+                        expense_id=None,
+                        user_id=att.user_id,
+                    ))
+                    dibuat += 1
+        except Exception as _att_err:
+            _log(f"[finance] auto-freeze absensi dilewati: {_att_err}")
+
     db.flush()
     if commit:
         db.commit()
     return {"periode": key, "dibekukan": dibuat, "sudah_ada": 0}
+
+
+def sync_open_period_salary_expense(db: Session, kas_period_id: int):
+    """Sinkronkan baris Beban Gaji (ExpensePeriod) pada periode OPEN yang berjalan.
+
+    Memastikan perubahan absensi (Hadir / Tidak Masuk) langsung mengubah Beban Gaji
+    dan Laba Bersih harian toko tanpa menunggu Tutup Kas.
+    Hanya boleh dijalankan pada periode kas yang berstatus OPEN.
+    """
+    from models import KasPeriod, UserAttendance, User
+    kas_p = db.query(KasPeriod).filter(KasPeriod.id == kas_period_id).first()
+    if not kas_p or (kas_p.status or "").upper() != "OPEN":
+        return {"error": "Periode bukan OPEN atau tidak ditemukan"}
+
+    key = period_key(db, kas_p.start_at, kas_p.end_at)
+    kunci_list = _semua_kunci(db, kas_p.start_at, kas_p.end_at)
+
+    # Hapus baris ExpensePeriod gaji yang bersumber dari user_id untuk periode ini
+    db.query(ExpensePeriod).filter(
+        ExpensePeriod.periode.in_(kunci_list),
+        ExpensePeriod.user_id.isnot(None),
+    ).delete(synchronize_session="fetch")
+
+    # Baca absensi aktif untuk kas_period_id
+    atts = db.query(UserAttendance).filter(UserAttendance.kas_period_id == kas_period_id).all()
+    user_map = {u.id: u for u in db.query(User).all()}
+
+    dibuat = 0
+    for att in atts:
+        if att.hadir and to_decimal(att.gaji_nominal) > ZERO:
+            u = user_map.get(att.user_id)
+            nama = u.display_name if u else f"Karyawan #{att.user_id}"
+            db.add(ExpensePeriod(
+                periode=key,
+                kategori="Gaji",
+                nama_beban=f"Gaji: {nama}",
+                nilai=to_decimal(att.gaji_nominal),
+                dibebankan_pada=datetime.now(),
+                expense_id=None,
+                user_id=att.user_id,
+            ))
+            dibuat += 1
+
+    db.flush()
+    db.commit()
+    return {"periode": key, "gaji_rows": dibuat}
 
 
 def _kas_period_untuk(db: Session, start: datetime):
@@ -563,4 +634,5 @@ __all__ = [
     "settled_orders",
     "settled_part_sales",
     "snapshot_laba_bersih",
+    "sync_open_period_salary_expense",
 ]

@@ -25,7 +25,7 @@ from migrations_warranty_claims import migrate_warranty_claims
 from money import ZERO, to_decimal
 from routers import (dashboard, orders, customers, auth, claims, expenses,
                      kas, spareparts, payments, refunds, expense_debt,
-                     inventory, laporan, notifications)
+                     inventory, laporan, notifications, attendance)
 from routers.auth import get_authenticated_user
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -246,6 +246,8 @@ def _migrate_schema():
         ("service_order_parts", "is_external", "BOOLEAN"),
         ("service_order_parts", "part_name", "VARCHAR(150)"),
         ("service_order_parts", "note", "VARCHAR(200)"),
+        ("users", "gaji_harian", "NUMERIC(18,2) DEFAULT 0"),
+        ("expense_periods", "user_id", "INTEGER"),
     ]
 
     def ddl(dtype):
@@ -508,6 +510,7 @@ app.include_router(expense_debt.router, dependencies=[Depends(get_authenticated_
 app.include_router(inventory.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(laporan.router, dependencies=[Depends(get_authenticated_user)])
 app.include_router(notifications.router, dependencies=[Depends(get_authenticated_user)])
+app.include_router(attendance.router, dependencies=[Depends(get_authenticated_user)])
 
 
 # ---------- Mount frontend (static) ----------
