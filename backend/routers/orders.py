@@ -218,10 +218,9 @@ def list_technicians(db: Session = Depends(get_db_session)):
     for u in users:
         if auth_mod.canonical_role(u) != auth_mod.ROLE_TEKNISI:
             continue
-        for nama in ((getattr(u, "display_name", "") or "").strip(),
-                     (getattr(u, "username", "") or "").strip()):
-            if nama:
-                names.add(nama)
+        nama = (getattr(u, "display_name", "") or "").strip() or (getattr(u, "username", "") or "").strip()
+        if nama:
+            names.add(nama)
     return sorted(names)
 
 
