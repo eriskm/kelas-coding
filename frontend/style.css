@@ -2548,10 +2548,14 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageSparepart .receive-input,
 #pageSpare .receive-input,
 #pageClaim .receive-input,
-#pageUpdateServis .receive-input { font-size: 14px; }
+#pageUpdateServis .receive-input,
+#pageKeuangan .receive-input,
+#pageKeuangan select { font-size: 14px; }
 #pageSpare .field-label,
 #pageClaim .field-label,
-#pageUpdateServis .field-label { font-size: 12px; }
+#pageUpdateServis .field-label,
+#pageKeuangan .field-label,
+#pageKeuangan .tx-filter-label { font-size: 12px; }
 #pageSpare .receive-feedback,
 #pageClaim .receive-feedback,
 #pageUpdateServis .receive-feedback { font-size: 13.5px; }
@@ -2592,6 +2596,24 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 /* Tabel Sparepart */
 #pageSparepart .tx-table thead th { font-size: 11.5px; }
 #pageSparepart .tx-table tbody td { font-size: 13px; }
+
+/* Tabel & Elemen Keuangan: selaraskan dengan baseline Sparepart & Transaksi */
+#pageKeuangan .tx-table thead th,
+#pageKeuangan .cash-table thead th,
+.ku-titipan-panel .tx-table thead th,
+.ku-hutang-panel .tx-table thead th { font-size: 11.5px; }
+
+#pageKeuangan .tx-table tbody td,
+#pageKeuangan .cash-table tbody td,
+.ku-titipan-panel .tx-table tbody td,
+.ku-hutang-panel .tx-table tbody td { font-size: 13px; }
+
+#pageKeuangan .ku-tab-btn { font-size: 13px; }
+#pageKeuangan .ku-block-title,
+#pageKeuangan .panel-title,
+.ku-titipan-panel .ku-tp-head > span:first-child { font-size: 14.5px; }
+#pageKeuangan .ku-tp-label { font-size: 11.5px; }
+#pageKeuangan .ku-period-badge { font-size: 12px; }
 #pageSparepart .tx-table .tx-laba-muted { font-size: 13.5px; }
 #pageSparepart .qty-flag { font-size: 10.5px; }
 #spKpi .sm-top { font-size: 11px; }
