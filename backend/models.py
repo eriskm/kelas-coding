@@ -429,7 +429,7 @@ class JournalEntry(Base):
     ref_code = Column(String(80), index=True)
     amount = Column(MONEY)
     actor = Column(String(60), index=True)
-    source = Column(String(20), default="SYSTEM")
+    source = Column(String(80), default="SYSTEM")
     details = Column(JSON)
 
 
@@ -443,7 +443,7 @@ class ExpensePeriod(Base):
     __tablename__ = "expense_periods"
 
     id = Column(Integer, primary_key=True, index=True)
-    periode = Column(String(20), nullable=False, index=True)
+    periode = Column(String(60), nullable=False, index=True)
     kategori = Column(String(40), index=True)
     nama_beban = Column(String(200))
     nilai = Column(MONEY, nullable=False, default=Decimal("0"))
@@ -464,7 +464,7 @@ class Distribution(Base):
     __tablename__ = "distributions"
 
     id = Column(Integer, primary_key=True, index=True)
-    periode = Column(String(20), nullable=False, unique=True, index=True)
+    periode = Column(String(60), nullable=False, unique=True, index=True)
     kas_period_id = Column(Integer, index=True)
     laba_bersih = Column(MONEY, nullable=False, default=Decimal("0"))
     karyawan_pct = Column(MONEY, nullable=False, default=Decimal("0.10"))
@@ -528,7 +528,7 @@ class ExpenseDebtPeriod(Base):
     __tablename__ = "expense_debt_periods"
 
     id = Column(Integer, primary_key=True, index=True)
-    periode = Column(String(20), nullable=False, unique=True, index=True)
+    periode = Column(String(60), nullable=False, unique=True, index=True)
     kas_period_id = Column(Integer, index=True)
     beban = Column(MONEY, nullable=False, default=Decimal("0"))
     laba_kotor = Column(MONEY, nullable=False, default=Decimal("0"))
@@ -550,7 +550,7 @@ class ExpenseDebtEntry(Base):
     tipe = Column(String(20), nullable=False, index=True)  # HUTANG | PELUNASAN
     nominal = Column(MONEY, nullable=False, default=Decimal("0"))
     saldo_setelah = Column(MONEY, nullable=False, default=Decimal("0"))
-    periode = Column(String(20), index=True)   # periode asal hutang / pelunasan
+    periode = Column(String(60), index=True)   # periode asal hutang / pelunasan
     expense_debt_period_id = Column(Integer, index=True)
     kas_entry_id = Column(Integer, index=True)  # mutasi Kas Aset (bukan Buku Kas)
     oleh = Column(String(120))
