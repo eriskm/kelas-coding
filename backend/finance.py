@@ -369,6 +369,13 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
         try:
             from models import UserAttendance, User
             atts = db.query(UserAttendance).filter(UserAttendance.kas_period_id == kas_p.id).all()
+            if not atts and (kas_p.status or "").upper() == "OPEN":
+                try:
+                    from routers.attendance import init_period_attendance
+                    init_period_attendance(db, kas_p.id)
+                    atts = db.query(UserAttendance).filter(UserAttendance.kas_period_id == kas_p.id).all()
+                except Exception:
+                    pass
             if atts:
                 user_map = {u.id: u for u in db.query(User).all()}
             for att in atts:

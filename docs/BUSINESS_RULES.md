@@ -30,6 +30,10 @@ supaya tidak ada dua versi yang bisa berbeda.
 | `OD-LOCK-10` | Struktur 7 Role BOSS SF | 🔒 |
 | `OD-LOCK-11` | Aturan Dasar Uang BOSS SF | 🔒 |
 | `OD-LOCK-12` | Hutang Beban: Input Manual oleh Admin | 🔒 (menggantikan OD-LOCK-07) |
+| `OD-LOCK-13` | Karantina Titipan DP & Larangan Menutup Beban dari DP | 🔒 |
+| `OD-LOCK-14` | Prioritas Waterfall Hutang Beban & Pelunasan Kas Aset Fleksibel | 🔒 |
+| `OD-LOCK-15` | Pencicilan Beban per Transaksi Lunas di Kasir (Opsi B) & Tutup Kas Bersih | 🔒 |
+| `OD-LOCK-16` | Inisialisasi Otomatis Presensi Saat Buka Kas & Sinkronisasi Real-Time | 🔒 |
 
 Teks lengkap + status hukumnya: [`OWNER_DECISIONS.md`](OWNER_DECISIONS.md).
 
@@ -155,7 +159,22 @@ penyalinan teks.
 
 ---
 
-## 10. Konflik yang belum selesai
+## 10. Waterfall Hutang Beban & Buka Kas
+
+| Aturan | Ditegakkan di |
+|---|---|
+| Prioritas Waterfall: Laba Kotor tutup Gaji (CTS) 100% sebelum Operasional (CTO) | `expense_debt.hitung_breakdown_hutang()` |
+| Pelunasan Fleksibel Kas Aset seadanya/penuh (Owner & Developer saja) | `expense_debt.pelunasan_kas_aset_fleksibel()` |
+| Beban dicicil per transaksi lunas (CASH) dari laba kotor unit (Opsi B) | `orders._bayar_beban_periode_di_cash()` |
+| Tutup Kas menyerap sisa laba kotor periode untuk beban toko | `closing.selesaikan_periode()` |
+| Buka Kas otomatis default Hadir untuk seluruh karyawan aktif | `attendance.init_period_attendance()` |
+| Perubahan manual absensi langsung mengubah Beban Gaji real-time | `finance.sync_open_period_salary_expense()` |
+
+Detail: [OWNER_DECISIONS.md](OWNER_DECISIONS.md) bagian OD-LOCK-14, OD-LOCK-15, dan OD-LOCK-16.
+
+---
+
+## 11. Konflik yang belum selesai
 
 [FAKTA] Ada beberapa tempat di mana kode dan dokumentasi lama berbeda, dan
 satu alur Owner yang belum jelas. Rinciannya di

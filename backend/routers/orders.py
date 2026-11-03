@@ -14,7 +14,7 @@ import journal
 import notifications as notif_mod
 from finance import order_sisa
 from routers import payments as payments_mod
-from money import ZERO, to_decimal
+from money import ZERO, quantize, to_decimal
 from authority import (Action, check, is_closing_status, require_authority,
                       sanitize_finance_payload)
 from routers.auth import can_edit_finance, get_authenticated_user
@@ -37,8 +37,14 @@ router = APIRouter(prefix="/api/orders", tags=["orders"])
 # Subset aktif checklist (selaras frontend ACTIVE_*): key pensiun
 # (lcd_pecah/lcd_terbuka/frame_gompal/box/charger) difilter saat tulis.
 # Klaim tidak difilter (form klaim masih memakai daftar penuh).
-CHECK_FISIK_KEYS = {"frame_bengkok", "tombol_tidak_ada", "bekas_air"}
-CHECK_LEN_KEYS = {"unit_saja", "case", "sim_card", "memory_card"}
+CHECK_FISIK_KEYS = {
+    "lcd_pecah", "backdoor", "lecet", "kena_air", "segel",
+    "bekas_air", "frame_bengkok", "tombol_tidak_ada", "lcd_terbuka", "frame_gompal"
+}
+CHECK_LEN_KEYS = {
+    "sim_tray", "memory", "charger", "dus", "case",
+    "unit_saja", "sim_card", "memory_card", "box"
+}
 
 
 def _clean_checklist(values, allowed):
@@ -129,10 +135,21 @@ def _bayar_beban_periode_di_cash(db: Session, order, actor: str = None) -> dict:
         if total_beban <= ZERO:
             return {"dibayar": False, "alasan": "Beban periode masih nol"}
 
+        # Opsi B (Owner, 2026-11-02): Laba kotor unit yang baru lunas
+        _laba_unit = max(ZERO, quantize(
+            to_decimal(order.final_price or 0)
+            - to_decimal(order.part_cost or 0)
+            - to_decimal(order.modal_jasa or 0)
+            - to_decimal(order.modal_lainnya or 0)
+        ))
+        _ord_no = getattr(order, "no_servis", None) or str(getattr(order, "id", ""))
+
         return _beb.bayar_beban_periode(
             db, start, end, key, total_beban, oleh=actor,
             kas_period_id=period.id,
-            laba_kotor=to_decimal(core["laba_kotor"]))
+            laba_kotor=to_decimal(core["laba_kotor"]),
+            laba_unit=_laba_unit,
+            order_no=_ord_no)
     except Exception:  # noqa: BLE001
         return {"dibayar": False, "alasan": "pembayaran Beban dilewati"}
 

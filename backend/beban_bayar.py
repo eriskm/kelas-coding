@@ -68,9 +68,30 @@ def _total_dibayar(db: Session, periode: str) -> Decimal:
     return quantize(total)
 
 
+def _sudah_dibayar_oleh_unit(db: Session, periode: str, order_no: str) -> Decimal:
+    """Berapa Beban periode ini yang sudah dibayar dari laba unit order_no."""
+    from models import KasEntry
+    if not order_no:
+        return ZERO
+    total = ZERO
+    for k in (db.query(KasEntry)
+              .filter(KasEntry.layer == cash.LAYER_LACI,
+                      KasEntry.sumber == cash.SUMBER_BEBAN,
+                      KasEntry.ref_type == BE_REF_TYPE,
+                      KasEntry.ref_id == periode).all()):
+        if ("(Laba unit #%s)" % order_no) in (k.keterangan or ""):
+            n = abs(to_decimal(k.nominal))
+            if (k.jenis or "").strip().lower() == "keluar":
+                total += n
+            else:
+                total -= n
+    return quantize(total)
+
+
 def bayar_beban_periode(db: Session, start, end, periode_key: str,
                         total_beban, oleh: str = None,
-                        kas_period_id=None, laba_kotor=None) -> dict:
+                        kas_period_id=None, laba_kotor=None,
+                        laba_unit=None, order_no: str = None) -> dict:
     """OD-LOCK-06: bayar kewajiban Beban satu periode. IDEMPOTEN.
 
     Urutan dana (persis aturan Owner):
@@ -93,11 +114,21 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
         return out
 
     # -- (1) Laci ------------------------------------------------------------
-    # OD-LOCK-13: Beban HANYA boleh dibayar dari kas bebas milik toko
-    # (saldo laci dikurangi seluruh saldo titipan DP yang masih tertahan).
-    # Uang DP adalah dana titipan pelanggan yang dilarang dipakai untuk Beban.
-    saldo_laci = cash.saldo_laci_milik_toko(db)
-    dari_laci = quantize(min(sisa_kewajiban, saldo_laci)) if saldo_laci > ZERO else ZERO
+    if laba_unit is not None:
+        # OPSI B (Owner, 2026-11-02): Cicil Beban per unit servis dari Laba Kotor unit yang baru lunas.
+        # Uang DP pelanggan lain tidak tersentuh karena cicilan murni dibatasi laba unit ini.
+        laba_u = max(ZERO, quantize(to_decimal(laba_unit)))
+        sudah_unit = _sudah_dibayar_oleh_unit(db, periode_key, order_no) if order_no else ZERO
+        sisa_laba_unit = max(ZERO, quantize(laba_u - sudah_unit))
+        saldo_fisik_laci = cash.saldo_laci(db)
+        tersedia = min(sisa_laba_unit, saldo_fisik_laci) if saldo_fisik_laci > ZERO else ZERO
+        dari_laci = quantize(min(sisa_kewajiban, tersedia)) if tersedia > ZERO else ZERO
+    else:
+        # OD-LOCK-13: Beban HANYA boleh dibayar dari kas bebas milik toko
+        # (saldo laci dikurangi seluruh saldo titipan DP yang masih tertahan).
+        # Uang DP adalah dana titipan pelanggan yang dilarang dipakai untuk Beban.
+        saldo_laci = cash.saldo_laci_milik_toko(db)
+        dari_laci = quantize(min(sisa_kewajiban, saldo_laci)) if saldo_laci > ZERO else ZERO
 
     # -- (2) KAS ASET: TIDAK PERNAH DISENTUH OTOMATIS -----------------------
     # Owner: "ketika akhir kas bernilai minus, maka keputusan untuk menutup dari
@@ -119,9 +150,11 @@ def bayar_beban_periode(db: Session, start, end, periode_key: str,
 
     # -- (3) satu baris kas untuk seluruh pembayaran -------------------------
     if total_dibayar > ZERO:
+        ket = ("Pembayaran Beban periode %s (Laba unit #%s)" % (periode_key, order_no)
+               if order_no else ("Pembayaran Beban periode %s" % periode_key))
         cash.catat_mutasi(
             db, cash.LAYER_LACI, "Keluar", cash.KATEGORI[cash.SUMBER_BEBAN],
-            "Pembayaran Beban periode %s" % periode_key, total_dibayar,
+            ket, total_dibayar,
             sumber=cash.SUMBER_BEBAN, ref_type=BE_REF_TYPE,
             ref_id=periode_key, oleh=oleh, check_saldo=False)
 

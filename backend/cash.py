@@ -898,16 +898,18 @@ def ringkasan(db: Session, *, termasuk_aset: bool = True, periode_mulai=None) ->
     """
     laci = saldo_laci(db)
     titipan = saldo_titipan_dp(db)
+    laci_bebas = quantize(saldo_laci_milik_toko(db))
     out = {"laci": laci, "label_laci": LABEL[LAYER_LACI], "cara_baca": CARA_BACA,
            "kas_aset_awal": (saldo_laci_sampai(db, periode_mulai)
                              if periode_mulai is not None else laci),
            "titipan_dp": titipan,
-           "laci_milik_toko": quantize(laci - titipan)}
+           "laci_milik_toko": laci_bebas}
     if termasuk_aset:
         aset = saldo_kas_aset(db)
+        master_bebas = quantize(laci_bebas + aset)
         out.update({"aset": aset, "label_aset": LABEL[LAYER_ASET],
                     "master_kas": quantize(laci + aset),
-                    "master_kas_milik_toko": quantize(laci - titipan + aset)})
+                    "master_kas_milik_toko": master_bebas})
     return out
 
 

@@ -19,6 +19,7 @@ Aturan implementasi (ID-06 — structure detail, bukan business rule baru):
 - Tanpa `commit` di modul: pemanggil (router) yang mengatur transaksi.
 """
 from __future__ import annotations
+from datetime import datetime
 
 from decimal import Decimal
 
@@ -240,6 +241,14 @@ def lunas_hutang(db: Session, nominal=None, periode=None, oleh: str = None):
         raise DebtError("Saldo Kas Aset tidak cukup untuk pelunasan %s (kurang %s)"
                         % (n, kurang))
 
+    if not periode:
+        from models import ExpenseDebtPeriod
+        p_row = (db.query(ExpenseDebtPeriod)
+                 .filter(ExpenseDebtPeriod.hutang_baru > ZERO)
+                 .order_by(ExpenseDebtPeriod.id.desc()).first())
+        if p_row:
+            periode = p_row.periode
+
     # v4 #8: pelunasan dicatat sebagai penyelesaian hutang; pengeluaran aktual dari
     # SALDO ASET BESAR dicatat manual Admin.
     saldo_baru = quantize(outstanding - n)
@@ -259,13 +268,170 @@ def lunas_hutang(db: Session, nominal=None, periode=None, oleh: str = None):
             "saldo_hutang": saldo_baru, "saldo_kas_aset_setelah": cash.saldo_kas_aset(db)}
 
 
-def ringkasan(db: Session) -> dict:
+def hitung_breakdown_hutang(db: Session, kas_period_id: int = None, periode_key: str = None) -> dict:
+    """Waterfall Breakdown Beban (Gaji vs Operasional).
+
+    Prioritas Waterfall:
+    1. Laba Kotor pertama kali dialokasikan untuk menutup Gaji Karyawan (CTS) 100%.
+    2. Sisa Laba Kotor setelah seluruh gaji tertutup dialokasikan ke Beban Operasional (CTO).
+    3. Sisa kekurangan yang tidak tertutup menjadi Hutang Beban dengan rincian:
+       - Hutang Gaji Karyawan (per karyawan: user_id, nama, nilai, terbayar, sisa_hutang)
+       - Hutang Operasional Toko (nama, nilai, terbayar, sisa_hutang)
+    4. Pembayaran pelunasan dari Kas Aset mengurangi Hutang Gaji terlebih dahulu,
+       kemudian sisanya mengurangi Hutang Operasional.
+    """
+    from models import KasPeriod, ExpensePeriod, ExpenseDebtEntry
+
+    kp = None
+    if kas_period_id is not None:
+        try:
+            pid = int(str(kas_period_id).replace("kas_period:", "").strip())
+            kp = db.query(KasPeriod).filter(KasPeriod.id == pid).first()
+        except Exception:
+            pass
+    elif periode_key is not None:
+        try:
+            pid = int(str(periode_key).replace("kas_period:", "").strip())
+            kp = db.query(KasPeriod).filter(KasPeriod.id == pid).first()
+        except Exception:
+            pass
+
+    if kp is None:
+        kp = (db.query(KasPeriod).filter(KasPeriod.status == "OPEN")
+              .order_by(KasPeriod.id.desc()).first() or
+              db.query(KasPeriod).order_by(KasPeriod.id.desc()).first())
+
+    if not kp:
+        return {
+            "periode": None, "kas_period_id": None,
+            "laba_kotor": ZERO, "total_gaji": ZERO, "total_ops": ZERO,
+            "total_beban": ZERO, "gaji_tercover": ZERO, "ops_tercover": ZERO,
+            "hutang_gaji": ZERO, "hutang_ops": ZERO, "total_hutang": ZERO,
+            "gaji_items": [], "ops_items": [], "pelunasan_kas_aset": ZERO
+        }
+
+    start = kp.start_at
+    end = kp.end_at or datetime.now()
+    key = finance.period_key(db, start, end)
+
+    core = finance.compute_finance_core(db, start, end)
+    laba_kotor = quantize(to_decimal(core.get("laba_kotor", 0)))
+
+    kunci = finance._semua_kunci(db, start, end)
+    rows = (db.query(ExpensePeriod)
+            .filter(ExpensePeriod.periode.in_(kunci))
+            .order_by(ExpensePeriod.id.asc()).all())
+
+    gaji_rows = [r for r in rows if (r.kategori or "").strip().lower() == "gaji"]
+    ops_rows = [r for r in rows if (r.kategori or "").strip().lower() != "gaji"]
+
+    total_gaji = quantize(sum((to_decimal(r.nilai) for r in gaji_rows), ZERO))
+    total_ops = quantize(sum((to_decimal(r.nilai) for r in ops_rows), ZERO))
+    total_beban = quantize(total_gaji + total_ops)
+
+    # Waterfall Tahap 1: Laba Kotor ke Gaji (CTS)
+    gaji_tercover = min(laba_kotor, total_gaji) if total_gaji > ZERO else ZERO
+    hutang_gaji_awal = quantize(total_gaji - gaji_tercover)
+    sisa_laba_setelah_gaji = quantize(max(ZERO, laba_kotor - total_gaji))
+
+    # Waterfall Tahap 2: Sisa Laba Kotor ke Operasional (CTO)
+    ops_tercover = min(sisa_laba_setelah_gaji, total_ops) if total_ops > ZERO else ZERO
+    hutang_ops_awal = quantize(total_ops - ops_tercover)
+
+    # Pelunasan Kas Aset pada periode ini
+    kunci_pelunasan = list(kunci) + [f"kas_period:{kp.id}", str(kp.id)]
+    entries_pelunasan = (db.query(ExpenseDebtEntry)
+                         .filter(ExpenseDebtEntry.tipe == TIPE_PELUNASAN)
+                         .filter(ExpenseDebtEntry.periode.in_(kunci_pelunasan)).all())
+    total_lunas_aset = quantize(sum((to_decimal(e.nominal) for e in entries_pelunasan), ZERO))
+
+    # Pelunasan memprioritaskan gaji dulu, baru operasional
+    lunas_ke_gaji = min(total_lunas_aset, hutang_gaji_awal) if hutang_gaji_awal > ZERO else ZERO
+    sisa_lunas_ops = quantize(max(ZERO, total_lunas_aset - hutang_gaji_awal))
+    lunas_ke_ops = min(sisa_lunas_ops, hutang_ops_awal) if hutang_ops_awal > ZERO else ZERO
+
+    sisa_hutang_gaji = quantize(hutang_gaji_awal - lunas_ke_gaji)
+    sisa_hutang_ops = quantize(hutang_ops_awal - lunas_ke_ops)
+    total_sisa_hutang = quantize(sisa_hutang_gaji + sisa_hutang_ops)
+
+    # Detail item gaji
+    gaji_items = []
+    total_terbayar_gaji = quantize(gaji_tercover + lunas_ke_gaji)
+    for r in gaji_rows:
+        val = quantize(to_decimal(r.nilai))
+        if total_gaji > ZERO:
+            porsi = val / total_gaji
+            terbayar_item = quantize(total_terbayar_gaji * porsi)
+            hutang_item = quantize(max(ZERO, val - terbayar_item))
+        else:
+            terbayar_item = val
+            hutang_item = ZERO
+        status_item = "LUNAS" if hutang_item == ZERO else ("SEBAGIAN" if terbayar_item > ZERO else "TERTUNGGAK")
+        gaji_items.append({
+            "id": r.id,
+            "user_id": r.user_id,
+            "nama": r.nama_beban,
+            "nilai": val,
+            "terbayar": terbayar_item,
+            "hutang": hutang_item,
+            "status": status_item
+        })
+
+    # Detail item operasional
+    ops_items = []
+    total_terbayar_ops = quantize(ops_tercover + lunas_ke_ops)
+    for r in ops_rows:
+        val = quantize(to_decimal(r.nilai))
+        if total_ops > ZERO:
+            porsi = val / total_ops
+            terbayar_item = quantize(total_terbayar_ops * porsi)
+            hutang_item = quantize(max(ZERO, val - terbayar_item))
+        else:
+            terbayar_item = val
+            hutang_item = ZERO
+        status_item = "LUNAS" if hutang_item == ZERO else ("SEBAGIAN" if terbayar_item > ZERO else "TERTUNGGAK")
+        ops_items.append({
+            "id": r.id,
+            "nama": r.nama_beban,
+            "nilai": val,
+            "terbayar": terbayar_item,
+            "hutang": hutang_item,
+            "status": status_item
+        })
+
+    return {
+        "periode": f"kas_period:{kp.id}" if kp and kp.id else key,
+        "kas_period_id": kp.id,
+        "laba_kotor": laba_kotor,
+        "total_gaji": total_gaji,
+        "total_ops": total_ops,
+        "total_beban": total_beban,
+        "gaji_tercover": gaji_tercover,
+        "ops_tercover": ops_tercover,
+        "hutang_gaji": sisa_hutang_gaji,
+        "hutang_ops": sisa_hutang_ops,
+        "total_hutang": total_sisa_hutang,
+        "gaji_items": gaji_items,
+        "ops_items": ops_items,
+        "pelunasan_kas_aset": total_lunas_aset
+    }
+
+
+def ringkasan(db: Session, kas_period_id: int = None) -> dict:
     """Status Hutang Beban (read-only) — termasuk carry-forward antar periode."""
     from models import ExpenseDebtEntry, ExpenseDebtPeriod
 
     hutang = saldo_hutang(db)
     periods = (db.query(ExpenseDebtPeriod)
                .order_by(ExpenseDebtPeriod.periode.desc()).all())
+
+    target_period_id = kas_period_id
+    if target_period_id is None and quantize(to_decimal(hutang)) > ZERO:
+        for p in periods:
+            if quantize(to_decimal(p.hutang_baru)) > ZERO:
+                target_period_id = p.periode
+                break
+
     return {
         "saldo_hutang": hutang,
         "saldo_kas_aset": cash.saldo_kas_aset(db),
@@ -276,6 +442,7 @@ def ringkasan(db: Session) -> dict:
                      "hutang_baru": p.hutang_baru, "hutang_awal": p.hutang_awal,
                      "hutang_akhir": p.hutang_akhir, "created_at": p.created_at,
                      "oleh": p.oleh} for p in periods],
+        "breakdown": hitung_breakdown_hutang(db, kas_period_id=target_period_id),
         "ledger": [{"id": e.id, "tipe": e.tipe, "nominal": e.nominal,
                     "saldo_setelah": e.saldo_setelah, "periode": e.periode,
                     "kas_entry_id": e.kas_entry_id, "created_at": e.created_at,

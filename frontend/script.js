@@ -97,6 +97,8 @@ const RC_PATH_TARGET = {
 
 function rcGetPath() {
     try {
+        const sel = document.getElementById('rcPathSelect');
+        if (sel && sel.value) return sel.value;
         const c = document.querySelector('input[name="rcPath"]:checked');
         const v = c ? c.value : 'TITIP';
         return RC_PATH_TARGET[v] ? v : 'TITIP';
@@ -115,6 +117,8 @@ function rcAutoPath() {
 
 function rcApplyPath() {
     const path = rcGetPath();
+    const sel = document.getElementById('rcPathSelect');
+    if (sel && sel.value !== path) sel.value = path;
     const hid = document.getElementById('rcStatus');
     if (hid) hid.value = RC_PATH_TARGET[path];
     const fw = document.getElementById('rcFinalWrap');
@@ -133,7 +137,8 @@ function rcApplyPath() {
         }
     }
     if (tw) {
-        tw.classList.toggle('sm:col-span-2', !isTunggu);
+        // Tetap 1 kolom agar presisi 4 kolom bersama Estimasi, DP, Status Awal
+        tw.classList.remove('sm:col-span-2');
     }
     try { rcMarkReq(); } catch (_) {}
     ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
@@ -263,9 +268,9 @@ function rcMarkReq() {
             if (!el) return;
             el.innerHTML = base + (need(fid) ? ' <b class="text-red-500">*</b>' : '');
         };
-        mark('rcPlanLabel', 'Rencana Perbaikan', 'rcPlan');
-        mark('rcEstimateLabel', 'Estimasi Biaya', 'rcEstimate');
-        mark('rcTechnicianLabel', 'Teknisi Penanggung Jawab', 'rcTechnician');
+        mark('rcPlanLabel', 'Rencana Tindakan Perbaikan', 'rcPlan');
+        mark('rcEstimateLabel', 'Estimasi Biaya (Rp)', 'rcEstimate');
+        mark('rcTechnicianLabel', 'Teknisi PJ', 'rcTechnician');
         mark('rcFinalLabel', 'Harga Final', 'rcFinal');
     } catch (_) {}
 }
@@ -782,7 +787,7 @@ function openServisBaru() {
     const _nb = document.getElementById('receiveNotaBtn');
     if (_nb) _nb.classList.add('hidden');
     const _st = document.getElementById('receiveSubmitText');
-    if (_st) _st.textContent = 'Terima & Daftarkan Servis';
+    if (_st) _st.textContent = 'Simpan Servis';
     updateReceiveSteps();
     try { updateReceiveCalc(); } catch (_) {}
     loadSmartHistory();
@@ -1099,7 +1104,7 @@ const BSSF_CAPS = {
         'CLAIM_WRITE', 'CUSTOMER_WRITE', 'PART_SALE_CREATE'],
     teknisi: ['SERVICE_PART_USE', 'ORDER_UPDATE', 'ORDER_HANDOVER', 'CLAIM_WRITE', 'SPAREPART_DEFECT_REPORT'],
     adminSparepart: ['SERVICE_PART_USE', 'SPAREPART_WRITE', 'REPORT_SPAREPART', 'SPAREPART_DEFECT_REPORT', 'SPAREPART_DEFECT_RESOLVE'],
-    pengelola: ['REPORT_FULL', 'REPORT_SPAREPART'],
+    pengelola: ['REPORT_FULL', 'REPORT_SPAREPART', 'EXPENSE_DEBT_WRITE', 'KAS_ASET_INJEKSI'],
     investor: ['REPORT_INVESTOR'],
     custom: [],
 };
@@ -6870,11 +6875,24 @@ function kuSwitchTab(tab) {
     if (paneRi) paneRi.classList.toggle('hidden', _kuActiveTab !== 'riwayat');
     if (tWrap) tWrap.classList.add('hidden');
 
-    if (_kuActiveTab === 'titipan') {
+    if (_kuActiveTab === 'operasional') {
+        renderKondisiKas();
+        renderKuKpi();
+    } else if (_kuActiveTab === 'titipan') {
         renderKuTitipan();
+    } else if (_kuActiveTab === 'aset') {
+        loadKuAset().catch(() => {});
+        loadKuDebt().catch(() => {});
     } else if (_kuActiveTab === 'riwayat') {
         renderRiwayat();
         renderKuArsip();
+    }
+
+    const activeBtn = _kuActiveTab === 'titipan' ? btnTp :
+        _kuActiveTab === 'aset' ? btnAs :
+        _kuActiveTab === 'riwayat' ? btnRi : btnOp;
+    if (activeBtn && typeof activeBtn.scrollIntoView === 'function' && window.innerWidth < 640) {
+        activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
     }
 }
 
@@ -6965,6 +6983,7 @@ async function loadKuAset() {
     let saldo = null, items = [];
     try { saldo = await apiGet('/kas/saldo'); } catch (_) {}
     try { const r = await apiGet('/kas/aset/riwayat?period=all&limit=50'); items = (r && r.items) || []; } catch (_) {}
+    if (saldo) _kuSaldoLapisan = saldo;
     const laci = _kuSaldoLapisan || {};
     const lihatAset = canViewAset();
     // v4 #11: untuk role tanpa authority, panel Kas Aset ditampilkan mulai dari
@@ -6989,11 +7008,11 @@ async function loadKuAset() {
         // ditampilkan ke Owner adalah versi setelah DP yang ditahan dikurangi,
         // supaya uang customer tidak terbaca sebagai uang usaha (Owner).
         const cards = [
-            { label: 'Kas Aset Kecil (Laci)', value: kuRupiah(laci.laci_milik_toko != null ? laci.laci_milik_toko : (laci.laci || 0)), icon: 'fa-wallet', cls: 'sm-blue' },
+            { label: 'Kas Aset Kecil (Laci)', value: kuRupiah(Math.max(0, Number(laci.laci_milik_toko != null ? laci.laci_milik_toko : (laci.laci || 0)))), icon: 'fa-wallet', cls: 'sm-blue' },
         ];
         if (lihatAset) {
-            cards.push({ label: 'Kas Aset Besar (Pengelola)', value: kuRupiah(laci.aset || 0), icon: 'fa-vault', cls: 'sm-blue' });
-            cards.push({ label: 'Master Kas', value: kuRupiah(laci.master_kas_milik_toko != null ? laci.master_kas_milik_toko : (laci.master_kas || 0)), icon: 'fa-layer-group', cls: 'sm-green' });
+            cards.push({ label: 'Kas Aset Besar (Pengelola)', value: kuRupiah(Math.max(0, Number(laci.aset || 0))), icon: 'fa-vault', cls: 'sm-blue' });
+            cards.push({ label: 'Master Kas', value: kuRupiah(Math.max(0, Number(laci.master_kas_milik_toko != null ? laci.master_kas_milik_toko : (laci.master_kas || 0)))), icon: 'fa-layer-group', cls: 'sm-green' });
         }
         summary.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
@@ -7105,23 +7124,41 @@ async function kuAsetTransfer() {
 // Catatan: teks lamanya berbunyi "Terbentuk saat Tutup Kas" -- itu sudah tidak
 // benar sejak distribution berubah otomatis (CTO tercapai), bukan Tutup Kas.
 
-// Hutang Beban (P2-11): status, ledger, proses defisit, pelunasan.
+// Hutang Beban (P2-11): status, ledger, waterfall breakdown, pelunasan fleksibel.
+let _kuDebtData = null;
+
 async function loadKuDebt() {
     const sum = document.getElementById('kuDebtSummary');
     const banner = document.getElementById('kuDebtStatusBanner');
     const body = document.getElementById('kuDebtBody');
     const lunasBtn = document.getElementById('kuDebtLunasBtn');
     const lunasHint = document.getElementById('kuDebtLunasHint');
+    const lunasInput = document.getElementById('kuDebtNominalInput');
+    const bdWrap = document.getElementById('kuDebtBreakdownWrap');
+    const bdBody = document.getElementById('kuDebtBreakdownBody');
+
     if (!sum && !body) return;
     let d = null;
     try { d = await apiGet('/beban-hutang'); } catch (_) {}
+    _kuDebtData = d;
     const hutang = (d && Number(d.saldo_hutang)) || 0;
     const aset = (d && Number(d.saldo_kas_aset)) || 0;
+    const bd = (d && d.breakdown) || {};
+    let hutangGaji = 0;
+    let hutangOps = 0;
+    if (hutang > 0) {
+        const rawGaji = Number(bd.hutang_gaji || 0);
+        hutangGaji = Math.min(hutang, rawGaji);
+        hutangOps = Math.max(0, hutang - hutangGaji);
+    }
 
+    // 1. Ringkasan 4 Kartu: Total Hutang, Hutang Gaji CTS, Hutang Operasional, Kas Aset
     if (sum) {
         const cards = [
-            { label: 'Sisa Hutang Beban', value: kuRupiah(hutang), icon: 'fa-file-circle-exclamation', cls: 'sm-red' },
-            { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: 'sm-blue' },
+            { label: 'Total Sisa Hutang', value: kuRupiah(hutang), icon: 'fa-file-circle-exclamation', cls: hutang > 0 ? 'sm-red' : 'sm-gray' },
+            { label: 'Hutang Gaji (CTS)', value: kuRupiah(hutangGaji), icon: 'fa-users', cls: hutangGaji > 0 ? 'sm-amber' : 'sm-emerald' },
+            { label: 'Hutang Operasional', value: kuRupiah(hutangOps), icon: 'fa-shop', cls: hutangOps > 0 ? 'sm-red' : 'sm-emerald' },
+            { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: aset > 0 ? 'sm-blue' : 'sm-gray' },
         ];
         sum.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
@@ -7130,7 +7167,7 @@ async function loadKuDebt() {
             </div>`).join('');
     }
 
-    // Status Banner & Smart Pelunasan Button
+    // 2. Status Banner & Panduan Pelunasan Kas Aset
     if (banner) {
         if (hutang <= 0) {
             banner.innerHTML = `
@@ -7141,43 +7178,84 @@ async function loadKuDebt() {
             if (lunasBtn) {
                 lunasBtn.disabled = true;
                 lunasBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                lunasBtn.innerHTML = '<i class="fa-solid fa-check"></i> Tidak Ada Hutang';
             }
             if (lunasHint) lunasHint.textContent = 'Tidak ada kewajiban hutang yang perlu dilunasi.';
+            if (lunasInput) lunasInput.value = '';
         } else if (aset >= hutang) {
             banner.innerHTML = `
                 <div class="flex items-center justify-between p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/40 text-blue-700 dark:text-blue-300 text-xs">
                     <span class="flex items-center gap-2 font-medium">
                         <i class="fa-solid fa-circle-check text-blue-500 text-sm"></i>
-                        <span><b>Siap Dilunasi:</b> Saldo Kas Aset mencukupi untuk melunasi seluruh hutang toko.</span>
+                        <span><b>Dana Cukup:</b> Saldo Kas Aset (${kuRupiah(aset)}) mencukupi untuk melunasi seluruh hutang toko (${kuRupiah(hutang)}).</span>
                     </span>
-                    <span class="font-bold text-[11px] bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded text-blue-800 dark:text-blue-200">Dana Cukup</span>
+                    <span class="font-bold text-[11px] bg-blue-100 dark:bg-blue-900/50 px-2 py-0.5 rounded text-blue-800 dark:text-blue-200">Lunas Penuh</span>
                 </div>`;
             if (lunasBtn) {
                 lunasBtn.disabled = false;
                 lunasBtn.classList.remove('opacity-50', 'cursor-not-allowed');
-                lunasBtn.innerHTML = `<i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan Seluruh Hutang (${kuRupiah(hutang)}) dari Kas Aset`;
             }
-            if (lunasHint) lunasHint.textContent = 'Pelunasan akan menutup seluruh tanggungan hutang ini.';
-        } else {
+            if (lunasHint) lunasHint.textContent = 'Bisa bayar penuh atau sebagian (input nominal fleksibel di atas).';
+            if (lunasInput && !lunasInput.value) lunasInput.value = Math.round(hutang);
+        } else if (aset > 0) {
             const kurang = hutang - aset;
             banner.innerHTML = `
                 <div class="flex items-center justify-between p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800/40 text-amber-800 dark:text-amber-300 text-xs">
                     <span class="flex items-center gap-2 font-medium">
-                        <i class="fa-solid fa-triangle-exclamation text-amber-500 text-sm"></i>
-                        <span><b>Kas Aset Belum Cukup:</b> Tersedia ${kuRupiah(aset)}, masih kurang <b>${kuRupiah(kurang)}</b>.</span>
+                        <i class="fa-solid fa-hand-holding-dollar text-amber-500 text-sm"></i>
+                        <span><b>Bisa Bayar Sebagian:</b> Kas Aset tersedia ${kuRupiah(aset)} (kurang ${kuRupiah(kurang)} untuk lunas total).</span>
                     </span>
-                    <span class="font-bold text-[11px] bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded text-amber-900 dark:text-amber-200">Kurang Dana</span>
+                    <span class="font-bold text-[11px] bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded text-amber-900 dark:text-amber-200">Cicil Seadanya</span>
+                </div>`;
+            if (lunasBtn) {
+                lunasBtn.disabled = false;
+                lunasBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+            if (lunasHint) lunasHint.textContent = `Bisa bayar seadanya Kas Aset (${kuRupiah(aset)}) atau masukkan nominal pilihan Anda.`;
+            if (lunasInput && !lunasInput.value) lunasInput.value = Math.round(aset);
+        } else {
+            banner.innerHTML = `
+                <div class="flex items-center justify-between p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/20 border border-rose-200 dark:border-rose-800/40 text-rose-800 dark:text-rose-300 text-xs">
+                    <span class="flex items-center gap-2 font-medium">
+                        <i class="fa-solid fa-triangle-exclamation text-rose-500 text-sm"></i>
+                        <span><b>Kas Aset Kosong:</b> Saldo Kas Aset Rp 0. Suntik dana ke Kas Aset untuk melunasi hutang.</span>
+                    </span>
+                    <span class="font-bold text-[11px] bg-rose-100 dark:bg-rose-900/50 px-2 py-0.5 rounded text-rose-900 dark:text-rose-200">Dana Habis</span>
                 </div>`;
             if (lunasBtn) {
                 lunasBtn.disabled = true;
                 lunasBtn.classList.add('opacity-50', 'cursor-not-allowed');
-                lunasBtn.innerHTML = `<i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan dari Kas Aset (Kurang ${kuRupiah(kurang)})`;
             }
-            if (lunasHint) lunasHint.textContent = 'Tambah modal Kas Aset atau tunggu akumulasi bagi hasil Tutup Kas berikutnya.';
+            if (lunasHint) lunasHint.textContent = 'Tambah modal Kas Aset via menu Kas (Suntikan Dana Owner) untuk menutup hutang.';
+            if (lunasInput) lunasInput.value = '';
         }
     }
 
+    // 3. Render Tabel Breakdown Waterfall (Gaji vs Operasional)
+    renderKuDebtBreakdown(bd);
+    renderKuDebtEntitas(bd, hutang);
+
+    // Populate dropdown pilihan periode waterfall
+    const periodSel = document.getElementById('kuDebtPeriodSelect');
+    if (periodSel) {
+        const perList = (d && d.periode) || [];
+        let opts = '';
+        perList.forEach(p => {
+            const label = (p.periode || '') + ' (Defisit ' + kuRupiah(p.hutang_baru || p.defisit || 0) + ')';
+            opts += `<option value="${escapeHtml(p.periode)}">${escapeHtml(label)}</option>`;
+        });
+        opts += `<option value="open">Periode Aktif (Berjalan)</option>`;
+        periodSel.innerHTML = opts;
+        const activeVal = bd && bd.kas_period_id ? ('kas_period:' + bd.kas_period_id) : (bd && bd.periode ? bd.periode : '');
+        if (activeVal && Array.from(periodSel.options).some(o => o.value === activeVal)) {
+            periodSel.value = activeVal;
+        } else if (perList.length) {
+            periodSel.value = perList[0].periode;
+        } else {
+            periodSel.value = 'open';
+        }
+    }
+
+    // 4. Render Riwayat Periode Defisit (dengan baris yang bisa diklik)
     if (body) {
         const per = (d && d.periode) || [];
         body.innerHTML = per.length ? per.map(p => {
@@ -7185,8 +7263,12 @@ async function loadKuDebt() {
             const badge = isLunas
                 ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-check text-[10px]"></i> Lunas</span>`
                 : `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock text-[10px]"></i> Belum Lunas</span>`;
-            return `<tr>
-                <td class="font-medium">${escapeHtml(p.periode || '-')}</td>
+            const isSelected = bd && (bd.periode === p.periode || String(bd.kas_period_id) === String(p.periode).replace('kas_period:', ''));
+            return `<tr class="cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${isSelected ? 'ku-period-active bg-blue-50/60 dark:bg-blue-950/30' : ''}" data-period="${escapeHtml(p.periode)}" onclick="kuDebtChangePeriod('${escapeHtml(p.periode)}')" title="Klik untuk menampilkan rincian beban periode ${escapeHtml(p.periode)}">
+                <td class="font-medium flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-pointer text-blue-500 text-[10px]"></i>
+                    <span>${escapeHtml(p.periode || '-')}</span>
+                </td>
                 <td class="numeric-r">${kuRupiah(p.defisit || 0)}</td>
                 <td class="numeric-r">${kuRupiah(p.cover_kas_aset || 0)}</td>
                 <td class="numeric-r font-semibold text-red-600 dark:text-red-400">${kuRupiah(p.hutang_baru || 0)}</td>
@@ -7197,6 +7279,29 @@ async function loadKuDebt() {
     }
     kuRenderHutangManual();
     applyRoleUI(document.body);
+}
+
+function kuDebtSetNominal(mode) {
+    const input = document.getElementById('kuDebtNominalInput');
+    if (!input || !_kuDebtData) return;
+    const hutang = Number(_kuDebtData.saldo_hutang) || 0;
+    const aset = Number(_kuDebtData.saldo_kas_aset) || 0;
+    const bd = _kuDebtData.breakdown || {};
+    const hGaji = Math.min(hutang, Number(bd.hutang_gaji || 0));
+    const hOps = Math.max(0, hutang - hGaji);
+
+    if (mode === 'aset') {
+        input.value = Math.min(aset, hutang);
+    } else if (mode === 'semua') {
+        input.value = hutang;
+    } else if (mode === 'gaji') {
+        input.value = hGaji;
+    } else if (mode === 'ops') {
+        input.value = hOps;
+    } else if (typeof mode === 'number') {
+        input.value = Math.min(hutang, Math.round(mode));
+    }
+    kuDebtSimulasiCicil(input.value);
 }
 
 // OD-LOCK-12: padanan Conditions Kas Operasional (baris terakhir tabel).
@@ -7292,20 +7397,55 @@ async function kuHutangCatat() {
 }
 
 async function kuDebtLunas() {
-    if (!can('EXPENSE_DEBT_WRITE')) { toast('Aksi ditolak: hanya Admin.'); return; }
+    if (!can('EXPENSE_DEBT_WRITE')) { toast('Aksi ditolak: hanya Owner / Developer.'); return; }
+    const input = document.getElementById('kuDebtNominalInput');
+    const d = _kuDebtData || {};
+    const hutang = Number(d.saldo_hutang) || 0;
+    const aset = Number(d.saldo_kas_aset) || 0;
+
+    let nominal = Number((input && input.value) || 0);
+    if (!nominal || nominal <= 0) {
+        nominal = Math.min(aset, hutang);
+    }
+
+    if (hutang <= 0) {
+        _kuFb('kuDebtFeedback', 'Tidak ada tanggungan Hutang Beban yang perlu dilunasi.', 'info');
+        return;
+    }
+    if (aset <= 0) {
+        _kuFb('kuDebtFeedback', 'Saldo Kas Aset kosong. Silakan lakukan suntik dana ke Kas Aset terlebih dahulu.', 'error');
+        return;
+    }
+    if (nominal > aset) {
+        _kuFb('kuDebtFeedback', 'Nominal ' + kuRupiah(nominal) + ' melebihi saldo Kas Aset yang tersedia (' + kuRupiah(aset) + ').', 'error');
+        return;
+    }
+    if (nominal > hutang) {
+        _kuFb('kuDebtFeedback', 'Nominal ' + kuRupiah(nominal) + ' melebihi sisa Hutang Beban (' + kuRupiah(hutang) + ').', 'error');
+        return;
+    }
+
+    const bd = d.breakdown || {};
+    const totalGajiHutang = Number(bd.hutang_gaji || 0);
+    const alokGaji = Math.min(nominal, totalGajiHutang);
+    const alokOps = Math.max(0, nominal - alokGaji);
+
+    let pesanConfirm = 'Bayar cicilan Hutang Beban sebesar ' + kuRupiah(nominal) + ' dari Kas Aset?\n\n'
+        + 'Alokasi Pembayaran (Waterfall CTS):\n'
+        + '• Gaji Karyawan: ' + kuRupiah(alokGaji) + '\n'
+        + '• Operasional Toko: ' + kuRupiah(alokOps) + '\n\n'
+        + 'Dana Kas Aset akan terpotong secara riil dan sisa hutang akan berkurang.';
+
+    if (!confirm(pesanConfirm)) return;
+
     try {
-        const pre = await apiGet('/beban-hutang/precheck');
-        if (!pre || !pre.bisa_lunas) {
-            _kuFb('kuDebtFeedback', pre && pre.saldo_hutang === 0
-                ? 'Tidak ada Hutang Beban outstanding.'
-                : 'Saldo Kas Aset tidak cukup untuk melunasi.', 'error');
-            return;
-        }
-        if (!confirm('Lunasi Hutang Beban ' + _kuMoney(pre.saldo_hutang) + ' dari Kas Aset?')) return;
-        const res = await apiPost('/beban-hutang/lunas', {}, { idempotencyKey: newIdemKey() });
-        _kuFb('kuDebtFeedback', 'Pelunasan ' + _kuMoney(res.nominal) + '. Sisa hutang '
-            + _kuMoney(res.saldo_hutang) + '.', 'success');
-        toast('Hutang Beban dilunasi.', 'success');
+        const periodSel = document.getElementById('kuDebtPeriodSelect');
+        const perVal = periodSel && periodSel.value !== 'open' ? periodSel.value : null;
+        const res = await apiPost('/beban-hutang/lunas', { nominal: nominal, periode: perVal }, { idempotencyKey: newIdemKey() });
+        _kuFb('kuDebtFeedback', 'Pelunasan ' + kuRupiah(res.nominal) + ' berhasil diproses. Sisa hutang: '
+            + kuRupiah(res.saldo_hutang) + ', Sisa Kas Aset: ' + kuRupiah(res.saldo_kas_aset) + '.', 'success');
+        toast('Pelunasan dari Kas Aset berhasil (' + kuRupiah(res.nominal) + ').', 'success');
+        if (input) input.value = '';
         await loadKuDebt();
     } catch (err) {
         _kuFb('kuDebtFeedback', err.message || 'Gagal melunasi Hutang Beban.', 'error');
@@ -9059,20 +9199,27 @@ async function loadSmartHistory() {
 
 const CHECK_FISIK = [
     { key: 'lcd_pecah', label: 'LCD Pecah' },
-    { key: 'lcd_terbuka', label: 'LCD Terbuka' },
+    { key: 'backdoor', label: 'Backdoor' },
+    { key: 'lecet', label: 'Lecet' },
+    { key: 'kena_air', label: 'Kena Air' },
+    { key: 'segel', label: 'Segel' },
+    { key: 'bekas_air', label: 'Kena Air' },
     { key: 'frame_bengkok', label: 'Frame bengkok' },
-    { key: 'frame_gompal', label: 'Frame/Case Gompal' },
     { key: 'tombol_tidak_ada', label: 'Tombol rusak' },
-    { key: 'bekas_air', label: 'Bekas Air' }
+    { key: 'lcd_terbuka', label: 'LCD Terbuka' },
+    { key: 'frame_gompal', label: 'Frame/Case Gompal' }
 ];
 
 const CHECK_LEN = [
-    { key: 'unit_saja', label: 'Unit Saja' },
+    { key: 'sim_tray', label: 'SIM Tray' },
+    { key: 'memory', label: 'Memory' },
+    { key: 'charger', label: 'Charger' },
+    { key: 'dus', label: 'Dus' },
     { key: 'case', label: 'Case' },
+    { key: 'unit_saja', label: 'Unit Saja' },
     { key: 'sim_card', label: 'SIM Card' },
     { key: 'memory_card', label: 'Memory Card' },
-    { key: 'box', label: 'Box' },
-    { key: 'charger', label: 'Charger' }
+    { key: 'box', label: 'Box' }
 ];
 
 // Subset aktif Kondisi & Kelengkapan — dipakai Servis Baru (rc) & Update (us).
@@ -9100,9 +9247,16 @@ function renderChecklist(prefix, containerId, note, only) {
 }
 
 function collectChecklist(prefix) {
-    const get = (list) => list
-        .filter(it => { const el = document.getElementById(prefix + '-ck-' + it.key); return el && el.checked; })
-        .map(it => it.key);
+    const get = (list) => {
+        const res = [];
+        list.forEach(it => {
+            const el = document.getElementById(prefix + '-ck-' + it.key);
+            if (el && el.checked && !res.includes(it.key)) {
+                res.push(it.key);
+            }
+        });
+        return res;
+    };
     return { fisik: get(CHECK_FISIK), len: get(CHECK_LEN) };
 }
 
@@ -9127,7 +9281,7 @@ async function loadReceiveTechnicians() {
     try { techs = await apiGet('/orders/technicians'); } catch (_) { return []; }
     if (!Array.isArray(techs) || !techs.length) return [];
     const cur = sel.value || '';
-    sel.innerHTML = '<option value="">— Pilih Teknisi —</option>'
+    sel.innerHTML = '<option value="">-- Belum Ditentukan --</option>'
         + techs.map(t => `<option value="${t}">${t}</option>`).join('');
     // Kembalikan pilihan teknisi dari draft setelah option async tersedia.
     try {
@@ -11692,7 +11846,7 @@ async function loadClaimTechnicians() {
     try {
         const techs = await apiGet('/orders/technicians');
         if (!Array.isArray(techs) || !techs.length) return;
-        sel.innerHTML = '<option value="">— Pilih Teknisi —</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
+        sel.innerHTML = '<option value="">-- Belum Ditentukan --</option>' + techs.map(t => `<option value="${t}">${t}</option>`).join('');
     } catch (_) {}
 }
 
@@ -12923,3 +13077,334 @@ function renderAttendanceBeban() {
         </div>`;
     }).join('');
 }
+
+function renderKuDebtBreakdown(bd) {
+    const bdWrap = document.getElementById('kuDebtBreakdownWrap');
+    const bdBody = document.getElementById('kuDebtBreakdownBody');
+    if (!bdWrap || !bdBody) return;
+    const gajiList = (bd && bd.gaji_items) || [];
+    const opsList = (bd && bd.ops_items) || [];
+    if (gajiList.length || opsList.length) {
+        bdWrap.classList.remove('hidden');
+        let rowsHtml = '';
+        gajiList.forEach(g => {
+            const badge = g.status === 'LUNAS'
+                ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-check text-[10px]"></i> Lunas</span>`
+                : (g.status === 'SEBAGIAN'
+                    ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-hourglass-half text-[10px]"></i> Sebagian</span>`
+                    : `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock text-[10px]"></i> Tertunggak</span>`);
+            rowsHtml += `<tr>
+                <td class="font-medium"><span class="badge-role text-[10px] mr-1.5 px-1.5 py-0.5 bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 rounded font-semibold">GAJI</span>${escapeHtml(g.nama || 'Gaji Karyawan')}</td>
+                <td class="numeric-r">${kuRupiah(g.nilai || 0)}</td>
+                <td class="numeric-r text-emerald-600 dark:text-emerald-400">${kuRupiah(g.terbayar || 0)}</td>
+                <td class="numeric-r font-semibold ${g.hutang > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-400'}">${kuRupiah(g.hutang || 0)}</td>
+                <td class="text-center">${badge}</td>
+            </tr>`;
+        });
+        opsList.forEach(o => {
+            const badge = o.status === 'LUNAS'
+                ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-check text-[10px]"></i> Lunas</span>`
+                : (o.status === 'SEBAGIAN'
+                    ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-700 bg-amber-50 dark:text-amber-400 dark:bg-amber-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-hourglass-half text-[10px]"></i> Sebagian</span>`
+                    : `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock text-[10px]"></i> Tertunggak</span>`);
+            rowsHtml += `<tr>
+                <td class="font-medium"><span class="badge-role text-[10px] mr-1.5 px-1.5 py-0.5 bg-gray-100 text-gray-700 dark:bg-white/10 dark:text-gray-300 rounded font-semibold">OPS</span>${escapeHtml(o.nama || 'Operasional Toko')}</td>
+                <td class="numeric-r">${kuRupiah(o.nilai || 0)}</td>
+                <td class="numeric-r text-emerald-600 dark:text-emerald-400">${kuRupiah(o.terbayar || 0)}</td>
+                <td class="numeric-r font-semibold ${o.hutang > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-gray-400'}">${kuRupiah(o.hutang || 0)}</td>
+                <td class="text-center">${badge}</td>
+            </tr>`;
+        });
+        bdBody.innerHTML = rowsHtml;
+    } else {
+        bdWrap.classList.add('hidden');
+    }
+}
+window.renderKuDebtBreakdown = renderKuDebtBreakdown;
+
+async function kuDebtChangePeriod(periodVal) {
+    if (!periodVal) return;
+    try {
+        let ep = '/beban-hutang/breakdown';
+        if (periodVal !== 'open') {
+            const cleanId = String(periodVal).replace('kas_period:', '').trim();
+            ep += '?kas_period_id=' + encodeURIComponent(cleanId);
+        }
+        const bd = await apiGet(ep);
+        if (bd) {
+            renderKuDebtBreakdown(bd);
+            const dCurrent = _kuDebtData || {};
+            renderKuDebtEntitas(bd, Number(dCurrent.saldo_hutang) || 0);
+            const inputVal = document.getElementById('kuDebtNominalInput');
+            if (inputVal && inputVal.value) kuDebtSimulasiCicil(inputVal.value);
+            const periodSel = document.getElementById('kuDebtPeriodSelect');
+            if (periodSel && periodSel.value !== periodVal) {
+                periodSel.value = periodVal;
+            }
+            document.querySelectorAll('#kuDebtBody tr').forEach(tr => {
+                const trPer = tr.dataset.period;
+                const isMatch = trPer === periodVal || trPer === ('kas_period:' + periodVal);
+                tr.classList.toggle('ku-period-active', isMatch);
+                tr.classList.toggle('bg-blue-50/60', isMatch);
+                tr.classList.toggle('dark:bg-blue-950/30', isMatch);
+            });
+            const d = _kuDebtData || {};
+            const hutangTotal = Number(d.saldo_hutang) || 0;
+            const aset = Number(d.saldo_kas_aset) || 0;
+            if (hutangTotal > 0 && periodVal !== 'open') {
+                const hGaji = Math.min(hutangTotal, Number(bd.hutang_gaji || 0));
+                const hOps = Math.max(0, hutangTotal - hGaji);
+                const sum = document.getElementById('kuDebtSummary');
+                if (sum) {
+                    const cards = [
+                        { label: 'Total Sisa Hutang', value: kuRupiah(hutangTotal), icon: 'fa-file-circle-exclamation', cls: hutangTotal > 0 ? 'sm-red' : 'sm-gray' },
+                        { label: 'Hutang Gaji (CTS)', value: kuRupiah(hGaji), icon: 'fa-users', cls: hGaji > 0 ? 'sm-amber' : 'sm-emerald' },
+                        { label: 'Hutang Operasional', value: kuRupiah(hOps), icon: 'fa-shop', cls: hOps > 0 ? 'sm-red' : 'sm-emerald' },
+                        { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: aset > 0 ? 'sm-blue' : 'sm-gray' },
+                    ];
+                    sum.innerHTML = cards.map(c => `
+                        <div class="sm-card ${c.cls}">
+                            <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
+                            <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+                        </div>`).join('');
+                }
+            }
+        }
+    } catch (err) {
+        console.error('Failed to change debt period:', err);
+    }
+}
+window.kuDebtChangePeriod = kuDebtChangePeriod;
+
+function renderKuDebtEntitas(bd, hutangTotal) {
+    const grid = document.getElementById('kuDebtEntitasGrid');
+    if (!grid) return;
+    if (!bd || hutangTotal <= 0) {
+        grid.innerHTML = '<div class="col-span-3 text-center text-xs text-gray-400 py-2">Tidak ada tanggungan hutang beban aktif.</div>';
+        return;
+    }
+
+    const gajiItems = bd.gaji_items || [];
+    const opsItems = bd.ops_items || [];
+    let cards = [];
+
+    gajiItems.forEach(g => {
+        const h = Number(g.hutang || 0);
+        cards.push({
+            tipe: 'GAJI',
+            nama: g.nama || 'Gaji Karyawan',
+            hutang: h,
+            nilai: Number(g.nilai || 0),
+            terbayar: Number(g.terbayar || 0),
+            icon: 'fa-user-tag',
+            borderCls: h > 0 ? 'border-amber-200 dark:border-amber-800/40 bg-amber-50/40 dark:bg-amber-950/20' : 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/40 dark:bg-emerald-950/20',
+            textCls: h > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400',
+            status: g.status || (h > 0 ? 'SEBAGIAN' : 'LUNAS')
+        });
+    });
+
+    const totalHutangOps = Number(bd.hutang_ops || 0);
+    const totalNilaiOps = Number(bd.total_ops || 0);
+    const totalTerbayarOps = Number(bd.ops_tercover || 0);
+    cards.push({
+        tipe: 'OPS',
+        nama: 'Operasional Toko (' + opsItems.length + ' Pos)',
+        hutang: totalHutangOps,
+        nilai: totalNilaiOps,
+        terbayar: totalTerbayarOps,
+        icon: 'fa-shop',
+        borderCls: totalHutangOps > 0 ? 'border-red-200 dark:border-red-800/40 bg-red-50/40 dark:bg-red-950/20' : 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/40 dark:bg-emerald-950/20',
+        textCls: totalHutangOps > 0 ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400',
+        status: totalHutangOps > 0 ? (totalTerbayarOps > 0 ? 'SEBAGIAN' : 'TERTUNGGAK') : 'LUNAS'
+    });
+
+    grid.innerHTML = cards.map(c => `
+        <div class="p-2.5 rounded-lg border ${c.borderCls} cursor-pointer hover:shadow-xs hover:brightness-105 transition-all" onclick="kuDebtSetNominal(${c.hutang})" title="Klik untuk mengisi nominal ${kuRupiah(c.hutang)}">
+            <div class="flex items-center justify-between mb-1">
+                <span class="text-[11px] font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5 truncate">
+                    <i class="fa-solid ${c.icon} ${c.textCls} text-[10px]"></i> ${escapeHtml(c.nama)}
+                </span>
+                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded ${c.hutang > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200'}">${c.status}</span>
+            </div>
+            <div class="flex items-baseline justify-between mt-1">
+                <span class="text-[10px] text-gray-500 dark:text-gray-400">Hutang Tertanggung:</span>
+                <span class="text-xs font-extrabold ${c.textCls}">${kuRupiah(c.hutang)}</span>
+            </div>
+            <div class="text-[10px] text-gray-400 mt-0.5 flex justify-between">
+                <span>Terbayar: ${kuRupiah(c.terbayar)}</span>
+                <span>Total: ${kuRupiah(c.nilai)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+window.renderKuDebtEntitas = renderKuDebtEntitas;
+
+function kuDebtSimulasiCicil(nominalStr) {
+    const wrap = document.getElementById('kuDebtSimulasiWrap');
+    const list = document.getElementById('kuDebtSimulasiList');
+    const totEl = document.getElementById('kuDebtSimulasiTotal');
+    if (!wrap || !list) return;
+
+    const nom = Number(nominalStr) || 0;
+    if (nom <= 0) {
+        wrap.classList.add('hidden');
+        return;
+    }
+
+    const d = _kuDebtData || {};
+    const bd = d.breakdown || {};
+    const gajiItems = bd.gaji_items || [];
+    const opsItems = bd.ops_items || [];
+    const totalGajiHutang = Number(bd.hutang_gaji || 0);
+    const totalOpsHutang = Number(bd.hutang_ops || 0);
+
+    wrap.classList.remove('hidden');
+    if (totEl) totEl.textContent = 'Nominal Bayar: ' + kuRupiah(nom);
+
+    let sisaNom = nom;
+    let alokasiGajiTotal = Math.min(sisaNom, totalGajiHutang);
+    sisaNom = Math.max(0, sisaNom - alokasiGajiTotal);
+    let alokasiOpsTotal = Math.min(sisaNom, totalOpsHutang);
+
+    let html = '';
+
+    gajiItems.forEach(g => {
+        const hAwal = Number(g.hutang || 0);
+        let alokasiItem = 0;
+        if (totalGajiHutang > 0 && alokasiGajiTotal > 0) {
+            const porsi = hAwal / totalGajiHutang;
+            alokasiItem = Math.min(hAwal, Math.round(alokasiGajiTotal * porsi));
+        }
+        const sisaItem = Math.max(0, hAwal - alokasiItem);
+        html += `<div class="flex items-center justify-between text-xs py-0.5 border-b border-blue-100/60 dark:border-blue-900/40">
+            <span class="font-medium flex items-center gap-1.5">
+                <span class="badge-role text-[9px] px-1 bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 rounded font-bold">GAJI</span>
+                ${escapeHtml(g.nama || 'Gaji Karyawan')}
+            </span>
+            <span class="flex items-center gap-2">
+                <span class="text-emerald-600 dark:text-emerald-400 font-semibold">+${kuRupiah(alokasiItem)}</span>
+                <span class="text-[11px] ${sisaItem === 0 ? 'text-emerald-600 font-bold' : 'text-gray-400'}">(Sisa: ${sisaItem === 0 ? 'Lunas' : kuRupiah(sisaItem)})</span>
+            </span>
+        </div>`;
+    });
+
+    const sisaOps = Math.max(0, totalOpsHutang - alokasiOpsTotal);
+    html += `<div class="flex items-center justify-between text-xs py-0.5">
+        <span class="font-medium flex items-center gap-1.5">
+            <span class="badge-role text-[9px] px-1 bg-gray-200 text-gray-800 dark:bg-white/10 dark:text-gray-300 rounded font-bold">OPS</span>
+            Beban Operasional Toko
+        </span>
+        <span class="flex items-center gap-2">
+            <span class="${alokasiOpsTotal > 0 ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : 'text-gray-400'}">+${kuRupiah(alokasiOpsTotal)}</span>
+            <span class="text-[11px] ${sisaOps === 0 ? 'text-emerald-600 font-bold' : 'text-gray-400'}">(Sisa: ${sisaOps === 0 ? 'Lunas' : kuRupiah(sisaOps)})</span>
+        </span>
+    </div>`;
+
+    list.innerHTML = html;
+}
+window.kuDebtSimulasiCicil = kuDebtSimulasiCicil;
+
+function kuDebtToggleBreakdown() {
+    const content = document.getElementById('kuDebtBreakdownContent');
+    const chevron = document.getElementById('kuDebtBreakdownChevron');
+    const label = document.getElementById('kuDebtBreakdownToggleLabel');
+    if (!content) return;
+    const isHidden = content.classList.contains('hidden');
+    if (isHidden) {
+        content.classList.remove('hidden');
+        if (chevron) chevron.classList.add('rotate-180');
+        if (label) label.textContent = 'Tutup Detail';
+    } else {
+        content.classList.add('hidden');
+        if (chevron) chevron.classList.remove('rotate-180');
+        if (label) label.textContent = 'Lihat Detail Pos';
+    }
+}
+window.kuDebtToggleBreakdown = kuDebtToggleBreakdown;
+
+// Helper shortcuts Servis Baru (Brand, Pwd, Money, Path)
+function rcSetBrand(brand) {
+    const el = document.getElementById('rcDevice');
+    if (!el) return;
+    el.value = brand + ' ';
+    el.focus();
+    el.dispatchEvent(new Event('input'));
+}
+window.rcSetBrand = rcSetBrand;
+
+function rcSetPassword(pwd) {
+    const el = document.getElementById('rcPassword');
+    if (!el) return;
+    el.value = pwd;
+    el.dispatchEvent(new Event('input'));
+}
+window.rcSetPassword = rcSetPassword;
+
+function rcAddEstimate(val) {
+    const el = document.getElementById('rcEstimate');
+    if (!el) return;
+    if (val === 0) {
+        el.value = '';
+    } else {
+        const curr = rcNum(el) || 0;
+        el.value = curr + val;
+    }
+    if (typeof rcFormatMoneyInput === 'function') rcFormatMoneyInput(el);
+    if (typeof updateReceiveCalc === 'function') updateReceiveCalc();
+}
+window.rcAddEstimate = rcAddEstimate;
+
+function rcSetDpMode(mode) {
+    const dpEl = document.getElementById('rcDp');
+    const estEl = document.getElementById('rcEstimate');
+    if (!dpEl) return;
+    if (mode === 'none') {
+        dpEl.value = '0';
+    } else if (mode === 'lunas') {
+        dpEl.value = estEl && estEl.value ? estEl.value : '0';
+    } else if (typeof mode === 'number') {
+        const curr = rcNum(dpEl) || 0;
+        dpEl.value = curr + mode;
+    }
+    if (typeof rcFormatMoneyInput === 'function') rcFormatMoneyInput(dpEl);
+    if (typeof updateReceiveCalc === 'function') updateReceiveCalc();
+}
+window.rcSetDpMode = rcSetDpMode;
+
+function rcChangePathSelect(val) {
+    const r = document.querySelector(`input[name="rcPath"][value="${val}"]`);
+    if (r) {
+        r.checked = true;
+        r.dispatchEvent(new Event('change'));
+    }
+    if (typeof rcApplyPath === 'function') rcApplyPath();
+}
+window.rcChangePathSelect = rcChangePathSelect;
+
+function rcAppendDamage(text) {
+    const el = document.getElementById('rcDamage');
+    if (!el) return;
+    const cur = el.value.trim();
+    if (!cur) {
+        el.value = text;
+    } else if (!cur.includes(text)) {
+        el.value = cur + ', ' + text;
+    }
+    el.focus();
+    el.dispatchEvent(new Event('input'));
+}
+window.rcAppendDamage = rcAppendDamage;
+
+function rcAppendPlan(text) {
+    const el = document.getElementById('rcPlan');
+    if (!el) return;
+    const cur = el.value.trim();
+    if (!cur) {
+        el.value = text;
+    } else if (!cur.includes(text)) {
+        el.value = cur + ', ' + text;
+    }
+    el.focus();
+    el.dispatchEvent(new Event('input'));
+}
+window.rcAppendPlan = rcAppendPlan;

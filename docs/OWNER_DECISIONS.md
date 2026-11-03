@@ -997,6 +997,64 @@ Hutang Beban= 105.000
 
 ---
 
+## OD-LOCK-14 — Prioritas Waterfall Hutang Beban & Pelunasan Kas Aset Fleksibel
+
+**Status: LOCKED (Owner, 2026-11-02)**
+
+Owner menyetujui:
+1. **Prioritas Waterfall**: Laba Kotor toko memprioritaskan penutupan Hak Keringat Karyawan (Beban Gaji / CTS) 100% lebih dulu.
+   - Sisa Laba Kotor setelah menutupi seluruh Gaji baru digunakan untuk menutupi Beban Operasional Toko (CTO).
+   - Bila Laba Kotor belum mencukupi Total Beban, Hutang Beban hanya dialokasikan untuk Operasional Toko (dan sisa Gaji bila laba sangat minim), sehingga hak gaji karyawan diproteksi secara maksimal.
+2. **Pelunasan Fleksibel dari Kas Aset**:
+   - Nilai Kas Aset tidak harus sama persis dengan jumlah hutang untuk melunasi.
+   - Owner/Admin dapat membayar seadanya saldo Kas Aset yang tersedia (sebagian) atau melunasi penuh secara fleksibel.
+   - Kas Aset tidak boleh minus; pembayaran yang melebihi saldo Kas Aset atau melebihi sisa hutang wajib ditolak sistem.
+3. **Restriksi Hak Akses**:
+   - Aksi pelunasan Hutang Beban dari Kas Aset (`POST /api/kas/aset/keluar` & `POST /api/beban-hutang/lunas`) hanya boleh diakses oleh akun **Owner (Pengelola/Admin)** dan **Developer (Superadmin)**. Kasir dan Teknisi ditolak tegas (HTTP 403).
+
+### Pengujian (Wajib Jadi Test)
+- `tests/test_expense_debt_waterfall.py` (7 test)
+
+---
+
+## OD-LOCK-15 — Pencicilan Beban per Transaksi Lunas di Meja Kasir (Opsi B) & Tutup Kas Bersih
+
+**Status: LOCKED (Owner, 2026-11-02)**
+
+Owner: *"Jawab nya Opsi B. Uang Dp yang masuk ke Laci Kasir tidak bisa digunakan, Uang DP adalah titipan kepentingannya hanya untuk melunasi Transaksi yg belum selesai."*
+
+1. **Pencicilan Beban Real-Time (Opsi B)**:
+   - Ketika transaksi unit servis menjadi `CASH` (pelunasan di meja kasir), beban toko (Gaji & Operasional) otomatis dicicil langsung dari laba kotor unit bersangkutan (`final_price - modal_total`).
+   - Pencicilan dibatasi maksimal sebesar Laba Kotor unit tersebut (`min(sisa_beban, laba_unit)`).
+   - Uang muka (DP) unit lain yang berada di laci tidak pernah terpakai karena cicilan murni bersumber dari keuntungan transaksi baru.
+2. **Penyelesaian Tutup Kas & Saldo Laci Nol**:
+   - Saat Tutup Kas, sisa laba kotor periode yang belum terserap beban transaksi otomatis diserap untuk melunasi Beban Toko (`closing.py:selesaikan_periode`).
+   - Saldo Kas Perputaran (Laci) milik toko kembali ke titik **Rp 0.00** tanpa ada saldo mengambang, menyisakan fisik laci yang utuh persis sebesar uang titipan DP konsumen yang belum lunas.
+
+### Pengujian (Wajib Jadi Test)
+- `tests/test_beban_opsi_b.py` (8 test)
+
+---
+
+## OD-LOCK-16 — Inisialisasi Otomatis Presensi Karyawan Hadir Saat Buka Kas & Sinkronisasi Real-Time
+
+**Status: LOCKED (Owner, 2026-11-02)**
+
+Owner: *"ketika Buka Kas Beban tetap Hadir, jika tdk ada yg hadir tinggal di ubah manual maka otomatis beban tetap sesuai"*
+
+1. **Default Hadir Saat Buka Kas**:
+   - Ketika kasir / Admin melakukan Buka Kas (`KasPeriod` baru berstatus `OPEN`), sistem otomatis menginisialisasi absensi seluruh karyawan aktif (`active == 1`) dengan status default **Hadir** (`hadir = True`).
+   - Gaji harian seluruh karyawan aktif otomatis dijumlahkan dan dibekukan ke tabel `expense_periods` sebagai Beban Gaji periode baru.
+2. **Sinkronisasi Otomatis saat Diubah Manual**:
+   - Jika ada karyawan yang tidak hadir / libur / izin dan diubah manual oleh Admin melalui antarmuka presensi (`/api/attendance/toggle`), sistem langsung mengupdate data presensi dan seketika menghitung ulang Beban Gaji toko (`sync_open_period_salary_expense`).
+   - Beban Gaji toko otomatis berkurang secara proporsional sesuai kehadiran nyata tanpa perlu menunggu proses Tutup Kas.
+
+### Pengujian (Wajib Jadi Test)
+- `tests/test_beban_opsi_b.py::test_buka_kas_auto_inits_attendance_and_beban`
+- `tests/test_beban_opsi_b.py::test_ubah_manual_absensi_mengubah_beban_secara_otomatis`
+
+---
+
 # Ketidaksesuaian Implementasi
 
 > Dicatat sesuai instruksi: **jangan mengubah keputusan bisnis untuk
@@ -1061,6 +1119,9 @@ Seluruh keputusan Owner sudah sejalan dengan kode.
 | OD-LOCK-10 | `authority.MODAL_FIELDS` + `Action.ORDER_UPDATE_MODAL` - Kasir boleh harga, tidak boleh modal |
 | OD-LOCK-10 | `frontend/script.js` - `BSSF_CAPS` 7 role, `PAGE_CAP` penjaga halaman, `bssfCaps()`/`canViewAset()`/`showAkun()` fail-closed |
 | OD-LOCK-13 | `backend/cash.py` (`saldo_laci_milik_toko`) & `backend/beban_bayar.py` — pembayaran Beban hanya menyerap Kas Bebas Milik Toko, DP terlarang dipakai untuk Beban/defisit periode |
+| OD-LOCK-14 | `backend/expense_debt.py` (`hitung_breakdown_hutang`, `pelunasan_kas_aset_fleksibel`) — prioritas waterfall CTS gaji 100% sebelum CTO operasional, pelunasan fleksibel dari kas aset |
+| OD-LOCK-15 | `backend/routers/orders.py` (`_bayar_beban_periode_di_cash`) & `backend/beban_bayar.py` — cicil beban per transaksi dari laba unit, Tutup Kas menyerap sisa laba kotor |
+| OD-LOCK-16 | `backend/routers/attendance.py` (`init_period_attendance`, `toggle_attendance`) & `backend/closing.py` — inisialisasi default Hadir saat Buka Kas dan sinkronisasi real-time |
 ---
 
 # Aturan Penggunaan Dokumen Ini

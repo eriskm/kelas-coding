@@ -147,10 +147,16 @@ def selesaikan_periode(db: Session, period, fin: dict, oleh: str = None) -> dict
     # periode dibekukan. Satu penanda idempotensi untuk semua jalur.
     total_beban = quantize(to_decimal(fin.get("total_beban") or 0))
     import beban_bayar as be_bayar
+    lk = to_decimal(fin.get("laba_kotor") or 0)
+    sudah_be = be_bayar._total_dibayar(db, key)
+    laba_tersisa = max(ZERO, quantize(lk - sudah_be))
+    tersedia_beban = max(laba_tersisa, cash.saldo_laci_milik_toko(db))
     be = be_bayar.bayar_beban_periode(
         db, start, end, key, total_beban, oleh=oleh,
         kas_period_id=getattr(period, "id", None),
-        laba_kotor=to_decimal(fin.get("laba_kotor") or 0))
+        laba_kotor=lk,
+        laba_unit=tersedia_beban,
+        order_no="TUTUP_KAS")
     out["beban_dibayar"] = quantize(to_decimal(be.get("dari_laci") or 0)
                                     + to_decimal(be.get("dari_kas_aset") or 0))
     out["beban_sisa"] = quantize(max(to_decimal(be.get("kekurangan") or 0),
@@ -355,6 +361,20 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
     db.add(new_period)
     db.flush()
     db.refresh(new_period)
+
+    # Inisialisasi otomatis absensi default 'Hadir' untuk seluruh karyawan aktif & Beban Gaji
+    try:
+        from routers.attendance import init_period_attendance
+        init_period_attendance(db, new_period.id)
+    except Exception:
+        pass
+
+    # Bekukan Beban operasional berulang untuk periode baru
+    try:
+        from finance import freeze_expenses_for_period
+        freeze_expenses_for_period(db, new_start, new_end, commit=False)
+    except Exception:
+        pass
 
     # P2-13: laporan tutup kas & buka kas (dalam transaksi yang sama; anti-duplikat).
     _dist_total = ZERO

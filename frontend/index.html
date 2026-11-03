@@ -1605,15 +1605,19 @@
                     <!-- ===== PAGE: KEUANGAN ===== -->
                     <section id="pageKeuangan" class="hidden px-3 sm:px-5 py-4 sm:py-5 space-y-4">
 
-                        <div class="flex items-center justify-between flex-wrap gap-3">
+                        <!-- HEADER KEUANGAN -->
+                        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
-                                <h2 class="text-lg sm:text-xl font-extrabold text-gray-800 dark:text-white flex items-center gap-2.5">
+                                <h2 class="text-lg sm:text-xl font-black text-gray-900 dark:text-white flex items-center gap-2.5">
                                     <i class="fa-solid fa-coins text-brand-500"></i>
-                                    Keuangan
+                                    <span>Keuangan Toko</span>
                                 </h2>
-                                <div class="mt-1.5">
-                                    <span id="kuPeriodBadge" class="ku-period-badge"><i class="fa-solid fa-calendar-day"></i> Periode Kas Aktif</span>
-                                </div>
+                                <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                                    Buku kas operasional harian, karantina titipan DP, kas aset cadangan, dan rekonsiliasi mutasi toko
+                                </p>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span id="kuPeriodBadge" class="ku-period-badge"><i class="fa-solid fa-calendar-day"></i> Periode Kas Aktif</span>
                             </div>
                         </div>
 
@@ -1649,7 +1653,7 @@
                                         </span>
                                         <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Kas Laci (Kasir)</span>
                                     </div>
-                                    <div class="text-base sm:text-lg font-extrabold text-gray-800 dark:text-white" id="kuKpiLaci">Rp 0</div>
+                                    <div class="text-lg sm:text-xl font-black tabular-nums text-gray-800 dark:text-white" id="kuKpiLaci">Rp 0</div>
                                     <span class="text-[10px] text-gray-400">Saldo fisik di laci</span>
                                 </div>
                                 <div class="sm-card ku-kpi-card">
@@ -1659,7 +1663,7 @@
                                         </span>
                                         <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Omzet Periode</span>
                                     </div>
-                                    <div class="text-base sm:text-lg font-extrabold text-blue-600 dark:text-blue-400" id="kuKpiOmzet">Rp 0</div>
+                                    <div class="text-lg sm:text-xl font-black tabular-nums text-blue-600 dark:text-blue-400" id="kuKpiOmzet">Rp 0</div>
                                     <span class="text-[10px] text-gray-400">Total servis lunas</span>
                                 </div>
                                 <div class="sm-card ku-kpi-card">
@@ -1669,7 +1673,7 @@
                                         </span>
                                         <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Beban</span>
                                     </div>
-                                    <div class="text-base sm:text-lg font-extrabold text-amber-600 dark:text-amber-400" id="kuKpiBeban">Rp 0</div>
+                                    <div class="text-lg sm:text-xl font-black tabular-nums text-amber-600 dark:text-amber-400" id="kuKpiBeban">Rp 0</div>
                                     <span class="text-[10px] text-gray-400">Gaji &amp; operasional</span>
                                 </div>
                                 <div class="sm-card ku-kpi-card">
@@ -1679,7 +1683,7 @@
                                         </span>
                                         <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Laba Bersih</span>
                                     </div>
-                                    <div class="text-base sm:text-lg font-extrabold text-purple-600 dark:text-purple-400" id="kuKpiLaba">Rp 0</div>
+                                    <div class="text-lg sm:text-xl font-black tabular-nums text-purple-600 dark:text-purple-400" id="kuKpiLaba">Rp 0</div>
                                     <span class="text-[10px] text-gray-400">Laba kotor &minus; beban</span>
                                 </div>
                             </div>
@@ -1898,6 +1902,44 @@
                                 <div class="ku-summary mt-0" id="kuDebtSummary"></div>
                                 <div id="kuDebtStatusBanner" class="mt-2.5"></div>
 
+                                <!-- Rincian Alokasi Beban (Collapsible Accordion) -->
+                                <div id="kuDebtBreakdownWrap" class="mt-3 rounded-lg border border-gray-200/60 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] overflow-hidden hidden">
+                                    <button type="button" onclick="kuDebtToggleBreakdown()" class="w-full flex items-center justify-between p-2.5 sm:px-3 text-left hover:bg-gray-100/50 dark:hover:bg-white/[0.03] transition-colors" aria-expanded="false" aria-controls="kuDebtBreakdownContent">
+                                        <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
+                                            <i class="fa-solid fa-layer-group text-blue-500"></i>
+                                            <span>Rincian Pos Komponen Beban (Audit Detail)</span>
+                                        </span>
+                                        <span class="text-[11px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1.5">
+                                            <span id="kuDebtBreakdownToggleLabel">Lihat Detail Pos</span>
+                                            <i id="kuDebtBreakdownChevron" class="fa-solid fa-chevron-down text-[10px] transition-transform duration-200"></i>
+                                        </span>
+                                    </button>
+                                    <div id="kuDebtBreakdownContent" class="hidden p-2.5 sm:p-3 border-t border-gray-200/50 dark:border-white/5 space-y-2.5">
+                                        <div class="flex items-center justify-between flex-wrap gap-2">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Pilih Periode:</span>
+                                                <select id="kuDebtPeriodSelect" onchange="kuDebtChangePeriod(this.value)" class="receive-input text-xs py-1 px-2 border rounded-md" aria-label="Pilih Periode Waterfall">
+                                                </select>
+                                            </div>
+                                            <span class="text-[11px] text-gray-400">Waterfall CTS: Gaji didahulukan 100% sebelum operasional</span>
+                                        </div>
+                                        <div class="overflow-x-auto ku-mutasi-scroll">
+                                            <table class="tx-table w-full text-xs">
+                                                <thead>
+                                                    <tr>
+                                                        <th>Nama / Komponen Beban</th>
+                                                        <th class="numeric-r">Beban</th>
+                                                        <th class="numeric-r">Terbayar</th>
+                                                        <th class="numeric-r">Sisa Hutang</th>
+                                                        <th class="text-center" style="width: 90px;">Status</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody id="kuDebtBreakdownBody"></tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                </div>
+
                                 <!-- Tabel Riwayat Periode Hutang -->
                                 <div class="overflow-x-auto mt-3 ku-mutasi-scroll">
                                     <table class="tx-table w-full text-sm">
@@ -1917,20 +1959,53 @@
                                 <!-- Area Tindakan (Admin / EXPENSE_DEBT_WRITE) -->
                                 <div class="mt-3 pt-3 border-t border-gray-100 dark:border-white/5 space-y-3" data-cap="EXPENSE_DEBT_WRITE">
                                     
-                                    <!-- SUB-BLOK 1: PELUNASAN DARI KAS ASET -->
-                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10" id="kuDebtLunasCard">
-                                        <div class="flex items-center justify-between mb-2">
+                                    <!-- SUB-BLOK 1: PELUNASAN DARI KAS ASET (NOMINAL FLEKSIBEL) -->
+                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 sm:p-4 rounded-lg border border-gray-200/60 dark:border-white/10" id="kuDebtLunasCard">
+                                        <div class="flex items-center justify-between mb-2.5">
                                             <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                                                <i class="fa-solid fa-hand-holding-dollar text-emerald-500"></i> Pelunasan Hutang dari Kas Aset
+                                                <i class="fa-solid fa-hand-holding-dollar text-emerald-500"></i> Pelunasan / Cicil Hutang dari Kas Aset
                                             </span>
-                                            <span class="text-[11px] text-gray-400">Selesaikan tanggungan via Kas Aset</span>
+                                            <span class="text-[11px] text-gray-400">Khusus Owner &amp; Developer</span>
                                         </div>
-                                        <div class="flex flex-wrap items-center gap-2">
-                                            <button type="button" onclick="kuDebtLunas()" id="kuDebtLunasBtn" class="receive-submit-btn text-xs py-1.5 px-3">
-                                                <i class="fa-solid fa-hand-holding-dollar"></i> Lunaskan dari Kas Aset
+
+                                        <!-- RINCIAN POSISI HUTANG PER ENTITAS (Karyawan A, Karyawan B, Operasional) -->
+                                        <div class="mb-3" id="kuDebtEntitasWrap">
+                                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5 font-medium flex items-center justify-between">
+                                                <span>Rincian Sisa Tanggungan per Entitas:</span>
+                                                <span class="text-[10px] text-gray-400">Klik kartu untuk isi nominal otomatis</span>
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2" id="kuDebtEntitasGrid"></div>
+                                        </div>
+
+                                        <div class="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
+                                            <div class="field" style="min-width:170px;flex:1 1 170px">
+                                                <label class="field-label text-xs" for="kuDebtNominalInput">Nominal Bayar / Cicil (Rp)</label>
+                                                <input id="kuDebtNominalInput" type="number" min="0" step="1" oninput="kuDebtSimulasiCicil(this.value)" class="receive-input text-xs" placeholder="0">
+                                            </div>
+                                            <button type="button" onclick="kuDebtSetNominal('gaji')" id="kuDebtBtnGaji" class="receive-back-btn text-xs py-2 px-2.5 font-medium whitespace-nowrap text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/20" title="Khusus lunasi seluruh sisa hak gaji karyawan">
+                                                <i class="fa-solid fa-users text-[11px]"></i> Lunasi Hak Gaji
                                             </button>
-                                            <span class="text-xs text-gray-500 dark:text-gray-400" id="kuDebtLunasHint"></span>
+                                            <button type="button" onclick="kuDebtSetNominal('aset')" class="receive-back-btn text-xs py-2 px-2.5 font-medium whitespace-nowrap" title="Gunakan seluruh saldo Kas Aset yang tersedia">
+                                                <i class="fa-solid fa-vault text-[11px]"></i> Seadanya Kas Aset
+                                            </button>
+                                            <button type="button" onclick="kuDebtSetNominal('semua')" class="receive-back-btn text-xs py-2 px-2.5 font-medium whitespace-nowrap" title="Lunaskan seluruh sisa hutang toko">
+                                                <i class="fa-solid fa-check-double text-[11px]"></i> Seluruh Hutang
+                                            </button>
+                                            <button type="button" onclick="kuDebtLunas()" id="kuDebtLunasBtn" class="receive-submit-btn text-xs py-2 px-3 whitespace-nowrap">
+                                                <i class="fa-solid fa-hand-holding-dollar"></i> Bayar dari Kas Aset
+                                            </button>
                                         </div>
+
+                                        <!-- PREVIEW SIMULASI ALOKASI CICILAN REAL-TIME -->
+                                        <div id="kuDebtSimulasiWrap" class="hidden mt-2.5 p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 text-xs">
+                                            <div class="font-semibold text-blue-800 dark:text-blue-300 flex items-center justify-between mb-1.5">
+                                                <span class="flex items-center gap-1.5"><i class="fa-solid fa-calculator text-blue-500"></i> Simulasi Alokasi Pembayaran Cicilan:</span>
+                                                <span id="kuDebtSimulasiTotal" class="font-bold"></span>
+                                            </div>
+                                            <div id="kuDebtSimulasiList" class="space-y-1 text-gray-700 dark:text-gray-300"></div>
+                                        </div>
+
+                                        <p class="ku-sub mt-2 text-xs" id="kuDebtLunasHint"></p>
                                     </div>
 
                                     <!-- SUB-BLOK 2: PENCATATAN DEFISIT PERIODE INI (OD-LOCK-12) -->
@@ -1978,8 +2053,8 @@
                                         <h3 class="panel-title"><i class="fa-solid fa-list-ul"></i> Riwayat Transaksi &mdash; Kas Laci</h3>
                                         <p class="ku-sub">Bukti rinci setiap perpindahan uang di laci. Saldo akhir di sini sama dengan Saldo Kas (Laci) di Conditions Kas.</p>
                                     </div>
-                                    <button type="button" onclick="kuShowMain()" class="receive-back-btn">
-                                        <i class="fa-solid fa-arrow-left"></i> Kembali
+                                    <button type="button" onclick="renderRiwayat(); renderKuArsip();" class="receive-back-btn text-xs py-1.5 px-3" title="Muat ulang mutasi kas">
+                                        <i class="fa-solid fa-rotate"></i> Muat Ulang
                                     </button>
                                 </div>
 
@@ -2376,211 +2451,244 @@
 
                     <!-- ===== FLOATING WINDOW: SERVIS BARU ===== -->
                     <section id="pageReceive" class="float-window" role="dialog" aria-label="Servis Baru">
+                        <!-- HEADER SESUAI REFERENSI -->
                         <div class="float-titlebar" id="receiveTitlebar">
-                            <div class="flex items-center gap-2.5 min-w-0">
-                                <span class="receive-title-icon"><i class="fa-solid fa-truck-ramp-box"></i></span>
+                            <div class="flex items-center gap-3 min-w-0">
+                                <div class="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center flex-shrink-0 shadow-sm">
+                                    <i class="fa-solid fa-wrench text-base"></i>
+                                </div>
                                 <div class="min-w-0">
-                                    <h2 class="float-title">Servis Baru</h2>
-                                    <p class="float-sub">Daftarkan unit servis konsumen baru ke sistem</p>
+                                    <div class="flex items-center gap-2">
+                                        <h2 class="text-base sm:text-lg font-bold text-gray-900 dark:text-white leading-tight">Servis Baru</h2>
+                                        <span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-gray-200 dark:border-white/10 text-[11px] font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-white/5 cursor-grab select-none" title="Tahan dan geser untuk memindahkan jendela">
+                                            <i class="fa-solid fa-arrows-up-down-left-right text-[10px]"></i> Geser Header
+                                        </span>
+                                    </div>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-0.5 leading-tight">Form ringkas penerimaan unit servis baru</p>
                                 </div>
                             </div>
-                            <button type="button" class="float-close" onclick="closeServisBaru()" aria-label="Tutup">
-                                <i class="fa-solid fa-xmark"></i>
+                            <button type="button" class="w-8 h-8 rounded-lg border border-gray-200 dark:border-white/10 flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/5 transition" onclick="closeServisBaru()" aria-label="Tutup">
+                                <i class="fa-solid fa-xmark text-sm"></i>
                             </button>
                         </div>
 
                         <form id="receiveForm" autocomplete="off" class="rc-form-shell">
-                            <div class="float-body rc-float-scroll">
+                            <div class="float-body rc-float-scroll p-4 sm:p-6 space-y-4">
 
-                            <!-- TOP CONTROL: Posisi Servis Penuh (Keputusan Pertama Kasir) -->
-                            <div class="rc-topbar rc-topbar-full">
-                                <div class="rc-posbar rc-posbar-full" role="radiogroup" aria-label="Posisi Servis">
-                                    <div class="rc-posbar-head">
-                                        <span class="rc-posbar-title"><i class="fa-solid fa-route text-red-600"></i> Posisi Servis:</span>
+                                <!-- BARIS 1: IDENTITAS KONSUMEN & PERANGKAT (4 KOLOM) -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <!-- Nama Konsumen -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcName">Nama Konsumen <span class="text-red-500">*</span></label>
+                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcName" placeholder="Ketik nama pelanggan..." required>
                                     </div>
-                                    <div class="rc-posbar-opts" id="rcPathGroup">
-                                        <label class="rc-pos" title="Penerimaan unit awal untuk antrean pengecekan / ditinggal konsumen">
-                                            <input type="radio" name="rcPath" value="TITIP" checked>
-                                            <span class="rc-pos-ico"><i class="fa-solid fa-inbox"></i></span>
-                                            <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Titip Unit</span>
-                                                <span class="rc-pos-sub">Antre / Ditinggal (Default)</span>
-                                            </div>
-                                        </label>
-                                        <label class="rc-pos" title="Diagnosa awal jelas, langsung masuk meja perbaikan teknisi">
-                                            <input type="radio" name="rcPath" value="PERBAIKAN">
-                                            <span class="rc-pos-ico"><i class="fa-solid fa-screwdriver-wrench"></i></span>
-                                            <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Siap Kerjakan</span>
-                                                <span class="rc-pos-sub">Langsung ke teknisi</span>
-                                            </div>
-                                        </label>
-                                        <label class="rc-pos" title="Perlu menunggu pemesanan atau kedatangan suku cadang">
-                                            <input type="radio" name="rcPath" value="SPAREPART">
-                                            <span class="rc-pos-ico"><i class="fa-solid fa-hourglass-half"></i></span>
-                                            <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Inden Sparepart</span>
-                                                <span class="rc-pos-sub">Menunggu part toko/pesan</span>
-                                            </div>
-                                        </label>
-                                        <label class="rc-pos" title="Servis kilat langsung selesai ditunggu konsumen di toko">
-                                            <input type="radio" name="rcPath" value="TUNGGU">
-                                            <span class="rc-pos-ico"><i class="fa-solid fa-bolt"></i></span>
-                                            <div class="rc-pos-body">
-                                                <span class="rc-pos-txt">Servis Kilat</span>
-                                                <span class="rc-pos-sub">Ditunggu &amp; selesai di tempat</span>
-                                            </div>
-                                        </label>
+
+                                    <!-- Nomor WhatsApp -->
+                                    <div class="field">
+                                        <div class="flex items-center justify-between mb-1.5">
+                                            <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200" for="rcPhone">Nomor WhatsApp <span class="text-red-500">*</span></label>
+                                            <button type="button" id="rcHistPillBtn" class="rc-hist-pill-btn hidden text-[11px] text-blue-600 hover:underline" onclick="openCustomerHistoryModal()" title="Lihat riwayat">
+                                                Riwayat
+                                            </button>
+                                        </div>
+                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcPhone" placeholder="0812xxxxxxxxx" inputmode="tel" autocomplete="off" required>
+                                        <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
+                                    </div>
+
+                                    <!-- Merek & Tipe HP -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDevice">Merek &amp; Tipe HP <span class="text-red-500">*</span></label>
+                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcDevice" placeholder="Contoh: Redmi Note 10" list="rcDeviceList" autocomplete="off" required>
+                                        <datalist id="rcDeviceList"></datalist>
+                                        <!-- Quick Brand Chips -->
+                                        <div class="flex items-center flex-wrap gap-1.5 mt-2" id="rcBrandChips">
+                                            <button type="button" onclick="rcSetBrand('Samsung')" class="rc-mini-chip">Samsung</button>
+                                            <button type="button" onclick="rcSetBrand('Xiaomi')" class="rc-mini-chip">Xiaomi</button>
+                                            <button type="button" onclick="rcSetBrand('Oppo')" class="rc-mini-chip">Oppo</button>
+                                            <button type="button" onclick="rcSetBrand('Vivo')" class="rc-mini-chip">Vivo</button>
+                                            <button type="button" onclick="rcSetBrand('Infinix')" class="rc-mini-chip">Infinix</button>
+                                            <button type="button" onclick="rcSetBrand('iPhone')" class="rc-mini-chip">iPhone</button>
+                                        </div>
+                                    </div>
+
+                                    <!-- Sandi / Pola Kunci -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPassword">Sandi / Pola Kunci</label>
+                                        <div class="relative">
+                                            <input class="w-full text-sm py-2 pl-3 pr-9 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="password" id="rcPassword" placeholder="Opsional / Kosongkan" autocomplete="off">
+                                            <button type="button" id="rcPwToggle" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs" aria-label="Tampilkan sandi">
+                                                <i class="fa-regular fa-eye"></i>
+                                            </button>
+                                        </div>
+                                        <!-- Quick Password Chips -->
+                                        <div class="flex items-center flex-wrap gap-1.5 mt-2" id="rcPwdChips">
+                                            <button type="button" onclick="rcSetPassword('Tanpa Sandi')" class="rc-mini-chip">Tanpa Sandi</button>
+                                            <button type="button" onclick="rcSetPassword('Pola Z')" class="rc-mini-chip">Pola Z</button>
+                                            <button type="button" onclick="rcSetPassword('Pola L')" class="rc-mini-chip">Pola L</button>
+                                            <button type="button" onclick="rcSetPassword('123456')" class="rc-mini-chip">123456</button>
+                                        </div>
+                                        <!-- Hidden field for IMEI -->
+                                        <input type="hidden" id="rcImei" value="">
                                     </div>
                                 </div>
-                            </div>
 
-                            <div class="rc-layout">
-                                <!-- KOLOM KIRI: Identitas Konsumen & Detail Fisik Perangkat -->
-                                <div class="rc-col rc-col-left">
-
-                                    <!-- PANEL 1: Data Pelanggan -->
-                                    <div class="panel receive-panel">
-                                        <div class="receive-panel-head">
-                                            <span class="receive-head-ico"><i class="fa-solid fa-user-check"></i></span>
-                                            <div>
-                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Data Pelanggan</h3>
-                                                <span class="text-[10.5px] text-gray-400">Nomor WhatsApp digunakan untuk Histori Cerdas</span>
-                                            </div>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                                            <div class="field">
-                                                <label class="field-label" for="rcName">Nama Pelanggan <b class="text-red-500">*</b></label>
-                                                <input class="receive-input" type="text" id="rcName" placeholder="cth. Andi Pratama" required>
-                                            </div>
-                                            <div class="field">
-                                                <div class="flex items-center justify-between mb-1">
-                                                    <label class="field-label mb-0" for="rcPhone">Nomor WhatsApp <b class="text-red-500">*</b></label>
-                                                    <button type="button" id="rcHistPillBtn" class="rc-hist-pill-btn hidden" onclick="openCustomerHistoryModal()" title="Klik untuk melihat riwayat servis lengkap">
-                                                        <i class="fa-solid fa-clock-rotate-left"></i> <span id="rcHistPillTxt">Riwayat Servis</span>
-                                                    </button>
-                                                </div>
-                                                <input class="receive-input" type="text" id="rcPhone" placeholder="cth. 081234567890" inputmode="tel" autocomplete="off" required>
-                                                <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
-                                            </div>
+                                <!-- BARIS 2: KELUHAN & RENCANA TINDAKAN (2 KOLOM) -->
+                                <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
+                                    <!-- Keluhan & Analisa Kerusakan Awal -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDamage">Keluhan &amp; Analisa Kerusakan Awal <span class="text-red-500">*</span></label>
+                                        <textarea class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" id="rcDamage" rows="2" placeholder="Jelaskan keluhan kerusakan unit..." required></textarea>
+                                        <div class="flex items-center flex-wrap gap-1.5 mt-2">
+                                            <button type="button" onclick="rcAppendDamage('Ganti LCD')" class="rc-mini-chip">Ganti LCD</button>
+                                            <button type="button" onclick="rcAppendDamage('Mati Total')" class="rc-mini-chip">Mati Total</button>
+                                            <button type="button" onclick="rcAppendDamage('Baterai')" class="rc-mini-chip">Baterai</button>
+                                            <button type="button" onclick="rcAppendDamage('Konektor Cas')" class="rc-mini-chip">Konektor Cas</button>
+                                            <button type="button" onclick="rcAppendDamage('Pola / FRP')" class="rc-mini-chip">Pola / FRP</button>
+                                            <button type="button" onclick="rcAppendDamage('Kena Air')" class="rc-mini-chip">Kena Air</button>
                                         </div>
                                     </div>
 
-                                    <!-- PANEL 2: Informasi & Kondisi Unit -->
-                                    <div class="panel receive-panel rc-panel-unit">
-                                        <div class="receive-panel-head">
-                                            <span class="receive-head-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>
-                                            <div>
-                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Informasi &amp; Kondisi Unit</h3>
-                                                <span class="text-[10.5px] text-gray-400">Data fisik unit saat diterima</span>
+                                    <!-- Rencana Tindakan Perbaikan -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPlan" id="rcPlanLabel">Rencana Tindakan Perbaikan</label>
+                                        <textarea class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" id="rcPlan" rows="2" placeholder="Rencana perbaikan teknisi (opsional)..."></textarea>
+                                        <div class="flex items-center flex-wrap gap-1.5 mt-2">
+                                            <button type="button" onclick="rcAppendPlan('Cek Mesin')" class="rc-mini-chip">Cek Mesin</button>
+                                            <button type="button" onclick="rcAppendPlan('Ganti Part')" class="rc-mini-chip">Ganti Part</button>
+                                            <button type="button" onclick="rcAppendPlan('Reball IC')" class="rc-mini-chip">Reball IC</button>
+                                            <button type="button" onclick="rcAppendPlan('Flash Ulang')" class="rc-mini-chip">Flash Ulang</button>
+                                            <button type="button" onclick="rcAppendPlan('Cleaning')" class="rc-mini-chip">Cleaning</button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- BARIS 3: KELENGKAPAN & KONDISI FISIK AWAL (1 KOTAK HALUS) -->
+                                <div class="p-3.5 sm:p-4 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-800/40 shadow-sm" id="rcCheckContainer">
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <!-- Kelengkapan Dibawa -->
+                                        <div>
+                                            <h4 class="text-xs font-bold text-gray-900 dark:text-white mb-2.5">Kelengkapan Dibawa</h4>
+                                            <div class="flex items-center flex-wrap gap-2" id="rcKelengkapanList">
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-sim_tray">
+                                                    <span>SIM Tray</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-memory">
+                                                    <span>Memory</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-charger">
+                                                    <span>Charger</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-dus">
+                                                    <span>Dus</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-case">
+                                                    <span>Case</span>
+                                                </label>
                                             </div>
                                         </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
-                                            <div class="field">
-                                                <label class="field-label" for="rcDevice">Perangkat / Model HP <b class="text-red-500">*</b></label>
-                                                <input class="receive-input" type="text" id="rcDevice" placeholder="cth. Samsung Galaxy A55" list="rcDeviceList" autocomplete="off" required>
-                                                <datalist id="rcDeviceList"></datalist>
-                                            </div>
-                                            <div class="field">
-                                                <label class="field-label" for="rcPassword">Kunci Layar / Pola</label>
-                                                <div class="relative">
-                                                    <input class="receive-input pr-10" type="password" id="rcPassword" placeholder="cth. 1234" autocomplete="off">
-                                                    <button type="button" id="rcPwToggle" class="rc-pw-toggle" aria-label="Tampilkan password"><i class="fa-solid fa-eye"></i></button>
-                                                </div>
-                                            </div>
-                                            <div class="field">
-                                                <label class="field-label" for="rcImei">IMEI / Serial Number</label>
-                                                <input class="receive-input" type="text" id="rcImei" placeholder="cth. 356938035643809" inputmode="numeric" autocomplete="off">
+
+                                        <!-- Kondisi Fisik Awal -->
+                                        <div>
+                                            <h4 class="text-xs font-bold text-gray-900 dark:text-white mb-2.5">Kondisi Fisik Awal</h4>
+                                            <div class="flex items-center flex-wrap gap-2" id="rcFisikList">
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-lcd_pecah">
+                                                    <span>LCD Pecah</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-backdoor">
+                                                    <span>Backdoor</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-lecet">
+                                                    <span>Lecet</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-kena_air">
+                                                    <span>Kena Air</span>
+                                                </label>
+                                                <label class="rc-check-item">
+                                                    <input type="checkbox" id="rc-ck-segel">
+                                                    <span>Segel</span>
+                                                </label>
                                             </div>
                                         </div>
-                                        <div class="rc-check-wrap">
-                                            <p class="field-label rc-check-title">Kondisi &amp; Kelengkapan Unit</p>
-                                            <div class="rc-check-groups" id="rcCheckGroups"></div>
+                                    </div>
+                                    <!-- Kompatibilitas element id -->
+                                    <div id="rcCheckGroups" class="hidden"></div>
+                                </div>
+
+                                <!-- BARIS 4: ESTIMASI, DP, TEKNISI & STATUS AWAL (4 KOLOM) -->
+                                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-1">
+                                    <!-- Estimasi Biaya (Rp) -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcEstimate" id="rcEstimateLabel">Estimasi Biaya (Rp)</label>
+                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 font-medium transition" type="text" inputmode="numeric" id="rcEstimate" placeholder="0">
+                                        <div class="flex items-center flex-wrap gap-1.5 mt-2">
+                                            <button type="button" onclick="rcAddEstimate(50000)" class="rc-mini-chip">+50rb</button>
+                                            <button type="button" onclick="rcAddEstimate(100000)" class="rc-mini-chip">+100rb</button>
+                                            <button type="button" onclick="rcAddEstimate(250000)" class="rc-mini-chip">+250rb</button>
+                                            <button type="button" onclick="rcAddEstimate(0)" class="rc-mini-chip text-red-600 dark:text-red-400 font-medium">Reset</button>
                                         </div>
                                     </div>
 
-                                </div><!-- /rc-col-left -->
-
-                                <!-- KOLOM KANAN: Keluhan/Diagnostik & Estimasi Finansial -->
-                                <div class="rc-col rc-col-right">
-
-                                    <!-- PANEL 3: Keluhan & Rencana Perbaikan -->
-                                    <div class="panel receive-panel">
-                                        <div class="receive-panel-head">
-                                            <span class="receive-head-ico"><i class="fa-solid fa-clipboard-list"></i></span>
-                                            <div>
-                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Keluhan &amp; Rencana Tindakan</h3>
-                                                <span class="text-[10.5px] text-gray-400">Diagnostik awal dan rencana perbaikan</span>
-                                            </div>
+                                    <!-- Uang Muka / DP (Rp) -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDp">Uang Muka / DP (Rp)</label>
+                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 font-medium transition" type="text" inputmode="numeric" id="rcDp" placeholder="0">
+                                        <div class="flex items-center flex-wrap gap-1.5 mt-2">
+                                            <button type="button" onclick="rcSetDpMode('none')" class="rc-mini-chip">Tanpa DP</button>
+                                            <button type="button" onclick="rcSetDpMode(50000)" class="rc-mini-chip">+50rb</button>
+                                            <button type="button" onclick="rcSetDpMode('lunas')" class="rc-mini-chip">Lunas</button>
                                         </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                            <div class="field">
-                                                <label class="field-label" for="rcDamage">Keluhan <b class="text-red-500">*</b></label>
-                                                <textarea class="receive-input" id="rcDamage" rows="2" placeholder="cth. Layar retak, touch sebagian tidak berfungsi" required></textarea>
-                                                <div class="mt-1">
-                                                    <span class="text-[9.5px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Cepat Keluhan:</span>
-                                                    <div id="rcDamageChips" class="rc-chip-group"></div>
-                                                </div>
-                                            </div>
-                                            <div class="field">
-                                                <label class="field-label" for="rcPlan" id="rcPlanLabel">Rencana Perbaikan</label>
-                                                <textarea class="receive-input" id="rcPlan" rows="2" placeholder="cth. Ganti LCD + frame, tes fungsi"></textarea>
-                                                <div class="mt-1">
-                                                    <span class="text-[9.5px] uppercase font-bold text-gray-400 dark:text-gray-500 tracking-wider">Cepat Tindakan:</span>
-                                                    <div id="rcPlanChips" class="rc-chip-group"></div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <div id="rcDpFeedback" class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 hidden flex items-center gap-1"></div>
                                     </div>
 
-                                    <!-- PANEL 4: Estimasi Biaya & Penugasan -->
-                                    <div class="panel receive-panel">
-                                        <div class="receive-panel-head">
-                                            <span class="receive-head-ico"><i class="fa-solid fa-calculator"></i></span>
-                                            <div>
-                                                <h3 class="text-sm font-bold text-gray-800 dark:text-white">Estimasi Biaya &amp; Penugasan</h3>
-                                                <span class="text-[10.5px] text-gray-400">Estimasi biaya, DP &amp; teknisi penanggung jawab</span>
-                                            </div>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                                            <div class="field">
-                                                <label class="field-label" for="rcEstimate" id="rcEstimateLabel">Estimasi Biaya</label>
-                                                <div class="relative">
-                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                    <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcEstimate" placeholder="500.000">
-                                                </div>
-                                            </div>
-                                            <div class="field">
-                                                <label class="field-label" for="rcDp">DP (Uang Muka)</label>
-                                                <div class="relative">
-                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                    <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcDp" placeholder="100.000">
-                                                </div>
-                                                <div id="rcDpFeedback" class="text-[11px] font-semibold text-rose-600 dark:text-rose-400 mt-1 hidden flex items-center gap-1"></div>
-                                            </div>
-                                            <div class="field sm:col-span-2" id="rcTechWrap">
-                                                <label class="field-label" for="rcTechnician" id="rcTechnicianLabel">Teknisi Penanggung Jawab</label>
-                                                <select class="receive-input" id="rcTechnician">
-                                                    <option value="">- Pilih Teknisi -</option>
-                                                </select>
-                                            </div>
-                                            <div class="field hidden" id="rcFinalWrap">
-                                                <label class="field-label" for="rcFinal" id="rcFinalLabel">Harga Final</label>
-                                                <div class="relative">
-                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                    <input class="receive-input pl-9" type="text" inputmode="numeric" id="rcFinal" placeholder="500.000">
-                                                </div>
-                                            </div>
-                                            <input type="hidden" id="rcStatus" value="DITERIMA">
-                                        </div>
+                                    <!-- Teknisi PJ -->
+                                    <div class="field" id="rcTechWrap">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcTechnician" id="rcTechnicianLabel">Teknisi PJ</label>
+                                        <select class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium transition" id="rcTechnician">
+                                            <option value="">-- Belum Ditentukan --</option>
+                                        </select>
                                     </div>
 
-                                </div><!-- /rc-col-right -->
-                            </div><!-- /rc-layout -->
+                                    <!-- Status Awal -->
+                                    <div class="field">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPathSelect">Status Awal</label>
+                                        <select class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium transition" id="rcPathSelect" onchange="rcChangePathSelect(this.value)">
+                                            <option value="TITIP" selected>Analisa</option>
+                                            <option value="PERBAIKAN">Siap Kerjakan</option>
+                                            <option value="SPAREPART">Inden Sparepart</option>
+                                            <option value="TUNGGU">Servis Kilat</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="field hidden sm:col-span-2 lg:col-span-4" id="rcFinalWrap">
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcFinal" id="rcFinalLabel">Harga Final (Wajib untuk Servis Kilat)</label>
+                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 font-medium" type="text" inputmode="numeric" id="rcFinal" placeholder="0">
+                                    </div>
+                                    <input type="hidden" id="rcStatus" value="DITERIMA">
+                                    <div class="hidden" id="rcHiddenRadioGroup">
+                                        <input type="radio" name="rcPath" value="TITIP" checked>
+                                        <input type="radio" name="rcPath" value="PERBAIKAN">
+                                        <input type="radio" name="rcPath" value="SPAREPART">
+                                        <input type="radio" name="rcPath" value="TUNGGU">
+                                    </div>
+                                </div>
+
                             </div><!-- /float-body -->
 
-                            <!-- STICKY FOOTER BAR (IDE A) -->
+                            <!-- FOOTER SESUAI REFERENSI -->
                             <footer class="rc-sticky-footer">
+                                <div class="flex items-center gap-2 text-xs font-medium text-gray-500 dark:text-gray-400" id="rcStatusIndicator">
+                                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-slate-400 dark:bg-slate-500"></span>
+                                    <span>Form siap diisi</span>
+                                </div>
                                 <div id="rcCalcBar" class="rc-footer-summary hidden">
                                     <span class="rc-footer-chip" id="rcCalcChipEst"><i class="fa-solid fa-receipt"></i> Est: <b id="rcCalcEstVal">Rp 0</b></span>
                                     <span class="rc-footer-chip" id="rcCalcChipDp"><i class="fa-solid fa-hand-holding-dollar"></i> DP: <b id="rcCalcDpVal">Rp 0</b></span>
@@ -2590,48 +2698,38 @@
                                 </div>
                                 <div class="rc-footer-actions">
                                     <div id="receiveFeedback" class="hidden receive-feedback"></div>
+                                    <button type="button" onclick="closeServisBaru()" class="px-5 py-2 text-xs font-semibold text-gray-700 dark:text-gray-200 bg-white dark:bg-slate-800 border border-gray-300 dark:border-white/15 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-700 transition">
+                                        Batal
+                                    </button>
                                     <button type="button" id="receiveNotaBtn" onclick="openNota()" class="hidden receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent">
                                         <i class="fa-solid fa-receipt"></i> Cetak Nota
                                     </button>
-                                    <button type="submit" id="receiveSubmitBtn" class="receive-submit-btn">
-                                        <i class="fa-solid fa-check-double"></i>
-                                        <span id="receiveSubmitText">Terima & Daftarkan Servis</span>
+                                    <button type="submit" id="receiveSubmitBtn" class="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-lg flex items-center gap-2 shadow-sm transition">
+                                        <i class="fa-solid fa-floppy-disk text-xs"></i>
+                                        <span id="receiveSubmitText">Simpan Servis</span>
                                     </button>
                                 </div>
                             </footer>
                         </form>
-                        <!-- FLOATING SHORTCUT: icon saja default, panel muncul saat diklik -->
-                        <button type="button" id="rcShortcutFab" class="rc-shortcut-fab" title="Shortcut Input Cepat" aria-label="Shortcut Input Cepat" onclick="rcShortcutToggle(event)">
-                            <i class="fa-solid fa-keyboard"></i>
-                        </button>
-                        <div id="rcShortcutPop" class="rc-shortcut-pop" role="dialog" aria-label="Shortcut Input Cepat">
-                            <div class="rc-shortcut-pop-head">
-                                <span class="receive-head-ico"><i class="fa-solid fa-keyboard"></i></span>
-                                <div>
-                                    <h3 class="text-sm font-bold text-gray-800 dark:text-white">Shortcut Input Cepat</h3>
-                                    <span class="text-[10.5px] text-gray-400">Aktif saat form Servis Baru terbuka</span>
-                                </div>
-                            </div>
-                            <ul class="rc-keys">
-                                <li><span><kbd>Enter</kbd></span> Pindah kolom</li>
-                                <li><span><kbd>F2</kbd></span> Fokus Nama</li>
-                                <li><span><kbd>F4</kbd></span> Fokus Perangkat</li>
-                                <li class="is-primary"><span><kbd>F8</kbd> / <kbd>Ctrl</kbd>+<kbd>S</kbd></span> Simpan Servis</li>
-                            </ul>
-                        </div>
                         <!-- POPUP: sukses daftar servis -->
                         <div id="receiveSuccessPopup" class="rsp-overlay hidden" onclick="if(event.target===this)closeReceiveSuccessPopup(true)" role="alertdialog" aria-label="Servis berhasil didaftarkan">
                             <div class="rsp-card">
-                                <span class="rsp-check"><i class="fa-solid fa-check"></i></span>
-                                <h3 class="rsp-title">Unit Berhasil Didaftarkan!</h3>
-                                <p class="rsp-sub">No. Servis</p>
-                                <p class="rsp-no" id="rspNoServis">-</p>
-                                <div class="rsp-btns">
-                                    <button type="button" onclick="receiveSuccessPrint()" class="receive-submit-btn rsp-btn">
-                                        <i class="fa-solid fa-receipt"></i> Cetak Nota
+                                <div class="rsp-badge"><i class="fa-solid fa-check"></i></div>
+                                <div class="rsp-title">Unit Berhasil Didaftarkan!</div>
+                                <div class="rsp-sub">Nomor servis resmi untuk unit ini:</div>
+                                <div class="rsp-no" id="rspNoServis">-</div>
+                                <div class="rsp-grid">
+                                    <div><span class="rsp-lbl">Pelanggan</span><b id="rspCust">-</b></div>
+                                    <div><span class="rsp-lbl">Perangkat</span><b id="rspDev">-</b></div>
+                                    <div><span class="rsp-lbl">Estimasi</span><b id="rspEst">Rp 0</b></div>
+                                    <div><span class="rsp-lbl">DP</span><b id="rspDp">Rp 0</b></div>
+                                </div>
+                                <div class="rsp-actions">
+                                    <button type="button" class="btn btn-sm btn-ghost" onclick="closeReceiveSuccessPopup(true)">
+                                        <i class="fa-solid fa-xmark"></i> Tutup
                                     </button>
-                                    <button type="button" onclick="closeReceiveSuccessPopup(true)" class="receive-back-btn rsp-btn">
-                                        <i class="fa-solid fa-plus"></i> Input Servis Lagi
+                                    <button type="button" class="btn btn-sm btn-primary" onclick="closeReceiveSuccessPopup(false); openNota();">
+                                        <i class="fa-solid fa-receipt"></i> Cetak Nota
                                     </button>
                                 </div>
                             </div>

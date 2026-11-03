@@ -5,7 +5,7 @@ Authority (Q13: PENGELOLA read-oriented):
 - tulis       : `Action.EXPENSE_DEBT_WRITE` = Admin saja (PENGELOLA 403).
 """
 from pydantic import BaseModel
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from typing import Optional
 from money import to_decimal
 from sqlalchemy.orm import Session
@@ -68,16 +68,24 @@ def proses_defisit(kas_period_id: int = Query(None),
 
 
 
+class _LunasIn(BaseModel):
+    nominal: Optional[float] = None
+    periode: Optional[str] = None
+
+
 @router.post("/lunas")
-def lunas(nominal: float = Query(None, description="default = seluruh sisa hutang"),
-          periode: str = Query(None),
+def lunas(data: Optional[_LunasIn] = Body(None),
+          nominal: Optional[float] = Query(None, description="default = seluruh sisa hutang"),
+          periode: Optional[str] = Query(None),
           db: Session = Depends(get_db_session),
           user: User = Depends(require_authority(Action.EXPENSE_DEBT_WRITE)),
           idempotency_key: str = Header(None, alias=idem.HEADER)):
     """Pelunasan Hutang Beban dari Kas Aset (+ pre-check). P2-14: idempotency."""
+    nom = data.nominal if (data and data.nominal is not None) else nominal
+    per = data.periode if (data and data.periode is not None) else periode
     return _dengan_idem(db, "beban_hutang.lunas", idempotency_key,
-                        {"nominal": nominal, "periode": periode},
-                        lambda: _lunas_impl(nominal, periode, db, user))
+                        {"nominal": nom, "periode": per},
+                        lambda: _lunas_impl(nom, per, db, user))
 
 
 def _lunas_impl(nominal, periode, db, user):
@@ -110,10 +118,19 @@ def _lunas_impl(nominal, periode, db, user):
 
 
 @router.get("")
-def status_hutang(db: Session = Depends(get_db_session),
+def status_hutang(kas_period_id: Optional[int] = Query(None),
+                  db: Session = Depends(get_db_session),
                   user: User = Depends(get_authenticated_user)):
-    """Status Hutang Beban + ledger (read-only; termasuk untuk PENGELOLA)."""
-    return debt_mod.ringkasan(db)
+    """Status Hutang Beban + ledger + waterfall breakdown (read-only; termasuk untuk PENGELOLA)."""
+    return debt_mod.ringkasan(db, kas_period_id=kas_period_id)
+
+
+@router.get("/breakdown")
+def breakdown_hutang(kas_period_id: Optional[int] = Query(None),
+                     db: Session = Depends(get_db_session),
+                     user: User = Depends(get_authenticated_user)):
+    """Detail Waterfall Alokasi Beban (Gaji Karyawan vs Operasional Toko)."""
+    return debt_mod.hitung_breakdown_hutang(db, kas_period_id=kas_period_id)
 
 
 @router.get("/precheck")

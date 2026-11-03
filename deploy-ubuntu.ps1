@@ -11,7 +11,8 @@ $host_ = "sf@192.168.18.132"
 $ex = @(
   "--exclude=.git", "--exclude=venv", "--exclude=__pycache__",
   "--exclude=backup-*.db", "--exclude=*.log", "--exclude=cloudflared.exe",
-  "--exclude=referensi-nota", "--exclude=deploy-ubuntu.ps1"
+  "--exclude=referensi-nota", "--exclude=deploy-ubuntu.ps1",
+  "--exclude=scratch", "--exclude=.pytest_cache"
 )
 if (-not $WithDb) { $ex += "--exclude=servisku.db" }
 
@@ -20,7 +21,7 @@ tar @ex -czf $stage -C $src .
 if (-not $?) { throw "gagal membuat arsip" }
 
 Write-Host "[2/4] Upload ke $host_ ..."
-scp $stage "${host_}:/tmp/bosssf-deploy.tar.gz"
+scp -O $stage "${host_}:/tmp/bosssf-deploy.tar.gz"
 if (-not $?) { throw "gagal upload" }
 
 Write-Host "[3/4] Extract..."

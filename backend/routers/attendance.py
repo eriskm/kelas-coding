@@ -57,17 +57,12 @@ class AttendanceToggleIn(BaseModel):
     keterangan: Optional[str] = None
 
 
-@router.get("/today", response_model=AttendanceTodayOut)
-def get_today_attendance(
-    db: Session = Depends(get_db_session),
-    current_user: User = Depends(get_authenticated_user),
-):
-    """Ambil daftar kehadiran seluruh karyawan aktif untuk periode kas yang berjalan."""
-    period = get_active_period(db)
-    if not period:
-        raise HTTPException(status_code=400, detail="Tidak ada periode kas aktif")
+def init_period_attendance(db: Session, kas_period_id: int) -> int:
+    """Inisialisasi absensi default 'Hadir' untuk seluruh karyawan aktif pada kas_period_id dan sinkronkan ke Beban Gaji."""
+    period = db.query(KasPeriod).filter(KasPeriod.id == kas_period_id).first()
+    if not period or (period.status or "").upper() != "OPEN":
+        return 0
 
-    # Pastikan setiap user aktif punya baris absensi di periode ini
     active_users = (
         db.query(User)
         .filter(User.active == 1)
@@ -101,7 +96,35 @@ def get_today_attendance(
 
     if new_created:
         db.flush()
-        db.commit()
+        sync_open_period_salary_expense(db, period.id)
+    return len(existing_atts)
+
+
+@router.get("/today", response_model=AttendanceTodayOut)
+def get_today_attendance(
+    db: Session = Depends(get_db_session),
+    current_user: User = Depends(get_authenticated_user),
+):
+    """Ambil daftar kehadiran seluruh karyawan aktif untuk periode kas yang berjalan."""
+    period = get_active_period(db)
+    if not period:
+        raise HTTPException(status_code=400, detail="Tidak ada periode kas aktif")
+
+    init_period_attendance(db, period.id)
+
+    active_users = (
+        db.query(User)
+        .filter(User.active == 1)
+        .order_by(User.role.asc(), User.display_name.asc())
+        .all()
+    )
+
+    existing_atts = {
+        att.user_id: att
+        for att in db.query(UserAttendance)
+        .filter(UserAttendance.kas_period_id == period.id)
+        .all()
+    }
 
     items = []
     tot_hadir = 0
