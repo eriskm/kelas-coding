@@ -4881,11 +4881,28 @@ select.range-pill.range-select option { color: #0f172a; }
     border-radius: 8px;
     font-size: 13.5px;
 }
+#pageUpdateServis input.receive-input.pl-8 {
+    padding-left: 32px !important;
+}
 #pageUpdateServis textarea.receive-input {
     padding: 5px 9px;
 }
 #pageUpdateServis .field-label {
     margin-bottom: 1.5px;
+}
+#pageUpdateServis .receive-input::placeholder,
+#pageUpdateServis textarea.receive-input::placeholder,
+#pageUpdateServis input::placeholder {
+    font-size: 10px;
+    font-style: italic;
+    color: #64748b;
+    opacity: 1;
+}
+.dark #pageUpdateServis .receive-input::placeholder,
+.dark #pageUpdateServis textarea.receive-input::placeholder,
+.dark #pageUpdateServis input::placeholder {
+    color: #94a3b8;
+    opacity: 1;
 }
 #pageUpdateServis .us-fin {
     gap: 6px;
