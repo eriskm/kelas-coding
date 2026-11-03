@@ -3514,8 +3514,8 @@ function usSetStatus(s) {
         mark('usPlanLabel', planBase, 'usPlan');
         mark('usEstimateLabel', 'Estimasi Biaya', 'usEstimate');
         mark('usTechnicianLabel', 'Teknisi PJ', 'usTechnician');
-        mark('usFinFinalLabel', 'Harga Final (total pembayaran pelanggan)', 'usFinFinal');
-        mark('usStatusNoteLabel', 'Catatan Status (wajib untuk Gagal/Batal)', 'usStatusNote');
+        mark('usFinFinalLabel', 'Harga Final (total pembayaran)', 'usFinFinal');
+        mark('usStatusNoteLabel', 'Catatan Status', 'usStatusNote');
     } catch (_) {}
     try { usUnitUpdate(); } catch (_) {}
 }
@@ -3723,7 +3723,7 @@ function initUpdateServis() {
                     const _missing = [];
                     if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
                     if (!usVal('usTechnician').trim()) _missing.push(['Teknisi PJ', 'usTechnician']);
-                    if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final (total pembayaran pelanggan)', 'usFinFinal']);
+                    if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final (total pembayaran)', 'usFinFinal']);
                     if (_missing.length) {
                         _needFail(_missing.map(m => m[0]).join(', '));
                         _needFocus(_missing[0][1]);

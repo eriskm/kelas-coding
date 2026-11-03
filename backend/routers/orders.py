@@ -972,7 +972,7 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             # unitnya lenyap dari laporan tanpa pernah ada angkanya.
             harga = payload.get("final_price", order.final_price)
             if not (to_decimal(harga or 0) > ZERO):
-                missing.append("Harga Final (total pembayaran pelanggan)")
+                missing.append("Harga Final (total pembayaran)")
             if missing:
                 raise HTTPException(status_code=400,
                                     detail="Status DONE wajib melengkapi: " + ", ".join(missing))
