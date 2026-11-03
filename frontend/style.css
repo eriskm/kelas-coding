@@ -4876,6 +4876,21 @@ select.range-pill.range-select option { color: #0f172a; }
 .dark #pageUpdateServis .float-body {
     background: #0b1120;
 }
+#pageUpdateServis .receive-input {
+    padding: 5px 9px;
+    border-radius: 8px;
+    font-size: 13.5px;
+}
+#pageUpdateServis textarea.receive-input {
+    padding: 5px 9px;
+}
+#pageUpdateServis .field-label {
+    margin-bottom: 1.5px;
+}
+#pageUpdateServis .us-fin {
+    gap: 6px;
+    margin-top: 4px;
+}
 #pageUpdateServis .rc-sticky-footer {
     padding: 12px 20px !important;
     background: #ffffff !important;
