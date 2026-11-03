@@ -2553,7 +2553,6 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageKeuangan select { font-size: 14px; }
 #pageSpare .field-label,
 #pageClaim .field-label,
-#pageUpdateServis .field-label,
 #pageKeuangan .field-label,
 #pageKeuangan .tx-filter-label { font-size: 12px; }
 #pageSpare .receive-feedback,
@@ -4880,15 +4879,36 @@ select.range-pill.range-select option { color: #0f172a; }
     padding: 5px 9px;
     border-radius: 8px;
     font-size: 13.5px;
+    font-weight: 600;
+    color: #0f172a;
+}
+.dark #pageUpdateServis .receive-input {
+    color: #ffffff;
+}
+.dark #pageUpdateServis select.receive-input option {
+    background: #1e293b;
+    color: #f8fafc;
 }
 #pageUpdateServis input.receive-input.pl-8 {
     padding-left: 32px !important;
 }
 #pageUpdateServis textarea.receive-input {
     padding: 5px 9px;
+    font-weight: 600;
+    color: #0f172a;
+}
+.dark #pageUpdateServis textarea.receive-input {
+    color: #ffffff;
 }
 #pageUpdateServis .field-label {
-    margin-bottom: 1.5px;
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 2px;
+    letter-spacing: 0.01em;
+}
+.dark #pageUpdateServis .field-label {
+    color: #94a3b8;
 }
 #pageUpdateServis .receive-input::placeholder,
 #pageUpdateServis textarea.receive-input::placeholder,
