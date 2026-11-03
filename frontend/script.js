@@ -3513,7 +3513,7 @@ function usSetStatus(s) {
         };
         mark('usPlanLabel', planBase, 'usPlan');
         mark('usEstimateLabel', 'Estimasi Biaya', 'usEstimate');
-        mark('usTechnicianLabel', 'Teknisi Penanggung Jawab', 'usTechnician');
+        mark('usTechnicianLabel', 'Teknisi PJ', 'usTechnician');
         mark('usFinFinalLabel', 'Harga Final (total pembayaran pelanggan)', 'usFinFinal');
         mark('usStatusNoteLabel', 'Catatan Status (wajib untuk Gagal/Batal)', 'usStatusNote');
     } catch (_) {}
@@ -3710,7 +3710,7 @@ function initUpdateServis() {
                     }
                 } else if (_usSt === 'REPAIR') {
                     if (!usVal('usTechnician').trim()) {
-                        _needFail('Teknisi Penanggung Jawab');
+                        _needFail('Teknisi PJ');
                         _needFocus('usTechnician');
                         return;
                     }
@@ -3722,7 +3722,7 @@ function initUpdateServis() {
                     // terhitung sebagai omzet 0 -- unit lenyap dari laporan.
                     const _missing = [];
                     if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
-                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi PJ', 'usTechnician']);
                     if (!(usNum('usFinFinal') > 0)) _missing.push(['Harga Final (total pembayaran pelanggan)', 'usFinFinal']);
                     if (_missing.length) {
                         _needFail(_missing.map(m => m[0]).join(', '));
@@ -3741,7 +3741,7 @@ function initUpdateServis() {
                     // jadi satu-satunya penentu.
                     const _missing = [];
                     if (!usVal('usPlan').trim()) _missing.push(['Perbaikan / Tindakan Perbaikan', 'usPlan']);
-                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi Penanggung Jawab', 'usTechnician']);
+                    if (!usVal('usTechnician').trim()) _missing.push(['Teknisi PJ', 'usTechnician']);
                     if (_missing.length) {
                         _needFail(_missing.map(m => m[0]).join(', '));
                         _needFocus(_missing[0][1]);
@@ -4078,7 +4078,7 @@ function grDetail(idx) {
 
     // -- (3) Teknisi yang menangani ----------------------------------------
     document.getElementById('warrantyTeknisi').innerHTML = `
-        <div><span>Teknisi Penanggung Jawab</span><b>${escapeHtml((g.teknisi || '').trim() || kosong)}</b></div>`;
+        <div><span>Teknisi PJ</span><b>${escapeHtml((g.teknisi || '').trim() || kosong)}</b></div>`;
 
     // -- (2) Riwayat Klaim Garansi -----------------------------------------
     // Hanya klaim yang benar-benar tersimpan. Kalau belum pernah ada klaim,
@@ -9382,10 +9382,10 @@ async function initReceivePage() {
             if (_rcPath === 'REPAIR' || _rcPath === 'WAIT PART') {
                 if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana Perbaikan', 'rcPlan']);
                 if (!(rcNum('rcEstimate') > 0)) _rcMissing.push(['Estimasi Biaya', 'rcEstimate']);
-                if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi Penanggung Jawab', 'rcTechnician']);
+                if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi PJ', 'rcTechnician']);
             } else if (_rcPath === 'TUNGGU') {
                 if (!_rcVal('rcPlan')) _rcMissing.push(['Rencana/Tindakan Perbaikan', 'rcPlan']);
-                if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi Penanggung Jawab', 'rcTechnician']);
+                if (!_rcVal('rcTechnician')) _rcMissing.push(['Teknisi PJ', 'rcTechnician']);
                 if (((document.getElementById('rcFinal') || {}).value || '').trim() === '') _rcMissing.push(['Harga Final (wajib terdefinisi, boleh 0)', 'rcFinal']);
             }
             if (_rcMissing.length) {

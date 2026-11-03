@@ -206,7 +206,7 @@ def _pastikan_teknisi_aktif(db: Session, nama):
 
 @router.get("/technicians")
 def list_technicians(db: Session = Depends(get_db_session)):
-    """Daftar Teknisi Penanggung Jawab: HANYA akun ber-role TEKNISI.
+    """Daftar Teknisi PJ: HANYA akun ber-role TEKNISI.
 
     Owner: "di halaman Update Data Servis dan Servis Baru pada Teknisi
     Penanggung Jawab pilihannya dulu hanya akun teknisi saja."
@@ -217,7 +217,7 @@ def list_technicians(db: Session = Depends(get_db_session)):
       3. akun aktif ber-role ADMIN dan SUPERADMIN.
 
     Akibatnya Manager Toko dan akun Developer ikut muncul sebagai pilihan
-    "Teknisi Penanggung Jawab" di form Servis Baru, Update Data Servis, dan
+    "Teknisi PJ" di form Servis Baru, Update Data Servis, dan
     Klaim Garansi. Sekarang hanya akun TEKNISI aktif.
 
     Catatan: nama historis yang TIDAK punya akun (teknisi lama yang hanya ada di
@@ -950,7 +950,7 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
             tech = payload.get("technician", order.technician)
             if not (tech or "").strip():
                 raise HTTPException(status_code=400,
-                                    detail="Status REPAIR wajib melengkapi: Teknisi Penanggung Jawab")
+                                    detail="Status REPAIR wajib melengkapi: Teknisi PJ")
             _pastikan_teknisi_aktif(db, tech)
         elif new_status == "DONE":
             missing = []
@@ -959,7 +959,7 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                 missing.append("Perbaikan / Tindakan Perbaikan")
             tech = payload.get("technician", order.technician)
             if not (tech or "").strip():
-                missing.append("Teknisi Penanggung Jawab")
+                missing.append("Teknisi PJ")
             else:
                 # Unit yang teknisinya NONAKTIF masih boleh diselesaikan --
                 # yang ditolak hanya penugasan BARU ke dia. Kalau nama teknisi
