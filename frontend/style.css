@@ -4846,9 +4846,45 @@ select.range-pill.range-select option { color: #0f172a; }
 .nps-foot-r b em { font-style: normal; color: #2563eb; }
 .nps-foot-r span { font-size: 12px; color: #888; font-weight: 600; letter-spacing: 0.5px; display: block; }
 /* ============================================
-   UPDATE DATA SERVIS (2 kolom + finance + aksi)
+   UPDATE DATA SERVIS (Desain ringkas & cardless sesuai Servis Baru)
    ============================================ */
-#pageUpdateServis { width: min(1100px, calc(100vw - 24px)); }
+#pageUpdateServis {
+    width: min(1180px, calc(100vw - 24px)) !important;
+    max-width: 1180px !important;
+    border-radius: 18px !important;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25) !important;
+    border: 1px solid rgba(226, 232, 240, 0.8) !important;
+}
+.dark #pageUpdateServis {
+    border-color: rgba(255, 255, 255, 0.1) !important;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5) !important;
+}
+#pageUpdateServis .float-titlebar {
+    padding: 12px 20px !important;
+    background: #ffffff !important;
+    border-bottom: 1px solid #f1f5f9 !important;
+}
+.dark #pageUpdateServis .float-titlebar {
+    background: #0f172a !important;
+    border-bottom-color: rgba(255, 255, 255, 0.08) !important;
+}
+#pageUpdateServis .float-body {
+    zoom: 1 !important;
+    background: #f8fafc;
+}
+.dark #pageUpdateServis .float-body {
+    background: #0b1120;
+}
+#pageUpdateServis .rc-sticky-footer {
+    padding: 12px 20px !important;
+    background: #ffffff !important;
+    border-top: 1px solid #f1f5f9 !important;
+}
+.dark #pageUpdateServis .rc-sticky-footer {
+    background: #0f172a !important;
+    border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
 .us-titlebar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .us-head-meta {
     margin: 2px 0 0; font-size: 11px; color: #64748b;
@@ -4861,12 +4897,52 @@ select.range-pill.range-select option { color: #0f172a; }
 .us-head-meta #usHeadDevice, .us-head-meta #usHeadCustomer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .us-head-meta .us-dot { opacity: .4; flex-shrink: 0; }
 .us-titlebar #usHeadStatus { flex-shrink: 0; }
-.us-layout { display: grid; grid-template-columns: 1.55fr 1fr; gap: 12px; align-items: start; }
-@media (max-width: 900px) { .us-layout { grid-template-columns: 1fr; } }
-.us-main { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.us-side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
-.us-check-grid { grid-template-columns: repeat(3, 1fr); }
-@media (max-width: 560px) { .us-check-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* Checklist Pills di Update Data Servis */
+#usCheckContainer .rc-check-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 640px) { #usCheckContainer .rc-check-groups { grid-template-columns: 1fr; } }
+#usCheckContainer .rc-check-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+#usCheckContainer .rc-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    border-radius: 8px;
+    background: #ffffff;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    transition: all 0.15s ease;
+    cursor: pointer;
+    line-height: 1.25;
+    user-select: none;
+}
+#usCheckContainer .rc-check:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+#usCheckContainer .rc-check:has(input:checked) {
+    border-color: #3b82f6;
+    background: #eff6ff;
+    color: #1d4ed8;
+    font-weight: 600;
+}
+.dark #usCheckContainer .rc-check {
+    background: rgba(255, 255, 255, 0.04);
+    color: #cbd5e1;
+    border-color: rgba(255, 255, 255, 0.10);
+}
+.dark #usCheckContainer .rc-check:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.18);
+}
+.dark #usCheckContainer .rc-check:has(input:checked) {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.15);
+    color: #93c5fd;
+}
+
 .us-fin { display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
 .us-duo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 @media (max-width: 480px) { .us-duo { grid-template-columns: 1fr; } }
@@ -4903,27 +4979,11 @@ select.range-pill.range-select option { color: #0f172a; }
     background: #f8fafc; font-family: inherit; font-size: 10.5px; font-weight: 700; color: #475569;
 }
 .dark .us-keys kbd { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); color: #cbd5e1; }
-/* Sticky savebar Update Data Servis — CTA utama selalu terlihat */
-.us-savebar {
-    position: sticky; bottom: -16px; z-index: 5;
-    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-    margin-top: 12px; padding: 12px 2px 4px;
-    background: linear-gradient(180deg, rgba(255,255,255,0), #ffffff 38%);
-}
-.dark .us-savebar { background: linear-gradient(180deg, rgba(20,20,28,0), #14141c 38%); }
-.us-savebar #usFeedback { flex: 1 1 100%; margin: 0; }
-.us-savebar-btn { flex: 1 1 220px; justify-content: center; }
-.us-savebar-keys { margin: 0; flex: 0 0 auto; }
 /* Status kiri = read-only mirror (satu-satunya editor: usQuickStatus di panel Aksi).
    Disabled hanya mematikan input user — .value tetap bisa ditulis/dibaca via JS. */
 #usStatus:disabled { opacity: .8; cursor: not-allowed; background: #f1f5f9; }
 .dark #usStatus:disabled { background: rgba(255,255,255,.04); }
 .us-ro-hint { font-weight: 600; color: #94a3b8; font-size: 10px; }
-@media (max-width: 560px) {
-    .us-savebar { gap: 8px; }
-    .us-savebar-btn { flex: 1 1 100%; }
-    .us-savebar-keys { flex: 1 1 100%; text-align: center; }
-}
 ﻿
 /* =====================================================================
    POLISH UI HALAMAN KEUANGAN (2026-10-17)
