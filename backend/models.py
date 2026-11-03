@@ -390,7 +390,7 @@ class KasEntry(Base):
     # Pelaku mutasi posisi Master Kas (audit).
     oleh = Column(String(120))
     ref_type = Column(String(30), index=True)
-    ref_id = Column(Integer, index=True)
+    ref_id = Column(String(60), index=True)
 
 
 class StatusHistory(Base):

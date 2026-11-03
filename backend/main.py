@@ -12,6 +12,7 @@ from datetime import date, datetime
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
@@ -37,14 +38,25 @@ APP_VERSION = "1.0.10"
 
 
 class NoCacheStaticFiles(StaticFiles):
-    """StaticFiles yang selalu memaksa browser mengambil versi terbaru (no-cache)."""
+    """StaticFiles dengan caching cerdas:
+    - HTML: no-cache, must-revalidate (selalu cek server agar versi baru langsung terbaca)
+    - Aset (JS, CSS, Gambar, Font): di-cache browser & proxy (max-age=86400).
+      Pembaruan versi dikendalikan presisi via query parameter (?v=...) di index.html.
+    """
 
     async def get_response(self, path: str, scope):
         response = await super().get_response(path, scope)
         if isinstance(response, FileResponse):
-            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
-            response.headers["Pragma"] = "no-cache"
-            response.headers["Expires"] = "0"
+            lower_path = path.lower()
+            if lower_path.endswith(".html") or not path or path == "/":
+                response.headers["Cache-Control"] = "no-cache, must-revalidate"
+                response.headers["Pragma"] = "no-cache"
+            else:
+                response.headers["Cache-Control"] = "public, max-age=86400, stale-while-revalidate=3600"
+                if "Pragma" in response.headers:
+                    del response.headers["Pragma"]
+                if "Expires" in response.headers:
+                    del response.headers["Expires"]
         return response
 
 app = FastAPI(
@@ -61,6 +73,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# GZip compression - kompresi otomatis respon > 1KB (mengurangi ukuran JS/CSS dari ~900KB menjadi ~150KB)
+app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 
 @app.on_event("startup")

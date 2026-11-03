@@ -52,19 +52,26 @@ def _total_dibayar(db: Session, periode: str) -> Decimal:
     """Berapa Beban periode ini yang SUDAH dibayar ke Laci (lewat apa pun).
 
     Entri Beban selalu bertipe "Keluar", jadi dijumlahkan sebagai NILAI ABSOLUT.
+    Toleran terhadap tipe ref_id di PostgreSQL (integer) vs SQLite (dinamis).
     """
     from models import KasEntry
     total = ZERO
-    for k in (db.query(KasEntry)
-              .filter(KasEntry.layer == cash.LAYER_LACI,
-                      KasEntry.sumber == cash.SUMBER_BEBAN,
-                      KasEntry.ref_type == BE_REF_TYPE,
-                      KasEntry.ref_id == periode).all()):
-        n = abs(to_decimal(k.nominal))
-        if (k.jenis or "").strip().lower() == "keluar":
-            total += n
-        else:
-            total -= n
+    p_str = str(periode).strip()
+    tag = ("periode %s" % p_str)
+    entries = (db.query(KasEntry)
+               .filter(KasEntry.layer == cash.LAYER_LACI,
+                       KasEntry.sumber == cash.SUMBER_BEBAN,
+                       KasEntry.ref_type == BE_REF_TYPE)
+               .all())
+    for k in entries:
+        r_id = str(k.ref_id or "").strip()
+        ket = k.keterangan or ""
+        if r_id == p_str or tag in ket:
+            n = abs(to_decimal(k.nominal))
+            if (k.jenis or "").strip().lower() == "keluar":
+                total += n
+            else:
+                total -= n
     return quantize(total)
 
 
@@ -74,19 +81,24 @@ def _sudah_dibayar_oleh_unit(db: Session, periode: str, order_no: str) -> Decima
     if not order_no:
         return ZERO
     total = ZERO
-    for k in (db.query(KasEntry)
-              .filter(KasEntry.layer == cash.LAYER_LACI,
-                      KasEntry.sumber == cash.SUMBER_BEBAN,
-                      KasEntry.ref_type == BE_REF_TYPE,
-                      KasEntry.ref_id == periode).all()):
-        if ("(Laba unit #%s)" % order_no) in (k.keterangan or ""):
+    p_str = str(periode).strip()
+    tag = ("periode %s" % p_str)
+    unit_tag = ("(Laba unit #%s)" % order_no)
+    entries = (db.query(KasEntry)
+               .filter(KasEntry.layer == cash.LAYER_LACI,
+                       KasEntry.sumber == cash.SUMBER_BEBAN,
+                       KasEntry.ref_type == BE_REF_TYPE)
+               .all())
+    for k in entries:
+        r_id = str(k.ref_id or "").strip()
+        ket = k.keterangan or ""
+        if (r_id == p_str or tag in ket) and unit_tag in ket:
             n = abs(to_decimal(k.nominal))
             if (k.jenis or "").strip().lower() == "keluar":
                 total += n
             else:
                 total -= n
     return quantize(total)
-
 
 def bayar_beban_periode(db: Session, start, end, periode_key: str,
                         total_beban, oleh: str = None,
