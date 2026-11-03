@@ -2257,7 +2257,7 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 }
 
 /* Skala 90%: Update Data Servis 10% lebih ringkas */
-#pageUpdateServis .float-body { zoom: 0.9; }
+#pageUpdateServis .float-body { zoom: 1; }
 
 /* Servis Baru: Ukuran diperbesar 20% lebih terbaca & responsif tanpa scroll */
 #pageReceive .float-titlebar { padding: 7px 14px; }
@@ -2547,11 +2547,24 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageGaransi .tx-toolbar .receive-input,
 #pageSparepart .receive-input,
 #pageSpare .receive-input,
-#pageClaim .receive-input { font-size: 14px; }
+#pageClaim .receive-input,
+#pageUpdateServis .receive-input { font-size: 14px; }
 #pageSpare .field-label,
-#pageClaim .field-label { font-size: 12px; }
+#pageClaim .field-label,
+#pageUpdateServis .field-label { font-size: 12px; }
 #pageSpare .receive-feedback,
-#pageClaim .receive-feedback { font-size: 13.5px; }
+#pageClaim .receive-feedback,
+#pageUpdateServis .receive-feedback { font-size: 13.5px; }
+#pageUpdateServis .receive-panel-head h3 { font-size: 15px; }
+#pageUpdateServis .float-title { font-size: 15px; }
+#pageUpdateServis .float-sub { font-size: 11px; }
+#pageUpdateServis .us-head-meta { font-size: 11.5px; }
+#pageUpdateServis .us-stat span { font-size: 11.5px; }
+#pageUpdateServis .us-stat b { font-size: 14.5px; }
+#pageUpdateServis .us-row { font-size: 13px; }
+#pageUpdateServis .us-row.is-total b { font-size: 15px; }
+#pageUpdateServis table thead th { font-size: 11.5px; }
+#pageUpdateServis table tbody td { font-size: 13.5px; }
 
 /* Tabel Transaksi + Histori: head 11.5 / body 13.5 */
 #pageTransaksi .tx-table thead th,
