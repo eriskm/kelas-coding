@@ -9347,10 +9347,16 @@ async function initReceivePage() {
     const pwToggle = document.getElementById('rcPwToggle');
     const pwInput = document.getElementById('rcPassword');
     if (pwToggle && pwInput) pwToggle.addEventListener('click', () => {
-        const show = pwInput.type === 'password';
-        pwInput.type = show ? 'text' : 'password';
-        pwToggle.innerHTML = `<i class="fa-solid ${show ? 'fa-eye-slash' : 'fa-eye'}"></i>`;
-        pwToggle.setAttribute('aria-label', show ? 'Sembunyikan password' : 'Tampilkan password');
+        const isMasked = pwInput.classList.contains('rc-masked-pin');
+        if (isMasked) {
+            pwInput.classList.remove('rc-masked-pin');
+            pwToggle.innerHTML = '<i class="fa-regular fa-eye-slash"></i>';
+            pwToggle.setAttribute('aria-label', 'Samarkan sandi');
+        } else {
+            pwInput.classList.add('rc-masked-pin');
+            pwToggle.innerHTML = '<i class="fa-regular fa-eye"></i>';
+            pwToggle.setAttribute('aria-label', 'Tampilkan sandi');
+        }
     });
 
     const form = document.getElementById('receiveForm');
@@ -9460,6 +9466,13 @@ async function initReceivePage() {
             const _nb2 = document.getElementById('receiveNotaBtn');
             if (_nb2) _nb2.classList.remove('hidden');
             this.reset();
+            const _pwIn = document.getElementById('rcPassword');
+            const _pwTog = document.getElementById('rcPwToggle');
+            if (_pwIn) _pwIn.classList.remove('rc-masked-pin');
+            if (_pwTog) {
+                _pwTog.innerHTML = '<i class="fa-regular fa-eye-slash"></i>';
+                _pwTog.setAttribute('aria-label', 'Samarkan sandi');
+            }
             clearReceiveDraft();
             try {
                 updateRcPhoneFeedback('');

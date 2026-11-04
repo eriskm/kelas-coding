@@ -6180,3 +6180,9 @@ select.range-pill.range-select option { color: #0f172a; }
 .dark .ku-chip-gray:hover {
     background: rgba(255, 255, 255, 0.14);
 }
+
+/* Masking pin / sandi HP tanpa trigger browser credential manager */
+.rc-masked-pin {
+    -webkit-text-security: disc !important;
+    text-security: disc !important;
+}
