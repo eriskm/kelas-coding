@@ -7599,13 +7599,19 @@ function closeKuHutangSaranPopup() {
 
 function bukaPanelHutangBebanDariTutupKas() {
     closeKuHutangSaranPopup();
+    if (typeof kuSwitchTab === 'function') {
+        kuSwitchTab('aset');
+    }
     kuRenderHutangManual();
     const wrap = document.getElementById('kuHutangManualWrap');
+    const panel = wrap ? wrap.closest('.ku-hutang-panel') : null;
     const input = document.getElementById('kuHutangInput');
     const btn = document.getElementById('kuHutangBtn');
     if (wrap) {
         wrap.classList.remove('hidden');
-        wrap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        setTimeout(() => {
+            (panel || wrap).scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 120);
     }
     if (input && _sisaHutangPending > 0) {
         input.value = Math.round(_sisaHutangPending);
@@ -7617,7 +7623,7 @@ function bukaPanelHutangBebanDariTutupKas() {
         setTimeout(() => {
             if (btn) btn.focus();
             else input.focus();
-        }, 300);
+        }, 350);
     }
 }
 
@@ -7716,7 +7722,7 @@ async function kuTutupKas() {
         const konfirmasiMinus = confirm(
             'PERHATIAN: Hitungan kas Anda berakhir MINUS / TEKOR.\n\n'
             + 'Apakah Anda sudah memastikan hitungan uang fisik dan data transaksi ini sudah benar-benar sesuai?\n\n'
-            + 'Klik OK untuk tetap melanjutkan Tutup Kas dengan nilai minus ini.\n'
+            + 'Klik OK untuk tetap melanjutkan Tutup Kas dan langsung diarahkan ke halaman Hutang Beban.\n'
             + 'Klik Cancel untuk membatalkan dan memeriksa ulang hitungan.');
         if (!konfirmasiMinus) return;
     }
@@ -7762,11 +7768,12 @@ async function kuTutupKas() {
         await loadKuFinance();
         renderKuArsip();
 
-        // 6. NOTIFIKASI PENGARAH KE HUTANG BEBAN JIKA SISA BEBAN / KAS TOKO NOL
+        // 6. LANGSUNG ARAHKAN KE HALAMAN / TAB HUTANG BEBAN JIKA SISA BEBAN MINUS
         if (sisaHutangBeban > 0 && !sudahTercatat) {
+            bukaPanelHutangBebanDariTutupKas();
             setTimeout(() => {
                 bukaKuHutangSaranPopup(sisaHutangBeban, closedPid);
-            }, 600);
+            }, 350);
         }
     } catch (err) {
         toast(err.message || 'Gagal tutup kas.');
