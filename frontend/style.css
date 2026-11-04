@@ -5160,8 +5160,8 @@ select.range-pill.range-select option { color: #0f172a; }
 .ku-kas-panel .ku-summary .sm-top,
 .ku-hutang-panel .ku-summary .sm-top {
     display: flex; align-items: center; gap: 5.5px;
-    font-size: 11px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.03em; line-height: 1.2;
+    font-size: 11.5px; font-weight: 700;
+    letter-spacing: -0.01em; line-height: 1.2;
 }
 .ku-kas-panel .ku-summary .sm-top i,
 .ku-hutang-panel .ku-summary .sm-top i { font-size: 11px; width: 14px; text-align: center; }
@@ -6107,4 +6107,76 @@ select.range-pill.range-select option { color: #0f172a; }
     background: #1d4ed8 !important;
     box-shadow: 0 4px 6px -1px rgba(37, 99, 235, 0.25) !important;
     transform: none !important;
+}
+
+/* ---------- Refinement Tab 3: Kas Aset & Hutang Beban ---------- */
+#kuTabPaneAset input.receive-input.pl-9 {
+    padding-left: 32px !important;
+}
+
+.ku-chip-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4.5px;
+    padding: 3px 8.5px;
+    border-radius: 6px;
+    font-size: 10.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    border: 1px solid transparent;
+    user-select: none;
+}
+.ku-chip-amber {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+}
+.ku-chip-amber:hover {
+    background: #fde68a;
+    color: #78350f;
+}
+.dark .ku-chip-amber {
+    background: rgba(245, 158, 11, 0.16);
+    color: #fbbf24;
+    border-color: rgba(245, 158, 11, 0.35);
+}
+.dark .ku-chip-amber:hover {
+    background: rgba(245, 158, 11, 0.26);
+}
+
+.ku-chip-blue {
+    background: #e0f2fe;
+    color: #0369a1;
+    border-color: #bae6fd;
+}
+.ku-chip-blue:hover {
+    background: #bae6fd;
+    color: #0284c7;
+}
+.dark .ku-chip-blue {
+    background: rgba(14, 165, 233, 0.16);
+    color: #38bdf8;
+    border-color: rgba(14, 165, 233, 0.35);
+}
+.dark .ku-chip-blue:hover {
+    background: rgba(14, 165, 233, 0.26);
+}
+
+.ku-chip-gray {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #e2e8f0;
+}
+.ku-chip-gray:hover {
+    background: #e2e8f0;
+    color: #1e293b;
+}
+.dark .ku-chip-gray {
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    border-color: rgba(255, 255, 255, 0.12);
+}
+.dark .ku-chip-gray:hover {
+    background: rgba(255, 255, 255, 0.14);
 }

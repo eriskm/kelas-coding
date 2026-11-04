@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=26">
+    <link rel="stylesheet" href="/static/style.css?v=27">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1831,25 +1831,29 @@
                                 </div>
                                 <form id="kuAsetForm" autocomplete="off" class="ku-kas-form mt-3 pt-3 border-t border-gray-100 dark:border-white/5" data-cap="KAS_ASET_INJEKSI">
                                     <!-- SUB-BLOK 1: SETOR / TARIK MODAL TOKO -->
-                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 mb-3">
-                                        <div class="flex items-center justify-between mb-2">
+                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 mb-3 space-y-2.5">
+                                        <div class="flex items-center justify-between">
                                             <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                                                 <i class="fa-solid fa-money-bill-transfer text-blue-500"></i> Setor / Tarik Modal Usaha
                                             </span>
-                                            <span class="text-[11px] text-gray-400">Injeksi modal baru & penarikan kas aset</span>
+                                            <span class="text-[11px] text-gray-400">Injeksi &amp; penarikan modal</span>
                                         </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            <div class="relative">
+                                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                                            <div class="sm:col-span-5 relative">
                                                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                <input class="receive-input pl-9 w-full text-xs" type="number" id="kuAsetNominal" min="1" placeholder="Nominal Rp" required>
+                                                <input class="receive-input pl-9 w-full text-xs font-semibold" type="number" id="kuAsetNominal" min="1" placeholder="Nominal Rp" required>
                                             </div>
-                                            <select class="receive-input text-xs w-full" id="kuAsetPosisi" aria-label="Tujuan Setor Modal">
-                                                <option value="LACI">Setor ke Laci (Kas Kecil)</option>
-                                                <option value="KAS_ASET">Setor ke Kas Aset (Brankas)</option>
-                                            </select>
-                                            <input class="receive-input text-xs w-full" type="text" id="kuAsetKeterangan" placeholder="Keterangan (mis. suntik modal)" required>
+                                            <div class="sm:col-span-7">
+                                                <select class="receive-input text-xs w-full" id="kuAsetPosisi" aria-label="Tujuan Setor Modal">
+                                                    <option value="LACI">Setor ke Laci (Kas Operasional)</option>
+                                                    <option value="KAS_ASET">Setor ke Kas Aset (Brankas Cadangan)</option>
+                                                </select>
+                                            </div>
+                                            <div class="sm:col-span-12">
+                                                <input class="receive-input text-xs w-full" type="text" id="kuAsetKeterangan" placeholder="Keterangan transaksi (mis. suntik modal awal / setor pribadi)" required>
+                                            </div>
                                         </div>
-                                        <div class="flex items-center gap-2 mt-2.5">
+                                        <div class="flex items-center gap-2 pt-0.5">
                                             <button type="button" onclick="kuAsetMasuk()" class="receive-submit-btn text-xs py-1.5 px-3">
                                                 <i class="fa-solid fa-arrow-down"></i> Setor Modal (Masuk)
                                             </button>
@@ -1860,25 +1864,29 @@
                                     </div>
 
                                     <!-- SUB-BLOK 2: TRANSFER KAS INTERNAL (LACI ⇄ ASET) -->
-                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10">
-                                        <div class="flex items-center justify-between mb-2">
+                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 space-y-2.5">
+                                        <div class="flex items-center justify-between">
                                             <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                                                 <i class="fa-solid fa-right-left text-amber-500"></i> Pindah Kas Internal (Laci ⇄ Brankas)
                                             </span>
-                                            <span class="text-[11px] text-gray-400">Pindah antar-kantong toko (Master Kas tetap)</span>
+                                            <span class="text-[11px] text-gray-400">Pindah kantong (Master Kas tetap)</span>
                                         </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            <div class="relative">
+                                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
+                                            <div class="sm:col-span-5 relative">
                                                 <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                <input class="receive-input pl-9 w-full text-xs" type="number" id="kuTransferNominal" min="1" placeholder="Nominal Rp" required>
+                                                <input class="receive-input pl-9 w-full text-xs font-semibold" type="number" id="kuTransferNominal" min="1" placeholder="Nominal Rp" required>
                                             </div>
-                                            <select class="receive-input text-xs w-full" id="kuTransferArah" aria-label="Arah transfer kas">
-                                                <option value="LACI-&gt;KAS_ASET">Laci Kasir &rarr; Brankas Aset</option>
-                                                <option value="KAS_ASET-&gt;LACI">Brankas Aset &rarr; Laci Kasir</option>
-                                            </select>
-                                            <input class="receive-input text-xs w-full" type="text" id="kuTransferKeterangan" placeholder="Keterangan (mis. setor kas berlebih)" required>
+                                            <div class="sm:col-span-7">
+                                                <select class="receive-input text-xs w-full" id="kuTransferArah" aria-label="Arah transfer kas">
+                                                    <option value="LACI-&gt;KAS_ASET">Laci Kasir &rarr; Brankas Toko</option>
+                                                    <option value="KAS_ASET-&gt;LACI">Brankas Toko &rarr; Laci Kasir</option>
+                                                </select>
+                                            </div>
+                                            <div class="sm:col-span-12">
+                                                <input class="receive-input text-xs w-full" type="text" id="kuTransferKeterangan" placeholder="Keterangan pindah kas (mis. setor kelebihan laci ke brankas)" required>
+                                            </div>
                                         </div>
-                                        <div class="flex items-center gap-2 mt-2.5">
+                                        <div class="flex items-center gap-2 pt-0.5">
                                             <button type="button" onclick="kuAsetTransfer()" class="receive-back-btn text-xs py-1.5 px-3 border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-700 dark:text-amber-400">
                                                 <i class="fa-solid fa-right-left"></i> Pindahkan Kas Antar-Kantong
                                             </button>
@@ -1977,23 +1985,36 @@
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2" id="kuDebtEntitasGrid"></div>
                                         </div>
 
-                                        <div class="flex flex-wrap items-end gap-2 pt-2 border-t border-gray-100 dark:border-white/5">
-                                            <div class="field" style="min-width:170px;flex:1 1 170px">
-                                                <label class="field-label text-xs" for="kuDebtNominalInput">Nominal Bayar / Cicil (Rp)</label>
-                                                <input id="kuDebtNominalInput" type="number" min="0" step="1" oninput="kuDebtSimulasiCicil(this.value)" class="receive-input text-xs" placeholder="0">
+                                        <!-- QUICK-FILL CHIPS + NOMINAL INPUT & SUBMIT ACTION -->
+                                        <div class="pt-2.5 border-t border-gray-100 dark:border-white/5 space-y-2">
+                                            <div class="flex items-center justify-between flex-wrap gap-1.5">
+                                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                                                    <i class="fa-solid fa-wand-magic-sparkles text-blue-500 text-[10px]"></i> Pilihan Nominal Cepat:
+                                                </span>
+                                                <div class="flex items-center gap-1.5 flex-wrap">
+                                                    <button type="button" onclick="kuDebtSetNominal('gaji')" id="kuDebtBtnGaji" class="ku-chip-btn ku-chip-amber" title="Isi nominal sebesar seluruh hak gaji yang tertunggak">
+                                                        <i class="fa-solid fa-users text-[10px]"></i> Seluruh Gaji
+                                                    </button>
+                                                    <button type="button" onclick="kuDebtSetNominal('aset')" id="kuDebtBtnAset" class="ku-chip-btn ku-chip-blue" title="Isi nominal sebesar saldo Kas Aset yang tersedia">
+                                                        <i class="fa-solid fa-vault text-[10px]"></i> Sesuai Kas Aset
+                                                    </button>
+                                                    <button type="button" onclick="kuDebtSetNominal('semua')" id="kuDebtBtnSemua" class="ku-chip-btn ku-chip-gray" title="Isi nominal sebesar total sisa hutang toko">
+                                                        <i class="fa-solid fa-check-double text-[10px]"></i> Total Hutang
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <button type="button" onclick="kuDebtSetNominal('gaji')" id="kuDebtBtnGaji" class="receive-back-btn text-xs py-2 px-2.5 font-medium whitespace-nowrap text-amber-700 dark:text-amber-400 border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/20" title="Khusus lunasi seluruh sisa hak gaji karyawan">
-                                                <i class="fa-solid fa-users text-[11px]"></i> Lunasi Hak Gaji
-                                            </button>
-                                            <button type="button" onclick="kuDebtSetNominal('aset')" class="receive-back-btn text-xs py-2 px-2.5 font-medium whitespace-nowrap" title="Gunakan seluruh saldo Kas Aset yang tersedia">
-                                                <i class="fa-solid fa-vault text-[11px]"></i> Seadanya Kas Aset
-                                            </button>
-                                            <button type="button" onclick="kuDebtSetNominal('semua')" class="receive-back-btn text-xs py-2 px-2.5 font-medium whitespace-nowrap" title="Lunaskan seluruh sisa hutang toko">
-                                                <i class="fa-solid fa-check-double text-[11px]"></i> Seluruh Hutang
-                                            </button>
-                                            <button type="button" onclick="kuDebtLunas()" id="kuDebtLunasBtn" class="receive-submit-btn text-xs py-2 px-3 whitespace-nowrap">
-                                                <i class="fa-solid fa-hand-holding-dollar"></i> Bayar dari Kas Aset
-                                            </button>
+
+                                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                                                <div class="sm:col-span-7 relative">
+                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                    <input id="kuDebtNominalInput" type="number" min="0" step="1" oninput="kuDebtSimulasiCicil(this.value)" class="receive-input pl-9 w-full text-xs font-semibold" placeholder="Nominal bayar / cicil">
+                                                </div>
+                                                <div class="sm:col-span-5">
+                                                    <button type="button" onclick="kuDebtLunas()" id="kuDebtLunasBtn" class="receive-submit-btn w-full text-xs py-2 px-3 justify-center shadow-xs whitespace-nowrap">
+                                                        <i class="fa-solid fa-hand-holding-dollar"></i> Bayar dari Kas Aset
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
 
                                         <!-- PREVIEW SIMULASI ALOKASI CICILAN REAL-TIME -->
@@ -2009,23 +2030,25 @@
                                     </div>
 
                                     <!-- SUB-BLOK 2: PENCATATAN DEFISIT PERIODE INI (OD-LOCK-12) -->
-                                    <div id="kuHutangManualWrap" class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10">
-                                        <div class="flex items-center justify-between mb-2">
+                                    <div id="kuHutangManualWrap" class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 space-y-2">
+                                        <div class="flex items-center justify-between">
                                             <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
                                                 <i class="fa-solid fa-pen-to-square text-amber-500"></i> Pembukuan Sisa Beban Periode
                                             </span>
                                             <span class="text-[11px] text-gray-400">Catat minus operasional ke Hutang Beban</span>
                                         </div>
-                                        <div class="flex flex-wrap items-end gap-2">
-                                            <div class="field" style="min-width:200px;flex:1 1 200px">
-                                                <label class="field-label text-xs" for="kuHutangInput">Nominal Sisa Beban (Rp)</label>
-                                                <input id="kuHutangInput" type="number" min="0" step="1" class="receive-input text-xs" placeholder="0">
+                                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
+                                            <div class="sm:col-span-7 relative">
+                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                                                <input id="kuHutangInput" type="number" min="0" step="1" class="receive-input pl-9 w-full text-xs font-semibold" placeholder="Nominal Sisa Beban (Rp)">
                                             </div>
-                                            <button type="button" onclick="kuHutangCatat()" id="kuHutangBtn" class="receive-submit-btn text-xs py-2 px-3">
-                                                <i class="fa-solid fa-file-circle-plus"></i> Catat Hutang Beban
-                                            </button>
+                                            <div class="sm:col-span-5">
+                                                <button type="button" onclick="kuHutangCatat()" id="kuHutangBtn" class="receive-submit-btn w-full text-xs py-2 px-3 justify-center whitespace-nowrap">
+                                                    <i class="fa-solid fa-file-circle-plus"></i> Catat Hutang Beban
+                                                </button>
+                                            </div>
                                         </div>
-                                        <p class="ku-sub mt-2 text-xs" id="kuHutangHint"></p>
+                                        <p class="ku-sub mt-1 text-xs" id="kuHutangHint"></p>
                                     </div>
 
                                     <div id="kuDebtFeedback" class="hidden receive-feedback mt-2"></div>
@@ -3877,6 +3900,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=32"></script>
+<script src="/static/script.js?v=33"></script>
 </body>
 </html>

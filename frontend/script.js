@@ -7008,16 +7008,19 @@ async function loadKuAset() {
         // ditampilkan ke Owner adalah versi setelah DP yang ditahan dikurangi,
         // supaya uang customer tidak terbaca sebagai uang usaha (Owner).
         const cards = [
-            { label: 'Kas Aset Kecil (Laci)', value: kuRupiah(Math.max(0, Number(laci.laci_milik_toko != null ? laci.laci_milik_toko : (laci.laci || 0)))), icon: 'fa-wallet', cls: 'sm-blue' },
+            { label: 'Laci Kasir', sub: 'Kas Operasional', legacy: 'Kas Aset Kecil (Laci)', value: kuRupiah(Math.max(0, Number(laci.laci_milik_toko != null ? laci.laci_milik_toko : (laci.laci || 0)))), icon: 'fa-cash-register', cls: 'sm-blue' },
         ];
         if (lihatAset) {
-            cards.push({ label: 'Kas Aset Besar (Pengelola)', value: kuRupiah(Math.max(0, Number(laci.aset || 0))), icon: 'fa-vault', cls: 'sm-blue' });
-            cards.push({ label: 'Master Kas', value: kuRupiah(Math.max(0, Number(laci.master_kas_milik_toko != null ? laci.master_kas_milik_toko : (laci.master_kas || 0)))), icon: 'fa-layer-group', cls: 'sm-green' });
+            cards.push({ label: 'Brankas Toko', sub: 'Kas Cadangan', value: kuRupiah(Math.max(0, Number(laci.aset || 0))), icon: 'fa-vault', cls: 'sm-blue' });
+            cards.push({ label: 'Total Kas Toko', sub: 'Master Kas Bersih', legacy: 'Master Kas', value: kuRupiah(Math.max(0, Number(laci.master_kas_milik_toko != null ? laci.master_kas_milik_toko : (laci.master_kas || 0)))), icon: 'fa-layer-group', cls: 'sm-green' });
         }
         summary.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
-                <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
-                <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+                <div class="sm-top"><i class="fa-solid ${c.icon}"></i><span>${c.label}</span></div>
+                <div class="sm-bot">
+                    <span class="sm-num ku-num">${c.value}</span>
+                    ${c.sub ? `<div class="text-[10px] text-gray-400 mt-0.5 font-medium">${c.sub}</div>` : ''}
+                </div>
             </div>`).join('');
     }
     // Aset detail hanya diambil bila role berhak (v4 #11).
@@ -7156,8 +7159,8 @@ async function loadKuDebt() {
     if (sum) {
         const cards = [
             { label: 'Total Sisa Hutang', value: kuRupiah(hutang), icon: 'fa-file-circle-exclamation', cls: hutang > 0 ? 'sm-red' : 'sm-gray' },
-            { label: 'Hutang Gaji (CTS)', value: kuRupiah(hutangGaji), icon: 'fa-users', cls: hutangGaji > 0 ? 'sm-amber' : 'sm-emerald' },
-            { label: 'Hutang Operasional', value: kuRupiah(hutangOps), icon: 'fa-shop', cls: hutangOps > 0 ? 'sm-red' : 'sm-emerald' },
+            { label: 'Tanggungan Gaji', value: kuRupiah(hutangGaji), icon: 'fa-users', cls: hutangGaji > 0 ? 'sm-amber' : 'sm-emerald' },
+            { label: 'Tanggungan Operasional', value: kuRupiah(hutangOps), icon: 'fa-shop', cls: hutangOps > 0 ? 'sm-red' : 'sm-emerald' },
             { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: aset > 0 ? 'sm-blue' : 'sm-gray' },
         ];
         sum.innerHTML = cards.map(c => `
@@ -13158,8 +13161,8 @@ async function kuDebtChangePeriod(periodVal) {
                 if (sum) {
                     const cards = [
                         { label: 'Total Sisa Hutang', value: kuRupiah(hutangTotal), icon: 'fa-file-circle-exclamation', cls: hutangTotal > 0 ? 'sm-red' : 'sm-gray' },
-                        { label: 'Hutang Gaji (CTS)', value: kuRupiah(hGaji), icon: 'fa-users', cls: hGaji > 0 ? 'sm-amber' : 'sm-emerald' },
-                        { label: 'Hutang Operasional', value: kuRupiah(hOps), icon: 'fa-shop', cls: hOps > 0 ? 'sm-red' : 'sm-emerald' },
+                        { label: 'Tanggungan Gaji', value: kuRupiah(hGaji), icon: 'fa-users', cls: hGaji > 0 ? 'sm-amber' : 'sm-emerald' },
+                        { label: 'Tanggungan Operasional', value: kuRupiah(hOps), icon: 'fa-shop', cls: hOps > 0 ? 'sm-red' : 'sm-emerald' },
                         { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: aset > 0 ? 'sm-blue' : 'sm-gray' },
                     ];
                     sum.innerHTML = cards.map(c => `
@@ -13190,15 +13193,19 @@ function renderKuDebtEntitas(bd, hutangTotal) {
 
     gajiItems.forEach(g => {
         const h = Number(g.hutang || 0);
+        const rawNama = g.nama || 'Gaji Karyawan';
+        const cleanNama = rawNama.replace(/^Gaji:\s*/i, '').trim();
         cards.push({
             tipe: 'GAJI',
-            nama: g.nama || 'Gaji Karyawan',
+            labelTag: 'Hak Gaji',
+            nama: cleanNama,
             hutang: h,
             nilai: Number(g.nilai || 0),
             terbayar: Number(g.terbayar || 0),
             icon: 'fa-user-tag',
             borderCls: h > 0 ? 'border-amber-200 dark:border-amber-800/40 bg-amber-50/40 dark:bg-amber-950/20' : 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/40 dark:bg-emerald-950/20',
             textCls: h > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400',
+            badgeCls: h > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
             status: g.status || (h > 0 ? 'SEBAGIAN' : 'LUNAS')
         });
     });
@@ -13208,31 +13215,40 @@ function renderKuDebtEntitas(bd, hutangTotal) {
     const totalTerbayarOps = Number(bd.ops_tercover || 0);
     cards.push({
         tipe: 'OPS',
-        nama: 'Operasional Toko (' + opsItems.length + ' Pos)',
+        labelTag: 'Operasional',
+        nama: 'Operasional (' + opsItems.length + ' Pos)',
         hutang: totalHutangOps,
         nilai: totalNilaiOps,
         terbayar: totalTerbayarOps,
         icon: 'fa-shop',
         borderCls: totalHutangOps > 0 ? 'border-red-200 dark:border-red-800/40 bg-red-50/40 dark:bg-red-950/20' : 'border-emerald-200 dark:border-emerald-800/40 bg-emerald-50/40 dark:bg-emerald-950/20',
         textCls: totalHutangOps > 0 ? 'text-red-700 dark:text-red-400' : 'text-emerald-700 dark:text-emerald-400',
+        badgeCls: totalHutangOps > 0 ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/50 dark:text-rose-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200',
         status: totalHutangOps > 0 ? (totalTerbayarOps > 0 ? 'SEBAGIAN' : 'TERTUNGGAK') : 'LUNAS'
     });
 
     grid.innerHTML = cards.map(c => `
-        <div class="p-2.5 rounded-lg border ${c.borderCls} cursor-pointer hover:shadow-xs hover:brightness-105 transition-all" onclick="kuDebtSetNominal(${c.hutang})" title="Klik untuk mengisi nominal ${kuRupiah(c.hutang)}">
-            <div class="flex items-center justify-between mb-1">
-                <span class="text-[11px] font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-1.5 truncate">
-                    <i class="fa-solid ${c.icon} ${c.textCls} text-[10px]"></i> ${escapeHtml(c.nama)}
-                </span>
-                <span class="text-[10px] font-bold px-1.5 py-0.2 rounded ${c.hutang > 0 ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-200' : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/50 dark:text-emerald-200'}">${c.status}</span>
+        <div class="p-2.5 rounded-lg border ${c.borderCls} cursor-pointer hover:shadow-sm hover:brightness-105 transition-all flex flex-col justify-between" onclick="kuDebtSetNominal(${c.hutang})" title="Klik untuk mengisi nominal ${kuRupiah(c.hutang)}">
+            <div>
+                <div class="flex items-center justify-between mb-1 gap-1">
+                    <span class="text-[10px] font-semibold text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                        <i class="fa-solid ${c.icon} ${c.textCls} text-[10px]"></i> ${c.labelTag}
+                    </span>
+                    <span class="text-[9.5px] font-bold px-1.5 py-0.5 rounded ${c.badgeCls}">${c.status}</span>
+                </div>
+                <div class="text-xs font-bold text-gray-800 dark:text-gray-100 truncate mb-1" title="${escapeHtml(c.nama)}">
+                    ${escapeHtml(c.nama)}
+                </div>
             </div>
-            <div class="flex items-baseline justify-between mt-1">
-                <span class="text-[10px] text-gray-500 dark:text-gray-400">Hutang Tertanggung:</span>
-                <span class="text-xs font-extrabold ${c.textCls}">${kuRupiah(c.hutang)}</span>
-            </div>
-            <div class="text-[10px] text-gray-400 mt-0.5 flex justify-between">
-                <span>Terbayar: ${kuRupiah(c.terbayar)}</span>
-                <span>Total: ${kuRupiah(c.nilai)}</span>
+            <div>
+                <div class="flex items-baseline justify-between mt-1 pt-1 border-t border-gray-200/50 dark:border-white/5">
+                    <span class="text-[10px] text-gray-500 dark:text-gray-400">Sisa Hutang:</span>
+                    <span class="text-xs font-extrabold ${c.textCls}">${kuRupiah(c.hutang)}</span>
+                </div>
+                <div class="text-[9.5px] text-gray-400 mt-0.5 flex justify-between">
+                    <span>Terbayar: ${kuRupiah(c.terbayar)}</span>
+                    <span>Total: ${kuRupiah(c.nilai)}</span>
+                </div>
             </div>
         </div>
     `).join('');
