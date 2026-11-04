@@ -1648,32 +1648,34 @@ input.receive-input.pr-10 { padding-right: 40px !important; }
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .05em;
-    color: #64748b;
+    color: #475569;
     background: #f8fafc;
     padding: 9px 12px;
-    border-bottom: 1px solid #e2e8f0;
+    border-bottom: 1.5px solid #e2e8f0;
     white-space: nowrap;
 }
-.dark .tx-table thead th { color: #94a3b8; background: rgba(255,255,255,0.03); border-bottom-color: rgba(255,255,255,0.08); }
+.dark .tx-table thead th { color: #94a3b8; background: rgba(15, 23, 42, 0.55); border-bottom-color: rgba(255,255,255,0.09); }
 .tx-table tbody td {
     padding: 9px 12px;
     border-bottom: 1px solid #f1f5f9;
     vertical-align: middle;
     font-size: 12.5px;
-    color: #334155;
+    color: #1e293b;
+    transition: background-color 0.12s ease;
 }
-.dark .tx-table tbody td { border-bottom-color: rgba(255,255,255,0.05); color: #cbd5e1; }
-.tx-table tbody tr:hover { background: #f8fafc; }
-.dark .tx-table tbody tr:hover { background: rgba(255,255,255,0.025); }
+.dark .tx-table tbody td { border-bottom-color: rgba(255,255,255,0.06); color: #e2e8f0; }
+.tx-table tbody tr:hover { background: #f1f5f9; }
+.dark .tx-table tbody tr:hover { background: rgba(255,255,255,0.04); }
 .tx-table tbody tr:last-child td { border-bottom: none; }
-.tx-table .tx-num { font-weight: 600; font-size: 11px; color: #94a3b8; }
+.tx-table .tx-num { font-weight: 600; font-size: 11px; color: #64748b; font-variant-numeric: tabular-nums; }
+.dark .tx-table .tx-num { color: #94a3b8; }
 .tx-table .tx-device { font-weight: 600; color: #0f172a; }
 .dark .tx-table .tx-device { color: #e2e8f0; }
 .tx-table .tx-cell-muted { color: #475569; font-size: 11.5px; }
 .dark .tx-table .tx-cell-muted { color: #94a3b8; }
 .tx-table .tx-user { font-weight: 600; font-size: 12.5px; color: #334155; }
 .dark .tx-table .tx-user { color: #cbd5e1; }
-.tx-table .tx-laba { text-align: right; font-weight: 700; color: #059669; }
+.tx-table .tx-laba { text-align: right; font-weight: 700; color: #059669; font-variant-numeric: tabular-nums; }
 .dark .tx-table .tx-laba { color: #34d399; }
 .tx-table .tx-aksi { text-align: center; white-space: nowrap; }
 /* UI AUDIT P0 — min-width proporsional per halaman (base 900px hanya fallback).
@@ -1690,12 +1692,18 @@ input.receive-input.pr-10 { padding-right: 40px !important; }
 #pageTransaksi .tx-table td:last-child,
 #pagePelanggan .tx-table td:last-child,
 #pageGaransi .tx-table td:last-child { background: #fff; }
+#pageTransaksi .tx-table tbody tr:hover td:last-child,
+#pagePelanggan .tx-table tbody tr:hover td:last-child,
+#pageGaransi .tx-table tbody tr:hover td:last-child { background: #f1f5f9; }
 #pageTransaksi .tx-table th:last-child,
 #pagePelanggan .tx-table th:last-child,
 #pageGaransi .tx-table th:last-child { background: #f8fafc; }
 .dark #pageTransaksi .tx-table td:last-child,
 .dark #pagePelanggan .tx-table td:last-child,
 .dark #pageGaransi .tx-table td:last-child { background: #16171d; }
+.dark #pageTransaksi .tx-table tbody tr:hover td:last-child,
+.dark #pagePelanggan .tx-table tbody tr:hover td:last-child,
+.dark #pageGaransi .tx-table tbody tr:hover td:last-child { background: #1c1e26; }
 .dark #pageTransaksi .tx-table th:last-child,
 .dark #pagePelanggan .tx-table th:last-child,
 .dark #pageGaransi .tx-table th:last-child { background: #16171d; }
@@ -6276,4 +6284,109 @@ select.range-pill.range-select option { color: #0f172a; }
 .rc-masked-pin {
     -webkit-text-security: disc !important;
     text-security: disc !important;
+}
+/* =====================================================================
+   POIN 2: PENYERAGAMAN ANGKA NOMINAL (TABULAR-NUMS) & KONTRAS TABEL
+   ===================================================================== */
+.tabular-nums,
+.font-mono:not(#posThermalReceipt):not(#unclaimedWaMsg),
+.tx-table .tx-num,
+.tx-table .tx-laba,
+.tx-table .tx-sisa,
+.tx-table .tx-laba-muted,
+.tx-table .tx-debit,
+.tx-table .tx-kredit,
+.tx-table .tx-saldo,
+.cash-table .cash-num,
+.sm-num,
+.sm-pct,
+.hl-num,
+.hl-pct,
+.dr-unit,
+.dr-pct,
+.insight-val,
+.ku-kpi-card b,
+.ku-kpi-card .text-lg,
+.ku-kpi-card .text-xl,
+.al-pct,
+.al-nom,
+.al-total b,
+.ku-tp-val,
+.qty-ok,
+.qty-low,
+.qty-out,
+.qty-flag,
+.rc-calc-chip b,
+.rc-calc-badge,
+#spValor,
+#spTotalCount,
+#spReadyCount,
+#spLowCount,
+#spOutCount,
+#posStatCount,
+#posStatQty,
+#posStatModal,
+#posStatProfit,
+#posGrandTotal {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+}
+
+/* Tabel Katalog Sparepart (#spContainer): Header, Hover Baris & Kontras Angka */
+#pageSparepart #spContainer table thead tr {
+    background-color: #f8fafc !important;
+    color: #475569 !important;
+    border-bottom: 1.5px solid #e2e8f0 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    font-size: 10.5px !important;
+}
+.dark #pageSparepart #spContainer table thead tr {
+    background-color: rgba(15, 23, 42, 0.55) !important;
+    color: #94a3b8 !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.09) !important;
+}
+#pageSparepart #spContainer table tbody tr {
+    transition: background-color 0.12s ease;
+}
+#pageSparepart #spContainer table tbody tr:hover {
+    background-color: #f1f5f9 !important;
+}
+.dark #pageSparepart #spContainer table tbody tr:hover {
+    background-color: rgba(255, 255, 255, 0.04) !important;
+}
+#pageSparepart #spContainer table td.font-mono {
+    font-size: 12.5px;
+    font-weight: 600;
+}
+#pageSparepart #spContainer table td.text-gray-500 {
+    color: #334155 !important;
+}
+.dark #pageSparepart #spContainer table td.text-gray-500 {
+    color: #cbd5e1 !important;
+}
+/* Penyesuaian Kolom Perangkat & Sisa di Tabel Transaksi (#pageTransaksi)
+   agar 2 baris sejajar Pelanggan/Keluhan dan seluruh 10 kolom muat tanpa terpotong */
+#pageTransaksi .tx-table td:nth-child(3) > div {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1px;
+}
+#pageTransaksi .tx-table td:nth-child(3) .tx-device {
+    order: 1;
+    max-width: 155px;
+    line-height: 1.35;
+}
+#pageTransaksi .tx-table td:nth-child(3) .font-mono {
+    order: 2;
+    font-size: 11px !important;
+    white-space: nowrap;
+    line-height: 1.3;
+}
+#pageTransaksi .tx-table .tx-sisa {
+    text-align: right;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
 }
