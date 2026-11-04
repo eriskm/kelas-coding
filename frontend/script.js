@@ -6900,7 +6900,9 @@ function renderKuKpi() {
     const fin = _kuFin || {};
     const sl = _kuSaldoLapisan || {};
 
-    const laciVal = sl.saldo_laci != null ? Number(sl.saldo_laci) : Number(fin.saldo_laci || 0);
+    const laciVal = sl.laci_milik_toko != null
+        ? Number(sl.laci_milik_toko)
+        : (sl.saldo_laci != null ? Number(sl.saldo_laci) : Number(fin.saldo_laci || 0));
     const laciEl = document.getElementById('kuKpiLaci');
     if (laciEl) laciEl.textContent = formatRupiah(laciVal);
 
@@ -7445,11 +7447,20 @@ async function kuDebtLunas() {
         const periodSel = document.getElementById('kuDebtPeriodSelect');
         const perVal = periodSel && periodSel.value !== 'open' ? periodSel.value : null;
         const res = await apiPost('/beban-hutang/lunas', { nominal: nominal, periode: perVal }, { idempotencyKey: newIdemKey() });
-        _kuFb('kuDebtFeedback', 'Pelunasan ' + kuRupiah(res.nominal) + ' berhasil diproses. Sisa hutang: '
-            + kuRupiah(res.saldo_hutang) + ', Sisa Kas Aset: ' + kuRupiah(res.saldo_kas_aset) + '.', 'success');
-        toast('Pelunasan dari Kas Aset berhasil (' + kuRupiah(res.nominal) + ').', 'success');
+        const nomLunas = Number(res.nominal || nominal);
+        let sisaAset = Number(res.saldo_kas_aset || 0);
+        try {
+            const ketKeluar = 'Pelunasan Hutang Beban' + (perVal ? ' (' + perVal + ')' : '');
+            const resAset = await apiPost('/kas/aset/keluar', { nominal: nomLunas, keterangan: ketKeluar }, { idempotencyKey: newIdemKey() });
+            if (resAset && resAset.saldo_setelah != null) {
+                sisaAset = Number(resAset.saldo_setelah);
+            }
+        } catch (_) {}
+        _kuFb('kuDebtFeedback', 'Pelunasan ' + kuRupiah(nomLunas) + ' berhasil diproses. Sisa hutang: '
+            + kuRupiah(res.saldo_hutang) + ', Sisa Kas Aset: ' + kuRupiah(sisaAset) + '.', 'success');
+        toast('Pelunasan dari Kas Aset berhasil (' + kuRupiah(nomLunas) + ').', 'success');
         if (input) input.value = '';
-        await loadKuDebt();
+        await loadKuFinance();
     } catch (err) {
         _kuFb('kuDebtFeedback', err.message || 'Gagal melunasi Hutang Beban.', 'error');
     }
@@ -7965,7 +7976,7 @@ body.innerHTML = rows.join('');
 async function kuJalankanDistribusi() {
     if (!confirm('Jalankan Distribusi Laba sekarang?\n\n' +
         '70% (Karyawan + Pengelola + Investor) akan KELUAR permanen dari Laci.\n' +
-        '30% Hak Kas Aset akan keluar dari Laci dan MASUK ke Kas Aset.\n\n' +
+        '30% Hak Kas Aset dicadangkan di Laci dan dipindahkan ke Kas Aset saat Tutup Kas.\n\n' +
         'Tindakan ini tidak bisa dibatalkan dari halaman ini.')) return;
     const btn = document.getElementById('kuDistribusiBtn');
     if (btn) { btn.disabled = true; }
@@ -7996,6 +8007,8 @@ function renderAlloc() {
     const cto = !!fin.cto_tercapai;
     const formed = !!fin.alokasi_terbentuk && total > 0;
     const src = formed ? al : (fin.alokasi_preview || {});
+    const alTotal = Number(src.total) || ((Number(src.karyawan) || 0) + (Number(src.pengelola) || 0) + (Number(src.investor) || 0) + (Number(src.kas_aset) || 0));
+    const adaSelisihAlokasi = cto && formed && Math.abs(total - alTotal) >= 1;
     const badge = document.getElementById('kuAllocBadge');
     const note = document.getElementById('kuAllocNote');
     if (badge) {
@@ -8008,7 +8021,7 @@ function renderAlloc() {
         note.textContent = !cto
             ? 'Belum otomatis: Laba Kotor masih di bawah Total Beban (CTO).'
             : (formed
-                ? 'Uang sudah dibagikan: 70% keluar dari Laci, 30% Hak Kas Aset masuk ke Kas Aset.'
+                ? 'Uang sudah dialokasikan: 70% keluar dari Laci, 30% Hak Kas Aset dicadangkan di Laci (dipindah ke Kas Aset saat Tutup Kas).'
                 : (alasan ? ('Belum terbentuk — ' + alasan + '.')
                           : 'Menunggu perhitungan laba periode.'));
     }
@@ -8025,28 +8038,29 @@ function renderAlloc() {
         } else {
             // 1 = baru terbentuk, >1 = ada top-up karena laba naik lagi.
             const n = Number(fin.distribusi_jumlah_alokasi) || 0;
-            let t = 'Sudah terbentuk otomatis. 70% keluar dari Laci, 30% Hak Kas Aset masuk ke Kas Aset.';
+            let t = 'Sudah terbentuk otomatis. 70% keluar dari Laci, 30% Hak Kas Aset dicadangkan di Laci dan pindah ke Kas Aset saat Tutup Kas.';
             if (n > 1) t += ' Terjadi <b>' + (n - 1) + ' kali top-up</b> — tiap kali laba naik, hanya selisihnya yang ditambah.';
             catatan.innerHTML = t;
         }
     }
-    // Tombol manual hanya muncul kalau CTO tercapai tapi distributions belum
-    // jalan — mis. data sudah terlanjur CASH sebelum aturan otomatis ini aktif.
-    if (btn) btn.classList.toggle('hidden', !(cto && !formed));
+    // Tombol manual muncul kalau CTO tercapai tapi distributions belum jalan,
+    // atau masih ada selisih laba baru (mis. dari POS penjualan part) yang belum di-topup.
+    if (btn) btn.classList.toggle('hidden', !((cto && !formed) || adaSelisihAlokasi));
     _kuAllocView = cto ? [
         { nama: 'Bonus Karyawan', val: src.karyawan || 0, color: '#f59e0b' },
         { nama: 'Pengelola', val: src.pengelola || 0, color: '#dc2626' },
         { nama: 'Investor', val: src.investor || 0, color: '#2563eb' },
         { nama: 'Kas Aset', val: src.kas_aset || 0, color: '#16a34a' },
     ] : [];
-    updateProfitChart(_kuAllocView.map(a => (total > 0 ? a.val / total * 100 : 0)), cto);
+    const denom = alTotal > 0 ? alTotal : total;
+    updateProfitChart(_kuAllocView.map(a => (denom > 0 ? a.val / denom * 100 : 0)), cto);
     if (!list) return;
     if (!cto) {
         list.innerHTML = '';
         return;
     }
     list.innerHTML = _kuAllocView.map((a, i) => {
-        const pct = total > 0 ? Math.round(a.val / total * 100) : 0;
+        const pct = denom > 0 ? Math.round(a.val / denom * 100) : 0;
         return `
         <div class="al-row${i === _kuSelAlloc ? ' is-sel' : ''}" data-alloc="${i}">
             <span class="al-dot" style="background:${a.color}"></span>
@@ -12215,7 +12229,7 @@ function bebanDel(i) {
 
 async function bebanSave() {
     // Validasi form sebelum simpan
-    if (!_bebanList.length) {
+    if (!_bebanList.length && !_bebanDeleted.length) {
         bebanFeedback('Tidak ada beban untuk disimpan.', true);
         return;
     }
@@ -12230,7 +12244,10 @@ async function bebanSave() {
         }
     }
     const total = _bebanList.reduce((a, b) => a + (Number(b.nilai) || 0), 0);
-    if (!confirm('Simpan ' + _bebanList.length + ' beban dengan total ' + bebanRupiah(total) + '?')) return;
+    const confirmMsg = _bebanList.length
+        ? ('Simpan ' + _bebanList.length + ' beban dengan total ' + bebanRupiah(total) + '?')
+        : ('Hapus ' + _bebanDeleted.length + ' beban dan kosongkan daftar beban operasional?');
+    if (!confirm(confirmMsg)) return;
     const btn = document.getElementById('bebanSaveBtn');
     const txt = document.getElementById('bebanSaveText');
     const LABEL = 'SIMPAN & KEMBALI KE DASHBOARD';
@@ -12257,6 +12274,7 @@ async function bebanSave() {
         }
         bebanFeedback('Tersimpan: ' + _bebanList.length + ' beban, total ' + bebanRupiah(total) + ' — kembali ke dashboard.', false);
         try { await loadDashboard(); } catch (_) {}
+        try { if (typeof loadKuFinance === 'function') await loadKuFinance(); } catch (_) {}
         setTimeout(closeBeban, 1200);
     } catch (err) {
         bebanFeedback(err.message, true);
@@ -13045,8 +13063,8 @@ async function toggleAttendance(userId, hadir) {
         _attendanceToday = res;
         renderAttendanceBeban();
         bebanRender();
-        if (typeof loadFinanceOverview === 'function') loadFinanceOverview();
-        if (typeof renderKondisiKas === 'function') renderKondisiKas();
+        if (typeof loadDashboard === 'function') loadDashboard().catch(() => {});
+        if (typeof loadKuFinance === 'function') loadKuFinance().catch(() => {});
         toast(hadir ? 'Presensi diubah: HADIR (Beban gaji aktif)' : 'Presensi diubah: TIDAK MASUK (Beban gaji Rp 0)');
     } catch (e) {
         toast((e && e.message) || 'Gagal mengubah presensi');

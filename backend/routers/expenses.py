@@ -72,6 +72,13 @@ def create_expense(data: schemas.ExpenseCreate, db: Session = Depends(get_db_ses
     # `beban_bayar.bayar_beban_periode` (Laci -> Kas Aset -> Hutang Beban),
     # yang dipanggil saat periode dibekukan dan dipanggil ulang oleh Tutup Kas
     # untuk membayar sisa saja. Satu jalur, satu penanda, tidak ada dobel.
+    try:
+        from finance import sync_open_period_expense_item
+        sync_open_period_expense_item(
+            db, row, action="upsert", oleh=user.display_name or user.username
+        )
+    except Exception:
+        pass
     db.commit()
     db.refresh(row)
     return row
@@ -95,6 +102,14 @@ def update_expense(expense_id: int, data: schemas.ExpenseUpdate, db: Session = D
         payload.pop("recurring", None)
     for key, val in payload.items():
         setattr(row, key, val)
+    db.flush()
+    try:
+        from finance import sync_open_period_expense_item
+        sync_open_period_expense_item(
+            db, row, action="upsert", oleh=user.display_name or user.username
+        )
+    except Exception:
+        pass
     db.commit()
     db.refresh(row)
     return row
@@ -107,6 +122,13 @@ def delete_expense(expense_id: int, db: Session = Depends(get_db_session),
     row = db.query(Expense).filter(Expense.id == expense_id).first()
     if not row:
         raise HTTPException(status_code=404, detail="Beban tidak ditemukan")
+    try:
+        from finance import sync_open_period_expense_item
+        sync_open_period_expense_item(
+            db, row, action="delete", oleh=admin.display_name or admin.username
+        )
+    except Exception:
+        pass
     db.delete(row)
     db.commit()
     return {"ok": True}

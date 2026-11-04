@@ -378,7 +378,18 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
                     pass
             if atts:
                 user_map = {u.id: u for u in db.query(User).all()}
+            existing_att_uids = {
+                r.user_id
+                for r in db.query(ExpensePeriod)
+                .filter(
+                    ExpensePeriod.periode.in_(_semua_kunci(db, start, end)),
+                    ExpensePeriod.user_id.isnot(None),
+                )
+                .all()
+            }
             for att in atts:
+                if att.user_id in existing_att_uids:
+                    continue
                 if att.hadir and to_decimal(att.gaji_nominal) > ZERO:
                     u = user_map.get(att.user_id)
                     nama = u.display_name if u else f"Karyawan #{att.user_id}"
@@ -399,6 +410,101 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
     if commit:
         db.commit()
     return {"periode": key, "dibekukan": dibuat, "sudah_ada": 0}
+
+
+def reconcile_open_period_distribution(db: Session, kas_p, oleh: str = "Sistem"):
+    """Jika periode OPEN sudah memiliki Distribution terbentuk dan beban berubah
+    (akibat input/edit/hapus beban atau toggle absensi), sesuaikan alokasi
+    distribusi (topdown bila laba bersih turun, topup bila laba bersih naik).
+    """
+    if not kas_p or (getattr(kas_p, "status", "") or "").upper() != "OPEN":
+        return None
+    try:
+        from datetime import timedelta
+        import distribution as dist_mod
+
+        start = kas_p.start_at
+        end = kas_p.end_at or (max(datetime.now(), start) + timedelta(days=1))
+        core = compute_finance_core(db, start, end)
+        existing = dist_mod.sudah_ada(db, core["periode"], kas_p.id)
+        if existing is None:
+            return None
+        cto = (core["laba_kotor"] >= core["total_beban"]) and (core["laba_bersih"] > ZERO)
+        res = dist_mod.pastikan_otomatis(
+            db,
+            core["periode"],
+            core["laba_bersih"],
+            cto_tercapai=cto,
+            kas_period_id=kas_p.id,
+            oleh=oleh,
+        )
+        db.flush()
+        return res
+    except Exception as exc:  # noqa: BLE001
+        _log(f"[finance] gagal rekonsiliasi distribusi periode OPEN: {exc}")
+        return None
+
+
+def sync_open_period_expense_item(
+    db: Session, expense_row, action: str = "upsert", oleh: str = "Admin"
+):
+    """Sinkronkan perubahan satu baris `Expense` (create/update/delete) ke
+    `ExpensePeriod` pada periode kas yang sedang OPEN (tanpa pernah mengubah
+    periode CLOSED/historis), lalu rekonsiliasi distribusi bila sudah terbentuk.
+    """
+    from datetime import timedelta
+    from models import KasPeriod
+
+    kas_p = (
+        db.query(KasPeriod)
+        .filter(KasPeriod.status == "OPEN")
+        .order_by(KasPeriod.id.desc())
+        .first()
+    )
+    if not kas_p or expense_row is None:
+        return {"synced": False}
+
+    start = kas_p.start_at
+    end = kas_p.end_at or (max(datetime.now(), start) + timedelta(days=1))
+    key = period_key(db, start, end)
+    kunci_list = _semua_kunci(db, start, end)
+
+    # Hanya sinkronkan jika periode OPEN ini sudah punya baris ExpensePeriod
+    # (kalau belum pernah dibekukan, `beban_frozen` nanti yang akan membekukannya).
+    has_rows = (
+        db.query(ExpensePeriod)
+        .filter(ExpensePeriod.periode.in_(kunci_list))
+        .first()
+        is not None
+    )
+    if not has_rows:
+        return {"synced": False, "periode": key}
+
+    exp_id = getattr(expense_row, "id", None)
+    if exp_id is not None:
+        db.query(ExpensePeriod).filter(
+            ExpensePeriod.periode.in_(kunci_list),
+            ExpensePeriod.expense_id == exp_id,
+        ).delete(synchronize_session="fetch")
+
+    if action != "delete":
+        kat_clean = (getattr(expense_row, "kategori", "") or "").strip()
+        if kat_clean.lower() in BEBAN_KATEGORI:
+            db.add(
+                ExpensePeriod(
+                    periode=key,
+                    kategori=kat_clean,
+                    nama_beban=(getattr(expense_row, "uraian", None) or kat_clean or "-").strip(),
+                    nilai=to_decimal(getattr(expense_row, "nilai", 0)),
+                    dibebankan_pada=datetime.now(),
+                    expense_id=exp_id,
+                    user_id=None,
+                )
+            )
+
+    db.flush()
+    reconcile_open_period_distribution(db, kas_p, oleh=oleh)
+    return {"synced": True, "periode": key}
 
 
 def sync_open_period_salary_expense(db: Session, kas_period_id: int):
@@ -443,6 +549,7 @@ def sync_open_period_salary_expense(db: Session, kas_period_id: int):
             dibuat += 1
 
     db.flush()
+    reconcile_open_period_distribution(db, kas_p, oleh="Absensi")
     db.commit()
     return {"periode": key, "gaji_rows": dibuat}
 

@@ -362,17 +362,17 @@ def tutup_periode(db: Session, period, counted=None, oleh: str = None,
     db.flush()
     db.refresh(new_period)
 
+    # Bekukan Beban operasional berulang untuk periode baru terlebih dahulu
+    try:
+        from finance import freeze_expenses_for_period
+        freeze_expenses_for_period(db, new_start, new_end, commit=False)
+    except Exception:
+        pass
+
     # Inisialisasi otomatis absensi default 'Hadir' untuk seluruh karyawan aktif & Beban Gaji
     try:
         from routers.attendance import init_period_attendance
         init_period_attendance(db, new_period.id)
-    except Exception:
-        pass
-
-    # Bekukan Beban operasional berulang untuk periode baru
-    try:
-        from finance import freeze_expenses_for_period
-        freeze_expenses_for_period(db, new_start, new_end, commit=False)
     except Exception:
         pass
 

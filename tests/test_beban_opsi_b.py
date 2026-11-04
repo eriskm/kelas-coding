@@ -512,3 +512,107 @@ def test_ubah_manual_absensi_mengubah_beban_secara_otomatis(fresh_db):
     fin2 = compute_finance_core(db, st, en)
     assert fin2["beban_gaji"] == Decimal("150000.00"), "Beban gaji harus otomatis turun ke 150k setelah diubah manual!"
 
+
+def test_buka_kas_membekukan_operasional_dan_gaji_tanpa_duplikat(fresh_db):
+    """Saat Tutup Kas membuka periode baru, baik Beban Operasional (katalog Expense)
+    maupun Beban Gaji (presensi UserAttendance) wajib ikut terbawa ke ExpensePeriod
+    periode baru tanpa menggandakan baris gaji.
+    """
+    db = fresh_db
+    import models as m
+    import closing
+    from routers.dashboard import compute_finance, batas_periode
+    from finance import compute_finance_core
+
+    now = datetime(2026, 11, 3, 10, 0, 0)
+    u1 = m.User(username="tech_op1", display_name="Teknisi Satu", role="TEKNISI",
+                passcode_hash="h1", passcode_salt="s1",
+                active=1, gaji_harian=Decimal("150000"))
+    exp_ops = m.Expense(kategori="Operasional", uraian="Listrik & Wifi Harian",
+                        nilai=Decimal("55000"), recurring=True)
+    db.add_all([u1, exp_ops])
+    db.flush()
+
+    p = m.KasPeriod(start_at=now, end_at=now + timedelta(days=1), status="OPEN")
+    db.add(p)
+    db.flush()
+
+    res = closing.tutup_periode(db, p, counted=None, oleh="Admin", compute_finance=compute_finance)
+    db.flush()
+
+    new_pid = res["new_period"]["id"]
+    p2 = db.query(m.KasPeriod).filter(m.KasPeriod.id == new_pid).first()
+    st, en = batas_periode(p2)
+    fin = compute_finance_core(db, st, en)
+
+    assert fin["beban_gaji"] == Decimal("150000.00"), "Beban gaji 150k wajib tercatat tepat 1x (tidak terduplikasi)"
+    assert fin["beban_operasional"] == Decimal("55000.00"), "Beban operasional 55k wajib ikut terbawa ke periode baru"
+    assert fin["total_beban"] == Decimal("205000.00")
+
+
+def test_perubahan_beban_periode_open_otomatis_rekonsiliasi_distribusi(fresh_db):
+    """Jika di tengah periode OPEN distribusi sudah terbentuk (CTO tercapai),
+    lalu Admin menambah/mengubah/menghapus Beban Operasional di periode berjalan,
+    maka ExpensePeriod dan Distribution otomatis tersinkronisasi (topdown/topup).
+    """
+    db = fresh_db
+    import models as m
+    import cash as cash_mod
+    import distribution as dist_mod
+    from routers.dashboard import batas_periode
+    from finance import compute_finance_core, sync_open_period_expense_item
+
+    now = datetime(2026, 11, 4, 10, 0, 0)
+    p = m.KasPeriod(start_at=now, end_at=now + timedelta(days=1), status="OPEN")
+    cust = m.Customer(name="Budi", phone="08123", created_at=now)
+    db.add_all([p, cust])
+    db.flush()
+
+    # Order 1: Omzet 1.000.000, Modal 200.000 -> Laba Kotor 800.000
+    o = m.ServiceOrder(
+        no_servis="SRV-SYNC-1", customer_id=cust.id, device="A55", status="CASH",
+        unit_status="DIAMBIL", service_date=now.date(), taken_at=now + timedelta(hours=1),
+        final_price=Decimal("1000000"), estimate=Decimal("1000000"),
+        part_cost=Decimal("150000"), modal_jasa=Decimal("50000"), modal_lainnya=Decimal("0"),
+        created_at=now
+    )
+    db.add(o)
+    db.flush()
+    pay = m.Payment(service_order_id=o.id, kind="PELUNASAN", amount=Decimal("1000000"),
+                    method="CASH", created_at=now + timedelta(hours=1))
+    db.add(pay)
+    db.flush()
+    cash_mod.catat_penerimaan(db, pay)
+    cash_mod.catat_modal(db, o)
+
+    # Beban awal: Operasional 100.000
+    exp1 = m.Expense(kategori="Operasional", uraian="Sewa", nilai=Decimal("100000"), recurring=True)
+    db.add(exp1)
+    db.flush()
+
+    st, en = batas_periode(p)
+    core1 = compute_finance_core(db, st, en)
+    assert core1["laba_bersih"] == Decimal("700000.00")
+
+    # Bentuk distribusi awal (Laba Bersih 700.000)
+    res_dist1 = dist_mod.pastikan_otomatis(
+        db, core1["periode"], core1["laba_bersih"], cto_tercapai=True, kas_period_id=p.id, oleh="Admin"
+    )
+    assert res_dist1["dibentuk"] is True
+    assert res_dist1["distribution"].laba_bersih == Decimal("700000.00")
+
+    # Admin menambah beban operasional baru Rp 200.000 di tengah periode OPEN
+    exp2 = m.Expense(kategori="Operasional", uraian="Token Listrik", nilai=Decimal("200000"), recurring=False)
+    db.add(exp2)
+    db.flush()
+    sync_open_period_expense_item(db, exp2, action="upsert", oleh="Admin")
+
+    core2 = compute_finance_core(db, st, en)
+    assert core2["total_beban"] == Decimal("300000.00")
+    assert core2["laba_bersih"] == Decimal("500000.00")
+
+    dist_row = dist_mod.sudah_ada(db, core2["periode"], p.id)
+    assert dist_row.laba_bersih == Decimal("500000.00"), "Alokasi distribusi wajib otomatis turun (topdown) mengikuti Laba Bersih 500k!"
+    assert dist_row.pengelola == Decimal("150000.00")
+
+
