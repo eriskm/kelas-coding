@@ -1431,39 +1431,83 @@ html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 .field-label {
     display: block;
     font-size: 11px;
-    font-weight: 700;
-    color: #111827;
-    margin-bottom: 6px;
+    font-weight: 600;
+    color: #64748b;
+    margin-bottom: 5px;
     letter-spacing: .01em;
 }
-.dark .field-label { color: #e5e7eb; }
+.dark .field-label { color: #94a3b8; }
 .receive-input {
     width: 100%;
-    padding: 10px 12px;
-    border-radius: 11px;
-    font-size: 13px;
-    font-weight: 500;
-    color: #111827;
-    background: #fff;
-    border: 1px solid #e5e7eb;
+    padding: 8px 11px;
+    border-radius: 9px;
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #0f172a;
+    background-color: #ffffff;
+    border: 1px solid #cbd5e1;
     outline: none;
-    transition: border-color .15s, box-shadow .15s, background .15s;
+    transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.receive-input:hover:not(:focus):not([readonly]):not(:disabled) {
+    border-color: #94a3b8;
 }
 .dark .receive-input {
-    background: rgba(255, 255, 255, 0.05);
-    border-color: rgba(255, 255, 255, 0.11);
-    color: #f3f4f6;
+    background-color: rgba(15, 23, 42, 0.65);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: #ffffff;
+}
+.dark .receive-input:hover:not(:focus):not([readonly]):not(:disabled) {
+    border-color: rgba(255, 255, 255, 0.25);
+}
+.dark select.receive-input option {
+    background: #1e293b;
+    color: #f8fafc;
 }
 .receive-input:focus {
-    border-color: #dc2626;
-    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+    border-color: #2563eb;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
 }
 .dark .receive-input:focus {
-    border-color: #f87171;
-    box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.28);
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.24);
 }
-.receive-input::placeholder { color: #a5aac0; }
-select.receive-input { appearance: none; cursor: pointer; background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%), linear-gradient(135deg, #94a3b8 50%, transparent 50%); background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%; background-size: 5px 5px; background-repeat: no-repeat; }
+.receive-input::placeholder,
+textarea.receive-input::placeholder {
+    font-size: 10.5px;
+    font-style: italic;
+    font-weight: 400;
+    color: #64748b;
+    opacity: 1;
+}
+.dark .receive-input::placeholder,
+.dark textarea.receive-input::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+}
+select.receive-input {
+    appearance: none;
+    cursor: pointer;
+    padding-right: 30px;
+    background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+}
+.dark select.receive-input {
+    background-image: linear-gradient(45deg, transparent 50%, #94a3b8 50%), linear-gradient(135deg, #94a3b8 50%, transparent 50%);
+    background-position: calc(100% - 18px) 50%, calc(100% - 13px) 50%;
+    background-size: 5px 5px;
+    background-repeat: no-repeat;
+}
+/* Kompatibilitas global padding prefix Rp & ikon pencarian */
+input.receive-input.pl-7 { padding-left: 28px !important; }
+input.receive-input.pl-8 { padding-left: 32px !important; }
+input.receive-input.pl-9 { padding-left: 36px !important; }
+input.receive-input.pl-10 { padding-left: 40px !important; }
+input.receive-input.pr-8 { padding-right: 32px !important; }
+input.receive-input.pr-9 { padding-right: 36px !important; }
+input.receive-input.pr-10 { padding-right: 40px !important; }
 
 /* History Cerdas */
 .history-item {
@@ -2541,7 +2585,17 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 
 /* Label + input sejajar baseline */
 #pageTransaksi .tx-filter-label,
-#pagePelanggan .tx-filter-label { font-size: 12px; }
+#pagePelanggan .tx-filter-label,
+#pageKeuangan .tx-filter-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #64748b;
+}
+.dark #pageTransaksi .tx-filter-label,
+.dark #pagePelanggan .tx-filter-label,
+.dark #pageKeuangan .tx-filter-label {
+    color: #94a3b8;
+}
 #pageTransaksi .tx-toolbar .receive-input,
 #pagePelanggan .tx-toolbar .receive-input,
 #pageGaransi .tx-toolbar .receive-input,
@@ -2550,11 +2604,10 @@ select.receive-input { appearance: none; cursor: pointer; background-image: line
 #pageClaim .receive-input,
 #pageUpdateServis .receive-input,
 #pageKeuangan .receive-input,
-#pageKeuangan select { font-size: 14px; }
+#pageKeuangan select { font-size: 13.5px; }
 #pageSpare .field-label,
 #pageClaim .field-label,
-#pageKeuangan .field-label,
-#pageKeuangan .tx-filter-label { font-size: 12px; }
+#pageKeuangan .field-label { font-size: 11px; }
 #pageSpare .receive-feedback,
 #pageClaim .receive-feedback,
 #pageUpdateServis .receive-feedback { font-size: 13.5px; }
@@ -6035,6 +6088,44 @@ select.range-pill.range-select option { color: #0f172a; }
 .dark #pageReceive .rc-sticky-footer {
     background: #0f172a !important;
     border-top-color: rgba(255, 255, 255, 0.08) !important;
+}
+#pageReceive .field > label,
+#pageReceive .field > div > label {
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    color: #64748b !important;
+    letter-spacing: 0.01em;
+}
+.dark #pageReceive .field > label,
+.dark #pageReceive .field > div > label {
+    color: #94a3b8 !important;
+}
+#pageReceive .field input[type="text"],
+#pageReceive .field input[type="number"],
+#pageReceive .field select,
+#pageReceive .field textarea {
+    font-size: 13.5px !important;
+    font-weight: 600 !important;
+    color: #0f172a !important;
+}
+.dark #pageReceive .field input[type="text"],
+.dark #pageReceive .field input[type="number"],
+.dark #pageReceive .field select,
+.dark #pageReceive .field textarea {
+    color: #ffffff !important;
+}
+#pageReceive .field input::placeholder,
+#pageReceive .field textarea::placeholder {
+    font-size: 10.5px !important;
+    font-style: italic !important;
+    font-weight: 400 !important;
+    color: #64748b !important;
+    opacity: 1 !important;
+}
+.dark #pageReceive .field input::placeholder,
+.dark #pageReceive .field textarea::placeholder {
+    color: #94a3b8 !important;
+    opacity: 1 !important;
 }
 
 /* Checklist Item Rounded Pill */
