@@ -303,3 +303,52 @@ def test_laci_tidak_pernah_negatif(db):
     db.commit()
     assert to_decimal(cash.saldo_laci(db)) >= ZERO, (
         "Laci tidak boleh pernah negatif")
+
+
+def test_catat_hutang_manual_setelah_tutup_kas_mengikat_ke_periode_closed(db):
+    """Saat Admin mencatat Hutang Beban lewat popup setelah Tutup Kas,
+    endpoint /api/beban-hutang/catat harus menerima kas_period_id milik periode
+    yang baru saja CLOSED (bukan periode baru yang OPEN)."""
+    import closing
+    import expense_debt
+    import models as m
+    from routers.dashboard import compute_finance
+    from routers.expense_debt import _HutangManualIn, catat_hutang_beban_manual
+    import pytest
+    from fastapi import HTTPException
+
+    p_lama = _skenario(db, "POPUP-CLOSED", 600000, 325000, 405000, 200000)
+    res_close = closing.tutup_periode(
+        db, p_lama, counted=None, oleh="pytest",
+        compute_finance=compute_finance
+    )
+    db.commit()
+
+    closed_id = res_close["closed_period_id"]
+    new_id = res_close["new_period"]["id"]
+    assert closed_id == p_lama.id
+    assert new_id != closed_id
+
+    admin_user = m.User(username="admin_test_popup", display_name="Admin Popup", role="ADMIN")
+    res_catat = catat_hutang_beban_manual(
+        data=_HutangManualIn(kas_period_id=closed_id, nominal=330000.0),
+        db=db,
+        user=admin_user,
+    )
+    assert res_catat["created"] is True
+    assert res_catat["periode"] == f"kas_period:{closed_id}"
+    assert to_decimal(res_catat["hutang_baru"]) == to_decimal(330000)
+    assert to_decimal(expense_debt.saldo_hutang(db)) == to_decimal(330000)
+
+    # Periode CLOSED yang sama tidak boleh dicatat 2 kali
+    with pytest.raises(HTTPException) as exc_info:
+        catat_hutang_beban_manual(
+            data=_HutangManualIn(kas_period_id=closed_id, nominal=330000.0),
+            db=db,
+            user=admin_user,
+        )
+    assert exc_info.value.status_code == 400
+
+    # Periode baru (OPEN) belum punya baris hutang (jatah 1x periode baru tetap utuh)
+    assert expense_debt.sudah_diproses(db, f"kas_period:{new_id}") is None
+

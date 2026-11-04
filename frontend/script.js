@@ -7326,8 +7326,9 @@ function kuRenderHutangManual() {
     const hint = document.getElementById('kuHutangHint');
     if (!wrap || !input || !hint) return;
     const boleh = can('EXPENSE_DEBT_WRITE') || can('KAS_CLOSE');
+    const adaPendingClosed = Boolean(_sisaHutangPendingPeriodId && _sisaHutangPending > 0);
     const akhir = kuKondisiKasAkhir();
-    const minus = akhir < 0 ? -akhir : 0;
+    const minus = adaPendingClosed ? _sisaHutangPending : (akhir < 0 ? -akhir : 0);
 
     if (!boleh) {
         wrap.classList.add('hidden');
@@ -7339,13 +7340,20 @@ function kuRenderHutangManual() {
         // Isi otomatis dengan nilai minus; Admin boleh menyesuaikan selama
         // tidak melebihi minus (server juga memeriksanya).
         if (document.activeElement !== input) input.value = Math.round(minus);
-        hint.textContent = 'Conditions Kas Operasional berakhir MINUS '
-            + kuRupiah(minus) + '. Isi nominal (tidak boleh melebihi angka itu), '
-            + 'lalu tekan Catat. Satu periode hanya boleh satu kali.';
+        if (adaPendingClosed) {
+            hint.textContent = 'Periode #' + _sisaHutangPendingPeriodId
+                + ' yang baru ditutup berakhir MINUS ' + kuRupiah(minus)
+                + '. Isi nominal (maksimal ' + kuRupiah(minus)
+                + '), lalu tekan Catat Hutang Beban. Satu periode hanya boleh satu kali.';
+        } else {
+            hint.textContent = 'Kondisi Kas Operasional berakhir MINUS '
+                + kuRupiah(minus) + '. Isi nominal (tidak boleh melebihi angka itu), '
+                + 'lalu tekan Catat. Satu periode hanya boleh satu kali.';
+        }
         if (btn) btn.disabled = false;
     } else {
         input.value = '';
-        hint.textContent = 'Conditions Kas Operasional berakhir PLUS '
+        hint.textContent = 'Kondisi Kas Operasional berakhir PLUS '
             + kuRupiah(akhir) + '. Tidak ada Hutang Beban yang perlu dicatat '
             + 'pada periode ini.';
         if (btn) btn.disabled = true;
@@ -7367,9 +7375,10 @@ async function kuHutangCatat() {
     }
     const input = document.getElementById('kuHutangInput');
     const nominal = Number((input && input.value) || 0);
-    const minus = -kuKondisiKasAkhir();
+    const adaPendingClosed = Boolean(_sisaHutangPendingPeriodId && _sisaHutangPending > 0);
+    const minus = adaPendingClosed ? _sisaHutangPending : -kuKondisiKasAkhir();
     if (!(minus > 0)) {
-        _kuFb('kuDebtFeedback', 'Conditions Kas Operasional tidak minus, jadi tidak ada Hutang Beban.', 'error');
+        _kuFb('kuDebtFeedback', 'Kondisi Kas Operasional tidak minus, jadi tidak ada Hutang Beban.', 'error');
         return;
     }
     if (!(nominal > 0)) {
@@ -7381,19 +7390,25 @@ async function kuHutangCatat() {
             + kuRupiah(minus) + '.', 'error');
         return;
     }
-    const pid = kuPeriodeAktifId();
+    const pid = adaPendingClosed ? _sisaHutangPendingPeriodId : kuPeriodeAktifId();
     if (!pid) {
-        _kuFb('kuDebtFeedback', 'Periode kas aktif tidak ditemukan.', 'error');
+        _kuFb('kuDebtFeedback', 'Periode kas target tidak ditemukan.', 'error');
         return;
     }
+    const labelPeriode = adaPendingClosed ? ('periode #' + pid + ' (baru ditutup)') : ('periode #' + pid + ' ini');
     if (!confirm('Catat Hutang Beban ' + kuRupiah(nominal)
-        + ' untuk periode ini?\n\nTindakan ini hanya bisa satu kali per periode.')) return;
+        + ' untuk ' + labelPeriode + '?\n\nTindakan ini hanya bisa satu kali per periode.')) return;
     try {
         const res = await apiPost('/beban-hutang/catat',
             { kas_period_id: pid, nominal: nominal },
             { idempotencyKey: newIdemKey() });
+        if (adaPendingClosed) {
+            _sisaHutangPending = 0;
+            _sisaHutangPendingPeriodId = null;
+        }
         _kuFb('kuDebtFeedback', 'Hutang Beban ' + kuRupiah(res.hutang_baru)
-            + ' tercatat. Sisa hutang ' + kuRupiah(res.saldo_hutang) + '.', 'success');
+            + ' tercatat untuk ' + (res.periode || ('kas_period:' + pid))
+            + '. Sisa hutang ' + kuRupiah(res.saldo_hutang) + '.', 'success');
         toast('Hutang Beban tercatat.', 'success');
         await loadKuDebt();
     } catch (err) {
@@ -7562,13 +7577,18 @@ function kuShowMain() {
 }
 
 let _sisaHutangPending = 0;
+let _sisaHutangPendingPeriodId = null;
 
-function bukaKuHutangSaranPopup(nominal) {
+function bukaKuHutangSaranPopup(nominal, closedPeriodId) {
     _sisaHutangPending = Number(nominal) || 0;
+    if (closedPeriodId !== undefined && closedPeriodId !== null) {
+        _sisaHutangPendingPeriodId = Number(closedPeriodId) || null;
+    }
     const ov = document.getElementById('kuHutangSaranPopup');
     const nomEl = document.getElementById('kuHutangSaranNominal');
     if (!ov) return;
     if (nomEl) nomEl.textContent = 'Rp ' + _sisaHutangPending.toLocaleString('id-ID');
+    kuRenderHutangManual();
     ov.classList.remove('hidden');
 }
 
@@ -7579,6 +7599,7 @@ function closeKuHutangSaranPopup() {
 
 function bukaPanelHutangBebanDariTutupKas() {
     closeKuHutangSaranPopup();
+    kuRenderHutangManual();
     const wrap = document.getElementById('kuHutangManualWrap');
     const input = document.getElementById('kuHutangInput');
     const btn = document.getElementById('kuHutangBtn');
@@ -7588,8 +7609,10 @@ function bukaPanelHutangBebanDariTutupKas() {
     }
     if (input && _sisaHutangPending > 0) {
         input.value = Math.round(_sisaHutangPending);
+        if (btn) btn.disabled = false;
+        const labelPeriode = _sisaHutangPendingPeriodId ? ('Periode #' + _sisaHutangPendingPeriodId) : 'periode yang baru ditutup';
         if (typeof _kuFb === 'function') {
-            _kuFb('kuDebtFeedback', 'Sisa Beban periode sebesar Rp ' + Number(_sisaHutangPending).toLocaleString('id-ID') + ' siap dicatat ke Hutang Beban. Tekan tombol Catat di bawah untuk konfirmasi.', 'info');
+            _kuFb('kuDebtFeedback', 'Sisa Beban ' + labelPeriode + ' sebesar Rp ' + Number(_sisaHutangPending).toLocaleString('id-ID') + ' siap dicatat ke Hutang Beban. Tekan tombol Catat Hutang Beban di bawah untuk konfirmasi.', 'info');
         }
         setTimeout(() => {
             if (btn) btn.focus();
@@ -7717,7 +7740,17 @@ async function kuTutupKas() {
         const def = (pen && pen.defisit) || {};
         const bebanBelumTerbayar = Number(pen.beban_belum_terbayar || 0);
         const defisitMinus = Number(def.minus || 0);
+        const sudahTercatat = Boolean(def.sudah_tercatat);
         const sisaHutangBeban = Math.max(bebanBelumTerbayar, defisitMinus);
+        const closedPid = Number(res && res.closed_period_id) || null;
+
+        if (sisaHutangBeban > 0 && !sudahTercatat && closedPid) {
+            _sisaHutangPending = sisaHutangBeban;
+            _sisaHutangPendingPeriodId = closedPid;
+        } else {
+            _sisaHutangPending = 0;
+            _sisaHutangPendingPeriodId = null;
+        }
 
         const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
         toast('Tutup kas berhasil. Masuk ' + r(f.total_masuk) + ' • Keluar ' + r(f.total_keluar)
@@ -7730,9 +7763,9 @@ async function kuTutupKas() {
         renderKuArsip();
 
         // 6. NOTIFIKASI PENGARAH KE HUTANG BEBAN JIKA SISA BEBAN / KAS TOKO NOL
-        if (sisaHutangBeban > 0) {
+        if (sisaHutangBeban > 0 && !sudahTercatat) {
             setTimeout(() => {
-                bukaKuHutangSaranPopup(sisaHutangBeban);
+                bukaKuHutangSaranPopup(sisaHutangBeban, closedPid);
             }, 600);
         }
     } catch (err) {

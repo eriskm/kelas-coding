@@ -162,22 +162,46 @@ def catat_hutang_beban_manual(data: _HutangManualIn,
 
     Tutup Kas TIDAK lagi membuat hutang otomatis. Endpoint inilah satu-satunya
     jalan masuk Hutang Beban. Nominal WAJIB <= nilai minus di akhir Kondisi
-    Kas Operasional; kalau tidak, ditolak.
+    Kas Operasional (baik saat periode masih OPEN maupun sesaat setelah CLOSED
+    lewat popup Tutup Kas); kalau tidak, ditolak.
     """
+    import json
     import expense_debt as debt_mod
-    from finance import period_key
+    from money import ZERO
     from routers.dashboard import batas_periode, compute_finance
 
     p = db.query(KasPeriod).filter(KasPeriod.id == data.kas_period_id).first()
     if p is None:
         raise HTTPException(status_code=404, detail="Periode kas tidak ditemukan")
-    if (p.status or "").upper() != "OPEN":
-        raise HTTPException(status_code=400,
-                            detail="Hanya periode OPEN yang bisa dicatat hutangnya")
 
-    key = period_key(db, p.start_at, p.end_at)
-    fin = compute_finance(db, *batas_periode(p))
-    kka = to_decimal(fin.get("kondisi_kas_akhir") or 0)
+    status_str = (p.status or "").strip().upper()
+    if status_str not in ("OPEN", "CLOSED"):
+        raise HTTPException(status_code=400,
+                            detail="Status periode kas tidak valid untuk pencatatan hutang")
+
+    key = f"kas_period:{p.id}"
+    kka = None
+
+    if status_str == "CLOSED" and getattr(p, "snapshot", None):
+        try:
+            snap = json.loads(p.snapshot)
+            pen = (snap.get("penyelesaian") or {})
+            defisit_snap = (pen.get("defisit") or {})
+            fin_snap = (snap.get("finance") or {})
+            sisa_be = to_decimal(pen.get("beban_belum_terbayar") or 0)
+            def_minus = to_decimal(defisit_snap.get("minus") or 0)
+            kka_raw = defisit_snap.get("kondisi_kas_akhir")
+            if kka_raw is None:
+                kka_raw = fin_snap.get("kondisi_kas_akhir")
+            kka_snap = to_decimal(kka_raw or 0)
+            batas_minus = max(sisa_be, def_minus, -kka_snap if kka_snap < ZERO else ZERO)
+            kka = -batas_minus if batas_minus > ZERO else kka_snap
+        except Exception:
+            kka = None
+
+    if kka is None:
+        fin = compute_finance(db, *batas_periode(p))
+        kka = to_decimal(fin.get("kondisi_kas_akhir") or 0)
 
     nominal = data.nominal
     if nominal is None:

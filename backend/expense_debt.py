@@ -318,6 +318,8 @@ def hitung_breakdown_hutang(db: Session, kas_period_id: int = None, periode_key:
     laba_kotor = quantize(to_decimal(core.get("laba_kotor", 0)))
 
     kunci = finance._semua_kunci(db, start, end)
+    if kp and kp.id and f"kas_period:{kp.id}" not in kunci:
+        kunci.insert(0, f"kas_period:{kp.id}")
     rows = (db.query(ExpensePeriod)
             .filter(ExpensePeriod.periode.in_(kunci))
             .order_by(ExpensePeriod.id.asc()).all())
@@ -423,7 +425,7 @@ def ringkasan(db: Session, kas_period_id: int = None) -> dict:
 
     hutang = saldo_hutang(db)
     periods = (db.query(ExpenseDebtPeriod)
-               .order_by(ExpenseDebtPeriod.periode.desc()).all())
+               .order_by(ExpenseDebtPeriod.id.desc()).all())
 
     target_period_id = kas_period_id
     if target_period_id is None and quantize(to_decimal(hutang)) > ZERO:
