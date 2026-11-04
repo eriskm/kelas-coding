@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=33">
+    <link rel="stylesheet" href="/static/style.css?v=34">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -19,6 +19,7 @@
                     fontFamily: { sans: ['Inter', 'sans-serif'] },
                     colors: {
                         brand: { 50:'#fef2f2', 100:'#fee2e2', 500:'#dc2626', 600:'#b91c1c', 700:'#991b1b' },
+                        surface: { 600:'#334155', 700:'#1e293b', 800:'#0f172a', 900:'#0b1120' },
                     }
                 }
             }
@@ -348,9 +349,9 @@
                                     <div class="flex items-center gap-2">
                                         <div class="relative flex-1">
                                             <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
-                                            <input type="text" id="posSearchInput" oninput="posFilterProducts()" placeholder="Cari nama part, device, atau merek..." class="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-surface-800 text-gray-800 dark:text-gray-100 focus:outline-hidden focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500">
+                                            <input type="text" id="posSearchInput" oninput="posFilterProducts()" placeholder="Cari nama part, device, atau merek..." class="receive-input w-full pl-9 pr-3">
                                         </div>
-                                        <select id="posCategoryFilter" onchange="posFilterProducts()" class="text-xs px-2.5 py-2 rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-surface-800 text-gray-700 dark:text-gray-200 focus:outline-hidden">
+                                        <select id="posCategoryFilter" onchange="posFilterProducts()" class="receive-input">
                                             <option value="">Semua Kategori</option>
                                         </select>
                                     </div>
@@ -372,8 +373,8 @@
                                             <span class="text-[10px] text-gray-400 font-normal">Opsional</span>
                                         </div>
                                         <div class="grid grid-cols-2 gap-2">
-                                            <input type="text" id="posCustomerName" value="Pelanggan Umum" placeholder="Nama Pelanggan" class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:outline-hidden focus:border-emerald-500">
-                                            <input type="text" id="posCustomerPhone" placeholder="No. WA / HP" class="w-full px-2.5 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50 dark:bg-white/5 text-gray-800 dark:text-gray-200 focus:outline-hidden focus:border-emerald-500">
+                                            <input type="text" id="posCustomerName" value="Pelanggan Umum" placeholder="Nama Pelanggan" class="receive-input w-full">
+                                            <input type="text" id="posCustomerPhone" placeholder="No. WA / HP" class="receive-input w-full">
                                         </div>
                                     </div>
 
@@ -414,7 +415,7 @@
                                         <div id="posCashInputs" class="grid grid-cols-2 gap-2 pt-1">
                                             <div>
                                                 <label class="text-[10.5px] text-gray-500 dark:text-gray-400 font-medium block mb-0.5">Uang Diterima:</label>
-                                                <input type="number" id="posCashReceived" oninput="posCalcChange()" placeholder="Rp" class="w-full px-2.5 py-1.5 text-xs font-bold rounded-lg border border-gray-200 dark:border-white/10 bg-white dark:bg-surface-800 text-gray-800 dark:text-gray-100 focus:outline-hidden focus:border-emerald-500">
+                                                <input type="number" id="posCashReceived" oninput="posCalcChange()" placeholder="Rp 0" class="receive-input w-full tabular-nums">
                                             </div>
                                             <div>
                                                 <label class="text-[10.5px] text-gray-500 dark:text-gray-400 font-medium block mb-0.5">Kembalian:</label>
@@ -2503,7 +2504,7 @@
                                     <!-- Nama Konsumen -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcName">Nama Konsumen <span class="text-red-500">*</span></label>
-                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcName" name="customer_name" placeholder="Ketik nama pelanggan..." autocomplete="off" required>
+                                        <input class="receive-input w-full" type="text" id="rcName" name="customer_name" placeholder="Ketik nama pelanggan..." autocomplete="off" required>
                                     </div>
 
                                     <!-- Nomor WhatsApp -->
@@ -2514,14 +2515,14 @@
                                                 Riwayat
                                             </button>
                                         </div>
-                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcPhone" name="customer_phone" placeholder="0812xxxxxxxxx" inputmode="tel" autocomplete="off" required>
+                                        <input class="receive-input w-full" type="text" id="rcPhone" name="customer_phone" placeholder="0812xxxxxxxxx" inputmode="tel" autocomplete="off" required>
                                         <div id="rcPhoneFeedback" class="text-[11px] font-medium mt-1 hidden"></div>
                                     </div>
 
                                     <!-- Merek & Tipe HP -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDevice">Merek &amp; Tipe HP <span class="text-red-500">*</span></label>
-                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcDevice" name="device_type" placeholder="Contoh: Redmi Note 10" list="rcDeviceList" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" required>
+                                        <input class="receive-input w-full" type="text" id="rcDevice" name="device_type" placeholder="Contoh: Redmi Note 10" list="rcDeviceList" autocomplete="off" autocorrect="off" autocapitalize="words" spellcheck="false" required>
                                         <datalist id="rcDeviceList"></datalist>
                                         <!-- Quick Brand Chips -->
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2" id="rcBrandChips">
@@ -2538,7 +2539,7 @@
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPassword">Sandi / Pola Kunci</label>
                                         <div class="relative">
-                                            <input class="w-full text-sm py-2 pl-3 pr-9 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" type="text" id="rcPassword" name="device_lock_passcode" placeholder="Opsional / Kosongkan" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
+                                            <input class="receive-input w-full pr-9" type="text" id="rcPassword" name="device_lock_passcode" placeholder="Opsional / Kosongkan" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">
                                             <button type="button" id="rcPwToggle" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-xs" aria-label="Samarkan karakter">
                                                 <i class="fa-regular fa-eye-slash"></i>
                                             </button>
@@ -2560,7 +2561,7 @@
                                     <!-- Keluhan & Analisa Kerusakan Awal -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDamage">Keluhan &amp; Analisa Kerusakan Awal <span class="text-red-500">*</span></label>
-                                        <textarea class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" id="rcDamage" rows="2" placeholder="Jelaskan keluhan kerusakan unit..." required></textarea>
+                                        <textarea class="receive-input w-full" id="rcDamage" rows="2" placeholder="Jelaskan keluhan kerusakan unit..." required></textarea>
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcAppendDamage('Ganti LCD')" class="rc-mini-chip">Ganti LCD</button>
                                             <button type="button" onclick="rcAppendDamage('Mati Total')" class="rc-mini-chip">Mati Total</button>
@@ -2574,7 +2575,7 @@
                                     <!-- Rencana Tindakan Perbaikan -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPlan" id="rcPlanLabel">Rencana Tindakan Perbaikan</label>
-                                        <textarea class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 transition" id="rcPlan" rows="2" placeholder="Rencana perbaikan teknisi (opsional)..."></textarea>
+                                        <textarea class="receive-input w-full" id="rcPlan" rows="2" placeholder="Rencana perbaikan teknisi (opsional)..."></textarea>
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcAppendPlan('Cek Mesin')" class="rc-mini-chip">Cek Mesin</button>
                                             <button type="button" onclick="rcAppendPlan('Ganti Part')" class="rc-mini-chip">Ganti Part</button>
@@ -2651,7 +2652,7 @@
                                     <!-- Estimasi Biaya (Rp) -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcEstimate" id="rcEstimateLabel">Estimasi Biaya (Rp)</label>
-                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 font-medium transition" type="text" inputmode="numeric" id="rcEstimate" placeholder="0">
+                                        <input class="receive-input w-full tabular-nums" type="text" inputmode="numeric" id="rcEstimate" placeholder="0">
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcAddEstimate(50000)" class="rc-mini-chip">+50rb</button>
                                             <button type="button" onclick="rcAddEstimate(100000)" class="rc-mini-chip">+100rb</button>
@@ -2663,7 +2664,7 @@
                                     <!-- Uang Muka / DP (Rp) -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDp">Uang Muka / DP (Rp)</label>
-                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400 font-medium transition" type="text" inputmode="numeric" id="rcDp" placeholder="0">
+                                        <input class="receive-input w-full tabular-nums" type="text" inputmode="numeric" id="rcDp" placeholder="0">
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcSetDpMode('none')" class="rc-mini-chip">Tanpa DP</button>
                                             <button type="button" onclick="rcSetDpMode(50000)" class="rc-mini-chip">+50rb</button>
@@ -2675,7 +2676,7 @@
                                     <!-- Teknisi PJ -->
                                     <div class="field" id="rcTechWrap">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcTechnician" id="rcTechnicianLabel">Teknisi PJ</label>
-                                        <select class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium transition" id="rcTechnician">
+                                        <select class="receive-input w-full" id="rcTechnician">
                                             <option value="">-- Belum Ditentukan --</option>
                                         </select>
                                     </div>
@@ -2683,7 +2684,7 @@
                                     <!-- Status Awal -->
                                     <div class="field">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPathSelect">Status Awal</label>
-                                        <select class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 font-medium transition" id="rcPathSelect" onchange="rcChangePathSelect(this.value)">
+                                        <select class="receive-input w-full" id="rcPathSelect" onchange="rcChangePathSelect(this.value)">
                                             <option value="TITIP" selected>Analisa</option>
                                             <option value="PERBAIKAN">Siap Kerjakan</option>
                                             <option value="SPAREPART">Inden Sparepart</option>
@@ -2693,7 +2694,7 @@
 
                                     <div class="field hidden sm:col-span-2 lg:col-span-4" id="rcFinalWrap">
                                         <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcFinal" id="rcFinalLabel">Harga Final (Wajib untuk Servis Kilat)</label>
-                                        <input class="w-full text-sm py-2 px-3 rounded-lg border border-gray-300 dark:border-white/15 bg-white dark:bg-slate-800 text-gray-900 dark:text-white focus:outline-none focus:border-blue-500 font-medium" type="text" inputmode="numeric" id="rcFinal" placeholder="0">
+                                        <input class="receive-input w-full tabular-nums" type="text" inputmode="numeric" id="rcFinal" placeholder="0">
                                     </div>
                                     <input type="hidden" id="rcStatus" value="DITERIMA">
                                     <div class="hidden" id="rcHiddenRadioGroup">

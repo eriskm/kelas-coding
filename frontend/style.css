@@ -6691,3 +6691,9 @@ a:focus-visible,
         padding: 7px 9px;
     }
 }
+
+#posCategoryFilter.receive-input {
+    width: auto;
+    min-width: 155px;
+    flex-shrink: 0;
+}
