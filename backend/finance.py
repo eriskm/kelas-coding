@@ -339,14 +339,21 @@ def freeze_expenses_for_period(db: Session, start: datetime, end: datetime,
     existing = (db.query(ExpensePeriod)
                 .filter(ExpensePeriod.periode.in_(_semua_kunci(db, start, end)))
                 .all())
-    if existing:
+    kas_p = _kas_period_untuk(db, start)
+    is_open = bool(kas_p and (getattr(kas_p, "status", "") or "").upper() == "OPEN")
+    has_catalog = any(getattr(r, "user_id", None) is None for r in existing)
+    if existing and (has_catalog or not is_open):
         return {"periode": key, "dibekukan": 0, "sudah_ada": len(existing)}
 
+    only_att_exists = bool(existing and not has_catalog and is_open)
     dibuat = 0
     for e in db.query(Expense).all():
         kategori = (e.kategori or "").strip().lower()
         if kategori not in BEBAN_KATEGORI:
             # SSOT-4: kategori lain bukan Beban -> tidak dibekukan sebagai beban.
+            continue
+        if only_att_exists and kategori == "gaji":
+            # Gaji periode OPEN sudah dikelola oleh UserAttendance.
             continue
         if not bool(getattr(e, "recurring", True)):
             moment = _expense_moment(e)
@@ -607,9 +614,17 @@ def beban_frozen(db: Session, start: datetime, end: datetime,
     key = period_key(db, start, end)
     kunci = _semua_kunci(db, start, end)
     rows = db.query(ExpensePeriod).filter(ExpensePeriod.periode.in_(kunci)).all()
+    kas_p = _kas_period_untuk(db, start)
+    is_open = bool(kas_p and (getattr(kas_p, "status", "") or "").upper() == "OPEN")
+    has_catalog = any(getattr(r, "user_id", None) is None for r in rows)
     baru_beku = not rows
-    if baru_beku:
-        freeze_expenses_for_period(db, start, end, commit=False)
+    if baru_beku or (is_open and not has_catalog):
+        res_frz = freeze_expenses_for_period(db, start, end, commit=False)
+        if not baru_beku and res_frz.get("dibekukan", 0) > 0:
+            try:
+                db.commit()
+            except Exception:
+                pass
         rows = (db.query(ExpensePeriod)
                 .filter(ExpensePeriod.periode.in_(kunci)).all())
     gaji = ZERO
