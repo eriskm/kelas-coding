@@ -6539,3 +6539,98 @@ select.range-pill.range-select option { color: #0f172a; }
 .dark #pageGaransi .tx-table tbody tr:hover td:last-child {
     background-color: var(--bg-surface-elevated);
 }
+/* =====================================================================
+   POIN 4: MICRO-INTERACTIONS, TOMBOL AKSI TABEL & FOCUS ACCESSIBILITY
+   ===================================================================== */
+/* 1. Tombol Aksi Tabel (.sp-action-btn & .tx-view-btn) */
+.sp-action-btn,
+.tx-view-btn {
+    background-color: var(--bg-surface-elevated);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-secondary);
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+                box-shadow 0.15s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.15s ease,
+                border-color 0.15s ease,
+                color 0.15s ease;
+}
+.dark .sp-action-btn,
+.dark .tx-view-btn {
+    background-color: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #94a3b8;
+    box-shadow: none;
+}
+.sp-action-btn:hover,
+.tx-view-btn:hover {
+    transform: translateY(-1.5px);
+    box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+    border-color: var(--border-strong);
+}
+.dark .sp-action-btn:hover,
+.dark .tx-view-btn:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    border-color: rgba(255, 255, 255, 0.22);
+}
+.sp-action-btn:active,
+.tx-view-btn:active,
+.tx-page-btn:active,
+.float-close:active,
+.ku-tab-btn:active {
+    transform: translateY(0) scale(0.95);
+}
+
+/* 2. Tombol Tutup Modal (.float-close) & Animasi Buka Modal */
+.float-close:hover {
+    background-color: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+    transform: translateY(-1px);
+}
+.dark .float-close:hover {
+    background-color: rgba(220, 38, 38, 0.18);
+    color: #fca5a5;
+    border-color: rgba(220, 38, 38, 0.35);
+}
+@keyframes modalFloatIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, calc(-50% + 8px)) scale(0.985);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+.float-window.open:not(.dragging) {
+    animation: modalFloatIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* 3. Navigasi Sidebar (.nav-link) Micro-interaction & Indikator Aktif */
+.nav-link {
+    position: relative;
+    transition: background-color 0.15s ease, color 0.15s ease, padding-left 0.15s ease;
+}
+.nav-link i {
+    transition: transform 0.15s ease, color 0.15s ease;
+}
+.nav-link:hover i {
+    transform: scale(1.08);
+}
+.nav-link.active {
+    box-shadow: inset 3px 0 0 #ef4444;
+}
+
+/* 4. Aksesibilitas Keyboard (:focus-visible) Tanpa Mengganggu Klik Mouse */
+button:focus-visible,
+a:focus-visible,
+.sp-action-btn:focus-visible,
+.tx-view-btn:focus-visible,
+.tx-page-btn:focus-visible,
+.ku-tab-btn:focus-visible,
+.float-close:focus-visible,
+.nav-link:focus-visible {
+    outline: 2px solid #3b82f6;
+    outline-offset: 2px;
+}
