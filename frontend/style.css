@@ -5,6 +5,46 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
 
+/* ============================================
+   DESIGN TOKENS (:root & .dark) — POIN 3
+   ============================================ */
+:root {
+    --bg-app: #f1f5f9;
+    --bg-surface: #ffffff;
+    --bg-surface-elevated: #f8fafc;
+    --bg-surface-hover: #f1f5f9;
+    --bg-modal-header: #ffffff;
+    --bg-modal-body: #f8fafc;
+    --border-subtle: #e2e8f0;
+    --border-strong: #cbd5e1;
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.03);
+    --shadow-card-hover: 0 6px 18px rgba(15, 23, 42, 0.08);
+    --shadow-modal: 0 25px 50px -12px rgba(15, 23, 42, 0.25), 0 0 0 1px rgba(226, 232, 240, 0.85);
+    --radius-card: 12px;
+    --radius-modal: 18px;
+    --radius-input: 9px;
+}
+
+.dark {
+    --bg-app: #0b0f19;
+    --bg-surface: #131824;
+    --bg-surface-elevated: #1a2234;
+    --bg-surface-hover: #1e293b;
+    --bg-modal-header: #0f172a;
+    --bg-modal-body: #0b1120;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --border-strong: rgba(255, 255, 255, 0.14);
+    --text-primary: #f8fafc;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.28);
+    --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.42);
+    --shadow-modal: 0 25px 50px -12px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.1);
+}
+
 /* Scrollbar */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -6389,4 +6429,113 @@ select.range-pill.range-select option { color: #0f172a; }
     text-align: right;
     font-weight: 700;
     font-variant-numeric: tabular-nums;
+}
+/* =====================================================================
+   POIN 3: KONSOLIDASI DESIGN TOKENS UNTUK PERMUKAAN, BORDER & MODAL
+   ===================================================================== */
+.app-content {
+    background-color: var(--bg-app);
+}
+.dark .app-content {
+    background-color: var(--bg-app);
+}
+.app-topbar {
+    background-color: var(--bg-surface);
+    border-bottom: 1px solid var(--border-subtle);
+}
+.dark .app-topbar {
+    background-color: #0f1420;
+    border-bottom-color: var(--border-subtle);
+}
+
+/* Penyeragaman Panel, Kartu KPI & Kontainer Utama */
+.panel,
+.star-card:not(.kpi-solid),
+.ku-kpi-card {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-card);
+    box-shadow: var(--shadow-card);
+}
+.dark .panel,
+.dark .star-card:not(.kpi-solid),
+.dark .ku-kpi-card {
+    background-color: var(--bg-surface);
+    border-color: var(--border-subtle);
+    box-shadow: var(--shadow-card);
+}
+.star-card:not(.kpi-solid):hover,
+.ku-kpi-card:hover {
+    box-shadow: var(--shadow-card-hover);
+    border-color: var(--border-strong);
+}
+.dark .star-card:not(.kpi-solid):hover,
+.dark .ku-kpi-card:hover {
+    box-shadow: var(--shadow-card-hover);
+    border-color: var(--border-strong);
+}
+
+/* Penyeragaman Seluruh Jendela Modal (.float-window) ke Standar Modern Clean SaaS */
+.float-window {
+    background-color: var(--bg-modal-body);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-modal);
+    box-shadow: var(--shadow-modal);
+}
+.dark .float-window {
+    background-color: var(--bg-modal-body);
+    border-color: rgba(255, 255, 255, 0.1);
+    box-shadow: var(--shadow-modal);
+}
+.float-titlebar {
+    background-color: var(--bg-modal-header);
+    border-bottom: 1px solid var(--border-subtle);
+    padding: 13px 18px;
+}
+.dark .float-titlebar {
+    background-color: var(--bg-modal-header);
+    border-bottom-color: var(--border-subtle);
+}
+.float-body {
+    background-color: var(--bg-modal-body);
+}
+.dark .float-body {
+    background-color: var(--bg-modal-body);
+}
+.float-window .receive-panel {
+    background-color: var(--bg-surface);
+    border: 1px solid var(--border-subtle);
+    box-shadow: var(--shadow-card);
+}
+.dark .float-window .receive-panel {
+    background-color: var(--bg-surface);
+    border-color: var(--border-subtle);
+    box-shadow: var(--shadow-card);
+}
+
+/* Sinkronisasi Warna Kolom Sticky Aksi terhadap Token Permukaan Panel */
+#pageTransaksi .tx-table td:last-child,
+#pagePelanggan .tx-table td:last-child,
+#pageGaransi .tx-table td:last-child {
+    background-color: var(--bg-surface);
+}
+.dark #pageTransaksi .tx-table td:last-child,
+.dark #pagePelanggan .tx-table td:last-child,
+.dark #pageGaransi .tx-table td:last-child {
+    background-color: var(--bg-surface);
+}
+#pageTransaksi .tx-table th:last-child,
+#pagePelanggan .tx-table th:last-child,
+#pageGaransi .tx-table th:last-child {
+    background-color: var(--bg-surface-elevated);
+}
+.dark #pageTransaksi .tx-table th:last-child,
+.dark #pagePelanggan .tx-table th:last-child,
+.dark #pageGaransi .tx-table th:last-child {
+    background-color: #111827;
+}
+.dark #pageTransaksi .tx-table tbody tr:hover td:last-child,
+.dark #pagePelanggan .tx-table tbody tr:hover td:last-child,
+.dark #pageGaransi .tx-table tbody tr:hover td:last-child {
+    background-color: var(--bg-surface-elevated);
 }
