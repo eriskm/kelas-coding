@@ -6634,3 +6634,60 @@ a:focus-visible,
     outline: 2px solid #3b82f6;
     outline-offset: 2px;
 }
+/* =====================================================================
+   POIN 5: OPTIMASI RESPONSIF LAYAR KECIL / TABLET (TOOLBAR, MODAL & TABEL)
+   ===================================================================== */
+/* 1. Kontainer Scroll Tabel Halus di Tablet & Mobile */
+.overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+}
+
+/* 2. Optimasi Filter Bar Transaksi, Pelanggan, Garansi & Sparepart di Tablet (<= 900px) */
+@media (max-width: 900px) {
+    #pageTransaksi #txDateFilter {
+        width: 100% !important;
+    }
+    #pageTransaksi .panel > .flex.sm\:flex-row {
+        flex-wrap: wrap;
+    }
+    #pageTransaksi .panel > .flex.sm\:flex-row > .relative.flex-1 {
+        flex: 1 1 100%;
+        min-width: 100%;
+    }
+    #pageTransaksi .panel > .flex.sm\:flex-row > div:not(.relative) {
+        flex: 1 1 calc(33.333% - 8px);
+        min-width: 130px;
+    }
+}
+
+/* 3. Optimasi Mobile (<= 640px): Modal Penuh Proporsional, Filter Rapi & Tabel Padat */
+@media (max-width: 640px) {
+    #pageReceive,
+    #pageUpdateServis,
+    .float-window {
+        width: calc(100vw - 12px) !important;
+        max-width: calc(100vw - 12px) !important;
+        max-height: calc(100dvh - 12px) !important;
+        border-radius: 14px !important;
+    }
+    #pageReceive .float-titlebar,
+    #pageUpdateServis .float-titlebar,
+    .float-titlebar {
+        padding: 10px 14px !important;
+    }
+    #pageReceive .rc-sticky-footer,
+    #pageUpdateServis .rc-sticky-footer {
+        padding: 10px 14px !important;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    #pageTransaksi .panel > .flex.sm\:flex-row > div:not(.relative) {
+        flex: 1 1 calc(50% - 6px);
+        min-width: 120px;
+    }
+    .tx-table thead th,
+    .tx-table tbody td {
+        padding: 7px 9px;
+    }
+}
