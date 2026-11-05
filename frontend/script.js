@@ -6910,24 +6910,31 @@ function renderKuKpi() {
         ? Number(sl.laci_milik_toko)
         : (sl.saldo_laci != null ? Number(sl.saldo_laci) : Number(fin.saldo_laci || 0));
     const laciEl = document.getElementById('kuKpiLaci');
-    if (laciEl) laciEl.textContent = formatRupiah(laciVal);
+    if (laciEl) laciEl.textContent = kuRupiah(laciVal);
 
     const omzetVal = Number(fin.omset || 0);
     const omzetEl = document.getElementById('kuKpiOmzet');
-    if (omzetEl) omzetEl.textContent = formatRupiah(omzetVal);
+    if (omzetEl) omzetEl.textContent = kuRupiah(omzetVal);
 
     const bebanVal = Number(fin.total_beban || 0);
     const bebanEl = document.getElementById('kuKpiBeban');
-    if (bebanEl) bebanEl.textContent = formatRupiah(bebanVal);
+    if (bebanEl) bebanEl.textContent = kuRupiah(bebanVal);
 
     const labaVal = Number(fin.laba_bersih || 0);
     const labaEl = document.getElementById('kuKpiLaba');
     if (labaEl) {
-        labaEl.textContent = formatRupiah(labaVal);
-        labaEl.classList.toggle('text-red-500', labaVal < 0);
-        labaEl.classList.toggle('text-purple-600', labaVal >= 0);
-        labaEl.classList.toggle('dark:text-purple-400', labaVal >= 0);
+        labaEl.textContent = kuRupiah(labaVal);
+        labaEl.classList.toggle('text-red-600', labaVal < 0);
         labaEl.classList.toggle('dark:text-red-400', labaVal < 0);
+        labaEl.classList.toggle('text-emerald-600', labaVal >= 0);
+        labaEl.classList.toggle('dark:text-emerald-400', labaVal >= 0);
+    }
+    const labaIconWrap = document.getElementById('kuKpiLabaIconWrap');
+    if (labaIconWrap) {
+        labaIconWrap.className = 'w-7 h-7 rounded-lg flex items-center justify-center text-xs '
+            + (labaVal < 0
+                ? 'bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400'
+                : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400');
     }
 
     const badge = document.getElementById('kuPeriodBadge');
@@ -7893,8 +7900,8 @@ function renderKuTitipan() {
             <td class="tx-cell-muted tx-nowrap">${escapeHtml(it.no_servis || '-')}</td>
             <td><span class="tx-ellipsis" title="${escapeHtml(it.pelanggan || '-')} — ${escapeHtml(it.unit || '-')}">${escapeHtml(it.pelanggan || '-')}</span><br><span class="text-[10.5px] text-gray-400">${escapeHtml(it.unit || '-')}</span></td>
             <td class="tx-nowrap"><span class="tx-titipan-tag">${escapeHtml(it.label || it.jenis || '-')}</span></td>
-            <td class="numeric-r">${Number(it.masuk) ? kuRupiah(it.masuk) : '<span class="text-green-500">-</span>'}</td>
-            <td class="numeric-r">${Number(it.keluar) ? kuRupiah(it.keluar) : '<span class="text-red-500">-</span>'}</td>
+            <td class="numeric-r">${Number(it.masuk) ? kuRupiah(it.masuk) : '<span class="text-slate-300 dark:text-slate-600 font-normal">-</span>'}</td>
+            <td class="numeric-r">${Number(it.keluar) ? kuRupiah(it.keluar) : '<span class="text-slate-300 dark:text-slate-600 font-normal">-</span>'}</td>
             <td class="tx-saldo numeric-r">${kuRupiah(it.saldo)}</td>
         </tr>`).join('');
 }
@@ -7937,8 +7944,8 @@ function renderKondisiKas() {
         rows.push(
             `<tr class="${cls || ''}">`
             + `<td><span class="tx-device">${escapeHtml(nama)}</span></td>`
-            + `<td class="tx-debit numeric-c">${d ? kuRupiah(d) : '<span class="text-green-500">-</span>'}</td>`
-            + `<td class="tx-kredit numeric-c">${k ? kuRupiah(k) : '<span class="text-red-500">-</span>'}</td>`
+            + `<td class="tx-debit numeric-c">${d ? kuRupiah(d) : '<span class="text-slate-300 dark:text-slate-600 font-normal">-</span>'}</td>`
+            + `<td class="tx-kredit numeric-c">${k ? kuRupiah(k) : '<span class="text-slate-300 dark:text-slate-600 font-normal">-</span>'}</td>`
             + `<td class="tx-saldo numeric-r">${kuRupiah(posisi ? d : saldo)}</td>`
             + `</tr>`);
     };

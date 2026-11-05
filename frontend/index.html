@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=40">
+    <link rel="stylesheet" href="/static/style.css?v=41">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1666,48 +1666,49 @@
 
                         <div id="kuMainView" class="space-y-4">
                         <!-- TAB 1: OPERASIONAL & KAS -->
+                        <!-- TAB 1: OPERASIONAL & KAS -->
                         <div id="kuTabPaneOperasional" class="space-y-4">
-                            <!-- Quick KPI 4-Card -->
+                            <!-- Quick KPI 4-Card (Modern Minimalist Business Software) -->
                             <div class="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-3" id="kuKpiBar">
-                                <div class="sm-card ku-kpi-card">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="sm-kpi-icon bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400">
+                                <div class="ku-kpi-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Kas Laci (Kasir)</span>
+                                        <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                                             <i class="fa-solid fa-cash-register"></i>
                                         </span>
-                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Kas Laci (Kasir)</span>
                                     </div>
-                                    <div class="text-lg sm:text-xl font-black tabular-nums text-gray-800 dark:text-white" id="kuKpiLaci">Rp 0</div>
-                                    <span class="text-[10px] text-gray-400">Saldo fisik di laci</span>
+                                    <div class="text-lg sm:text-2xl font-black tabular-nums tracking-tight font-mono text-slate-900 dark:text-white" id="kuKpiLaci">Rp 0</div>
+                                    <span class="text-[10.5px] text-slate-400 dark:text-slate-500 block mt-1">Saldo fisik di laci kasir</span>
                                 </div>
-                                <div class="sm-card ku-kpi-card">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="sm-kpi-icon bg-blue-50 text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+                                <div class="ku-kpi-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Omzet Periode</span>
+                                        <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-400">
                                             <i class="fa-solid fa-receipt"></i>
                                         </span>
-                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Omzet Periode</span>
                                     </div>
-                                    <div class="text-lg sm:text-xl font-black tabular-nums text-blue-600 dark:text-blue-400" id="kuKpiOmzet">Rp 0</div>
-                                    <span class="text-[10px] text-gray-400">Total servis lunas</span>
+                                    <div class="text-lg sm:text-2xl font-black tabular-nums tracking-tight font-mono text-slate-900 dark:text-white" id="kuKpiOmzet">Rp 0</div>
+                                    <span class="text-[10.5px] text-slate-400 dark:text-slate-500 block mt-1">Total servis lunas</span>
                                 </div>
-                                <div class="sm-card ku-kpi-card">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="sm-kpi-icon bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
+                                <div class="ku-kpi-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Beban</span>
+                                        <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs bg-amber-50 text-amber-600 dark:bg-amber-950/40 dark:text-amber-400">
                                             <i class="fa-solid fa-file-invoice-dollar"></i>
                                         </span>
-                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Total Beban</span>
                                     </div>
-                                    <div class="text-lg sm:text-xl font-black tabular-nums text-amber-600 dark:text-amber-400" id="kuKpiBeban">Rp 0</div>
-                                    <span class="text-[10px] text-gray-400">Gaji &amp; operasional</span>
+                                    <div class="text-lg sm:text-2xl font-black tabular-nums tracking-tight font-mono text-amber-600 dark:text-amber-400" id="kuKpiBeban">Rp 0</div>
+                                    <span class="text-[10.5px] text-slate-400 dark:text-slate-500 block mt-1">Gaji teknisi &amp; operasional</span>
                                 </div>
-                                <div class="sm-card ku-kpi-card">
-                                    <div class="flex items-center gap-2 mb-1">
-                                        <span class="sm-kpi-icon bg-purple-50 text-purple-600 dark:bg-purple-950/40 dark:text-purple-400">
-                                            <i class="fa-solid fa-chart-line"></i>
+                                <div class="ku-kpi-card">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Laba Bersih</span>
+                                        <span class="w-7 h-7 rounded-lg flex items-center justify-center text-xs bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40 dark:text-emerald-400" id="kuKpiLabaIconWrap">
+                                            <i class="fa-solid fa-chart-line" id="kuKpiLabaIcon"></i>
                                         </span>
-                                        <span class="text-xs font-semibold text-gray-500 dark:text-gray-400">Laba Bersih</span>
                                     </div>
-                                    <div class="text-lg sm:text-xl font-black tabular-nums text-purple-600 dark:text-purple-400" id="kuKpiLaba">Rp 0</div>
-                                    <span class="text-[10px] text-gray-400">Laba kotor &minus; beban</span>
+                                    <div class="text-lg sm:text-2xl font-black tabular-nums tracking-tight font-mono text-emerald-600 dark:text-emerald-400" id="kuKpiLaba">Rp 0</div>
+                                    <span class="text-[10.5px] text-slate-400 dark:text-slate-500 block mt-1">Laba kotor dikurangi beban</span>
                                 </div>
                             </div>
 
@@ -1715,38 +1716,38 @@
                             <div class="panel lg:col-span-3 ku-kas-panel">
                                 <!-- (1) RINGKASAN: satu angka per pos -->
                                 <section class="ku-block">
-                                    <header class="ku-block-head">
-                                        <h4 class="ku-block-title">
-                                            <i class="fa-solid fa-chart-pie"></i>
+                                    <header class="ku-block-head pb-2 mb-2 border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                                        <h4 class="ku-block-title text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                                            <i class="fa-solid fa-chart-pie text-brand-600 dark:text-brand-400"></i>
                                             <span>Kondisi Kas Operasional</span>
-                                            <span class="ku-info-tip" tabindex="0" role="button" aria-label="Ringkasan posisi keuangan operasional pada periode berjalan, meliputi saldo kas besar, kas kecil/laci, pendapatan penjualan, modal transaksi, dan beban operasional">
-                                                <i class="fa-solid fa-circle-question"></i>
-                                                <span class="ku-info-bubble">Ringkasan posisi keuangan operasional pada periode berjalan, meliputi saldo kas besar, kas kecil/laci, pendapatan penjualan, modal transaksi, dan beban operasional</span>
-                                            </span>
                                         </h4>
+                                        <span class="ku-info-tip" tabindex="0" role="button" aria-label="Ringkasan posisi keuangan operasional pada periode berjalan, meliputi saldo kas besar, kas kecil/laci, pendapatan penjualan, modal transaksi, dan beban operasional">
+                                            <i class="fa-solid fa-circle-question text-slate-400 hover:text-slate-600"></i>
+                                            <span class="ku-info-bubble">Ringkasan posisi keuangan operasional pada periode berjalan, meliputi saldo kas besar, kas kecil/laci, pendapatan penjualan, modal transaksi, dan beban operasional</span>
+                                        </span>
                                     </header>
-                                    <div class="overflow-x-auto">
-                                        <table class="tx-table cash-table w-full text-sm ku-kondisi">
-                                            <thead>
+                                    <div class="overflow-x-auto rounded-xl border border-slate-200/80 dark:border-white/10 bg-white dark:bg-slate-900/30">
+                                        <table class="tx-table cash-table w-full text-xs sm:text-sm ku-kondisi">
+                                            <thead class="bg-slate-50 dark:bg-slate-800/60 text-slate-500 dark:text-slate-400 text-[11px] uppercase tracking-wider border-b border-slate-200 dark:border-white/10">
                                                 <tr>
-                                                    <th>Uraian</th>
-                                                    <th class="numeric-c cash-num">Debit</th>
-                                                    <th class="numeric-c cash-num">Kredit</th>
-                                                    <th class="numeric-r cash-num">Saldo</th>
+                                                    <th class="py-2.5 px-3 text-left">Uraian</th>
+                                                    <th class="numeric-c cash-num py-2.5 px-3">Debit</th>
+                                                    <th class="numeric-c cash-num py-2.5 px-3">Kredit</th>
+                                                    <th class="numeric-r cash-num py-2.5 px-3">Saldo</th>
                                                 </tr>
                                             </thead>
-                                            <tbody id="kuKondisiBody"></tbody>
+                                            <tbody id="kuKondisiBody" class="divide-y divide-slate-100 dark:divide-white/5"></tbody>
                                         </table>
                                     </div>
                                 </section>
 
                                 <form id="kuKasForm" autocomplete="off" class="ku-kas-form" data-cap="KAS_ENTRY_WRITE">
-                                    <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] gap-2.5 mt-3 pt-3 border-t border-gray-100 dark:border-white/5">
-                                        <select class="receive-input" id="kuKasJenis">
+                                    <div class="grid grid-cols-2 lg:grid-cols-[1fr_1fr_1fr_auto] gap-2 mt-3 pt-3 border-t border-slate-100 dark:border-white/5">
+                                        <select class="receive-input text-xs" id="kuKasJenis">
                                             <option value="Masuk" selected>Masuk</option>
                                             <option value="Keluar">Keluar</option>
                                         </select>
-                                        <select class="receive-input" id="kuKasKategori">
+                                        <select class="receive-input text-xs" id="kuKasKategori">
                                             <option value="Penjualan Service" selected>Penjualan Service</option>
                                             <option value="Modal Part">Modal Part</option>
                                             <option value="Modal Jasa">Modal Jasa</option>
@@ -1755,38 +1756,42 @@
                                             <option value="Lainnya">Lainnya</option>
                                         </select>
                                         <div class="relative">
-                                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                            <input class="receive-input pl-9" type="number" id="kuKasNominal" min="1" placeholder="Nominal" required>
+                                            <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">Rp</span>
+                                            <input class="receive-input pl-8 py-1.5 text-xs font-mono font-semibold" type="number" id="kuKasNominal" min="1" placeholder="Nominal" required>
                                         </div>
-                                        <button type="submit" class="receive-back-btn bg-brand-500 text-white hover:bg-brand-600 border-transparent justify-center col-span-2 lg:col-span-1">
+                                        <button type="submit" class="receive-submit-btn text-xs py-1.5 px-3 justify-center col-span-2 lg:col-span-1 shadow-xs">
                                             <i class="fa-solid fa-plus"></i> Tambah
                                         </button>
                                     </div>
                                 </form>
                                 <div class="ku-kas-actions">
                                     <button type="button" id="kuTutupKasBtn" onclick="kuTutupKas()" class="ku-tutup-btn" data-cap="KAS_CLOSE">
-                                        <i class="fa-solid fa-lock"></i> Proses Tutup Kas & Pindah Arsip (jam 16.00)
+                                        <i class="fa-solid fa-lock"></i> Proses Tutup Kas &amp; Pindah Arsip (jam 16.00)
                                     </button>
                                 </div>
                             </div>
-                            <div class="panel lg:col-span-2">
-                                <!-- Panel "Distribusi Laba" yang dulu ada di baris bawah sudah
-                                     DIHAPUS: isinya empat baris 10/30/30/30 yang persis sama
-                                     dengan Alokasi Profit di atas, hanya lebih sedikit
-                                     informasi (tanpa donut, badge CTO, alasan, dan tombol).
-                                     Satu panel saja sudah cukup. -->
-                                <h3 class="panel-title">Alokasi Profit</h3>
-                                <div class="ku-bh-badge-wrap" id="kuAllocGate">
-                                    <span class="ku-bh-badge" id="kuAllocBadge">MENUNGGU CTO</span>
-                                    <span class="ku-bh-note" id="kuAllocNote">Target Operasional belum tercapai.</span>
-                                    <button type="button" id="kuDistribusiBtn" onclick="kuJalankanDistribusi()" class="receive-back-btn ku-dist-btn hidden">
-                                        <i class="fa-solid fa-share-from-square"></i> Jalankan Distribusi
-                                    </button>
+                            <div class="panel lg:col-span-2 flex flex-col justify-between">
+                                <div>
+                                    <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-white/5">
+                                        <h3 class="panel-title text-sm font-bold m-0 flex items-center gap-2">
+                                            <i class="fa-solid fa-chart-pie text-brand-600 dark:text-brand-400"></i>
+                                            <span>Alokasi Profit</span>
+                                        </h3>
+                                        <span class="ku-bh-badge" id="kuAllocBadge">MENUNGGU CTO</span>
+                                    </div>
+                                    <div class="ku-bh-badge-wrap" id="kuAllocGate">
+                                        <span class="ku-bh-note" id="kuAllocNote">Target Operasional belum tercapai.</span>
+                                        <button type="button" id="kuDistribusiBtn" onclick="kuJalankanDistribusi()" class="receive-back-btn ku-dist-btn hidden">
+                                            <i class="fa-solid fa-share-from-square"></i> Jalankan Distribusi
+                                        </button>
+                                    </div>
+                                    <div id="kuDonut"></div>
+                                    <div class="al-list" id="kuAllocList"></div>
                                 </div>
-                                <div id="kuDonut"></div>
-                                <div class="al-list" id="kuAllocList"></div>
-                                <div class="al-total"><span>Total Profit</span><b id="kuTotalProfit"></b></div>
-                                <div class="ku-alloc-note" id="kuAllocCatatan"></div>
+                                <div class="space-y-2 mt-3 pt-2">
+                                    <div class="al-total"><span>Total Profit</span><b id="kuTotalProfit">Rp 0</b></div>
+                                    <div class="ku-alloc-note" id="kuAllocCatatan"></div>
+                                </div>
                             </div>
                         </div>
 
@@ -3940,6 +3945,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=40"></script>
+<script src="/static/script.js?v=41"></script>
 </body>
 </html>

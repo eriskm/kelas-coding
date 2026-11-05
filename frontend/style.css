@@ -1995,28 +1995,47 @@ input.receive-input.pr-10 { padding-right: 40px !important; }
 .tx-status.ku-masuk { background: #dcfce7; color: #15803d; }
 .tx-status.ku-keluar { background: #fee2e2; color: #b91c1c; }
 #kuDonut { min-height: 200px; }
-.al-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
-.al-row { display: flex; align-items: center; gap: 9px; font-size: 12.5px; padding: 7px 10px; border: 1px solid transparent; border-radius: 10px; transition: border-color .15s, box-shadow .15s, background .15s; }
-.al-row:hover { background: rgba(148,163,184,0.12); }
-.al-dot { width: 11px; height: 11px; border-radius: 4px; flex-shrink: 0; }
+.al-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.al-row {
+    display: flex; align-items: center; gap: 8px; font-size: 12px;
+    padding: 7px 10px; border: 1px solid #f1f5f9; border-radius: 8px;
+    background: #fafafa;
+    transition: border-color .15s ease, background .15s ease;
+}
+.dark .al-row { background: rgba(255,255,255,0.02); border-color: rgba(255,255,255,0.05); }
+.al-row:hover { background: #f1f5f9; border-color: #e2e8f0; }
+.dark .al-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+.al-row.is-sel { border-color: #dc2626; background: #fef2f2; }
+.dark .al-row.is-sel { border-color: #ef4444; background: rgba(220,38,38,0.12); }
+.al-dot { width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0; }
 .al-name { font-weight: 600; color: #334155; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .dark .al-name { color: #cbd5e1; }
-.al-pct { font-weight: 800; color: #0f172a; width: 42px; text-align: right; }
-.dark .al-pct { color: #f1f5f9; }
-.al-nom { color: #64748b; width: 118px; text-align: right; white-space: nowrap; }
-.dark .al-nom { color: #94a3b8; }
+.al-pct {
+    font-weight: 700; color: #475569; font-size: 11px;
+    padding: 1.5px 6px; border-radius: 6px; background: #e2e8f0;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    text-align: center;
+}
+.dark .al-pct { background: rgba(255,255,255,0.1); color: #cbd5e1; }
+.al-nom {
+    color: #0f172a; font-weight: 700; font-size: 12px; width: 116px;
+    text-align: right; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+.dark .al-nom { color: #f8fafc; }
 .al-total {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-top: 10px;
-    padding-top: 10px;
-    border-top: 1px dashed #e2e8f0;
-    font-size: 13px;
-    color: #475569;
+    padding: 10px 14px;
+    border-radius: 10px;
+    background: #fef2f2;
+    border: 1px solid #fee2e2;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #991b1b;
 }
-.dark .al-total { border-top-color: rgba(255,255,255,0.12); color: #94a3b8; }
-.al-total b { font-size: 15px; font-weight: 800; color: #b91c1c; }
+.dark .al-total { background: rgba(220,38,38,0.1); border-color: rgba(220,38,38,0.25); color: #fca5a5; }
+.al-total b { font-size: 15px; font-weight: 900; color: #dc2626; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
 .dark .al-total b { color: #f87171; }
 
 /* Buku Kas: form menempel ke bawah panel (sejajar Total Profit) */
@@ -2048,14 +2067,17 @@ input.receive-input.pr-10 { padding-right: 40px !important; }
 .dark .ku-kas-actions { border-top-color: rgba(255,255,255,0.07); }
 .ku-tutup-btn {
     display: inline-flex; align-items: center; justify-content: center; gap: 8px;
-    width: 100%; padding: 10px 14px; border-radius: 11px;
+    width: 100%; padding: 11px 16px; border-radius: 12px;
     font-size: 13px; font-weight: 700; letter-spacing: .01em;
-    color: #fff; background: linear-gradient(135deg, #dc2626, #991b1b);
-    border: 1px solid transparent; box-shadow: 0 8px 20px rgba(220,38,38,0.28);
-    transition: transform .15s, box-shadow .15s, filter .15s;
+    color: #ffffff; background: #dc2626;
+    border: 1px solid #b91c1c; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+    transition: background-color .15s ease, border-color .15s ease, transform .1s ease;
+    cursor: pointer;
 }
-.ku-tutup-btn:hover { transform: translateY(-1px); filter: brightness(1.06); box-shadow: 0 12px 26px rgba(220,38,38,0.35); }
-.ku-tutup-btn:active { transform: translateY(0); }
+.ku-tutup-btn:hover { background: #b91c1c; border-color: #991b1b; }
+.ku-tutup-btn:active { background: #991b1b; transform: scale(0.99); }
+.dark .ku-tutup-btn { background: #dc2626; border-color: #ef4444; }
+.dark .ku-tutup-btn:hover { background: #b91c1c; border-color: #dc2626; }
 .ku-riwayat-toggle-wrap {
     display: flex; align-items: center; justify-content: center;
     gap: 10px; padding: 2px 0 4px;
@@ -5708,13 +5730,13 @@ select.range-pill.range-select option { color: #0f172a; }
     color: #ffffff !important;
     background: #dc2626;
     font-weight: 700;
-    box-shadow: 0 2px 8px rgba(220, 38, 38, 0.35);
+    box-shadow: 0 1px 3px rgba(220, 38, 38, 0.3);
 }
 .dark .ku-tab-btn.is-active {
     color: #ffffff !important;
     background: #dc2626;
     font-weight: 700;
-    box-shadow: 0 2px 10px rgba(220, 38, 38, 0.45);
+    box-shadow: 0 1px 3px rgba(220, 38, 38, 0.4);
 }
 
 .ku-period-badge {
@@ -5736,24 +5758,26 @@ select.range-pill.range-select option { color: #0f172a; }
 }
 
 .ku-kpi-card {
-    padding: 12px 14px;
-    border-radius: 10px;
+    padding: 14px 16px;
+    border-radius: 12px;
     border: 1px solid #e2e8f0;
-    background: #fff;
-    transition: all 0.2s ease;
+    background: #ffffff;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+    transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 .dark .ku-kpi-card {
-    background: #14141c;
+    background: #111827;
     border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 .ku-kpi-card:hover {
     border-color: #cbd5e1;
     transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
 }
 .dark .ku-kpi-card:hover {
-    border-color: rgba(255, 255, 255, 0.15);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 /* ============================================
