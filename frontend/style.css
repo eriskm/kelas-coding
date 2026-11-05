@@ -5053,6 +5053,8 @@ select.range-pill.range-select option { color: #0f172a; }
 
 /* Checklist Pills di Update Data Servis */
 #usCheckContainer .rc-check-groups { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+#usCheckContainer .rc-check-group + .rc-check-group,
+#clrCheckGroups .rc-check-group + .rc-check-group { margin-top: 0; padding-top: 0; border-top: 0; }
 @media (max-width: 640px) { #usCheckContainer .rc-check-groups { grid-template-columns: 1fr; } }
 #usCheckContainer .rc-check-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
 #usCheckContainer .rc-check {
