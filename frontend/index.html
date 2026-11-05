@@ -72,7 +72,7 @@
                             <span class="checkmark" aria-hidden="true"><i class="fa-solid fa-check"></i></span>
                             <span>Ingat Saya</span>
                         </label>
-                    <button type="button" class="forgot-link" id="forgotLink">Lupa Password?</button>
+                    <button type="button" class="forgot-link" id="forgotLink">Lupa Passcode?</button>
                 </div>
                 <button type="submit" class="login-btn" id="loginBtn">
                     <span id="loginBtnText">Login</span>
@@ -326,7 +326,7 @@
                                     <i class="fa-solid fa-cart-shopping text-emerald-500"></i>
                                     Kasir Penjualan Part & Aksesoris
                                 </h2>
-                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Penjualan eceran langsung ke konsumen dengan antrean stok FIFO & cetak struk thermal</p>
+                                <p class="text-[11.5px] text-gray-500 dark:text-gray-400 mt-0.5">Penjualan eceran langsung ke pelanggan dengan antrean stok FIFO & cetak struk thermal</p>
                             </div>
                             <div class="flex items-center gap-2">
                                 <button type="button" onclick="posClearCart()" class="px-3 py-1.5 rounded-lg border border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/5 text-gray-600 dark:text-gray-300 text-xs font-semibold flex items-center gap-1.5 transition">
@@ -369,7 +369,7 @@
                                     <!-- Customer Details -->
                                     <div class="space-y-2 border-b border-gray-200 dark:border-white/10 pb-3">
                                         <div class="flex items-center justify-between text-xs font-bold text-gray-800 dark:text-gray-200">
-                                            <span>Informasi Pembeli</span>
+                                            <span>Informasi Pelanggan</span>
                                             <span class="text-[10px] text-gray-400 font-normal">Opsional</span>
                                         </div>
                                         <div class="grid grid-cols-2 gap-2">
@@ -475,7 +475,7 @@
                                             <span id="unclaimedTotalBadge" class="px-2 py-0.5 rounded-full text-[11px] font-extrabold bg-amber-200 text-amber-900 dark:bg-amber-900/60 dark:text-amber-200">0 Unit</span>
                                         </div>
                                         <div class="text-[11px] text-gray-600 dark:text-gray-400 mt-0.5" id="unclaimedAlertDesc">
-                                            Unit status DONE dan FAILED yang belum diambil konsumen perlu diingatkan berkala via WhatsApp.
+                                            Unit status DONE dan FAILED yang belum diambil pelanggan perlu diingatkan berkala via WhatsApp.
                                         </div>
                                     </div>
                                 </div>
@@ -767,7 +767,7 @@
                             <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3">
                                 <div class="relative flex-1">
                                     <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400"></i>
-                                    <input type="text" id="grSearch" class="receive-input pl-9 w-full" placeholder="Cari Nama Pelanggan, No. WhatsApp, Device, atau IMEI..." autocomplete="off">
+                                    <input type="text" id="grSearch" class="receive-input pl-9 w-full" placeholder="Cari Nama Pelanggan, No. WhatsApp, Perangkat, atau IMEI..." autocomplete="off">
                                 </div>
                                 <div class="flex items-center gap-2 w-full sm:w-auto">
                                     <div class="relative flex-1 sm:w-44" title="Filter garansi yang aktif pada tanggal tertentu">
@@ -795,7 +795,7 @@
                                         <tr>
                                             <th class="w-10 text-center">No</th>
                                             <th>Pelanggan</th>
-                                            <th>Unit / Perangkat</th>
+                                            <th>Perangkat</th>
                                             <th class="text-center">Masa Garansi</th>
                                             <th class="text-center">Status</th>
                                             <th class="text-center w-28">Aksi</th>
@@ -909,7 +909,7 @@
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                                         <div class="field">
-                                            <label class="field-label" for="clName">Nama User</label>
+                                            <label class="field-label" for="clName">Nama Pelanggan</label>
                                             <input class="receive-input" type="text" id="clName" readonly>
                                         </div>
                                         <div class="field">
@@ -917,7 +917,7 @@
                                             <input class="receive-input" type="text" id="clPhone" readonly>
                                         </div>
                                         <div class="field sm:col-span-2">
-                                            <label class="field-label" for="clDevice">Device</label>
+                                            <label class="field-label" for="clDevice">Merek &amp; Tipe HP</label>
                                             <input class="receive-input" type="text" id="clDevice" readonly>
                                         </div>
                                     </div>
@@ -932,7 +932,7 @@
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                                         <div class="field sm:col-span-2">
-                                            <label class="field-label" for="clKeluhan">Keluhan / Kerusakan Saat Klaim <b class="text-red-500">*</b></label>
+                                            <label class="field-label" for="clKeluhan">Keluhan Kerusakan <b class="text-red-500">*</b></label>
                                             <textarea class="receive-input" id="clKeluhan" rows="2" placeholder="cth. LCD bergaris setelah 2 minggu pemakaian" required></textarea>
                                         </div>
                                         <div class="field">
@@ -940,7 +940,7 @@
                                             <input class="receive-input" type="date" id="clTgl">
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="clTindakan">Tindakan</label>
+                                            <label class="field-label" for="clTindakan">Rencana / Tindakan Perbaikan</label>
                                             <select class="receive-input" id="clTindakan">
                                                 <option value="Diagnosa ulang">Diagnosa ulang</option>
                                                 <option value="Perbaikan ulang">Perbaikan ulang</option>
@@ -977,7 +977,7 @@
                                 <span class="receive-title-icon"><i class="fa-solid fa-shield-halved"></i></span>
                                 <div class="min-w-0">
                                     <h2 class="float-title">Penerimaan Klaim Garansi</h2>
-                                    <p class="float-sub">Cari servis asal → verifikasi garansi → buat claim baru</p>
+                                    <p class="float-sub">Cari servis asal → verifikasi garansi → buat klaim baru</p>
                                 </div>
                             </div>
                             <button type="button" class="float-close" onclick="closeClaimReceive()" aria-label="Tutup">
@@ -990,7 +990,7 @@
                                     <span class="receive-head-ico"><i class="fa-solid fa-magnifying-glass"></i></span>
                                     <div>
                                         <h3 class="text-sm font-bold text-gray-800 dark:text-white">1. Cari Servis Asal</h3>
-                                        <span class="text-[10.5px] text-gray-400">No. servis / nota / WA / IMEI / nama customer (min. 2 huruf)</span>
+                                        <span class="text-[10.5px] text-gray-400">No. servis / nota / WA / IMEI / nama pelanggan (min. 2 huruf)</span>
                                     </div>
                                 </div>
                                 <div class="grid grid-cols-1 sm:grid-cols-[1fr_130px_auto] gap-3.5 pt-1">
@@ -1016,12 +1016,12 @@
                                     <span class="receive-head-ico"><i class="fa-solid fa-file-lines"></i></span>
                                     <div>
                                         <h3 class="text-sm font-bold text-gray-800 dark:text-white">2. Servis Asal &amp; Validasi Garansi</h3>
-                                        <span class="text-[10.5px] text-gray-400">Data referensi — tidak diubah oleh claim</span>
+                                        <span class="text-[10.5px] text-gray-400">Data referensi — tidak diubah oleh klaim</span>
                                     </div>
                                 </div>
                                 <div class="rc-cust-grid" id="clrOriginCard"></div>
                                 <div class="flex flex-wrap items-center gap-2 pt-2" id="clrBadges"></div>
-                                <p class="text-[11px] text-gray-400 pt-1">Garansi VALID berarti customer masih dalam periode garansi — bukan berarti claim otomatis diterima.</p>
+                                <p class="text-[11px] text-gray-400 pt-1">Garansi VALID berarti pelanggan masih dalam periode garansi — bukan berarti klaim otomatis diterima.</p>
                                 <div id="clrHistory" class="pt-2"></div>
                             </div>
                             <div class="panel receive-panel mt-3 hidden" id="clrFormWrap">
@@ -1029,29 +1029,29 @@
                                     <div class="receive-panel-head">
                                         <span class="receive-head-ico"><i class="fa-solid fa-file-circle-plus"></i></span>
                                         <div>
-                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">3. Data Claim Baru</h3>
-                                            <span class="text-[10.5px] text-gray-400">Keluhan baru + kondisi saat diterima</span>
+                                            <h3 class="text-sm font-bold text-gray-800 dark:text-white">3. Data Klaim Baru</h3>
+                                            <span class="text-[10.5px] text-gray-400">Keluhan kerusakan + kelengkapan dibawa &amp; kondisi fisik awal</span>
                                         </div>
                                     </div>
                                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-1">
                                         <div class="field">
-                                            <label class="field-label" for="clrDate">Tanggal Claim</label>
+                                            <label class="field-label" for="clrDate">Tanggal Klaim</label>
                                             <input class="receive-input" type="date" id="clrDate">
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="clrReceivedBy">User Penerima (CS)</label>
+                                            <label class="field-label" for="clrReceivedBy">Petugas Penerima (CS)</label>
                                             <input class="receive-input" type="text" id="clrReceivedBy" placeholder="Nama CS yang menerima">
                                         </div>
                                         <div class="field sm:col-span-2">
-                                            <label class="field-label" for="clrComplaint">Keluhan Claim <b class="text-red-500">*</b></label>
+                                            <label class="field-label" for="clrComplaint">Keluhan Kerusakan <b class="text-red-500">*</b></label>
                                             <textarea class="receive-input" id="clrComplaint" rows="2" placeholder="Keluhan pelanggan saat klaim..." required></textarea>
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="clrPhysical">Kondisi Fisik Saat Diterima</label>
+                                            <label class="field-label" for="clrPhysical">Kondisi Fisik Awal</label>
                                             <input class="receive-input" type="text" id="clrPhysical" placeholder="cth. mulus, ada lecet...">
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="clrCompleteness">Kelengkapan</label>
+                                            <label class="field-label" for="clrCompleteness">Kelengkapan Dibawa</label>
                                             <input class="receive-input" type="text" id="clrCompleteness" placeholder="cth. unit + charger...">
                                         </div>
                                         <div class="field sm:col-span-2">
@@ -1060,13 +1060,13 @@
                                         </div>
                                     </div>
                                     <div class="rc-check-wrap">
-                                        <p class="field-label rc-check-title">Checklist Kondisi Unit Saat Klaim Diterima</p>
+                                        <p class="field-label rc-check-title">Kelengkapan Dibawa &amp; Kondisi Fisik Awal</p>
                                         <div class="rc-check-groups" id="clrCheckGroups"></div>
                                     </div>
                                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
                                         <button type="submit" id="clrSubmitBtn" class="receive-submit-btn">
                                             <i class="fa-solid fa-check-double"></i>
-                                            <span id="clrSubmitText">Buat Claim Garansi</span>
+                                            <span id="clrSubmitText">Buat Klaim Garansi</span>
                                         </button>
                                         <div id="clrFeedback" class="hidden receive-feedback"></div>
                                     </div>
@@ -1076,14 +1076,14 @@
                                 <div class="receive-panel-head">
                                     <span class="receive-head-ico"><i class="fa-solid fa-list-check"></i></span>
                                     <div>
-                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">4. Workflow Claim</h3>
+                                        <h3 class="text-sm font-bold text-gray-800 dark:text-white">4. Workflow Klaim</h3>
                                         <span class="text-[10.5px] text-gray-400">Verifikasi → cek teknisi → keputusan → proses → selesai</span>
                                     </div>
                                 </div>
                                 <div id="clrResultCard"></div>
                                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 pt-3">
                                     <div class="field">
-                                        <label class="field-label" for="clrStatus">Status Proses Claim</label>
+                                        <label class="field-label" for="clrStatus">Status Proses Klaim</label>
                                         <select class="receive-input" id="clrStatus">
                                             <option value="MASUK">Masuk</option>
                                             <option value="VERIFIKASI">Verifikasi</option>
@@ -1096,7 +1096,7 @@
                                         </select>
                                     </div>
                                     <div class="field">
-                                        <label class="field-label" for="clrDecision">Hasil Claim</label>
+                                        <label class="field-label" for="clrDecision">Hasil Klaim</label>
                                         <select class="receive-input" id="clrDecision">
                                             <option value="BELUM_DIPUTUSKAN">Belum Diputuskan</option>
                                             <option value="DITERIMA">Diterima</option>
@@ -1136,8 +1136,8 @@
                                         <label class="field-label" for="clrTechRec">Rekomendasi Teknisi</label>
                                         <select class="receive-input" id="clrTechRec">
                                             <option value="">— Belum ada —</option>
-                                            <option value="DITERIMA">Claim Diterima</option>
-                                            <option value="DITOLAK">Claim Ditolak</option>
+                                            <option value="DITERIMA">Klaim Diterima</option>
+                                            <option value="DITOLAK">Klaim Ditolak</option>
                                         </select>
                                     </div>
                                     <div class="field">
@@ -1145,7 +1145,7 @@
                                         <select class="receive-input" id="clrTechnician"><option value="">— Pilih Teknisi —</option></select>
                                     </div>
                                     <div class="field">
-                                        <label class="field-label" for="clrAction">Tindakan yang Diperlukan</label>
+                                        <label class="field-label" for="clrAction">Rencana / Tindakan Perbaikan</label>
                                         <input class="receive-input" type="text" id="clrAction">
                                     </div>
                                     <div class="field sm:col-span-2">
@@ -1186,7 +1186,7 @@
                                         <i class="fa-solid fa-vault"></i> Refund Garansi (Kas Aset)
                                     </button>
                                     <button type="button" onclick="claimRPrint()" class="receive-back-btn">
-                                        <i class="fa-solid fa-receipt"></i> Cetak Nota Claim
+                                        <i class="fa-solid fa-receipt"></i> Cetak Nota Klaim
                                     </button>
                                     <div id="clrWorkflowFeedback" class="hidden receive-feedback"></div>
                                 </div>
@@ -1575,7 +1575,7 @@
                                             <input class="receive-input" type="text" id="spfJenis" placeholder="cth. LCD Samsung A55 ORI" required>
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="spfDevice">Device</label>
+                                            <label class="field-label" for="spfDevice">Merek &amp; Tipe HP</label>
                                             <input class="receive-input" type="text" id="spfDevice" placeholder="cth. Galaxy A55">
                                         </div>
                                         <div class="field">
@@ -1813,7 +1813,7 @@
                                     <h3 class="panel-title m-0" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
                                     <span class="ku-info-tip" id="kuMasterTip" tabindex="0" role="button" aria-label="Informasi Kas Aset">
                                         <i class="fa-solid fa-circle-question"></i>
-                                        <span class="ku-info-bubble" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung.</span>
+                                        <span class="ku-info-bubble" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP pelanggan tidak dihitung.</span>
                                     </span>
                                 </div>
                                 <div class="ku-summary" id="kuAsetSummary"></div>
@@ -2411,9 +2411,9 @@
                                             <input class="receive-input" type="text" id="akUsername" placeholder="cth. budi_admin" required>
                                         </div>
                                         <div class="field">
-                                            <label class="field-label" for="akPassword">Password <b class="text-red-500">*</b></label>
+                                            <label class="field-label" for="akPassword">Passcode <b class="text-red-500">*</b></label>
                                             <div class="relative">
-                                                <input class="receive-input pr-9" type="password" id="akPassword" placeholder="Masukkan password (opsional saat edit)">
+                                                <input class="receive-input pr-9" type="password" id="akPassword" placeholder="Masukkan passcode (opsional saat edit)">
                                                 <button type="button" onclick="togglePassVisibility('akPassword', this)" class="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 p-1" title="Tampilkan / Sembunyikan">
                                                     <i class="fa-solid fa-eye text-xs"></i>
                                                 </button>
@@ -2499,11 +2499,11 @@
                         <form id="receiveForm" autocomplete="off" class="rc-form-shell">
                             <div class="float-body rc-float-scroll p-4 sm:p-6 space-y-4">
 
-                                <!-- BARIS 1: IDENTITAS KONSUMEN & PERANGKAT (4 KOLOM) -->
+                                <!-- BARIS 1: IDENTITAS PELANGGAN & PERANGKAT (4 KOLOM) -->
                                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <!-- Nama Konsumen -->
+                                    <!-- Nama Pelanggan -->
                                     <div class="field">
-                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcName">Nama Konsumen <span class="text-red-500">*</span></label>
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcName">Nama Pelanggan <span class="text-red-500">*</span></label>
                                         <input class="receive-input w-full" type="text" id="rcName" name="customer_name" placeholder="Ketik nama pelanggan..." autocomplete="off" required>
                                     </div>
 
@@ -2558,9 +2558,9 @@
 
                                 <!-- BARIS 2: KELUHAN & RENCANA TINDAKAN (2 KOLOM) -->
                                 <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 pt-1">
-                                    <!-- Keluhan & Analisa Kerusakan Awal -->
+                                    <!-- Keluhan Kerusakan -->
                                     <div class="field">
-                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDamage">Keluhan &amp; Analisa Kerusakan Awal <span class="text-red-500">*</span></label>
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDamage">Keluhan Kerusakan <span class="text-red-500">*</span></label>
                                         <textarea class="receive-input w-full" id="rcDamage" rows="2" placeholder="Jelaskan keluhan kerusakan unit..." required></textarea>
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcAppendDamage('Ganti LCD')" class="rc-mini-chip">Ganti LCD</button>
@@ -2572,9 +2572,9 @@
                                         </div>
                                     </div>
 
-                                    <!-- Rencana Tindakan Perbaikan -->
+                                    <!-- Rencana / Tindakan Perbaikan -->
                                     <div class="field">
-                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPlan" id="rcPlanLabel">Rencana Tindakan Perbaikan</label>
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcPlan" id="rcPlanLabel">Rencana / Tindakan Perbaikan</label>
                                         <textarea class="receive-input w-full" id="rcPlan" rows="2" placeholder="Rencana perbaikan teknisi (opsional)..."></textarea>
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcAppendPlan('Cek Mesin')" class="rc-mini-chip">Cek Mesin</button>
@@ -2643,8 +2643,6 @@
                                             </div>
                                         </div>
                                     </div>
-                                    <!-- Kompatibilitas element id -->
-                                    <div id="rcCheckGroups" class="hidden"></div>
                                 </div>
 
                                 <!-- BARIS 4: ESTIMASI, DP, TEKNISI & STATUS AWAL (4 KOLOM) -->
@@ -2661,9 +2659,9 @@
                                         </div>
                                     </div>
 
-                                    <!-- Uang Muka / DP (Rp) -->
+                                    <!-- DP / Uang Muka (Rp) -->
                                     <div class="field">
-                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDp">Uang Muka / DP (Rp)</label>
+                                        <label class="block text-xs font-semibold text-gray-800 dark:text-gray-200 mb-1.5" for="rcDp">DP / Uang Muka (Rp)</label>
                                         <input class="receive-input w-full tabular-nums" type="text" inputmode="numeric" id="rcDp" placeholder="0">
                                         <div class="flex items-center flex-wrap gap-1.5 mt-2">
                                             <button type="button" onclick="rcSetDpMode('none')" class="rc-mini-chip">Tanpa DP</button>
@@ -2787,7 +2785,7 @@
                                         
                                         <!-- KOTAK DATA UNIT & PELANGGAN -->
                                         <div class="p-2 sm:p-2.5 rounded-xl border border-gray-200 dark:border-white/10 bg-white dark:bg-slate-800/40 shadow-sm flex flex-col gap-1.5">
-                                            <!-- Baris 1: Identitas Konsumen & Perangkat (3 Kolom) -->
+                                            <!-- Baris 1: Identitas Pelanggan & Perangkat (3 Kolom) -->
                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                                 <div class="field">
                                                     <label class="field-label text-[11px]" for="usNama">Nama Pelanggan <b class="text-red-500">*</b></label>
@@ -2798,7 +2796,7 @@
                                                     <input class="receive-input py-1 px-2 text-xs" type="text" id="usPhone" inputmode="tel" required>
                                                 </div>
                                                 <div class="field">
-                                                    <label class="field-label text-[11px]" for="usDevice">Perangkat / Model HP <b class="text-red-500">*</b></label>
+                                                    <label class="field-label text-[11px]" for="usDevice">Merek &amp; Tipe HP <b class="text-red-500">*</b></label>
                                                     <input class="receive-input py-1 px-2 text-xs" type="text" id="usDevice" required>
                                                 </div>
                                             </div>
@@ -2806,7 +2804,7 @@
                                             <!-- Baris 2: Keamanan, Identitas & Penanggung Jawab (4 Kolom) -->
                                             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                                 <div class="field">
-                                                    <label class="field-label text-[10.5px]" for="usPassword">Kunci / Pola</label>
+                                                    <label class="field-label text-[10.5px]" for="usPassword">Sandi / Pola Kunci</label>
                                                     <input class="receive-input py-1 px-2 text-xs" type="text" id="usPassword" autocomplete="off" placeholder="Opsional">
                                                 </div>
                                                 <div class="field">
@@ -2840,22 +2838,22 @@
                                                     <textarea class="receive-input py-1 px-2 text-xs" id="usDamage" rows="1" style="min-height:34px;height:34px;" required placeholder="Keluhan pelanggan..."></textarea>
                                                 </div>
                                                 <div class="field">
-                                                    <label class="field-label text-[10.5px]" for="usPlan" id="usPlanLabel">Rencana / Realisasi Perbaikan</label>
+                                                    <label class="field-label text-[10.5px]" for="usPlan" id="usPlanLabel">Rencana / Tindakan Perbaikan</label>
                                                     <textarea class="receive-input py-1 px-2 text-xs" id="usPlan" rows="1" style="min-height:34px;height:34px;" placeholder="Tindakan pengerjaan..."></textarea>
                                                 </div>
                                             </div>
 
-                                            <!-- Baris 4: Estimasi Biaya & DP Awal (2 Kolom) -->
+                                            <!-- Baris 4: Estimasi Biaya & DP (2 Kolom) -->
                                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
                                                 <div class="field">
-                                                    <label class="field-label text-[10.5px]" for="usEstimate" id="usEstimateLabel">Estimasi Biaya Awal</label>
+                                                    <label class="field-label text-[10.5px]" for="usEstimate" id="usEstimateLabel">Estimasi Biaya (Rp)</label>
                                                     <div class="relative">
                                                         <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
                                                         <input class="receive-input pl-8 py-1 text-xs" type="number" id="usEstimate" min="0">
                                                     </div>
                                                 </div>
                                                 <div class="field">
-                                                    <label class="field-label text-[10.5px]" for="usDp">DP (Uang Muka Awal)</label>
+                                                    <label class="field-label text-[10.5px]" for="usDp">DP / Uang Muka (Rp)</label>
                                                     <div class="relative">
                                                         <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
                                                         <input class="receive-input pl-8 py-1 text-xs" type="number" id="usDp" min="0">
@@ -2863,11 +2861,11 @@
                                                 </div>
                                             </div>
 
-                                            <!-- Accordion Ringkas: Catatan Kondisi Fisik & Kelengkapan (Hemat Ruang Vertikal) -->
+                                            <!-- Accordion Ringkas: Kelengkapan Dibawa & Kondisi Fisik Awal (Hemat Ruang Vertikal) -->
                                             <details class="p-1.5 sm:p-2 rounded-lg border border-gray-200 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.02] text-xs group" id="usCheckContainer">
                                                 <summary class="font-semibold text-gray-700 dark:text-gray-300 cursor-pointer flex items-center justify-between select-none list-none">
                                                     <span class="flex items-center gap-1.5 text-[11px] font-bold text-gray-800 dark:text-gray-200">
-                                                        <i class="fa-solid fa-clipboard-check text-blue-600 dark:text-blue-400 text-xs"></i> Catatan Kondisi Fisik &amp; Kelengkapan Unit Saat Diterima
+                                                        <i class="fa-solid fa-clipboard-check text-blue-600 dark:text-blue-400 text-xs"></i> Kelengkapan Dibawa &amp; Kondisi Fisik Awal
                                                     </span>
                                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-medium group-open:hidden">Buka Checklist &rsaquo;</span>
                                                     <span class="text-[10px] text-gray-400 font-medium hidden group-open:inline">Tutup &lsaquo;</span>
@@ -2933,7 +2931,7 @@
                                                 <div>
                                                     <div class="flex items-center justify-between mb-0.5">
                                                         <h5 class="text-[10.5px] font-bold text-gray-700 dark:text-gray-200">Histori Klaim Garansi</h5>
-                                                        <button type="button" onclick="usClaimNew()" class="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline" title="Buat claim baru">
+                                                        <button type="button" onclick="usClaimNew()" class="text-[10px] font-semibold text-blue-600 dark:text-blue-400 hover:underline" title="Buat klaim baru">
                                                             + Buat Klaim
                                                         </button>
                                                     </div>
@@ -3235,7 +3233,7 @@
                                         <span id="unclaimedWaStageBadge" class="px-2 py-0.5 rounded text-[11px] font-extrabold uppercase bg-amber-100 text-amber-800">Tahap 1</span>
                                         <span id="unclaimedWaTitle">Pengingat Unit Mengendap</span>
                                     </h3>
-                                    <p class="float-sub" id="unclaimedWaSub">Pengingat berkala agar unit segera diambil konsumen</p>
+                                    <p class="float-sub" id="unclaimedWaSub">Pengingat berkala agar unit segera diambil pelanggan</p>
                                 </div>
                             </div>
                             <p class="donewa-to" id="unclaimedWaTo"></p>
@@ -3588,7 +3586,7 @@
                         <tr class="border-b border-gray-200 dark:border-white/10 text-gray-400">
                             <th class="py-2 px-2.5">No. Struk</th>
                             <th class="py-2 px-2.5">Tanggal</th>
-                            <th class="py-2 px-2.5">Pembeli</th>
+                            <th class="py-2 px-2.5">Pelanggan</th>
                             <th class="py-2 px-2.5 text-right">Total Omzet</th>
                             <th class="py-2 px-2.5 text-right">Aksi</th>
                         </tr>
@@ -3793,7 +3791,7 @@
                         </div>
                         <span id="mbGaransiBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/60 dark:text-emerald-200">0 Unit</span>
                     </div>
-                    <p class="text-gray-600 dark:text-gray-300 text-xs mb-2.5">Sapa konsumen untuk memastikan perangkat hasil servis berfungsi baik dan menjaga kepuasan loyalitas.</p>
+                    <p class="text-gray-600 dark:text-gray-300 text-xs mb-2.5">Sapa pelanggan untuk memastikan perangkat hasil servis berfungsi baik dan menjaga kepuasan loyalitas.</p>
                     <div id="mbGaransiList" class="space-y-1.5 max-h-48 overflow-y-auto"></div>
                     <div class="mt-3 flex items-center justify-between pt-2 border-t border-emerald-200/60 dark:border-emerald-800/30">
                         <span class="text-[11px] text-emerald-700 dark:text-emerald-400 font-medium" id="mbGaransiSummaryTxt">0 unit perlu disapa</span>

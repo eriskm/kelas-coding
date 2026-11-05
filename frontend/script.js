@@ -268,7 +268,7 @@ function rcMarkReq() {
             if (!el) return;
             el.innerHTML = base + (need(fid) ? ' <b class="text-red-500">*</b>' : '');
         };
-        mark('rcPlanLabel', 'Rencana Tindakan Perbaikan', 'rcPlan');
+        mark('rcPlanLabel', 'Rencana / Tindakan Perbaikan', 'rcPlan');
         mark('rcEstimateLabel', 'Estimasi Biaya (Rp)', 'rcEstimate');
         mark('rcTechnicianLabel', 'Teknisi PJ', 'rcTechnician');
         mark('rcFinalLabel', 'Harga Final', 'rcFinal');
@@ -2544,7 +2544,7 @@ function txRowHtml(o, num) {
                     const col = stg === 4 ? 'bg-red-500 text-white' : stg === 3 ? 'bg-pink-500 text-white' : stg === 2 ? 'bg-orange-500 text-white' : 'bg-amber-500 text-white';
                     const lbl = stg === 4 ? '90+H' : stg === 3 ? '60H' : stg === 2 ? '30H' : '7H';
                     const isDone = isUnclaimedWaDone(un);
-                    return `<button type="button" onclick="event.stopPropagation(); unclaimedWaOpen(${o.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${col} hover:opacity-90 shadow-xs ml-1" title="Unit Mengendap ${un.days_pending} Hari (${isDone ? 'Sudah disapa hari ini' : 'Klik untuk Sapa Konsumen'})"><i class="fa-brands fa-whatsapp"></i> ${lbl}${isDone ? ' ✓' : ''}</button>`;
+                    return `<button type="button" onclick="event.stopPropagation(); unclaimedWaOpen(${o.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${col} hover:opacity-90 shadow-xs ml-1" title="Unit Mengendap ${un.days_pending} Hari (${isDone ? 'Sudah disapa hari ini' : 'Klik untuk Sapa Pelanggan'})"><i class="fa-brands fa-whatsapp"></i> ${lbl}${isDone ? ' ✓' : ''}</button>`;
                 }
             }
             return '';
@@ -2738,23 +2738,23 @@ async function txDetail(id) {
     document.getElementById('txdCustomer').innerHTML =
         row('No. Servis', o.no_servis) + row('Tanggal Terima', notaTgl((o.service_date || '').slice(0, 10))) +
         row('Nama Pelanggan', cust.name) + row('Nomor WhatsApp', cust.phone) +
-        row('Device', o.device) + row('IMEI', o.imei) +
-        row('Kunci Layar / Pola', o.device_password ? '••••••' : '-') + row('Teknisi', o.technician);
+        row('Perangkat', o.device) + row('IMEI', o.imei) +
+        row('Sandi / Pola Kunci', o.device_password ? '••••••' : '-') + row('Teknisi PJ', o.technician);
     document.getElementById('txdWork').innerHTML =
-            row('Keluhan', o.damagetype) + row('Rencana Perbaikan', o.repair_plan) +
+            row('Keluhan Kerusakan', o.damagetype) + row('Rencana / Tindakan Perbaikan', o.repair_plan) +
         row('Status', o.status) + row('Tgl Lunas', o.lunas_date ? notaTgl((o.lunas_date || '').slice(0, 10)) : '-')
         + row('Status Bayar', o.payment_status || '-') + row('Status Unit', (o.unit_status || 'DI TOKO') + (o.taken_at ? ' • ' + notaTgl(String(o.taken_at).slice(0, 10)) : ''));
     const fisik = txdCheckLabels(o.check_fisik, (typeof CHECK_FISIK !== 'undefined' ? CHECK_FISIK : []));
     const len = txdCheckLabels(o.check_len, (typeof CHECK_LEN !== 'undefined' ? CHECK_LEN : []));
     document.getElementById('txdChecklist').innerHTML =
-        '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">Kondisi unit saat diterima</p>'
+        '<p class="text-[11px] font-bold uppercase tracking-wide text-gray-400 mb-1">Kelengkapan Dibawa & Kondisi Fisik Awal</p>'
         + '<div class="text-[12.5px] text-gray-600 dark:text-gray-300">'
         + (fisik.length ? escapeHtml(fisik.join(' · ')) : 'Tidak ada catatan fisik')
         + ' <span class="text-gray-400">| ' + escapeHtml(len.join(' · ') || 'Unit saja') + '</span></div>';
     const rupiah = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
     const final = (o.final_price !== null && o.final_price !== undefined) ? o.final_price : o.estimate;
     document.getElementById('txdFinance').innerHTML =
-        row('Estimasi Biaya', rupiah(o.estimate)) + row('DP (Uang Muka)', rupiah(o.payment)) +
+        row('Estimasi Biaya (Rp)', rupiah(o.estimate)) + row('DP / Uang Muka (Rp)', rupiah(o.payment)) +
         row('Harga Final', rupiah(final)) + row('Modal Part', rupiah(o.part_cost)) +
         row('Sisa (Final − DP)', rupiah((Number(final) || 0) - (Number(o.payment) || 0)));
     const wbox = document.getElementById('txdWarranty');
@@ -2790,7 +2790,7 @@ async function txDetail(id) {
                     </div>
                     <div class="text-[11px] text-gray-400 mt-0.5">${escapeHtml(c.complaint || '')}</div>
                 </div>`).join('')
-                : '<div class="text-[12px] text-gray-400">Belum ada claim untuk servis ini.</div>');
+                : '<div class="text-[12px] text-gray-400">Belum ada klaim untuk servis ini.</div>');
     } catch (_) {
         cbox.innerHTML = '<div class="text-[12px] text-gray-400">Histori klaim tidak dapat dimuat.</div>';
     }
@@ -3170,9 +3170,13 @@ let _usTechnicianInit = ''; // teknisi dari server — dipasang lagi setelah opt
 let _usCheckBaseline = '';
 
 function _usServerChecklist(o) {
-    const fisik = Array.isArray(o.check_fisik) ? o.check_fisik : [];
-    const len = Array.isArray(o.check_len) ? o.check_len : ['unit_saja'];
-    return { fisik: fisik, len: len.length ? len : ['unit_saja'] };
+    const mapFisik = { bekas_air: 'kena_air' };
+    const mapLen = { memory_card: 'memory', box: 'dus' };
+    const rawFisik = Array.isArray(o.check_fisik) ? o.check_fisik : [];
+    const rawLen = Array.isArray(o.check_len) ? o.check_len : [];
+    const fisik = rawFisik.map(k => mapFisik[k] || k);
+    const len = rawLen.filter(k => k !== 'unit_saja').map(k => mapLen[k] || k);
+    return { fisik: fisik, len: len };
 }
 
 function openUpdateServis(o) {
@@ -3214,7 +3218,7 @@ function openUpdateServis(o) {
     // bukan store lokal). Setelah refresh pun tampil sama persis.
     const _usCheck = _usServerChecklist(o);
     applyChecklist('us', _usCheck);
-    _usCheckBaseline = JSON.stringify(_usCheck);
+    _usCheckBaseline = JSON.stringify(collectChecklist('us'));
     _checkStore[_usNo] = _usCheck;
     const _wmSel = document.getElementById('usWarrantyMonths');
     if (_wmSel) _wmSel.value = String((o.warranty_months !== null && o.warranty_months !== undefined) ? o.warranty_months : 1);
@@ -3271,7 +3275,7 @@ function usUnitUpdate() {
 
 async function usHandover() {
     if (!_txEditId) return;
-    if (!confirm('Tandai unit sudah diserahkan ke konsumen (DIAMBIL)?')) return;
+    if (!confirm('Tandai unit sudah diserahkan ke pelanggan (DIAMBIL)?')) return;
     try {
         const o = await apiPost('/orders/' + _txEditId + '/handover', {});
         usUnitRefresh(o.unit_status || 'DIAMBIL', o.taken_at || null);
@@ -3502,7 +3506,7 @@ function usSetStatus(s) {
     // KONFIRMASI = Rencana + Estimasi; PERBAIKAN = Teknisi;
     // SELESAI = Tindakan + Teknisi; GAGAL/BATAL = Catatan.
     try {
-        const planBase = (s === 'DONE' || s === 'CASH') ? 'Perbaikan / Tindakan Perbaikan' : 'Rencana Perbaikan';
+        const planBase = 'Rencana / Tindakan Perbaikan';
         const need = (fid) => (s === 'KONFIRMASI' && (fid === 'usPlan' || fid === 'usEstimate'))
             || (s === 'REPAIR' && fid === 'usTechnician')
             || ((s === 'DONE' || s === 'CASH') && (fid === 'usPlan' || fid === 'usTechnician'))
@@ -3513,7 +3517,7 @@ function usSetStatus(s) {
             el.innerHTML = base + (need(fid) ? ' <b class="text-red-500">*</b>' : '');
         };
         mark('usPlanLabel', planBase, 'usPlan');
-        mark('usEstimateLabel', 'Estimasi Biaya', 'usEstimate');
+        mark('usEstimateLabel', 'Estimasi Biaya (Rp)', 'usEstimate');
         mark('usTechnicianLabel', 'Teknisi PJ', 'usTechnician');
         mark('usFinFinalLabel', 'Harga Final (total pembayaran)', 'usFinFinal');
         mark('usStatusNoteLabel', 'Catatan Status', 'usStatusNote');
@@ -5093,7 +5097,7 @@ async function plDetailOpen(id, toHistory) {
                     const col = stg === 4 ? 'bg-red-500 text-white' : stg === 3 ? 'bg-pink-500 text-white' : stg === 2 ? 'bg-orange-500 text-white' : 'bg-amber-500 text-white';
                     const lbl = stg === 4 ? '90+H' : stg === 3 ? '60H' : stg === 2 ? '30H' : '7H';
                     const isDone = isUnclaimedWaDone(un);
-                    return `<button type="button" onclick="event.stopPropagation(); unclaimedWaOpen(${o.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${col} hover:opacity-90 shadow-xs ml-1" title="Unit Mengendap ${un.days_pending} Hari (${isDone ? 'Sudah disapa hari ini' : 'Klik untuk Sapa Konsumen'})"><i class="fa-brands fa-whatsapp"></i> ${lbl}${isDone ? ' ✓' : ''}</button>`;
+                    return `<button type="button" onclick="event.stopPropagation(); unclaimedWaOpen(${o.id})" class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-extrabold ${col} hover:opacity-90 shadow-xs ml-1" title="Unit Mengendap ${un.days_pending} Hari (${isDone ? 'Sudah disapa hari ini' : 'Klik untuk Sapa Pelanggan'})"><i class="fa-brands fa-whatsapp"></i> ${lbl}${isDone ? ' ✓' : ''}</button>`;
                 }
             }
             return '';
@@ -9280,10 +9284,10 @@ const CHECK_LEN = [
     { key: 'box', label: 'Box' }
 ];
 
-// Subset aktif Kondisi & Kelengkapan — dipakai Servis Baru (rc) & Update (us).
-// Master CHECK_* tetap utuh sebagai kamus label histori/nota; Klaim memakai daftar penuh.
-const ACTIVE_FISIK_KEYS = ['frame_bengkok', 'tombol_tidak_ada', 'bekas_air'];
-const ACTIVE_LEN_KEYS = ['unit_saja', 'case', 'sim_card', 'memory_card'];
+// Subset aktif Kelengkapan & Kondisi — dipakai Servis Baru (rc), Update (us), dan Klaim (clr).
+// Master CHECK_* tetap utuh sebagai kamus label histori/nota.
+const ACTIVE_FISIK_KEYS = ['lcd_pecah', 'backdoor', 'lecet', 'kena_air', 'segel'];
+const ACTIVE_LEN_KEYS = ['sim_tray', 'memory', 'charger', 'dus', 'case'];
 
 const _checkStore = {};
 
@@ -9299,8 +9303,8 @@ function renderChecklist(prefix, containerId, note, only) {
             </div>
         </div>`;
     box.innerHTML =
-            group('Kondisi Fisik Saat Diterima', 'fa-mobile-screen-button', pick(CHECK_FISIK, only && only.fisik))
-        + group('Kelengkapan Saat Diterima', 'fa-box-open', pick(CHECK_LEN, only && only.len))
+            group('Kelengkapan Dibawa', 'fa-box-open', pick(CHECK_LEN, (only && only.len) || ACTIVE_LEN_KEYS))
+        + group('Kondisi Fisik Awal', 'fa-mobile-screen-button', pick(CHECK_FISIK, (only && only.fisik) || ACTIVE_FISIK_KEYS))
         + (note ? `<p class="field-hint">${note}</p>` : '');
 }
 
@@ -9367,8 +9371,7 @@ async function initReceivePage() {
         return;
     }
     window._initReceiveBound = true;
-    renderChecklist('rc', 'rcCheckGroups', null, { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
-    applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
+    applyChecklist('rc', { fisik: [], len: [] });
     restoreReceiveDraft();
     await loadReceiveTechnicians();
 
@@ -9536,7 +9539,7 @@ async function initReceivePage() {
             } catch (_) {}
             _rcPathManual = false;
             try { rcApplyPath(); } catch (_) {}
-            applyChecklist('rc', { fisik: [], len: ['unit_saja'] });
+            applyChecklist('rc', { fisik: [], len: [] });
             document.querySelectorAll('#rcSteps .rc-step').forEach(li => { li.classList.remove('is-active'); li.classList.add('is-done'); });
             loadSmartHistory();
             showReceiveSuccessPopup(res.no_servis);
@@ -9734,7 +9737,7 @@ function notaShareWA() {
     } catch (_) {}
     const num = notaWaNumber(d.phone);
     if (!num) { notaFlash('Nomor WhatsApp kosong — teks nota sudah disalin.', true); return; }
-    notaFlash('Teks nota disalin — membuka WhatsApp customer...');
+    notaFlash('Teks nota disalin — membuka WhatsApp pelanggan...');
     window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
@@ -10014,31 +10017,31 @@ function renderNotaDigital(d) {
                         </div>
                         <div class="nps-card-content">
                             <div class="nps-field-group">
-                                <div class="nps-field-label">Keluhan / Diagnosa Awal:</div>
+                                <div class="nps-field-label">Keluhan Kerusakan:</div>
                                 <div class="nps-field-desc">${escapeHtml(d.damage || '-')}</div>
                             </div>
                             <div class="nps-field-group" style="margin-top: 10px;">
-                                <div class="nps-field-label">Rencana Tindakan:</div>
+                                <div class="nps-field-label">Rencana / Tindakan Perbaikan:</div>
                                 <div class="nps-field-desc">${escapeHtml(d.plan || '-')}</div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- Kartu Kondisi Fisik & Kelengkapan -->
+                    <!-- Kartu Kelengkapan Dibawa & Kondisi Fisik Awal -->
                     <div class="nps-card">
                         <div class="nps-card-header">
                             <div class="nps-ch-icon">
                                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path></svg>
                             </div>
-                            <span class="nps-ch-title">KONDISI FISIK & KELENGKAPAN SAAT TERIMA</span>
+                            <span class="nps-ch-title">KELENGKAPAN DIBAWA & KONDISI FISIK AWAL</span>
                         </div>
                         <div class="nps-card-content">
                             <div class="nps-field-group">
-                                <div class="nps-field-label">Kelengkapan:</div>
+                                <div class="nps-field-label">Kelengkapan Dibawa:</div>
                                 <div class="nps-field-desc">${escapeHtml(lenTxt)}</div>
                             </div>
                             <div class="nps-field-group" style="margin-top: 10px;">
-                                <div class="nps-field-label">Kondisi Fisik:</div>
+                                <div class="nps-field-label">Kondisi Fisik Awal:</div>
                                 <div class="nps-field-desc">${escapeHtml(fisikTxt)}</div>
                             </div>
                         </div>
@@ -10170,7 +10173,7 @@ function notaDigitalShareWA() {
     } catch (_) {}
     const num = notaWaNumber(d.phone);
     if (!num) { notaFlash('Nomor WhatsApp kosong — teks nota sudah disalin.', true); return; }
-    notaFlash('Nota digital disalin — membuka WhatsApp customer...');
+    notaFlash('Nota digital disalin — membuka WhatsApp pelanggan...');
     window.open('https://wa.me/' + num + '?text=' + encodeURIComponent(msg), '_blank');
 }
 
@@ -10464,7 +10467,7 @@ async function claimRSearch() {
                     ${clrWarrantyBadge(o.warranty_status)}
                 </div>
                 <div class="text-[12px] text-gray-500 dark:text-gray-400 mt-0.5">${escapeHtml(o.customer_name || '-')} · ${escapeHtml(o.customer_phone || '-')} · ${escapeHtml(o.device || '-')}</div>
-                <div class="text-[11px] text-gray-400 mt-0.5">Garansi s/d ${escapeHtml(notaTgl(o.warranty_end))}${o.claim_count ? ' · ' + o.claim_count + ' claim sebelumnya' : ''}</div>
+                <div class="text-[11px] text-gray-400 mt-0.5">Garansi s/d ${escapeHtml(notaTgl(o.warranty_end))}${o.claim_count ? ' · ' + o.claim_count + ' klaim sebelumnya' : ''}</div>
             </div>`).join('');
     } catch (err) {
         box.innerHTML = '<div class="text-[12px] text-red-500">' + escapeHtml(err.message) + '</div>';
@@ -10486,9 +10489,9 @@ async function claimRSelect(id) {
         const row = (k, v) => `<div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">${escapeHtml(k)}</span><b class="text-[13px] text-gray-800 dark:text-gray-100">${escapeHtml(v || '-')}</b></div>`;
         card.innerHTML =
             row('No. Servis', o.no_servis) + row('Tanggal Servis', notaTgl(o.service_date)) +
-            row('Pelanggan', o.customer_name) + row('Nomor WhatsApp', o.customer_phone) +
+            row('Nama Pelanggan', o.customer_name) + row('Nomor WhatsApp', o.customer_phone) +
             row('Perangkat', o.device) + row('IMEI', o.imei) +
-        row('Keluhan', o.damagetype) + row('Rencana Perbaikan', o.repair_plan) +
+        row('Keluhan Kerusakan', o.damagetype) + row('Rencana / Tindakan Perbaikan', o.repair_plan) +
             row('Teknisi Penanggung Jawab', o.technician) + row('Garansi Sampai', notaTgl(o.warranty_end) + ' (' + o.warranty_days + ' hari)');
     }
     const badges = document.getElementById('clrBadges');
@@ -10499,7 +10502,7 @@ async function claimRSelect(id) {
         badges.innerHTML = '<span class="text-[11px] font-bold text-gray-400">GARANSI:</span>' + clrWarrantyBadge(o.warranty_status)
             + '<span class="text-[11px] text-gray-400">(' + escapeHtml(_setTxt) + ')</span>'
             + '<span class="text-[11px] font-bold text-gray-400 ml-2">STATUS SERVIS:</span>' + clrStatusBadge(o.status)
-            + (Number(o.warranty_months) === 0 ? '<span class="text-[11px] text-red-500">Servis ini tanpa garansi — claim tercatat EXPIRED (riwayat).</span>' : '');
+            + (Number(o.warranty_months) === 0 ? '<span class="text-[11px] text-red-500">Servis ini tanpa garansi — klaim tercatat EXPIRED (riwayat).</span>' : '');
     }
     const _wdInput = document.getElementById('clrWarrantyDays');
     if (_wdInput) {
@@ -10523,9 +10526,9 @@ async function claimRSelect(id) {
                         <b class="text-[12.5px]">${escapeHtml(c.claim_no)}</b>
                         <span class="flex gap-1.5">${clrStatusBadge(c.claim_status)}${c.decision ? clrStatusBadge(c.decision) : ''}</span>
                     </div>
-                    <div class="text-[11px] text-gray-400 mt-0.5">Tgl claim: ${escapeHtml(c.claim_date || '-')}</div>
+                    <div class="text-[11px] text-gray-400 mt-0.5">Tgl klaim: ${escapeHtml(c.claim_date || '-')}</div>
                 </div>`).join('')
-                : '<div class="text-[12px] text-gray-400">Belum ada claim untuk servis ini — claim baru akan menjadi yang pertama.</div>');
+                : '<div class="text-[12px] text-gray-400">Belum ada klaim untuk servis ini — klaim baru akan menjadi yang pertama.</div>');
     }
     document.getElementById('clrOriginWrap').classList.remove('hidden');
     document.getElementById('clrFormWrap').classList.remove('hidden');
@@ -10550,13 +10553,13 @@ async function claimRSubmit(e) {
     if (e) e.preventDefault();
     if (!_clrOrigin) { claimRFeedback('Pilih dulu servis asalnya.', true); return; }
     const complaint = (document.getElementById('clrComplaint') || {}).value || '';
-    if (!complaint.trim()) { claimRFeedback('Keluhan claim wajib diisi.', true); return; }
+    if (!complaint.trim()) { claimRFeedback('Keluhan klaim wajib diisi.', true); return; }
     const btn = document.getElementById('clrSubmitBtn');
     const txt = document.getElementById('clrSubmitText');
     if (btn) btn.disabled = true;
     if (txt) txt.textContent = 'Menyimpan...';
     try {
-        let chk = { fisik: [], len: ['unit_saja'] };
+        let chk = { fisik: [], len: [] };
         try { chk = collectChecklist('clr'); } catch (_) {}
         const payload = {
             service_order_id: _clrOrigin.id,
@@ -10572,8 +10575,8 @@ async function claimRSubmit(e) {
         };
         const c = await apiPost('/claims/receive', payload);
         _clrClaim = c;
-        claimRFeedback('Claim ' + c.claim_no + ' dibuat. Servis asal tidak berubah.', false);
-        try { applyChecklist('clr', { fisik: [], len: ['unit_saja'] }); } catch (_) {}
+        claimRFeedback('Klaim ' + c.claim_no + ' dibuat. Servis asal tidak berubah.', false);
+        try { applyChecklist('clr', { fisik: [], len: [] }); } catch (_) {}
         const form = document.getElementById('claimReceiveForm');
         if (form) form.reset();
         const dt = document.getElementById('clrDate');
@@ -10585,7 +10588,7 @@ async function claimRSubmit(e) {
         claimRFeedback(err.message, true);
     } finally {
         if (btn) btn.disabled = false;
-        if (txt) txt.textContent = 'Buat Claim Garansi';
+        if (txt) txt.textContent = 'Buat Klaim Garansi';
     }
 }
 
@@ -10596,11 +10599,11 @@ function claimRRenderResult(c) {
         card.innerHTML = `
             <div class="clr-result">
                 <div class="flex items-center justify-between gap-2 flex-wrap">
-                    <div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">Claim ID</span>
+                    <div><span class="block text-[10.5px] font-bold uppercase tracking-wide text-gray-400">ID Klaim</span>
                     <b class="text-[16px] text-gray-800 dark:text-gray-100">${escapeHtml(c.claim_no)}</b></div>
                     ${clrWarrantyBadge(c.warranty_status)}
                 </div>
-                <div class="text-[12px] text-gray-500 dark:text-gray-400 mt-1">Servis asal <b>${escapeHtml(c.origin_no_servis || '')}</b> · Tgl claim ${escapeHtml(notaTgl(c.claim_date))} · ${escapeHtml(c.customer_name || '')}</div>
+                <div class="text-[12px] text-gray-500 dark:text-gray-400 mt-1">Servis asal <b>${escapeHtml(c.origin_no_servis || '')}</b> · Tgl klaim ${escapeHtml(notaTgl(c.claim_date))} · ${escapeHtml(c.customer_name || '')}</div>
                 <div class="flex gap-1.5 mt-2 flex-wrap"><span class="text-[11px] font-bold text-gray-400">PROSES:</span>${clrStatusBadge(c.claim_status)}
                 <span class="text-[11px] font-bold text-gray-400 ml-1">HASIL:</span>${clrStatusBadge(c.decision)}</div>
             </div>`;
@@ -10635,7 +10638,7 @@ function claimRWorkflowFeedback(msg, isErr) {
 // P2-10: Refund Klaim Garansi (Admin, dana Kas Aset + pre-check).
 async function clrRefundGaransi() {
     if (!can('REFUND_GARANSI')) { toast('Aksi ditolak: Refund Garansi adalah keputusan Admin.'); return; }
-    if (!_clrClaim) { claimRWorkflowFeedback('Belum ada claim aktif.', true); return; }
+    if (!_clrClaim) { claimRWorkflowFeedback('Belum ada klaim aktif.', true); return; }
     let nominal = Number((_clrClaim.customer_cost || 0));
     const v = prompt('Nominal refund garansi (dana dari Kas Aset), default biaya pelanggan:',
                      nominal ? String(nominal) : '');
@@ -10673,11 +10676,11 @@ function claimRRefreshResolusi(c) {
 }
 
 async function claimRSave() {
-    if (!_clrClaim) { claimRWorkflowFeedback('Belum ada claim aktif.', true); return; }
+    if (!_clrClaim) { claimRWorkflowFeedback('Belum ada klaim aktif.', true); return; }
     const decision = (document.getElementById('clrDecision') || {}).value || 'BELUM_DIPUTUSKAN';
     const reject = ((document.getElementById('clrRejectReason') || {}).value || '').trim();
     if (decision === 'DITOLAK' && !reject) {
-        claimRWorkflowFeedback('Claim DITOLAK wajib menyertakan alasan penolakan.', true);
+        claimRWorkflowFeedback('Klaim DITOLAK wajib menyertakan alasan penolakan.', true);
         return;
     }
     const btn = document.getElementById('clrSaveBtn');
@@ -12585,7 +12588,7 @@ function unclaimedWaOpen(orderId) {
     const cleanNum = (o.customer_phone || '').replace(/\D/g, '');
     if (!cleanNum) {
         if (warnEl) {
-            warnEl.textContent = 'Nomor WhatsApp customer tidak tersedia.';
+            warnEl.textContent = 'Nomor WhatsApp pelanggan tidak tersedia.';
             warnEl.classList.remove('hidden');
         }
         if (sendBtn) sendBtn.disabled = true;
