@@ -3258,14 +3258,15 @@ function usUnitRefresh(unitStatus, takenAt) {
 function usUnitUpdate() {
     const badge = document.getElementById('usUnitBadge');
     if (badge) {
-        const taken = _usUnit === 'DIAMBIL';
+        const st = typeof usGetStatus === 'function' ? usGetStatus() : '';
+        const taken = _usUnit === 'DIAMBIL' || st === 'CASH' || st === 'CANCEL';
         badge.innerHTML = '<i class="fa-solid fa-circle"></i>' + (taken ? 'DIAMBIL' : 'DI TOKO');
         badge.className = 'tx-status ' + (taken ? 'st-SELESAI' : 'st-KONFIRMASI');
     }
     const info = document.getElementById('usUnitTaken');
     if (info) info.textContent = (_usTakenAt ? 'Diambil: ' + txDate(String(_usTakenAt).slice(0, 10)) : '');
     const btn = document.getElementById('usHandoverBtn');
-    if (btn) btn.classList.toggle('hidden', _usUnit === 'DIAMBIL');
+    if (btn) btn.classList.add('hidden');
 }
 
 async function usHandover() {

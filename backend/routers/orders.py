@@ -1183,6 +1183,12 @@ def update_order(order_id: int, data: schemas.ServiceOrderUpdate,
                                   "laba": str(order.laba_bersih),
                                   "sisa_dilunasi": str(_sisa)},
                             actor=_actor(user))
+        elif new_status == "CANCEL":
+            # OD-LOCK-11.3: CANCEL = unit FAILED yang diambil konsumen.
+            # Otomatis tandai unit_status = DIAMBIL dan waktu pengambilan.
+            order.unit_status = "DIAMBIL"
+            if order.taken_at is None:
+                order.taken_at = datetime.now()
 
     # (5b) KEJAR MODAL KETINGGALAN (Owner, 2026-10-19).
     #
