@@ -3216,6 +3216,7 @@ function openUpdateServis(o) {
     usSyncTanpaModal();
     // Checklist awal: SELALU dari data server per No. Servis (bukan dummy,
     // bukan store lokal). Setelah refresh pun tampil sama persis.
+    renderChecklist('us', 'usCheckGroups', 'Catatan kondisi awal — tidak diubah otomatis saat data servis diperbarui.', { fisik: ACTIVE_FISIK_KEYS, len: ACTIVE_LEN_KEYS });
     const _usCheck = _usServerChecklist(o);
     applyChecklist('us', _usCheck);
     _usCheckBaseline = JSON.stringify(collectChecklist('us'));

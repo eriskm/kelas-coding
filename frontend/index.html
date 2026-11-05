@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=38">
+    <link rel="stylesheet" href="/static/style.css?v=39">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1061,7 +1061,29 @@
                                     </div>
                                     <div class="rc-check-wrap">
                                         <p class="field-label rc-check-title">Kelengkapan Dibawa &amp; Kondisi Fisik Awal</p>
-                                        <div class="rc-check-groups" id="clrCheckGroups"></div>
+                                        <div class="rc-check-groups" id="clrCheckGroups">
+                                            <div class="rc-check-group">
+                                                <p class="rc-check-group-head"><span class="rc-check-group-ico"><i class="fa-solid fa-box-open"></i></span>Kelengkapan Dibawa</p>
+                                                <div class="rc-check-grid">
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-sim_tray"><span>SIM Tray</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-memory"><span>Memory</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-charger"><span>Charger</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-dus"><span>Dus</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-case"><span>Case</span></label>
+                                                </div>
+                                            </div>
+                                            <div class="rc-check-group">
+                                                <p class="rc-check-group-head"><span class="rc-check-group-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>Kondisi Fisik Awal</p>
+                                                <div class="rc-check-grid">
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-lcd_pecah"><span>LCD Pecah</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-backdoor"><span>Backdoor</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-lecet"><span>Lecet</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-kena_air"><span>Kena Air</span></label>
+                                                    <label class="rc-check"><input type="checkbox" id="clr-ck-segel"><span>Segel</span></label>
+                                                </div>
+                                            </div>
+                                            <p class="field-hint">Kondisi unit saat klaim diterima.</p>
+                                        </div>
                                     </div>
                                     <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 pt-3">
                                         <button type="submit" id="clrSubmitBtn" class="receive-submit-btn">
@@ -2870,7 +2892,29 @@
                                                     <span class="text-[10px] text-blue-600 dark:text-blue-400 font-medium group-open:hidden">Buka Checklist &rsaquo;</span>
                                                     <span class="text-[10px] text-gray-400 font-medium hidden group-open:inline">Tutup &lsaquo;</span>
                                                 </summary>
-                                                <div class="rc-check-groups pt-2 mt-1.5 border-t border-gray-200 dark:border-white/10" id="usCheckGroups"></div>
+                                                <div class="rc-check-groups pt-2 mt-1.5 border-t border-gray-200 dark:border-white/10" id="usCheckGroups">
+                                                    <div class="rc-check-group">
+                                                        <p class="rc-check-group-head"><span class="rc-check-group-ico"><i class="fa-solid fa-box-open"></i></span>Kelengkapan Dibawa</p>
+                                                        <div class="rc-check-grid">
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-sim_tray"><span>SIM Tray</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-memory"><span>Memory</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-charger"><span>Charger</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-dus"><span>Dus</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-case"><span>Case</span></label>
+                                                        </div>
+                                                    </div>
+                                                    <div class="rc-check-group">
+                                                        <p class="rc-check-group-head"><span class="rc-check-group-ico"><i class="fa-solid fa-mobile-screen-button"></i></span>Kondisi Fisik Awal</p>
+                                                        <div class="rc-check-grid">
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-lcd_pecah"><span>LCD Pecah</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-backdoor"><span>Backdoor</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-lecet"><span>Lecet</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-kena_air"><span>Kena Air</span></label>
+                                                            <label class="rc-check"><input type="checkbox" id="us-ck-segel"><span>Segel</span></label>
+                                                        </div>
+                                                    </div>
+                                                    <p class="field-hint">Catatan kondisi awal — tidak diubah otomatis saat data servis diperbarui.</p>
+                                                </div>
                                             </details>
                                         </div>
 
@@ -3896,6 +3940,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=38"></script>
+<script src="/static/script.js?v=39"></script>
 </body>
 </html>
