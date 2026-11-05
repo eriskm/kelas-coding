@@ -6629,13 +6629,8 @@ select.range-pill.range-select option { color: #0f172a; }
         transform: translate(-50%, -50%) scale(1);
     }
 }
-.float-window.open:not(.has-dragged) {
+.float-window.open {
     animation: modalFloatIn 0.18s cubic-bezier(0.16, 1, 0.3, 1);
-}
-.float-window.has-dragged,
-.float-window.dragging {
-    animation: none !important;
-    transition: none !important;
 }
 
 /* 3. Navigasi Sidebar (.nav-link) Micro-interaction & Indikator Aktif */

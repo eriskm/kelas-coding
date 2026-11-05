@@ -918,7 +918,7 @@ function makeFloatDraggable(winId, barId, closeFunc) {
         win.style.right = 'auto';
         win.style.bottom = 'auto';
         win.style.transform = 'none';
-        win.classList.add('has-dragged', 'dragging');
+        win.classList.add('dragging');
         return (mx, my) => {
             const p = clampPos(ox + mx - cx, oy + my - cy);
             win.style.left = p.x + 'px';
@@ -969,22 +969,6 @@ function makeFloatDraggable(winId, barId, closeFunc) {
         win.style.bottom = 'auto';
         win.style.transform = 'none';
     });
-
-    try {
-        const mo = new MutationObserver((mutations) => {
-            for (const m of mutations) {
-                if (m.attributeName === 'class' && !win.classList.contains('open')) {
-                    win.classList.remove('has-dragged', 'dragging');
-                    win.style.left = '';
-                    win.style.top = '';
-                    win.style.right = '';
-                    win.style.bottom = '';
-                    win.style.transform = '';
-                }
-            }
-        });
-        mo.observe(win, { attributes: true, attributeFilter: ['class'] });
-    } catch (_) {}
 }
 
 function initFloatDrag() {
