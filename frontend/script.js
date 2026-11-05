@@ -778,7 +778,14 @@ function initAkunForm() {
 }
 
 function openServisBaru() {
-    document.getElementById('pageReceive').classList.add('open');
+    const pageEl = document.getElementById('pageReceive');
+    if (!pageEl) return;
+    if (pageEl.classList.contains('open')) {
+        // Guard anti double-execution: jika modal sudah terbuka (mis. dari hashchange yang dipicu setReceiveHash), abaikan panggilan kedua.
+        setReceiveHash();
+        return;
+    }
+    pageEl.classList.add('open');
     try { localStorage.setItem(RECEIVE_OPEN_KEY, '1'); } catch (_) {}
     closeReceiveSuccessPopup(false);
     restoreReceiveDraft();
@@ -798,13 +805,13 @@ function openServisBaru() {
         updateRcChipStates('rcPlan', 'rcPlanChips');
         populateDeviceDatalist();
 
-    ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el && !el.dataset.moneyBound) {
-            el.dataset.moneyBound = '1';
-            el.addEventListener('input', function () { rcFormatMoneyInput(this); });
-        }
-    });
+        ['rcEstimate', 'rcDp', 'rcFinal'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el && !el.dataset.moneyBound) {
+                el.dataset.moneyBound = '1';
+                el.addEventListener('input', function () { rcFormatMoneyInput(this); });
+            }
+        });
     } catch (_) {}
     setActiveNav('servisbaru', document.querySelectorAll('.nav-link'));
     setActiveNav(null, document.querySelectorAll('.mobile-nav-item'));
@@ -9344,21 +9351,42 @@ function applyChecklist(prefix, data) {
 // ber-role TEKNISI/ADMIN/SUPERADMIN (backend/routers/orders.py).
 // WAJIB dipanggil ulang tiap overlay dibuka: pada DOMContentLoaded token belum
 // ada, sehingga fetch pertama 401 dan dropdown tetap kosong sampai page reload.
+let _rcTechsFetching = false;
 async function loadReceiveTechnicians() {
     const sel = document.getElementById('rcTechnician');
     if (!sel) return [];
-    let techs = null;
-    try { techs = await apiGet('/orders/technicians'); } catch (_) { return []; }
-    if (!Array.isArray(techs) || !techs.length) return [];
     const cur = sel.value || '';
+    // Jika cache teknisi sudah ada, isi dropdown secara instan tanpa menunggu fetch
+    if (window._cachedTechs && window._cachedTechs.length && sel.options.length <= 1) {
+        sel.innerHTML = '<option value="">-- Belum Ditentukan --</option>'
+            + window._cachedTechs.map(t => `<option value="${t}">${t}</option>`).join('');
+        try {
+            const d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null');
+            const want = (d && d.rcTechnician) || cur;
+            if (want && Array.from(sel.options).some(o => o.value === want)) sel.value = want;
+        } catch (_) { if (cur) sel.value = cur; }
+    }
+    if (_rcTechsFetching) return window._cachedTechs || [];
+    _rcTechsFetching = true;
+    let techs = null;
+    try {
+        techs = await apiGet('/orders/technicians');
+    } catch (_) {
+        _rcTechsFetching = false;
+        return [];
+    }
+    _rcTechsFetching = false;
+    if (!Array.isArray(techs) || !techs.length) return [];
+    window._cachedTechs = techs;
+    const nowCur = sel.value || '';
     sel.innerHTML = '<option value="">-- Belum Ditentukan --</option>'
         + techs.map(t => `<option value="${t}">${t}</option>`).join('');
     // Kembalikan pilihan teknisi dari draft setelah option async tersedia.
     try {
         const d = JSON.parse(localStorage.getItem(RECEIVE_DRAFT_KEY) || 'null');
-        const want = (d && d.rcTechnician) || cur;
+        const want = (d && d.rcTechnician) || nowCur;
         if (want && Array.from(sel.options).some(o => o.value === want)) sel.value = want;
-    } catch (_) { if (cur) sel.value = cur; }
+    } catch (_) { if (nowCur) sel.value = nowCur; }
     return techs;
 }
 
@@ -12363,7 +12391,13 @@ document.addEventListener('DOMContentLoaded', async function () {
 
     window.addEventListener('hashchange', () => {
         if (!getToken()) return;
-        if (isReceiveHash()) { openServisBaru(); return; }
+        if (isReceiveHash()) {
+            const pageEl = document.getElementById('pageReceive');
+            if (pageEl && !pageEl.classList.contains('open')) {
+                openServisBaru();
+            }
+            return;
+        }
         const k = pageFromHash();
         if (k && k !== window._activePage) navigateTo(k);
     });
@@ -12379,7 +12413,12 @@ document.addEventListener('DOMContentLoaded', async function () {
         }
         const wantReceive = isReceiveHash() || isReceiveOpen();
         navigateTo(pageFromHash() || getSavedPage());
-        if (wantReceive) openServisBaru();
+        if (wantReceive) {
+            const pageEl = document.getElementById('pageReceive');
+            if (pageEl && !pageEl.classList.contains('open')) {
+                openServisBaru();
+            }
+        }
     } else {
         showLogin();
     }
