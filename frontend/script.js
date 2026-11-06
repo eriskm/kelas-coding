@@ -14090,110 +14090,95 @@ function renderKuKartuHutangContent() {
     const targetEntities = isAll ? entities : entities.filter(e => e.key === _kuKartuHutangFilter);
 
     if (targetEntities.length === 0) {
-        content.innerHTML = '<div class="text-center text-xs text-gray-400 py-4">Data entitas tidak ditemukan.</div>';
+        content.innerHTML = '<div class="text-center text-xs text-slate-400 py-3">Data entitas tidak ditemukan.</div>';
         return;
     }
 
     const containerCls = isAll
-        ? 'grid grid-cols-1 xl:grid-cols-2 gap-4'
-        : 'space-y-4';
+        ? 'grid grid-cols-1 xl:grid-cols-2 gap-2.5'
+        : 'space-y-2.5';
 
     content.className = containerCls;
     content.innerHTML = targetEntities.map(ent => {
         const rows = ent.rows || [];
         const hasRows = rows.length > 0;
 
-        let entIconBg = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+        let entIconColor = 'text-slate-500';
         let entIcon = 'fa-calculator';
-        let entTagBg = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
-        let entTagLabel = 'Konsolidasi Hutang Toko';
 
         if (ent.tipe === 'GAJI') {
-            entIconBg = 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400';
+            entIconColor = 'text-amber-500';
             entIcon = 'fa-user-tag';
-            entTagBg = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40';
-            entTagLabel = 'Prioritas 1: Hak Gaji (CTS)';
         } else if (ent.tipe === 'OPS') {
-            entIconBg = 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400';
+            entIconColor = 'text-blue-500';
             entIcon = 'fa-store';
-            entTagBg = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40';
-            entTagLabel = 'Prioritas 2: Operasional (CTO)';
         }
 
         const saldoBadgeCls = ent.saldo > 0
-            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/50'
-            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50';
+            ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/40 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/50'
+            : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50';
 
         const tableRowsHtml = hasRows ? rows.map(r => {
             const minusHtml = r.minus > 0
-                ? `<span class="font-mono font-bold text-rose-600 dark:text-rose-400">+${kuRupiah(r.minus)}</span>`
+                ? `<span class="font-mono font-bold text-rose-600 dark:text-rose-400 text-xs">+${kuRupiah(r.minus)}</span>`
                 : `<span class="text-slate-400">-</span>`;
             const bayarHtml = r.bayar > 0
-                ? `<span class="font-mono font-bold text-blue-600 dark:text-blue-400">-${kuRupiah(r.bayar)}</span>`
+                ? `<span class="font-mono font-bold text-blue-600 dark:text-blue-400 text-xs">-${kuRupiah(r.bayar)}</span>`
                 : `<span class="text-slate-400">-</span>`;
-            const saldoHtml = `<span class="font-mono font-bold text-slate-900 dark:text-white">${kuRupiah(r.saldo)}</span>`;
+            const saldoHtml = `<span class="font-mono font-bold text-slate-800 dark:text-slate-100 text-xs">${kuRupiah(r.saldo)}</span>`;
 
             return `<tr class="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors">
-                <td class="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] font-semibold">${String(r.no).padStart(2, '0')}</td>
-                <td class="py-2.5 px-3 font-medium text-slate-800 dark:text-slate-200">
-                    <div class="flex items-center gap-1.5">
+                <td class="py-1 px-2.5 text-center text-slate-400 font-mono text-[10.5px] font-semibold w-9">${String(r.no).padStart(2, '0')}</td>
+                <td class="py-1 px-2.5 font-medium text-slate-700 dark:text-slate-300 text-xs">
+                    <span class="inline-flex items-center gap-1.5">
                         <i class="fa-solid fa-calendar-day text-[10px] text-slate-400"></i>
                         <span>${escapeHtml(r.tgl || '-')}</span>
-                    </div>
+                    </span>
                 </td>
-                <td class="py-2.5 px-3 text-right">${minusHtml}</td>
-                <td class="py-2.5 px-3 text-right">${bayarHtml}</td>
-                <td class="py-2.5 px-3 text-right">${saldoHtml}</td>
+                <td class="py-1 px-2.5 text-right">${minusHtml}</td>
+                <td class="py-1 px-2.5 text-right">${bayarHtml}</td>
+                <td class="py-1 px-2.5 text-right">${saldoHtml}</td>
             </tr>`;
-        }).join('') : `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-400">Belum ada catatan mutasi untuk entitas ini.</td></tr>`;
+        }).join('') : `<tr><td colspan="5" class="py-3 text-center text-xs text-slate-400">Belum ada catatan mutasi.</td></tr>`;
 
         return `
-        <div class="border border-slate-200/80 dark:border-white/10 rounded-xl overflow-hidden bg-white dark:bg-slate-900/40 shadow-xs">
-            <!-- MODERN LEDGER HEADER -->
-            <div class="px-4 py-3 bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between flex-wrap gap-2">
-                <div class="flex items-center gap-2.5">
-                    <span class="w-8 h-8 rounded-lg ${entIconBg} flex items-center justify-center text-xs font-bold shadow-xs">
-                        <i class="fa-solid ${entIcon}"></i>
-                    </span>
-                    <div>
-                        <div class="flex items-center gap-2">
-                            <h4 class="text-xs font-bold text-slate-900 dark:text-white m-0">${escapeHtml(ent.short_name || ent.nama)}</h4>
-                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${entTagBg}">
-                                ${entTagLabel}
-                            </span>
-                        </div>
-                        <p class="text-[11px] text-slate-500 dark:text-slate-400 m-0">${escapeHtml(ent.nama)}</p>
-                    </div>
+        <div class="border border-slate-200/80 dark:border-white/10 rounded-lg overflow-hidden bg-white dark:bg-slate-900/40 shadow-xs">
+            <!-- COMPACT SLIM HEADER -->
+            <div class="px-3 py-1.5 bg-slate-50/90 dark:bg-slate-800/50 border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between gap-2">
+                <div class="flex items-center gap-1.5 min-w-0">
+                    <i class="fa-solid ${entIcon} ${entIconColor} text-xs"></i>
+                    <span class="font-bold text-xs text-slate-800 dark:text-slate-100 truncate">${escapeHtml(ent.short_name || ent.nama)}</span>
+                    <span class="text-[10.5px] text-slate-400 truncate hidden sm:inline">(${escapeHtml(ent.nama)})</span>
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Sisa Kewajiban:</span>
-                    <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg ${saldoBadgeCls}">
+                <div class="flex items-center gap-1.5 shrink-0">
+                    <span class="text-[10.5px] text-slate-400">Sisa:</span>
+                    <span class="text-xs font-mono font-bold px-2 py-0.5 rounded ${saldoBadgeCls}">
                         ${kuRupiah(ent.saldo || 0)}
                     </span>
                 </div>
             </div>
 
-            <!-- MODERN LEDGER TABLE -->
-            <div class="overflow-x-auto ku-mutasi-scroll">
+            <!-- COMPACT TABLE -->
+            <div class="overflow-x-auto max-h-56 ku-mutasi-scroll">
                 <table class="w-full text-xs text-left border-collapse">
                     <thead>
-                        <tr class="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.01] text-slate-500 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
-                            <th class="py-2.5 px-3 text-center w-12 font-medium">No</th>
-                            <th class="py-2.5 px-3 font-medium">Periode / Tanggal</th>
-                            <th class="py-2.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">Timbul Hutang (+)</th>
-                            <th class="py-2.5 px-3 text-right font-medium text-blue-600 dark:text-blue-400">Pembayaran / Cicil (-)</th>
-                            <th class="py-2.5 px-3 text-right font-medium text-slate-700 dark:text-slate-300">Sisa Saldo</th>
+                        <tr class="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/40 dark:bg-white/[0.01] text-slate-500 dark:text-slate-400 font-semibold text-[10.5px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-xs">
+                            <th class="py-1.5 px-2.5 text-center w-9 font-medium">No</th>
+                            <th class="py-1.5 px-2.5 font-medium">Periode / Tanggal</th>
+                            <th class="py-1.5 px-2.5 text-right font-medium text-rose-600 dark:text-rose-400">Timbul Hutang (+)</th>
+                            <th class="py-1.5 px-2.5 text-right font-medium text-blue-600 dark:text-blue-400">Cicil / Bayar (-)</th>
+                            <th class="py-1.5 px-2.5 text-right font-medium text-slate-700 dark:text-slate-300">Sisa Saldo</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-100 dark:divide-white/5">
                         ${tableRowsHtml}
                     </tbody>
                     <tfoot>
-                        <tr class="bg-slate-50/70 dark:bg-white/[0.02] border-t-2 border-slate-200/80 dark:border-white/10 text-xs font-semibold">
-                            <td colspan="4" class="py-3 px-3 text-right text-slate-500 dark:text-slate-400">
-                                Sisa Kewajiban (${escapeHtml(ent.short_name || ent.nama)}):
+                        <tr class="bg-slate-50/80 dark:bg-white/[0.02] border-t border-slate-200/80 dark:border-white/10 text-xs font-semibold">
+                            <td colspan="4" class="py-1.5 px-2.5 text-right text-slate-500 dark:text-slate-400 text-[11px]">
+                                Total Sisa (${escapeHtml(ent.short_name || ent.nama)}):
                             </td>
-                            <td class="py-3 px-3 text-right font-mono font-bold ${ent.saldo > 0 ? 'text-rose-600 dark:text-rose-400 text-sm' : 'text-emerald-600 dark:text-emerald-400 text-sm'}">
+                            <td class="py-1.5 px-2.5 text-right font-mono font-bold ${ent.saldo > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'} text-xs">
                                 ${kuRupiah(ent.saldo || 0)}
                             </td>
                         </tr>
