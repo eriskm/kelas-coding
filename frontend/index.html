@@ -1933,13 +1933,15 @@
                                         <h3 class="panel-title"><i class="fa-solid fa-list-ul"></i> Riwayat Transaksi &mdash; Kas Laci</h3>
                                         <p class="ku-sub">Bukti rinci setiap perpindahan uang di laci. Saldo akhir di sini sama dengan Saldo Kas (Laci) di Conditions Kas.</p>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <button type="button" onclick="openModalArsipTutupKas()" class="receive-back-btn text-xs py-1.5 px-2.5 text-amber-700 bg-amber-50 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-300 dark:border-amber-700/60 font-semibold shadow-xs transition-all flex items-center gap-1.5" title="Buka Arsip Tutup Kas (Periode Lampau)">
-                                            <i class="fa-solid fa-box-archive text-amber-600 dark:text-amber-400"></i>
-                                            <span>Arsip Tutup Kas</span>
+                                    <div class="flex items-center gap-2" id="kuRiwayatActions">
+                                        <button type="button" onclick="openModalRekonsiliasi()" class="w-8 h-8 rounded-full border border-emerald-300 dark:border-emerald-700/60 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/50 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-emerald-500/20 active:scale-95" title="Rekonsiliasi Tutup Kas (Saldo Sistem, Fisik &amp; Selisih)" aria-label="Rekonsiliasi Tutup Kas">
+                                            <i class="fa-solid fa-clipboard-check text-xs"></i>
                                         </button>
-                                        <button type="button" onclick="renderRiwayat();" class="receive-back-btn text-xs py-1.5 px-3" title="Muat ulang mutasi kas">
-                                            <i class="fa-solid fa-rotate"></i> Muat Ulang
+                                        <button type="button" onclick="openModalArsipTutupKas()" class="w-8 h-8 rounded-full border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/20 active:scale-95" title="Arsip Tutup Kas (Periode Lampau)" aria-label="Arsip Tutup Kas">
+                                            <i class="fa-solid fa-box-archive text-xs"></i>
+                                        </button>
+                                        <button type="button" onclick="renderRiwayat();" class="w-8 h-8 rounded-full border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-slate-800/40 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-500/20 active:scale-95" title="Muat ulang mutasi kas" aria-label="Muat Ulang Mutasi">
+                                            <i class="fa-solid fa-rotate text-xs"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -2015,15 +2017,7 @@
                                     </div>
                                 </section>
 
-                                <!-- (3) REKONSILIASI TUTUP KAS -->
-                                <section class="ku-block">
-                                    <header class="ku-block-head">
-                                        <h4 class="ku-block-title"><i class="fa-solid fa-clipboard-check"></i> Rekonsiliasi Tutup Kas</h4>
-                                        <p class="ku-block-sub">Saldo Fisik &amp; Selisih muncul setelah Tutup Kas. Penyesuaian sudah tercermin di Mutasi Kas.</p>
-                                    </header>
-                                    <div class="ku-summary" id="kuRekonsiliasi"></div>
-                                    <div class="ku-note-muted" id="kuRekonsiliasiNote"></div>
-                                </section>
+                                <!-- (3) REKONSILIASI TUTUP KAS — Disediakan via Icon & Modal Pop-up di Pojok Kanan Atas -->
 
                                 <!-- (4) ARSIP TUTUP KAS — Disediakan via Icon & Modal Pop-up di Pojok Kanan Atas Mutasi & Rekonsiliasi -->
                                 <section class="ku-block hidden" id="kuArsipBlock">
@@ -3905,6 +3899,42 @@
         </div>
     </div>
 
+    <!-- ===== MODAL REKONSILIASI TUTUP KAS (POJOK KANAN ATAS MUTASI & REKONSILIASI) ===== -->
+    <div id="modalRekonsiliasiTutupKas" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="modalRekonTitle" onclick="if(event.target===this)closeModalRekonsiliasi()">
+        <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 flex items-center justify-center text-sm shadow-xs">
+                        <i class="fa-solid fa-clipboard-check"></i>
+                    </span>
+                    <div>
+                        <h3 id="modalRekonTitle" class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                            Rekonsiliasi Tutup Kas
+                            <span class="text-[10px] font-normal px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300">Periode Berjalan</span>
+                        </h3>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Perbandingan Saldo Sistem vs Saldo Fisik &amp; Selisih Tutup Kas.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModalRekonsiliasi()" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer" title="Tutup">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <div class="p-5 space-y-3">
+                <div class="ku-summary" id="kuRekonsiliasi"></div>
+                <div class="ku-note-muted p-2.5 rounded-lg bg-slate-50 dark:bg-white/[0.02] border border-slate-200/60 dark:border-white/10 text-xs" id="kuRekonsiliasiNote"></div>
+            </div>
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40 text-xs text-gray-500">
+                <span><i class="fa-solid fa-info-circle text-blue-500 mr-1"></i> Penyesuaian selisih otomatis tercermin di buku Mutasi Kas.</span>
+                <button type="button" onclick="closeModalRekonsiliasi()" class="receive-back-btn text-xs py-1.5 px-4 font-semibold">
+                    Tutup
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- ===== MODAL ARSIP TUTUP KAS (POJOK KANAN ATAS MUTASI & REKONSILIASI) ===== -->
     <div id="modalArsipTutupKas" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="modalArsipTitle">
         <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
@@ -4058,6 +4088,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=54"></script>
+<script src="/static/script.js?v=55"></script>
 </body>
 </html>

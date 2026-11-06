@@ -8347,6 +8347,19 @@ function toggleArsipDetail(periodId) {
     }
 }
 
+function openModalRekonsiliasi() {
+    const m = document.getElementById('modalRekonsiliasiTutupKas');
+    if (m) m.classList.remove('hidden');
+}
+
+function closeModalRekonsiliasi() {
+    const m = document.getElementById('modalRekonsiliasiTutupKas');
+    if (m) m.classList.add('hidden');
+}
+
+window.openModalRekonsiliasi = openModalRekonsiliasi;
+window.closeModalRekonsiliasi = closeModalRekonsiliasi;
+
 function openModalArsipTutupKas() {
     renderKuArsip();
     const m = document.getElementById('modalArsipTutupKas');
