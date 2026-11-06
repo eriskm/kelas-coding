@@ -1890,14 +1890,12 @@
                                             </p>
                                         </div>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <button type="button" onclick="kuOpenModalCatatDefisit()" id="kuBtnOpenCatatDefisit" class="receive-submit-btn text-xs py-1.5 px-3 flex items-center gap-1.5 bg-amber-600 hover:bg-amber-700 text-white shadow-xs" title="Catat minus periode kas ke Hutang Beban (OD-LOCK-12)">
-                                            <i class="fa-solid fa-file-circle-plus"></i>
-                                            <span>Catat Defisit Periode</span>
+                                    <div class="flex items-center gap-2" id="kuHutangActions">
+                                        <button type="button" onclick="kuOpenModalCatatDefisit()" id="kuBtnOpenCatatDefisit" data-cap="KAS_CLOSE" class="w-8 h-8 rounded-full border border-amber-300 dark:border-amber-700/60 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/20 active:scale-95" title="Catat Defisit Periode ke Hutang Beban (OD-LOCK-12)" aria-label="Catat Defisit Periode ke Hutang Beban">
+                                            <i class="fa-solid fa-file-circle-plus text-xs"></i>
                                         </button>
-                                        <button type="button" onclick="kuOpenModalLunasHutang()" id="kuBtnOpenLunasHutang" class="receive-submit-btn text-xs py-1.5 px-3 flex items-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white shadow-xs" title="Pelunasan atau cicilan dari Kas Aset (OD-LOCK-14)">
-                                            <i class="fa-solid fa-hand-holding-dollar"></i>
-                                            <span>Cicil / Pelunasan</span>
+                                        <button type="button" onclick="kuOpenModalLunasHutang()" id="kuBtnOpenLunasHutang" data-cap="EXPENSE_DEBT_WRITE" class="w-8 h-8 rounded-full border border-blue-200 dark:border-blue-800/70 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 active:scale-95" title="Cicil / Pelunasan Hutang dari Kas Aset (OD-LOCK-14)" aria-label="Cicil / Pelunasan Hutang dari Kas Aset">
+                                            <i class="fa-solid fa-hand-holding-dollar text-xs"></i>
                                         </button>
                                     </div>
                                 </div>
@@ -3789,7 +3787,7 @@
     </div>
 
     <!-- MODAL CATAT DEFISIT KE HUTANG BEBAN (OD-LOCK-12 & PEMBAGIAN MINUS EDITABLE) -->
-    <div id="modalCatatDefisitHutang" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true">
+    <div id="modalCatatDefisitHutang" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" onclick="if(event.target===this)kuCloseModalCatatDefisit()">
         <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-150">
             <div class="px-4 py-3 bg-gray-50 dark:bg-white/[0.03] border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -3842,7 +3840,7 @@
     </div>
 
     <!-- MODAL PELUNASAN / CICILAN HUTANG DARI KAS ASET (OD-LOCK-14) -->
-    <div id="modalLunasHutang" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true">
+    <div id="modalLunasHutang" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" onclick="if(event.target===this)kuCloseModalLunasHutang()">
         <div class="bg-white dark:bg-gray-900 border border-gray-200 dark:border-white/10 rounded-xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in duration-150">
             <div class="px-4 py-3 bg-gray-50 dark:bg-white/[0.03] border-b border-gray-200 dark:border-white/10 flex items-center justify-between">
                 <div class="flex items-center gap-2">
@@ -4060,6 +4058,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=53"></script>
+<script src="/static/script.js?v=54"></script>
 </body>
 </html>
