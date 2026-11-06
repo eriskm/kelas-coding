@@ -1837,12 +1837,22 @@
                         <!-- TAB 3: KAS ASET TOKO (BRANKAS & MUTASI MODAL) -->
                         <div id="kuTabPaneAset" class="space-y-4 hidden">
                             <div class="panel ku-kas-panel" id="kuMasterPanel">
-                                <div class="flex items-center gap-2 mb-2.5">
-                                    <h3 class="panel-title m-0" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
-                                    <span class="ku-info-tip" id="kuMasterTip" tabindex="0" role="button" aria-label="Informasi Kas Aset">
-                                        <i class="fa-solid fa-circle-question"></i>
-                                        <span class="ku-info-bubble" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP pelanggan tidak dihitung.</span>
-                                    </span>
+                                <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100 dark:border-white/5 flex-wrap gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="panel-title m-0 text-sm font-bold flex items-center gap-2" id="kuMasterTitle"><i class="fa-solid fa-vault text-blue-600 dark:text-blue-400"></i> Kas Aset (Master Kas)</h3>
+                                        <span class="ku-info-tip" id="kuMasterTip" tabindex="0" role="button" aria-label="Informasi Kas Aset">
+                                            <i class="fa-solid fa-circle-question"></i>
+                                            <span class="ku-info-bubble" id="kuMasterDesc">Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci &harr; Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP pelanggan tidak dihitung.</span>
+                                        </span>
+                                    </div>
+                                    <div class="flex items-center gap-2" id="kuAsetActions">
+                                        <button type="button" onclick="openModalAsetModal()" data-cap="KAS_ASET_INJEKSI" class="w-8 h-8 rounded-full border border-blue-200 dark:border-blue-800/70 bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-500/20 active:scale-95" title="Setor / Tarik Modal Usaha" aria-label="Setor / Tarik Modal Usaha">
+                                            <i class="fa-solid fa-money-bill-transfer text-xs"></i>
+                                        </button>
+                                        <button type="button" onclick="openModalAsetTransfer()" data-cap="KAS_ASET_INJEKSI" class="w-8 h-8 rounded-full border border-amber-200 dark:border-amber-800/70 bg-amber-50 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 hover:bg-amber-100 dark:hover:bg-amber-900/50 flex items-center justify-center transition-all shadow-xs cursor-pointer focus:outline-none focus:ring-2 focus:ring-amber-500/20 active:scale-95" title="Pindah Kas Internal (Laci ⇄ Brankas)" aria-label="Pindah Kas Internal (Laci ⇄ Brankas)">
+                                            <i class="fa-solid fa-right-left text-xs"></i>
+                                        </button>
+                                    </div>
                                 </div>
                                 <div class="ku-summary" id="kuAsetSummary"></div>
                                 <div class="overflow-x-auto mt-2 ku-mutasi-scroll">
@@ -1858,72 +1868,6 @@
                                         <tbody id="kuAsetBody"></tbody>
                                     </table>
                                 </div>
-                                <form id="kuAsetForm" autocomplete="off" class="ku-kas-form mt-3 pt-3 border-t border-gray-100 dark:border-white/5" data-cap="KAS_ASET_INJEKSI">
-                                    <!-- SUB-BLOK 1: SETOR / TARIK MODAL TOKO -->
-                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 mb-3 space-y-2.5">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                                                <i class="fa-solid fa-money-bill-transfer text-blue-500"></i> Setor / Tarik Modal Usaha
-                                            </span>
-                                            <span class="text-[11px] text-gray-400">Injeksi &amp; penarikan modal</span>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                                            <div class="sm:col-span-5 relative">
-                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                <input class="receive-input pl-9 w-full text-xs font-semibold" type="number" id="kuAsetNominal" min="1" placeholder="Nominal Rp" required>
-                                            </div>
-                                            <div class="sm:col-span-7">
-                                                <select class="receive-input text-xs w-full" id="kuAsetPosisi" aria-label="Tujuan Setor Modal">
-                                                    <option value="KAS_ASET" selected>Setor ke Kas Aset (Brankas Cadangan)</option>
-                                                    <option value="LACI">Setor ke Laci (Kas Operasional)</option>
-                                                </select>
-                                            </div>
-                                            <div class="sm:col-span-12">
-                                                <input class="receive-input text-xs w-full" type="text" id="kuAsetKeterangan" placeholder="Keterangan transaksi (mis. suntik modal awal / setor pribadi)" required>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-2 pt-0.5">
-                                            <button type="button" onclick="kuAsetMasuk()" class="receive-submit-btn text-xs py-1.5 px-3">
-                                                <i class="fa-solid fa-arrow-down"></i> Setor Modal (Masuk)
-                                            </button>
-                                            <button type="button" onclick="kuAsetKeluar()" class="receive-back-btn text-xs py-1.5 px-3 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20" title="Tarik uang dari Kas Aset Besar ke luar toko">
-                                                <i class="fa-solid fa-arrow-up"></i> Tarik dari Kas Aset
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <!-- SUB-BLOK 2: TRANSFER KAS INTERNAL (LACI ⇄ ASET) -->
-                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 space-y-2.5">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                                                <i class="fa-solid fa-right-left text-amber-500"></i> Pindah Kas Internal (Laci ⇄ Brankas)
-                                            </span>
-                                            <span class="text-[11px] text-gray-400">Pindah kantong (Master Kas tetap)</span>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2">
-                                            <div class="sm:col-span-5 relative">
-                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                <input class="receive-input pl-9 w-full text-xs font-semibold" type="number" id="kuTransferNominal" min="1" placeholder="Nominal Rp" required>
-                                            </div>
-                                            <div class="sm:col-span-7">
-                                                <select class="receive-input text-xs w-full" id="kuTransferArah" aria-label="Arah transfer kas">
-                                                    <option value="LACI-&gt;KAS_ASET">Laci Kasir &rarr; Brankas Toko</option>
-                                                    <option value="KAS_ASET-&gt;LACI">Brankas Toko &rarr; Laci Kasir</option>
-                                                </select>
-                                            </div>
-                                            <div class="sm:col-span-12">
-                                                <input class="receive-input text-xs w-full" type="text" id="kuTransferKeterangan" placeholder="Keterangan pindah kas (mis. setor kelebihan laci ke brankas)" required>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-2 pt-0.5">
-                                            <button type="button" onclick="kuAsetTransfer()" class="receive-back-btn text-xs py-1.5 px-3 border-amber-300 dark:border-amber-700/50 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-700 dark:text-amber-400">
-                                                <i class="fa-solid fa-right-left"></i> Pindahkan Kas Antar-Kantong
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    <div id="kuAsetFeedback" class="hidden receive-feedback mt-2"></div>
-                                </form>
                             </div>
                         </div><!-- /#kuTabPaneAset -->
 
@@ -4002,6 +3946,120 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=52"></script>
+
+    <!-- ===== MODAL 1: SETOR / TARIK MODAL USAHA (KAS ASET) ===== -->
+    <div id="modalAsetModal" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="modalAsetModalTitle" onclick="if(event.target===this)closeModalAsetModal()">
+        <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 flex items-center justify-center text-sm shadow-xs">
+                        <i class="fa-solid fa-money-bill-transfer"></i>
+                    </span>
+                    <div>
+                        <h3 id="modalAsetModalTitle" class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                            Setor / Tarik Modal Usaha
+                        </h3>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Injeksi modal masuk atau penarikan uang dari Kas Aset.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModalAsetModal()" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer" title="Tutup">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <form id="kuAsetForm" autocomplete="off" class="p-5 space-y-3.5" data-cap="KAS_ASET_INJEKSI" onsubmit="return false;">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nominal Transaksi</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                        <input class="receive-input pl-9 w-full text-xs font-semibold" type="number" id="kuAsetNominal" min="1" placeholder="Masukkan jumlah nominal" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Tujuan / Posisi Akun</label>
+                    <select class="receive-input text-xs w-full" id="kuAsetPosisi" aria-label="Tujuan Setor Modal">
+                        <option value="KAS_ASET" selected>Kas Aset (Brankas Cadangan Toko)</option>
+                        <option value="LACI">Laci Kasir (Kas Operasional Harian)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Keterangan Transaksi</label>
+                    <input class="receive-input text-xs w-full" type="text" id="kuAsetKeterangan" placeholder="Contoh: Suntik modal awal / setor pribadi / prive" required>
+                </div>
+
+                <div id="kuAsetFeedback" class="hidden receive-feedback text-xs"></div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100 dark:border-white/5">
+                    <button type="button" onclick="closeModalAsetModal()" class="receive-back-btn text-xs py-1.5 px-3.5">
+                        Batal
+                    </button>
+                    <button type="button" onclick="kuAsetKeluar()" class="receive-back-btn text-xs py-1.5 px-3 text-red-600 dark:text-red-400 border-red-200 dark:border-red-800/50 hover:bg-red-50 dark:hover:bg-red-950/20" title="Tarik uang dari Kas Aset Besar ke luar toko">
+                        <i class="fa-solid fa-arrow-up"></i> Tarik dari Kas Aset
+                    </button>
+                    <button type="button" onclick="kuAsetMasuk()" class="receive-submit-btn text-xs py-1.5 px-4">
+                        <i class="fa-solid fa-arrow-down"></i> Setor Modal (Masuk)
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL 2: TRANSFER KAS INTERNAL (LACI ⇄ BRANKAS) ===== -->
+    <div id="modalAsetTransfer" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="modalAsetTransferTitle" onclick="if(event.target===this)closeModalAsetTransfer()">
+        <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-lg shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm shadow-xs">
+                        <i class="fa-solid fa-right-left"></i>
+                    </span>
+                    <div>
+                        <h3 id="modalAsetTransferTitle" class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                            Pindah Kas Internal (Laci ⇄ Brankas)
+                        </h3>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Pindah antar-kantong kas toko (Master Kas tetap & saldo aman).</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModalAsetTransfer()" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center justify-center transition-colors cursor-pointer" title="Tutup">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+            <!-- Modal Body -->
+            <form id="kuTransferForm" autocomplete="off" class="p-5 space-y-3.5" data-cap="KAS_ASET_INJEKSI" onsubmit="return false;">
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Nominal Transfer</label>
+                    <div class="relative">
+                        <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                        <input class="receive-input pl-9 w-full text-xs font-semibold" type="number" id="kuTransferNominal" min="1" placeholder="Masukkan nominal transfer" required>
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Arah Perpindahan Kas</label>
+                    <select class="receive-input text-xs w-full" id="kuTransferArah" aria-label="Arah transfer kas">
+                        <option value="LACI-&gt;KAS_ASET" selected>Laci Kasir &rarr; Brankas Toko (Amankan kelebihan laci)</option>
+                        <option value="KAS_ASET-&gt;LACI">Brankas Toko &rarr; Laci Kasir (Ambil modal kasir)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1">Keterangan Transfer</label>
+                    <input class="receive-input text-xs w-full" type="text" id="kuTransferKeterangan" placeholder="Contoh: Setor kelebihan uang laci sore ke brankas" required>
+                </div>
+
+                <div id="kuTransferFeedback" class="hidden receive-feedback text-xs"></div>
+
+                <div class="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100 dark:border-white/5">
+                    <button type="button" onclick="closeModalAsetTransfer()" class="receive-back-btn text-xs py-1.5 px-3.5">
+                        Batal
+                    </button>
+                    <button type="button" onclick="kuAsetTransfer()" class="receive-back-btn text-xs py-1.5 px-4 font-semibold border-amber-300 dark:border-amber-700/60 hover:bg-amber-50 dark:hover:bg-amber-950/20 text-amber-700 dark:text-amber-300 shadow-xs">
+                        <i class="fa-solid fa-right-left mr-1"></i> Pindahkan Kas Antar-Kantong
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+<script src="/static/script.js?v=53"></script>
 </body>
 </html>

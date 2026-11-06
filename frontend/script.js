@@ -7031,6 +7031,10 @@ async function loadKuAset() {
         _d.classList.toggle('hidden', !lihatAset);
         if (lihatAset) _d.textContent = 'Master Kas = Saldo Laci (Kas Aset Kecil) + Saldo Aset (Kas Aset Besar/Pengelola). Perpindahan Laci ↔ Aset tidak mengubah Master Kas. Angka di bawah adalah uang milik toko -- uang titipan DP customer tidak dihitung.';
     }
+    const _act = document.getElementById('kuAsetActions');
+    if (_act) {
+        _act.classList.toggle('hidden', !lihatAset || !can('KAS_ASET_INJEKSI'));
+    }
     if (summary) {
         // Angka FISIK (`laci`/`master_kas`) masih memuat DP karena uangnya benar-benar
         // ada di dalam laci, dan itulah yang dipakai saat Declare Tutup Kas. Yang
@@ -7066,7 +7070,11 @@ async function loadKuAset() {
             </tr>`;
         }).join('') : `<tr><td colspan="4"><div class="text-center text-sm text-gray-400 py-6">Belum ada mutasi Kas Aset.</div></td></tr>`;
     }
-    applyRoleUI(document.getElementById('kuAsetForm') || document);
+    applyRoleUI(document.getElementById('kuMasterPanel') || document);
+    const _m1 = document.getElementById('modalAsetModal');
+    if (_m1) applyRoleUI(_m1);
+    const _m2 = document.getElementById('modalAsetTransfer');
+    if (_m2) applyRoleUI(_m2);
 }
 
 function _kuFb(id, msg, kind) {
@@ -7076,6 +7084,41 @@ function _kuFb(id, msg, kind) {
     el.textContent = msg;
     if (kind) el.classList.add(kind);
 }
+
+function openModalAsetModal() {
+    const el = document.getElementById('modalAsetModal');
+    if (!el) return;
+    const fb = document.getElementById('kuAsetFeedback');
+    if (fb) fb.classList.add('hidden');
+    el.classList.remove('hidden');
+    const input = document.getElementById('kuAsetNominal');
+    if (input) setTimeout(() => input.focus(), 80);
+}
+
+function closeModalAsetModal() {
+    const el = document.getElementById('modalAsetModal');
+    if (el) el.classList.add('hidden');
+}
+
+function openModalAsetTransfer() {
+    const el = document.getElementById('modalAsetTransfer');
+    if (!el) return;
+    const fb = document.getElementById('kuTransferFeedback');
+    if (fb) fb.classList.add('hidden');
+    el.classList.remove('hidden');
+    const input = document.getElementById('kuTransferNominal');
+    if (input) setTimeout(() => input.focus(), 80);
+}
+
+function closeModalAsetTransfer() {
+    const el = document.getElementById('modalAsetTransfer');
+    if (el) el.classList.add('hidden');
+}
+
+window.openModalAsetModal = openModalAsetModal;
+window.closeModalAsetModal = closeModalAsetModal;
+window.openModalAsetTransfer = openModalAsetTransfer;
+window.closeModalAsetTransfer = closeModalAsetTransfer;
 
 async function kuAsetMasuk() {
     if (!can('KAS_ASET_INJEKSI')) { toast('Aksi ditolak: hanya Admin.'); return; }
@@ -7092,6 +7135,7 @@ async function kuAsetMasuk() {
         document.getElementById('kuAsetKeterangan').value = '';
         toast('Kas Aset bertambah ' + _kuMoney(nominal) + '.', 'success');
         await loadKuFinance();
+        setTimeout(() => closeModalAsetModal(), 1000);
     } catch (err) {
         _kuFb('kuAsetFeedback', err.message || 'Gagal menambah Kas Aset.', 'error');
     }
@@ -7116,6 +7160,7 @@ async function kuAsetKeluar() {
         document.getElementById('kuAsetKeterangan').value = '';
         toast('Kas Aset berkurang ' + _kuMoney(nominal) + '.', 'success');
         await loadKuFinance();
+        setTimeout(() => closeModalAsetModal(), 1000);
     } catch (err) {
         _kuFb('kuAsetFeedback', err.message || 'Gagal menarik Kas Aset.', 'error');
     }
@@ -7130,19 +7175,21 @@ async function kuAsetTransfer() {
     const nominal = Number((nomEl ? nomEl.value : 0) || 0);
     const keterangan = ((ketEl ? ketEl.value : '') || '').trim();
     const arah = ((document.getElementById('kuTransferArah') || {}).value || 'LACI->KAS_ASET').split('->');
-    if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan transfer wajib diisi.', 'error'); return; }
+    const fbId = document.getElementById('kuTransferFeedback') ? 'kuTransferFeedback' : 'kuAsetFeedback';
+    if (!nominal || !keterangan) { _kuFb(fbId, 'Nominal dan keterangan transfer wajib diisi.', 'error'); return; }
     const masterSebelum = (_kuSaldoLapisan && _kuSaldoLapisan.master_kas) || 0;
     try {
         const res = await apiPost('/kas/aset/transfer',
             { dari: arah[0], ke: arah[1], nominal, keterangan }, { idempotencyKey: newIdemKey() });
-        _kuFb('kuAsetFeedback', 'Transfer selesai. ' + res.label_dari + ' → ' + res.label_ke
+        _kuFb(fbId, 'Transfer selesai. ' + res.label_dari + ' → ' + res.label_ke
             + '. Master Kas ' + _kuMoney(res.master_kas_setelah) + '.', 'success');
         if (nomEl) nomEl.value = '';
         if (ketEl) ketEl.value = '';
         toast('Transfer Kas Aset tercatat.', 'success');
         await loadKuFinance();
+        setTimeout(() => closeModalAsetTransfer(), 1000);
     } catch (err) {
-        _kuFb('kuAsetFeedback', err.message || 'Gagal transfer Kas Aset.', 'error');
+        _kuFb(fbId, err.message || 'Gagal transfer Kas Aset.', 'error');
     }
 }
 

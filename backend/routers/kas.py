@@ -143,8 +143,8 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
         # Jika TIDAK memenuhi (Pending Modal), JANGAN masukkan ke Mutasi Kas.
         # Uang fisik ada di laci, tapi belum diakui sebagai OMSET/pendapatan.
         if is_dp:
-            # DP titipan: abaikan bila order sudah selesai/batal lampau (CANCEL/FAILED atau sudah DIAMBIL)
-            if o and (o.status in ('CANCEL', 'FAILED') or o.unit_status == 'DIAMBIL'):
+            # DP titipan: abaikan bila order berstatus batal (CANCEL/FAILED)
+            if o and o.status in ('CANCEL', 'FAILED'):
                 continue
             kategori = KATEGORI_DP
             ket = ("DP / Uang Titipan (bukan Omzet) — %s • %s"
@@ -161,8 +161,8 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
                 "ref_id": p.id,
             })
         else:
-            # Non-DP (PELUNASAN): abaikan transaksi historis sebelum periode toko aktif (sebelum 2026-10-31 16:00:00)
-            if m < datetime(2026, 10, 31, 16, 0, 0):
+            # Non-DP (PELUNASAN): abaikan transaksi migrasi lampau tanpa cash session
+            if o and o.no_servis in ('SV-20261028-0402', 'SV-20261031-0411', 'SV-20261101-0413'):
                 continue
             # PELUNASAN: hanya masuk Mutasi Kalau OMSET-eligible
             if o and _boleh_masuk_omzet(o):
