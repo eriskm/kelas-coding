@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=47">
+    <link rel="stylesheet" href="/static/style.css?v=48">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1944,6 +1944,23 @@
                                 
                                 <!-- Visualisasi Alur Akumulasi Hutang Usaha (Model A) -->
                                 <div id="kuDebtAccumFlow" class="mt-2.5 hidden"></div>
+
+                                <!-- BUKU MUTASI / KARTU HUTANG BERJALAN PER ENTITAS (FORMAT EXCEL SPREADSHEET) -->
+                                <div class="mt-3.5 pt-3 border-t border-gray-200/60 dark:border-white/10" id="kuKartuHutangSection">
+                                    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
+                                        <div class="flex items-center gap-2">
+                                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs">
+                                                <i class="fa-solid fa-table-list"></i>
+                                            </span>
+                                            <div>
+                                                <h4 class="font-bold text-xs text-gray-800 dark:text-gray-100 m-0">Buku Mutasi Hutang Berjalan (Ledger Hutang per Entitas)</h4>
+                                                <p class="text-[11px] text-gray-500 dark:text-gray-400 m-0">Kartu mutasi hutang berjalan akumulatif per karyawan &amp; operasional (Format Spreadsheet Excel)</p>
+                                            </div>
+                                        </div>
+                                        <div class="flex items-center gap-1.5 flex-wrap" id="kuKartuHutangTabs"></div>
+                                    </div>
+                                    <div id="kuKartuHutangContent" class="space-y-4"></div>
+                                </div>
 
                                 <!-- Rincian Alokasi Beban (Collapsible Accordion) -->
                                 <div id="kuDebtBreakdownWrap" class="mt-3 rounded-lg border border-gray-200/60 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] overflow-hidden hidden">
@@ -3948,6 +3965,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=47"></script>
+<script src="/static/script.js?v=48"></script>
 </body>
 </html>

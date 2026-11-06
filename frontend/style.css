@@ -6737,3 +6737,55 @@ a:focus-visible,
     min-width: 155px;
     flex-shrink: 0;
 }
+
+
+/* =====================================================================
+   BUKU MUTASI / KARTU HUTANG BERJALAN (SPREADSHEET EXCEL STYLE)
+   ===================================================================== */
+.ku-excel-wrap {
+    border-radius: 8px;
+    overflow: hidden;
+}
+.ku-excel-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 11.5px;
+    background-color: var(--bg-surface);
+}
+.ku-excel-table th {
+    padding: 7px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    white-space: nowrap;
+}
+.ku-excel-table td {
+    padding: 6.5px 10px;
+    border: 1px solid #e2e8f0;
+    vertical-align: middle;
+}
+.dark .ku-excel-table td {
+    border-color: rgba(255, 255, 255, 0.08);
+}
+.ku-excel-table tbody tr:nth-child(even) {
+    background-color: rgba(0, 0, 0, 0.015);
+}
+.dark .ku-excel-table tbody tr:nth-child(even) {
+    background-color: rgba(255, 255, 255, 0.02);
+}
+.ku-excel-table tbody tr:hover {
+    background-color: rgba(59, 130, 246, 0.05);
+}
+.dark .ku-excel-table tbody tr:hover {
+    background-color: rgba(59, 130, 246, 0.1);
+}
+.ku-excel-bayar-red {
+    color: #dc2626 !important;
+    font-weight: 700;
+}
+.dark .ku-excel-bayar-red {
+    color: #f87171 !important;
+}

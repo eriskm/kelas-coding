@@ -424,3 +424,58 @@ def test_tidak_ada_entri_kas_aset_dari_pembayaran_beban():
         m.KasEntry.ref_type == "beban_periode").count()
     assert n_laci == 1, "harus ada satu pencatatan pembayaran Beban di Laci"
     s.close()
+
+
+def test_kartu_hutang_reconcile_per_entitas():
+    """Format buku mutasi kartu hutang berjalan Excel:
+    No | TGL | # Minus | # Bayar | Saldo
+    Setiap entitas memiliki saldo berjalan yang terakumulasi saat defisit dan berkurang saat dicicil.
+    """
+    import expense_debt as debt_mod
+    import models as m
+
+    s = _stok(0)
+    ctx = _skenario(s, ZERO)
+    _isi(s, ctx['pid'])
+    s.commit()
+    s.expire_all()
+
+    p = s.query(m.KasPeriod).get(ctx['pid'])
+    _input_hutang_admin(s, p)
+    s.commit()
+
+    kh = debt_mod.hitung_kartu_hutang(s)
+    assert 'entities' in kh
+    assert 'saldo_total' in kh
+    assert kh['saldo_total'] == float(KEKURANGAN)
+
+    tot_sum = sum(e['saldo'] for e in kh['entities'] if e['key'] != 'total')
+    assert round(tot_sum, 2) == round(kh['saldo_total'], 2), 'Total entitas harus sama persis dengan total toko'
+
+    # Simulasikan cicilan pelunasan dari Kas Aset sebesar 100.000
+    e_lunas = m.ExpenseDebtEntry(
+        tipe='LUNAS_KAS_ASET',
+        nominal=to_decimal(100000),
+        saldo_setelah=KEKURANGAN - to_decimal(100000),
+        periode='kas_period:' + str(ctx['pid']),
+        oleh='pytest'
+    )
+    s.add(e_lunas)
+    s.commit()
+
+    kh_after = debt_mod.hitung_kartu_hutang(s)
+    assert kh_after['saldo_total'] == float(KEKURANGAN - to_decimal(100000))
+    tot_sum_after = sum(e['saldo'] for e in kh_after['entities'] if e['key'] != 'total')
+    assert round(tot_sum_after, 2) == round(kh_after['saldo_total'], 2), 'Setelah cicilan saldo tetap seimbang'
+
+    # Verifikasi baris kartu mutasi
+    for ent in kh_after['entities']:
+        assert len(ent['rows']) >= 2, 'Harus ada baris hutang baru dan baris cicilan bayar'
+        r1 = ent['rows'][0]
+        assert r1['minus'] >= 0
+        assert r1['bayar'] == 0
+        r2 = ent['rows'][1]
+        assert r2['minus'] == 0
+        assert r2['bayar'] >= 0
+
+    s.close()

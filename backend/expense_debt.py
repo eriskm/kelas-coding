@@ -419,6 +419,179 @@ def hitung_breakdown_hutang(db: Session, kas_period_id: int = None, periode_key:
     }
 
 
+def hitung_kartu_hutang(db: Session) -> dict:
+    """Membangun Buku Pembantu / Kartu Hutang Berjalan per Entitas (Reza, Dana, Ops, Total).
+
+    Format kolom tabel:
+    No | TGL | Minus (Defisit Baru) | Bayar (Cicilan) | Saldo (Akumulasi Berjalan)
+    """
+    from models import ExpenseDebtPeriod, ExpenseDebtEntry, ExpensePeriod
+
+    periods = db.query(ExpenseDebtPeriod).order_by(ExpenseDebtPeriod.id.asc()).all()
+    entries = db.query(ExpenseDebtEntry).order_by(ExpenseDebtEntry.id.asc()).all()
+
+    # Temukan entitas karyawan dari ExpensePeriod (kategori Gaji)
+    gaji_rows = (db.query(ExpensePeriod)
+                 .filter(ExpensePeriod.kategori.ilike("%gaji%"))
+                 .order_by(ExpensePeriod.id.asc()).all())
+    emp_map = {}
+    for r in gaji_rows:
+        raw = r.nama_beban or ""
+        clean = raw.replace("Gaji:", "").strip()
+        if clean and clean not in emp_map:
+            c = "red" if "reza" in clean.lower() else ("amber" if "dana" in clean.lower() else "purple")
+            parts = clean.split()
+            short_name = parts[1].upper() if len(parts) > 1 and parts[0].lower() in ("muhammad", "ahmad") else parts[0].upper()
+            emp_map[clean] = {
+                "key": clean.lower().replace(" ", "_"),
+                "nama": clean,
+                "short_name": short_name,
+                "tipe": "GAJI",
+                "color": c,
+                "user_id": r.user_id,
+                "rows": [],
+                "saldo": ZERO
+            }
+
+    ops_entity = {
+        "key": "ops",
+        "nama": "Operasional Toko",
+        "short_name": "OPERASIONAL",
+        "tipe": "OPS",
+        "color": "blue",
+        "user_id": None,
+        "rows": [],
+        "saldo": ZERO
+    }
+
+    total_entity = {
+        "key": "total",
+        "nama": "Total Beban Hutang Toko",
+        "short_name": "TOTAL",
+        "tipe": "TOTAL",
+        "color": "slate",
+        "user_id": None,
+        "rows": [],
+        "saldo": ZERO
+    }
+
+    for e in entries:
+        tgl_str = e.created_at.strftime("%d/%m/%Y") if e.created_at else "-"
+        nom = to_decimal(e.nominal)
+
+        if e.tipe in ("HUTANG", "HUTANG_BARU", "HUTANG_MANUAL"):
+            p = None
+            if e.expense_debt_period_id:
+                p = db.query(ExpenseDebtPeriod).filter(ExpenseDebtPeriod.id == e.expense_debt_period_id).first()
+            if not p:
+                p = db.query(ExpenseDebtPeriod).filter(ExpenseDebtPeriod.periode == e.periode).first()
+
+            bd = hitung_breakdown_hutang(db, kas_period_id=(p.kas_period_id if p else None))
+            gaji_map = {g["nama"].replace("Gaji:", "").strip(): to_decimal(g["hutang"]) for g in bd.get("gaji_items", [])}
+            ops_h = to_decimal(bd.get("hutang_ops", ZERO))
+
+            tot_bd = sum(gaji_map.values()) + ops_h
+            if tot_bd > ZERO and tot_bd != nom:
+                ratio = nom / tot_bd
+                for k in gaji_map:
+                    gaji_map[k] = quantize(gaji_map[k] * ratio)
+                ops_h = quantize(nom - sum(gaji_map.values()))
+            elif tot_bd == ZERO:
+                ops_h = nom
+
+            for emp_name, emp_obj in emp_map.items():
+                h_emp = gaji_map.get(emp_name, ZERO)
+                emp_obj["saldo"] = quantize(emp_obj["saldo"] + h_emp)
+                emp_obj["rows"].append({
+                    "no": len(emp_obj["rows"]) + 1,
+                    "tgl": tgl_str,
+                    "periode": e.periode,
+                    "minus": float(h_emp),
+                    "bayar": float(ZERO),
+                    "saldo": float(emp_obj["saldo"])
+                })
+
+            ops_entity["saldo"] = quantize(ops_entity["saldo"] + ops_h)
+            ops_entity["rows"].append({
+                "no": len(ops_entity["rows"]) + 1,
+                "tgl": tgl_str,
+                "periode": e.periode,
+                "minus": float(ops_h),
+                "bayar": float(ZERO),
+                "saldo": float(ops_entity["saldo"])
+            })
+
+            total_entity["saldo"] = quantize(total_entity["saldo"] + nom)
+            total_entity["rows"].append({
+                "no": len(total_entity["rows"]) + 1,
+                "tgl": tgl_str,
+                "periode": e.periode,
+                "minus": float(nom),
+                "bayar": float(ZERO),
+                "saldo": float(total_entity["saldo"])
+            })
+
+        elif e.tipe == "LUNAS_KAS_ASET":
+            # Pelunasan Model A Waterfall: Gaji first, then Ops
+            tot_gaji_debt = sum(emp["saldo"] for emp in emp_map.values())
+            alok_gaji = min(nom, tot_gaji_debt)
+            sisa_ops = max(ZERO, nom - alok_gaji)
+
+            bayar_terdistribusi = ZERO
+            emp_items = list(emp_map.items())
+            for idx, (emp_name, emp_obj) in enumerate(emp_items):
+                bayar_emp = ZERO
+                if tot_gaji_debt > ZERO and alok_gaji > ZERO:
+                    if idx == len(emp_items) - 1:
+                        bayar_emp = max(ZERO, min(emp_obj["saldo"], alok_gaji - bayar_terdistribusi))
+                    else:
+                        porsi = emp_obj["saldo"] / tot_gaji_debt
+                        bayar_emp = min(emp_obj["saldo"], quantize(alok_gaji * porsi))
+                        bayar_terdistribusi += bayar_emp
+                emp_obj["saldo"] = quantize(max(ZERO, emp_obj["saldo"] - bayar_emp))
+                emp_obj["rows"].append({
+                    "no": len(emp_obj["rows"]) + 1,
+                    "tgl": tgl_str,
+                    "periode": e.periode,
+                    "minus": float(ZERO),
+                    "bayar": float(bayar_emp),
+                    "saldo": float(emp_obj["saldo"])
+                })
+
+            bayar_ops = min(ops_entity["saldo"], sisa_ops)
+            ops_entity["saldo"] = quantize(max(ZERO, ops_entity["saldo"] - bayar_ops))
+            ops_entity["rows"].append({
+                "no": len(ops_entity["rows"]) + 1,
+                "tgl": tgl_str,
+                "periode": e.periode,
+                "minus": float(ZERO),
+                "bayar": float(bayar_ops),
+                "saldo": float(ops_entity["saldo"])
+            })
+
+            tot_bayar = sum(to_decimal(emp_obj["rows"][-1]["bayar"]) for emp_obj in emp_map.values()) + bayar_ops
+            total_entity["saldo"] = quantize(max(ZERO, total_entity["saldo"] - tot_bayar))
+            total_entity["rows"].append({
+                "no": len(total_entity["rows"]) + 1,
+                "tgl": tgl_str,
+                "periode": e.periode,
+                "minus": float(ZERO),
+                "bayar": float(tot_bayar),
+                "saldo": float(total_entity["saldo"])
+            })
+
+    for emp in emp_map.values():
+        emp["saldo"] = float(emp["saldo"])
+    ops_entity["saldo"] = float(ops_entity["saldo"])
+    total_entity["saldo"] = float(total_entity["saldo"])
+
+    entities = list(emp_map.values()) + [ops_entity, total_entity]
+    return {
+        "entities": entities,
+        "saldo_total": float(total_entity["saldo"])
+    }
+
+
 def ringkasan(db: Session, kas_period_id: int = None) -> dict:
     """Status Hutang Beban (read-only) — termasuk carry-forward antar periode."""
     from models import ExpenseDebtEntry, ExpenseDebtPeriod
@@ -445,6 +618,7 @@ def ringkasan(db: Session, kas_period_id: int = None) -> dict:
                      "hutang_akhir": p.hutang_akhir, "created_at": p.created_at,
                      "oleh": p.oleh} for p in periods],
         "breakdown": hitung_breakdown_hutang(db, kas_period_id=target_period_id),
+        "kartu_hutang": hitung_kartu_hutang(db),
         "ledger": [{"id": e.id, "tipe": e.tipe, "nominal": e.nominal,
                     "saldo_setelah": e.saldo_setelah, "periode": e.periode,
                     "kas_entry_id": e.kas_entry_id, "created_at": e.created_at,

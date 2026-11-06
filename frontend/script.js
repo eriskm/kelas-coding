@@ -7300,6 +7300,9 @@ async function loadKuDebt() {
     renderKuDebtBreakdown(bd);
     renderKuDebtEntitas(bd, hutang);
 
+    // Render Buku Mutasi / Kartu Hutang Berjalan (Spreadsheet Excel Model)
+    renderKuKartuHutang(d && d.kartu_hutang);
+
     // Render Alur Akumulasi Hutang Usaha (Model A)
     const perList = (d && d.periode) || [];
     renderKuDebtAccumFlow(perList, bd ? bd.periode : null, hutang);
@@ -13525,6 +13528,178 @@ async function kuDebtChangePeriod(periodVal) {
     }
 }
 window.kuDebtChangePeriod = kuDebtChangePeriod;
+
+let _kuKartuHutangData = null;
+let _kuKartuHutangFilter = 'all';
+
+function renderKuKartuHutang(khData) {
+    _kuKartuHutangData = khData;
+    const tabs = document.getElementById('kuKartuHutangTabs');
+    const content = document.getElementById('kuKartuHutangContent');
+    if (!tabs || !content) return;
+
+    if (!khData || !khData.entities || khData.entities.length === 0) {
+        tabs.innerHTML = '';
+        content.innerHTML = '<div class="text-center text-xs text-gray-400 py-4">Belum ada data mutasi hutang beban.</div>';
+        return;
+    }
+
+    const filterOptions = [
+        { key: 'all', label: 'Semua (Berdampingan)', icon: 'fa-table-columns' },
+        ...khData.entities.map(e => ({
+            key: e.key,
+            label: e.short_name || e.nama,
+            icon: e.tipe === 'GAJI' ? 'fa-user' : (e.tipe === 'OPS' ? 'fa-store' : 'fa-calculator'),
+            saldo: e.saldo,
+            color: e.color
+        }))
+    ];
+
+    tabs.innerHTML = filterOptions.map(opt => {
+        const isActive = _kuKartuHutangFilter === opt.key;
+        const saldoBadge = opt.saldo !== undefined && opt.saldo > 0
+            ? `<span class="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'}">${kuRupiah(opt.saldo)}</span>`
+            : '';
+        const activeCls = isActive
+            ? 'bg-red-600 text-white border-red-600 shadow-xs'
+            : 'bg-white dark:bg-white/[0.03] text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/[0.06]';
+        return `<button type="button" onclick="kuKartuHutangSetFilter('${escapeHtml(opt.key)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${activeCls}">
+            <i class="fa-solid ${opt.icon} text-[10px]"></i>
+            <span>${escapeHtml(opt.label)}</span>
+            ${saldoBadge}
+        </button>`;
+    }).join('');
+
+    renderKuKartuHutangContent();
+}
+window.renderKuKartuHutang = renderKuKartuHutang;
+
+function kuKartuHutangSetFilter(filterKey) {
+    _kuKartuHutangFilter = filterKey;
+    renderKuKartuHutang(_kuKartuHutangData);
+}
+window.kuKartuHutangSetFilter = kuKartuHutangSetFilter;
+
+function renderKuKartuHutangContent() {
+    const content = document.getElementById('kuKartuHutangContent');
+    if (!content || !_kuKartuHutangData || !_kuKartuHutangData.entities) return;
+
+    const entities = _kuKartuHutangData.entities;
+    const isAll = _kuKartuHutangFilter === 'all';
+    const targetEntities = isAll ? entities : entities.filter(e => e.key === _kuKartuHutangFilter);
+
+    if (targetEntities.length === 0) {
+        content.innerHTML = '<div class="text-center text-xs text-gray-400 py-4">Data entitas tidak ditemukan.</div>';
+        return;
+    }
+
+    const containerCls = isAll
+        ? 'grid grid-cols-1 xl:grid-cols-2 gap-4'
+        : 'space-y-4';
+
+    const colorConfig = {
+        red: {
+            bgTab: 'bg-red-600',
+            bgTh: 'bg-red-600',
+            border: 'border-red-200 dark:border-red-900/40',
+            badge: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
+        },
+        amber: {
+            bgTab: 'bg-amber-500',
+            bgTh: 'bg-amber-500',
+            border: 'border-amber-200 dark:border-amber-900/40',
+            badge: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
+        },
+        blue: {
+            bgTab: 'bg-blue-600',
+            bgTh: 'bg-blue-600',
+            border: 'border-blue-200 dark:border-blue-900/40',
+            badge: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
+        },
+        slate: {
+            bgTab: 'bg-slate-800',
+            bgTh: 'bg-slate-800',
+            border: 'border-slate-200 dark:border-slate-700',
+            badge: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
+        }
+    };
+
+    content.className = containerCls;
+    content.innerHTML = targetEntities.map(ent => {
+        const cfg = colorConfig[ent.color] || colorConfig.slate;
+        const rows = ent.rows || [];
+        const hasRows = rows.length > 0;
+
+        const tableRowsHtml = hasRows ? rows.map(r => {
+            const isFirst = r.no === 1;
+            const tglCls = isFirst ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-700 dark:text-gray-300 font-medium';
+            const minusHtml = r.minus > 0
+                ? `<span class="font-semibold text-gray-900 dark:text-gray-100">${kuRupiah(r.minus)}</span>`
+                : `<span class="text-gray-400">-</span>`;
+            const bayarHtml = r.bayar > 0
+                ? `<span class="ku-excel-bayar-red font-bold">-${kuRupiah(r.bayar)}</span>`
+                : (r.minus > 0 ? `<span class="text-gray-400">0</span>` : `<span class="text-gray-400">-</span>`);
+            const saldoHtml = `<span class="font-bold text-gray-900 dark:text-gray-100">${kuRupiah(r.saldo)}</span>`;
+
+            return `<tr class="hover:bg-blue-50/20 dark:hover:bg-white/[0.02] transition-colors">
+                <td class="text-center font-bold text-gray-600 dark:text-gray-400 font-mono text-xs">${r.no}</td>
+                <td class="text-center ${tglCls} text-xs">${escapeHtml(r.tgl || '-')}</td>
+                <td class="numeric-r font-mono text-xs">${minusHtml}</td>
+                <td class="numeric-r font-mono text-xs">${bayarHtml}</td>
+                <td class="numeric-r font-mono text-xs">${saldoHtml}</td>
+            </tr>`;
+        }).join('') : `<tr><td colspan="5" class="text-center text-xs text-gray-400 py-4">Belum ada catatan mutasi.</td></tr>`;
+
+        const iconTab = ent.tipe === 'GAJI' ? 'fa-user' : (ent.tipe === 'OPS' ? 'fa-store' : 'fa-calculator');
+
+        return `
+        <div class="ku-excel-wrap border border-gray-200/80 dark:border-white/10 rounded-lg overflow-hidden bg-white dark:bg-white/[0.02] shadow-xs">
+            <!-- EXCEL TAB HEADER (MODEL USER SCREENSHOT) -->
+            <div class="px-2 pt-2 bg-gray-100/70 dark:bg-white/[0.03] border-b border-gray-200 dark:border-white/5 flex items-center justify-between">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.bgTab} text-white font-bold text-xs rounded-t-md shadow-xs">
+                    <i class="fa-solid ${iconTab} text-[10px]"></i>
+                    <span>${escapeHtml(ent.short_name || ent.nama)}</span>
+                    <i class="fa-solid fa-chevron-down text-[9px] opacity-75"></i>
+                </div>
+                <div class="flex items-center gap-2 pb-1.5">
+                    <span class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">${escapeHtml(ent.nama)}</span>
+                    <span class="text-[11px] font-bold px-2 py-0.5 rounded ${cfg.badge}">
+                        Saldo: ${kuRupiah(ent.saldo || 0)}
+                    </span>
+                </div>
+            </div>
+
+            <!-- EXCEL TABLE SPREADSHEET -->
+            <div class="overflow-x-auto ku-mutasi-scroll">
+                <table class="ku-excel-table w-full">
+                    <thead>
+                        <tr class="${cfg.bgTh} text-white">
+                            <th class="text-center" style="width: 44px;">No <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
+                            <th class="text-center" style="width: 95px;">TGL <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
+                            <th class="numeric-r"># Minus <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
+                            <th class="numeric-r"># Bayar <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
+                            <th class="numeric-r">Saldo <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${tableRowsHtml}
+                    </tbody>
+                    <tfoot>
+                        <tr class="bg-gray-50 dark:bg-white/[0.02] font-semibold text-xs border-t border-gray-200 dark:border-white/10">
+                            <td colspan="4" class="text-right text-gray-600 dark:text-gray-400 py-2">
+                                Sisa Hutang (${escapeHtml(ent.short_name || ent.nama)}):
+                            </td>
+                            <td class="numeric-r font-mono font-bold text-xs ${ent.saldo > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} py-2">
+                                ${kuRupiah(ent.saldo || 0)}
+                            </td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>`;
+    }).join('');
+}
+window.renderKuKartuHutangContent = renderKuKartuHutangContent;
 
 function renderKuDebtEntitas(bd, hutangTotal) {
     const grid = document.getElementById('kuDebtEntitasGrid');
