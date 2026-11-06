@@ -7179,16 +7179,46 @@ async function loadKuDebt() {
 
     // 1. Ringkasan 4 Kartu: Total Hutang, Hutang Gaji CTS, Hutang Operasional, Kas Aset
     if (sum) {
+        const terbawaNom = Number((d && d.terbawa) || 0);
         const cards = [
-            { label: 'Total Sisa Hutang', value: kuRupiah(hutang), icon: 'fa-file-circle-exclamation', cls: hutang > 0 ? 'sm-red' : 'sm-gray' },
-            { label: 'Tanggungan Gaji', value: kuRupiah(hutangGaji), icon: 'fa-users', cls: hutangGaji > 0 ? 'sm-amber' : 'sm-emerald' },
-            { label: 'Tanggungan Operasional', value: kuRupiah(hutangOps), icon: 'fa-shop', cls: hutangOps > 0 ? 'sm-red' : 'sm-emerald' },
-            { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: aset > 0 ? 'sm-blue' : 'sm-gray' },
+            {
+                label: 'Total Sisa Hutang',
+                value: kuRupiah(hutang),
+                icon: 'fa-file-circle-exclamation',
+                cls: hutang > 0 ? 'sm-red' : 'sm-gray',
+                sub: terbawaNom > 0
+                    ? `Termasuk bawaan lalu: ${kuRupiah(terbawaNom)}`
+                    : (hutang > 0 ? 'Akumulasi kewajiban aktif' : 'Bebas hutang usaha')
+            },
+            {
+                label: 'Tanggungan Gaji',
+                value: kuRupiah(hutangGaji),
+                icon: 'fa-users',
+                cls: hutangGaji > 0 ? 'sm-amber' : 'sm-emerald',
+                sub: 'Prioritas 1: Hak Gaji (CTS)'
+            },
+            {
+                label: 'Tanggungan Operasional',
+                value: kuRupiah(hutangOps),
+                icon: 'fa-shop',
+                cls: hutangOps > 0 ? 'sm-red' : 'sm-emerald',
+                sub: 'Prioritas 2: Operasional (CTO)'
+            },
+            {
+                label: 'Kas Aset Tersedia',
+                value: kuRupiah(aset),
+                icon: 'fa-vault',
+                cls: aset > 0 ? 'sm-blue' : 'sm-gray',
+                sub: 'Sumber Pelunasan Usaha'
+            },
         ];
         sum.innerHTML = cards.map(c => `
             <div class="sm-card ${c.cls}">
                 <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
-                <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+                <div class="sm-bot">
+                    <span class="sm-num ku-num">${c.value}</span>
+                    <div class="text-[10px] mt-0.5 font-medium opacity-80">${c.sub}</div>
+                </div>
             </div>`).join('');
     }
 
@@ -7259,10 +7289,13 @@ async function loadKuDebt() {
     renderKuDebtBreakdown(bd);
     renderKuDebtEntitas(bd, hutang);
 
+    // Render Alur Akumulasi Hutang Usaha (Model A)
+    const perList = (d && d.periode) || [];
+    renderKuDebtAccumFlow(perList, bd ? bd.periode : null, hutang);
+
     // Populate dropdown pilihan periode waterfall
     const periodSel = document.getElementById('kuDebtPeriodSelect');
     if (periodSel) {
-        const perList = (d && d.periode) || [];
         let opts = '';
         perList.forEach(p => {
             const label = (p.periode || '') + ' (Defisit ' + kuRupiah(p.hutang_baru || p.defisit || 0) + ')';
@@ -7282,25 +7315,35 @@ async function loadKuDebt() {
 
     // 4. Render Riwayat Periode Defisit (dengan baris yang bisa diklik)
     if (body) {
-        const per = (d && d.periode) || [];
-        body.innerHTML = per.length ? per.map(p => {
+        body.innerHTML = perList.length ? perList.map(p => {
             const isLunas = hutang <= 0;
             const badge = isLunas
                 ? `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 dark:text-emerald-400 dark:bg-emerald-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-check text-[10px]"></i> Lunas</span>`
-                : `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock text-[10px]"></i> Belum Lunas</span>`;
+                : `<span class="inline-flex items-center gap-1 text-[11px] font-semibold text-rose-700 bg-rose-50 dark:text-rose-400 dark:bg-rose-950/40 px-2 py-0.5 rounded-full"><i class="fa-solid fa-clock text-[10px]"></i> Tertunggak</span>`;
             const isSelected = bd && (bd.periode === p.periode || String(bd.kas_period_id) === String(p.periode).replace('kas_period:', ''));
+            const hAwal = Number(p.hutang_awal || 0);
+            const hBaru = Number(p.hutang_baru || 0);
+            const hAkhir = Number(p.hutang_akhir || (hAwal + hBaru));
+            const coverAset = Number(p.cover_kas_aset || 0);
+            const coverHint = coverAset > 0 ? `<div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Cover Aset: -${kuRupiah(coverAset)}</div>` : '';
             return `<tr class="cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${isSelected ? 'ku-period-active bg-blue-50/60 dark:bg-blue-950/30' : ''}" data-period="${escapeHtml(p.periode)}" onclick="kuDebtChangePeriod('${escapeHtml(p.periode)}')" title="Klik untuk menampilkan rincian beban periode ${escapeHtml(p.periode)}">
-                <td class="font-medium flex items-center gap-1.5">
-                    <i class="fa-solid fa-arrow-pointer text-blue-500 text-[10px]"></i>
-                    <span>${escapeHtml(p.periode || '-')}</span>
+                <td class="font-medium">
+                    <div class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-arrow-pointer text-blue-500 text-[10px]"></i>
+                        <span>${escapeHtml(p.periode || '-')}</span>
+                    </div>
                 </td>
-                <td class="numeric-r">${kuRupiah(p.defisit || 0)}</td>
-                <td class="numeric-r">${kuRupiah(p.cover_kas_aset || 0)}</td>
-                <td class="numeric-r font-semibold text-red-600 dark:text-red-400">${kuRupiah(p.hutang_baru || 0)}</td>
+                <td class="numeric-r">
+                    <div class="font-medium text-gray-700 dark:text-gray-300">${kuRupiah(p.defisit || 0)}</div>
+                    ${coverHint}
+                </td>
+                <td class="numeric-r text-gray-600 dark:text-gray-400 font-mono text-xs">${kuRupiah(hAwal)}</td>
+                <td class="numeric-r font-semibold text-red-600 dark:text-red-400 font-mono text-xs">+${kuRupiah(hBaru)}</td>
+                <td class="numeric-r font-bold text-red-700 dark:text-red-300 font-mono text-xs bg-red-50/30 dark:bg-red-950/20">=${kuRupiah(hAkhir)}</td>
                 <td class="text-center">${badge}</td>
             </tr>`;
         }).join('')
-        : `<tr><td colspan="5"><div class="text-center text-sm text-gray-400 py-6">Belum ada proses defisit Beban.</div></td></tr>`;
+        : `<tr><td colspan="6"><div class="text-center text-sm text-gray-400 py-6">Belum ada proses defisit Beban.</div></td></tr>`;
     }
     kuRenderHutangManual();
     applyRoleUI(document.body);
@@ -13206,11 +13249,75 @@ function renderAttendanceBeban() {
 function renderKuDebtBreakdown(bd) {
     const bdWrap = document.getElementById('kuDebtBreakdownWrap');
     const bdBody = document.getElementById('kuDebtBreakdownBody');
+    const wfCard = document.getElementById('kuDebtWaterfallCard');
     if (!bdWrap || !bdBody) return;
     const gajiList = (bd && bd.gaji_items) || [];
     const opsList = (bd && bd.ops_items) || [];
     if (gajiList.length || opsList.length) {
         bdWrap.classList.remove('hidden');
+
+        if (wfCard && bd) {
+            const lk = Number(bd.laba_kotor || 0);
+            const tGaji = Number(bd.total_gaji || 0);
+            const tOps = Number(bd.total_ops || 0);
+            const gCov = Number(bd.gaji_tercover || 0);
+            const oCov = Number(bd.ops_tercover || 0);
+            const hGaji = Number(bd.hutang_gaji || 0);
+            const hOps = Number(bd.hutang_ops || 0);
+
+            const pctGaji = tGaji > 0 ? Math.min(100, Math.round((gCov / tGaji) * 100)) : 100;
+            const pctOps = tOps > 0 ? Math.min(100, Math.round((oCov / tOps) * 100)) : 100;
+
+            wfCard.classList.remove('hidden');
+            wfCard.innerHTML = `
+                <div class="p-2.5 rounded-lg border border-blue-200/70 dark:border-blue-900/40 bg-blue-50/30 dark:bg-blue-950/20 text-xs">
+                    <div class="font-bold text-gray-800 dark:text-gray-200 flex items-center justify-between mb-2">
+                        <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-layer-group text-blue-600 dark:text-blue-400"></i>
+                            <span>Porsi Alokasi Beban (Model A Waterfall)</span>
+                        </span>
+                        <span class="font-mono text-[11px] text-gray-600 dark:text-gray-400">Laba Kotor: <b>${kuRupiah(lk)}</b></span>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <div class="p-2 rounded bg-white dark:bg-white/5 border border-amber-200 dark:border-amber-800/40">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-bold text-amber-800 dark:text-amber-300 flex items-center gap-1">
+                                    <span class="badge-role text-[9px] px-1 bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 rounded font-bold">1</span>
+                                    Hak Gaji Karyawan (CTS)
+                                </span>
+                                <span class="text-[10px] font-bold ${hGaji > 0 ? 'text-amber-600' : 'text-emerald-600'}">${pctGaji}% Tercover</span>
+                            </div>
+                            <div class="text-[11px] text-gray-600 dark:text-gray-300 flex justify-between">
+                                <span>Beban: ${kuRupiah(tGaji)}</span>
+                                <span>Terbayar: ${kuRupiah(gCov)}</span>
+                            </div>
+                            <div class="text-[11px] mt-1 pt-1 border-t border-gray-100 dark:border-white/5 flex justify-between font-semibold ${hGaji > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-600'}">
+                                <span>Sisa Hutang Gaji:</span>
+                                <span>${kuRupiah(hGaji)}</span>
+                            </div>
+                        </div>
+                        <div class="p-2 rounded bg-white dark:bg-white/5 border border-red-200 dark:border-red-800/40">
+                            <div class="flex items-center justify-between mb-1">
+                                <span class="text-[10px] font-bold text-red-800 dark:text-red-300 flex items-center gap-1">
+                                    <span class="badge-role text-[9px] px-1 bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300 rounded font-bold">2</span>
+                                    Beban Operasional (CTO)
+                                </span>
+                                <span class="text-[10px] font-bold ${hOps > 0 ? 'text-rose-600' : 'text-emerald-600'}">${pctOps}% Tercover</span>
+                            </div>
+                            <div class="text-[11px] text-gray-600 dark:text-gray-300 flex justify-between">
+                                <span>Beban: ${kuRupiah(tOps)}</span>
+                                <span>Terbayar: ${kuRupiah(oCov)}</span>
+                            </div>
+                            <div class="text-[11px] mt-1 pt-1 border-t border-gray-100 dark:border-white/5 flex justify-between font-semibold ${hOps > 0 ? 'text-rose-700 dark:text-rose-400' : 'text-emerald-600'}">
+                                <span>Sisa Hutang Operasional:</span>
+                                <span>${kuRupiah(hOps)}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
         let rowsHtml = '';
         gajiList.forEach(g => {
             const badge = g.status === 'LUNAS'
@@ -13243,9 +13350,85 @@ function renderKuDebtBreakdown(bd) {
         bdBody.innerHTML = rowsHtml;
     } else {
         bdWrap.classList.add('hidden');
+        if (wfCard) wfCard.classList.add('hidden');
     }
 }
 window.renderKuDebtBreakdown = renderKuDebtBreakdown;
+
+function renderKuDebtAccumFlow(perList, activePeriodKey, hutangTotal) {
+    const flowEl = document.getElementById('kuDebtAccumFlow');
+    if (!flowEl) return;
+    if ((!perList || !perList.length) && hutangTotal <= 0) {
+        flowEl.classList.add('hidden');
+        return;
+    }
+
+    let p = null;
+    if (activePeriodKey && activePeriodKey !== 'open') {
+        const cleanKey = String(activePeriodKey).replace('kas_period:', '').trim();
+        p = perList.find(x => x.periode === activePeriodKey || String(x.periode).replace('kas_period:', '').trim() === cleanKey);
+    }
+    if (!p && perList && perList.length) {
+        p = perList[0];
+    }
+
+    const hAwal = p ? Number(p.hutang_awal || 0) : 0;
+    const hBaru = p ? Number(p.hutang_baru || 0) : 0;
+    const hDefisit = p ? Number(p.defisit || 0) : 0;
+    const hCover = p ? Number(p.cover_kas_aset || 0) : 0;
+    const hAkhir = p ? Number(p.hutang_akhir || (hAwal + hBaru)) : hutangTotal;
+    const labelPer = p ? (p.periode || '-') : 'Berjalan';
+
+    flowEl.classList.remove('hidden');
+    flowEl.innerHTML = `
+        <div class="p-3 rounded-xl border border-red-200/80 dark:border-red-900/40 bg-gradient-to-r from-red-50/50 via-amber-50/30 to-red-50/50 dark:from-red-950/20 dark:via-amber-950/10 dark:to-red-950/20">
+            <div class="flex items-center justify-between mb-2.5 pb-2 border-b border-red-200/50 dark:border-red-900/30">
+                <span class="text-xs font-bold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                    <i class="fa-solid fa-calculator text-red-600"></i>
+                    <span>Alur Akumulasi Hutang Usaha (Model A - Waterfall Priority)</span>
+                </span>
+                <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950/60 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/50">
+                    Periode: ${escapeHtml(labelPer)}
+                </span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                <div class="p-2 rounded-lg bg-white/90 dark:bg-white/5 border border-gray-200/70 dark:border-white/10 shadow-xs flex flex-col justify-between">
+                    <div class="text-[10px] text-gray-500 dark:text-gray-400 font-medium">1. Hutang Lalu (Awal)</div>
+                    <div class="font-extrabold text-sm text-gray-800 dark:text-gray-100 mt-1 font-mono">${kuRupiah(hAwal)}</div>
+                    <div class="text-[9.5px] text-gray-400 mt-0.5">Bawaan periode lalu</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/90 dark:bg-white/5 border border-red-200/80 dark:border-red-900/40 shadow-xs flex flex-col justify-between">
+                    <div class="text-[10px] text-red-600 dark:text-red-400 font-semibold flex items-center justify-between">
+                        <span>2. (+) Hutang Baru</span>
+                        <span class="text-[9px] text-gray-400">Defisit</span>
+                    </div>
+                    <div class="font-extrabold text-sm text-red-600 dark:text-red-400 mt-1 font-mono">+${kuRupiah(hBaru)}</div>
+                    <div class="text-[9.5px] text-gray-400 mt-0.5">Defisit: ${kuRupiah(hDefisit)}</div>
+                </div>
+                <div class="p-2 rounded-lg bg-white/90 dark:bg-white/5 border border-emerald-200/80 dark:border-emerald-900/40 shadow-xs flex flex-col justify-between">
+                    <div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">3. (-) Lunas Kas Aset</div>
+                    <div class="font-extrabold text-sm text-emerald-600 dark:text-emerald-400 mt-1 font-mono">-${kuRupiah(hCover)}</div>
+                    <div class="text-[9.5px] text-gray-400 mt-0.5">Pelunasan saat tutup</div>
+                </div>
+                <div class="p-2 rounded-lg bg-red-50/80 dark:bg-red-950/40 border-2 border-red-300 dark:border-red-800 shadow-xs flex flex-col justify-between">
+                    <div class="text-[10px] text-red-800 dark:text-red-300 font-bold">4. (=) Total Akumulasi</div>
+                    <div class="font-black text-sm text-red-700 dark:text-red-400 mt-1 font-mono">=${kuRupiah(hAkhir)}</div>
+                    <div class="text-[9.5px] text-red-600 dark:text-red-400 font-medium mt-0.5">Kewajiban berjalan</div>
+                </div>
+            </div>
+            <div class="mt-2.5 pt-2 border-t border-red-200/40 dark:border-red-900/20 text-[11px] text-gray-600 dark:text-gray-300 flex items-center justify-between flex-wrap gap-1.5">
+                <span class="flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-info text-blue-500"></i>
+                    <span>Minus berurutan otomatis terakumulasi ke periode berikutnya (Carry Forward OD-LOCK-06).</span>
+                </span>
+                <span class="font-semibold text-gray-700 dark:text-gray-300">
+                    Model A: Laba kotor menutup gaji 100% lebih dulu sebelum operasional
+                </span>
+            </div>
+        </div>
+    `;
+}
+window.renderKuDebtAccumFlow = renderKuDebtAccumFlow;
 
 async function kuDebtChangePeriod(periodVal) {
     if (!periodVal) return;
@@ -13260,6 +13443,7 @@ async function kuDebtChangePeriod(periodVal) {
             renderKuDebtBreakdown(bd);
             const dCurrent = _kuDebtData || {};
             renderKuDebtEntitas(bd, Number(dCurrent.saldo_hutang) || 0);
+            renderKuDebtAccumFlow((dCurrent && dCurrent.periode) || [], periodVal, Number(dCurrent.saldo_hutang) || 0);
             const inputVal = document.getElementById('kuDebtNominalInput');
             if (inputVal && inputVal.value) kuDebtSimulasiCicil(inputVal.value);
             const periodSel = document.getElementById('kuDebtPeriodSelect');
@@ -13281,16 +13465,46 @@ async function kuDebtChangePeriod(periodVal) {
                 const hOps = Math.max(0, hutangTotal - hGaji);
                 const sum = document.getElementById('kuDebtSummary');
                 if (sum) {
+                    const terbawaNom = Number((d && d.terbawa) || 0);
                     const cards = [
-                        { label: 'Total Sisa Hutang', value: kuRupiah(hutangTotal), icon: 'fa-file-circle-exclamation', cls: hutangTotal > 0 ? 'sm-red' : 'sm-gray' },
-                        { label: 'Tanggungan Gaji', value: kuRupiah(hGaji), icon: 'fa-users', cls: hGaji > 0 ? 'sm-amber' : 'sm-emerald' },
-                        { label: 'Tanggungan Operasional', value: kuRupiah(hOps), icon: 'fa-shop', cls: hOps > 0 ? 'sm-red' : 'sm-emerald' },
-                        { label: 'Kas Aset Tersedia', value: kuRupiah(aset), icon: 'fa-vault', cls: aset > 0 ? 'sm-blue' : 'sm-gray' },
+                        {
+                            label: 'Total Sisa Hutang',
+                            value: kuRupiah(hutangTotal),
+                            icon: 'fa-file-circle-exclamation',
+                            cls: hutangTotal > 0 ? 'sm-red' : 'sm-gray',
+                            sub: terbawaNom > 0
+                                ? `Termasuk bawaan lalu: ${kuRupiah(terbawaNom)}`
+                                : (hutangTotal > 0 ? 'Akumulasi kewajiban aktif' : 'Bebas hutang usaha')
+                        },
+                        {
+                            label: 'Tanggungan Gaji',
+                            value: kuRupiah(hGaji),
+                            icon: 'fa-users',
+                            cls: hGaji > 0 ? 'sm-amber' : 'sm-emerald',
+                            sub: 'Prioritas 1: Hak Gaji (CTS)'
+                        },
+                        {
+                            label: 'Tanggungan Operasional',
+                            value: kuRupiah(hOps),
+                            icon: 'fa-shop',
+                            cls: hOps > 0 ? 'sm-red' : 'sm-emerald',
+                            sub: 'Prioritas 2: Operasional (CTO)'
+                        },
+                        {
+                            label: 'Kas Aset Tersedia',
+                            value: kuRupiah(aset),
+                            icon: 'fa-vault',
+                            cls: aset > 0 ? 'sm-blue' : 'sm-gray',
+                            sub: 'Sumber Pelunasan Usaha'
+                        },
                     ];
                     sum.innerHTML = cards.map(c => `
                         <div class="sm-card ${c.cls}">
                             <div class="sm-top"><i class="fa-solid ${c.icon}"></i>${c.label}</div>
-                            <div class="sm-bot"><span class="sm-num ku-num">${c.value}</span></div>
+                            <div class="sm-bot">
+                                <span class="sm-num ku-num">${c.value}</span>
+                                <div class="text-[10px] mt-0.5 font-medium opacity-80">${c.sub}</div>
+                            </div>
                         </div>`).join('');
                 }
             }

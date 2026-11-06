@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=45">
+    <link rel="stylesheet" href="/static/style.css?v=46">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1937,6 +1937,9 @@
                                 <!-- Ringkasan & Status Kecukupan Dana -->
                                 <div class="ku-summary mt-0" id="kuDebtSummary"></div>
                                 <div id="kuDebtStatusBanner" class="mt-2.5"></div>
+                                
+                                <!-- Visualisasi Alur Akumulasi Hutang Usaha (Model A) -->
+                                <div id="kuDebtAccumFlow" class="mt-2.5 hidden"></div>
 
                                 <!-- Rincian Alokasi Beban (Collapsible Accordion) -->
                                 <div id="kuDebtBreakdownWrap" class="mt-3 rounded-lg border border-gray-200/60 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] overflow-hidden hidden">
@@ -1959,6 +1962,7 @@
                                             </div>
                                             <span class="text-[11px] text-gray-400">Waterfall CTS: Gaji didahulukan 100% sebelum operasional</span>
                                         </div>
+                                        <div id="kuDebtWaterfallCard" class="hidden"></div>
                                         <div class="overflow-x-auto ku-mutasi-scroll">
                                             <table class="tx-table w-full text-xs">
                                                 <thead>
@@ -1981,11 +1985,12 @@
                                     <table class="tx-table w-full text-sm">
                                         <thead>
                                             <tr>
-                                                <th>Periode</th>
-                                                <th class="numeric-r">Defisit</th>
-                                                <th class="numeric-r">Cover Aset</th>
-                                                <th class="numeric-r">Hutang Baru</th>
-                                                <th class="text-center" style="width: 100px;">Status</th>
+                                                <th>Periode Kas</th>
+                                                <th class="numeric-r">Defisit Periode</th>
+                                                <th class="numeric-r">Hutang Lalu (Awal)</th>
+                                                <th class="numeric-r">Hutang Baru (+)</th>
+                                                <th class="numeric-r">Total Akumulasi (=)</th>
+                                                <th class="text-center" style="width: 105px;">Status</th>
                                             </tr>
                                         </thead>
                                         <tbody id="kuDebtBody"></tbody>
@@ -3945,6 +3950,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=45"></script>
+<script src="/static/script.js?v=46"></script>
 </body>
 </html>
