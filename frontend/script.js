@@ -6862,6 +6862,16 @@ function kuRupiah(v) {
     return new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(Number(v) || 0);
 }
 
+function formatPeriodDisplay(p) {
+    if (!p) return '-';
+    const s = String(p).trim();
+    const m = s.match(/^kas_period:(\d+)/i);
+    if (m) return '#' + m[1];
+    if (/^\d+$/.test(s)) return '#' + s;
+    return s;
+}
+window.formatPeriodDisplay = formatPeriodDisplay;
+
 let _kuActiveTab = 'operasional';
 
 function kuSwitchTab(tab) {
@@ -6953,7 +6963,7 @@ function renderKuKpi() {
 
     const badge = document.getElementById('kuPeriodBadge');
     if (badge && fin.periode) {
-        badge.innerHTML = `<i class="fa-solid fa-calendar-day"></i> Periode ${escapeHtml(String(fin.periode))}`;
+        badge.innerHTML = `<i class="fa-solid fa-calendar-day"></i> Periode ${escapeHtml(formatPeriodDisplay(fin.periode))}`;
     }
 }
 
@@ -7361,7 +7371,8 @@ async function loadKuDebt() {
     if (periodSel) {
         let opts = '';
         perList.forEach(p => {
-            const label = (p.periode || '') + ' (Defisit ' + kuRupiah(p.hutang_baru || p.defisit || 0) + ')';
+            const perLabel = 'Periode ' + formatPeriodDisplay(p.periode);
+            const label = perLabel + ' (Defisit ' + kuRupiah(p.hutang_baru || p.defisit || 0) + ')';
             opts += `<option value="${escapeHtml(p.periode)}">${escapeHtml(label)}</option>`;
         });
         opts += `<option value="open">Periode Aktif (Berjalan)</option>`;
@@ -7389,11 +7400,12 @@ async function loadKuDebt() {
             const hAkhir = Number(p.hutang_akhir || (hAwal + hBaru));
             const coverAset = Number(p.cover_kas_aset || 0);
             const coverHint = coverAset > 0 ? `<div class="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium">Cover Aset: -${kuRupiah(coverAset)}</div>` : '';
-            return `<tr class="cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${isSelected ? 'ku-period-active bg-blue-50/60 dark:bg-blue-950/30' : ''}" data-period="${escapeHtml(p.periode)}" onclick="kuDebtChangePeriod('${escapeHtml(p.periode)}')" title="Klik untuk menampilkan rincian beban periode ${escapeHtml(p.periode)}">
+            const perLabel = 'Periode ' + formatPeriodDisplay(p.periode);
+            return `<tr class="cursor-pointer hover:bg-blue-50/40 dark:hover:bg-blue-950/20 transition-colors ${isSelected ? 'ku-period-active bg-blue-50/60 dark:bg-blue-950/30' : ''}" data-period="${escapeHtml(p.periode)}" onclick="kuDebtChangePeriod('${escapeHtml(p.periode)}')" title="Klik untuk menampilkan rincian beban ${escapeHtml(perLabel)}">
                 <td class="font-medium">
                     <div class="flex items-center gap-1.5">
                         <i class="fa-solid fa-arrow-pointer text-blue-500 text-[10px]"></i>
-                        <span>${escapeHtml(p.periode || '-')}</span>
+                        <span>${escapeHtml(perLabel)}</span>
                     </div>
                 </td>
                 <td class="numeric-r">
@@ -7533,7 +7545,7 @@ async function kuHutangCatat() {
             _sisaHutangPendingPeriodId = null;
         }
         _kuFb('kuDebtFeedback', 'Hutang Beban ' + kuRupiah(res.hutang_baru)
-            + ' tercatat untuk ' + (res.periode || ('kas_period:' + pid))
+            + ' tercatat untuk Periode ' + formatPeriodDisplay(res.periode || pid)
             + '. Sisa hutang ' + kuRupiah(res.saldo_hutang) + '.', 'success');
         toast('Hutang Beban tercatat.', 'success');
         await loadKuDebt();
@@ -7642,7 +7654,7 @@ async function kuOpenModalCatatDefisit() {
 
         const totHutang = Number(bd.total_hutang || 0);
         if (nomTxt) nomTxt.textContent = kuRupiah(totHutang);
-        if (perTxt) perTxt.textContent = bd.periode || ('kas_period:' + (bd.kas_period_id || ''));
+        if (perTxt) perTxt.textContent = formatPeriodDisplay(bd.periode || bd.kas_period_id);
 
         const gajiItems = bd.gaji_items || [];
         const totOps = Number(bd.hutang_ops || 0);
@@ -13878,7 +13890,7 @@ function renderKuDebtAccumFlow(perList, activePeriodKey, hutangTotal) {
     const hDefisit = p ? Number(p.defisit || 0) : 0;
     const hCover = p ? Number(p.cover_kas_aset || 0) : 0;
     const hAkhir = p ? Number(p.hutang_akhir || (hAwal + hBaru)) : hutangTotal;
-    const labelPer = p ? (p.periode || '-') : 'Berjalan';
+    const labelPer = p ? formatPeriodDisplay(p.periode) : 'Berjalan';
 
     flowEl.classList.remove('hidden');
     flowEl.innerHTML = `
