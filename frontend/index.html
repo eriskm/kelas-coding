@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=46">
+    <link rel="stylesheet" href="/static/style.css?v=47">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1644,7 +1644,7 @@
                             </div>
                         </div>
 
-                        <!-- Segmented Navigation Bar: 4 Tabs -->
+                        <!-- Segmented Navigation Bar: 5 Tabs -->
                         <div class="ku-tabs-nav" role="tablist" aria-label="Navigasi Halaman Keuangan">
                             <button type="button" class="ku-tab-btn is-active" id="kuTabBtnOperasional" onclick="kuSwitchTab('operasional')" role="tab" aria-selected="true">
                                 <i class="fa-solid fa-cash-register"></i>
@@ -1656,7 +1656,12 @@
                             </button>
                             <button type="button" class="ku-tab-btn" id="kuTabBtnAset" onclick="kuSwitchTab('aset')" role="tab" aria-selected="false">
                                 <i class="fa-solid fa-vault"></i>
-                                <span>Kas Aset &amp; Hutang Beban</span>
+                                <span>Kas Aset Toko</span>
+                            </button>
+                            <button type="button" class="ku-tab-btn" id="kuTabBtnHutang" onclick="kuSwitchTab('hutang')" role="tab" aria-selected="false">
+                                <i class="fa-solid fa-file-circle-exclamation"></i>
+                                <span>Hutang Beban</span>
+                                <span id="kuTabHutangBadge" class="hidden ml-1 w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
                             </button>
                             <button type="button" class="ku-tab-btn" id="kuTabBtnRiwayat" onclick="kuSwitchTab('riwayat')" role="tab" aria-selected="false">
                                 <i class="fa-solid fa-clock-rotate-left"></i>
@@ -1829,12 +1834,8 @@
                             </div>
                         </div><!-- /#kuTabPaneTitipan -->
 
-                        <!-- TAB 3: BRANKAS & HUTANG (KAS ASET) -->
+                        <!-- TAB 3: KAS ASET TOKO (BRANKAS & MUTASI MODAL) -->
                         <div id="kuTabPaneAset" class="space-y-4 hidden">
-                        <!-- P2-15: Kas Aset - Distribusi - Hutang Beban - Notifikasi.
-                             Panel Distribusi Laba dihapus (duplikat Alokasi Profit),
-                             Notifikasi jadi icon lonceng di baris Riwayat Transaksi. -->
-                        <div class="grid grid-cols-1 lg:grid-cols-2 gap-2.5 sm:gap-3">
                             <div class="panel ku-kas-panel" id="kuMasterPanel">
                                 <div class="flex items-center gap-2 mb-2.5">
                                     <h3 class="panel-title m-0" id="kuMasterTitle"><i class="fa-solid fa-vault"></i> Kas Aset (Master Kas)</h3>
@@ -1924,7 +1925,10 @@
                                     <div id="kuAsetFeedback" class="hidden receive-feedback mt-2"></div>
                                 </form>
                             </div>
+                        </div><!-- /#kuTabPaneAset -->
 
+                        <!-- TAB 4: HUTANG BEBAN (MODEL A & WATERFALL CTS) -->
+                        <div id="kuTabPaneHutang" class="space-y-4 hidden">
                             <div class="panel ku-hutang-panel">
                                 <div class="flex items-center gap-2 mb-2.5">
                                     <h3 class="panel-title m-0"><i class="fa-solid fa-file-circle-exclamation"></i> Hutang Beban</h3>
@@ -2087,13 +2091,7 @@
                                     <div id="kuDebtFeedback" class="hidden receive-feedback mt-2"></div>
                                 </div>
                             </div>
-
-                            </div>
-
-                        <!-- PEMBUKA RIWAYAT: Rincian Arus Kas sengaja tidak lagi tampil
-                             di halaman utama. Buka lewat tombol paling bawah ini supaya
-                             Conditions Kas Operasional tetap jadi fokus. -->
-                        </div><!-- /#kuTabPaneAset -->
+                        </div><!-- /#kuTabPaneHutang -->
 
                         <!-- Backup wrapper pembuka riwayat untuk kompatibilitas -->
                         <div class="ku-riwayat-toggle-wrap hidden" id="kuRiwayatToggleWrap">
@@ -3950,6 +3948,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=46"></script>
+<script src="/static/script.js?v=47"></script>
 </body>
 </html>

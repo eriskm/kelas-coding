@@ -5271,6 +5271,11 @@ select.range-pill.range-select option { color: #0f172a; }
     display: grid; gap: 8px;
     grid-template-columns: repeat(2, 1fr);
 }
+@media (min-width: 768px) {
+    .ku-hutang-panel .ku-summary {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
 @media (max-width: 640px) {
     .ku-kas-panel .ku-summary { grid-template-columns: 1fr; }
     .ku-hutang-panel .ku-summary { grid-template-columns: 1fr; }
@@ -6282,8 +6287,9 @@ select.range-pill.range-select option { color: #0f172a; }
     transform: none !important;
 }
 
-/* ---------- Refinement Tab 3: Kas Aset & Hutang Beban ---------- */
-#kuTabPaneAset input.receive-input.pl-9 {
+/* ---------- Refinement Tab 3: Kas Aset & Tab 4: Hutang Beban ---------- */
+#kuTabPaneAset input.receive-input.pl-9,
+#kuTabPaneHutang input.receive-input.pl-9 {
     padding-left: 32px !important;
 }
 

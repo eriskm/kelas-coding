@@ -6869,22 +6869,26 @@ function kuSwitchTab(tab) {
     const btnOp = document.getElementById('kuTabBtnOperasional');
     const btnTp = document.getElementById('kuTabBtnTitipan');
     const btnAs = document.getElementById('kuTabBtnAset');
+    const btnHt = document.getElementById('kuTabBtnHutang');
     const btnRi = document.getElementById('kuTabBtnRiwayat');
 
     if (btnOp) { btnOp.classList.toggle('is-active', _kuActiveTab === 'operasional'); btnOp.setAttribute('aria-selected', _kuActiveTab === 'operasional' ? 'true' : 'false'); }
     if (btnTp) { btnTp.classList.toggle('is-active', _kuActiveTab === 'titipan'); btnTp.setAttribute('aria-selected', _kuActiveTab === 'titipan' ? 'true' : 'false'); }
     if (btnAs) { btnAs.classList.toggle('is-active', _kuActiveTab === 'aset'); btnAs.setAttribute('aria-selected', _kuActiveTab === 'aset' ? 'true' : 'false'); }
+    if (btnHt) { btnHt.classList.toggle('is-active', _kuActiveTab === 'hutang'); btnHt.setAttribute('aria-selected', _kuActiveTab === 'hutang' ? 'true' : 'false'); }
     if (btnRi) { btnRi.classList.toggle('is-active', _kuActiveTab === 'riwayat'); btnRi.setAttribute('aria-selected', _kuActiveTab === 'riwayat' ? 'true' : 'false'); }
 
     const paneOp = document.getElementById('kuTabPaneOperasional');
     const paneTp = document.getElementById('kuTabPaneTitipan');
     const paneAs = document.getElementById('kuTabPaneAset');
+    const paneHt = document.getElementById('kuTabPaneHutang');
     const paneRi = document.getElementById('kuRiwayatView');
     const tWrap = document.getElementById('kuRiwayatToggleWrap');
 
     if (paneOp) paneOp.classList.toggle('hidden', _kuActiveTab !== 'operasional');
     if (paneTp) paneTp.classList.toggle('hidden', _kuActiveTab !== 'titipan');
     if (paneAs) paneAs.classList.toggle('hidden', _kuActiveTab !== 'aset');
+    if (paneHt) paneHt.classList.toggle('hidden', _kuActiveTab !== 'hutang');
     if (paneRi) paneRi.classList.toggle('hidden', _kuActiveTab !== 'riwayat');
     if (tWrap) tWrap.classList.add('hidden');
 
@@ -6895,6 +6899,7 @@ function kuSwitchTab(tab) {
         renderKuTitipan();
     } else if (_kuActiveTab === 'aset') {
         loadKuAset().catch(() => {});
+    } else if (_kuActiveTab === 'hutang') {
         loadKuDebt().catch(() => {});
     } else if (_kuActiveTab === 'riwayat') {
         renderRiwayat();
@@ -6903,6 +6908,7 @@ function kuSwitchTab(tab) {
 
     const activeBtn = _kuActiveTab === 'titipan' ? btnTp :
         _kuActiveTab === 'aset' ? btnAs :
+        _kuActiveTab === 'hutang' ? btnHt :
         _kuActiveTab === 'riwayat' ? btnRi : btnOp;
     if (activeBtn && typeof activeBtn.scrollIntoView === 'function' && window.innerWidth < 640) {
         activeBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
@@ -7175,6 +7181,11 @@ async function loadKuDebt() {
         const rawGaji = Number(bd.hutang_gaji || 0);
         hutangGaji = Math.min(hutang, rawGaji);
         hutangOps = Math.max(0, hutang - hutangGaji);
+    }
+
+    const hutangBadge = document.getElementById('kuTabHutangBadge');
+    if (hutangBadge) {
+        hutangBadge.classList.toggle('hidden', hutang <= 0);
     }
 
     // 1. Ringkasan 4 Kartu: Total Hutang, Hutang Gaji CTS, Hutang Operasional, Kas Aset
@@ -7663,7 +7674,7 @@ function closeKuHutangSaranPopup() {
 function bukaPanelHutangBebanDariTutupKas() {
     closeKuHutangSaranPopup();
     if (typeof kuSwitchTab === 'function') {
-        kuSwitchTab('aset');
+        kuSwitchTab('hutang');
     }
     kuRenderHutangManual();
     const wrap = document.getElementById('kuHutangManualWrap');
