@@ -1,3 +1,4 @@
+let _kuSelectedPeriod = 'current';
 /* ============================================
    SUKABUMI FLASHER — Dashboard Logic (fetch dari FastAPI)
    ============================================ */
@@ -8207,6 +8208,7 @@ async function renderKuArsip() {
         const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
         const html = snaps.map(({ p, s }) => {
             const f = (s && s.finance) || {};
+            const rec = (s && s.rekonsiliasi) || {};
             const mulai = String(((s || {}).period || {}).start_at || '').slice(0, 16).replace('T', ' ');
             const selesai = String(((s || {}).period || {}).end_at || '').slice(0, 16).replace('T', ' ');
             const punyaSelisih = s.selisih !== null && s.selisih !== undefined;
@@ -8215,22 +8217,62 @@ async function renderKuArsip() {
                     ? '<span class="ku-arsip-chip is-ok">Rekonsiliasi pas</span>'
                     : '<span class="ku-arsip-chip is-warn">Selisih ' + r(s.selisih) + '</span>')
                 : '<span class="ku-arsip-chip">Tanpa Declare fisik</span>';
-            return `<div class="ku-arsip-row">
-                <div class="ku-arsip-main">
-                    <div class="ku-arsip-title">
-                        <span class="al-dot" style="background:#f59e0b"></span>
-                        Periode #${p.id}: ${escapeHtml(mulai)} &ndash; ${escapeHtml(selesai)}
-                        ${badge}
+            const detId = 'arsipDet_' + p.id;
+            return `<div class="rounded-xl border border-gray-200 dark:border-white/10 bg-slate-50/60 dark:bg-white/[0.02] overflow-hidden transition-all shadow-xs">
+                <!-- Baris Ringkas (Klik untuk Buka/Tutup Data Rinci) -->
+                <div class="p-3 cursor-pointer hover:bg-slate-100/80 dark:hover:bg-white/5 flex items-center justify-between gap-3 flex-wrap transition-colors select-none" onclick="toggleArsipDetail(${p.id})">
+                    <div class="min-w-0">
+                        <div class="flex items-center gap-2 flex-wrap text-xs font-bold text-gray-800 dark:text-gray-200">
+                            <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                            <span>Periode #${p.id}:</span>
+                            <span class="font-normal text-gray-600 dark:text-gray-400">${escapeHtml(mulai)} &ndash; ${escapeHtml(selesai)}</span>
+                            ${badge}
+                        </div>
+                        <div class="text-[11px] text-gray-400 dark:text-gray-500 mt-1">
+                            Ditutup: ${escapeHtml(String(p.closed_at || '').slice(0, 16).replace('T', ' '))} &bull; Oleh: <b>${escapeHtml(p.closed_by || '-')}</b>
+                        </div>
                     </div>
-                    <div class="ku-arsip-meta">
-                        Ditutup ${escapeHtml(String(p.closed_at || '').slice(0, 16).replace('T', ' '))}
-                        oleh <b>${escapeHtml(p.closed_by || '-')}</b>
+                    <div class="flex items-center gap-3 text-xs">
+                        <div class="text-right">
+                            <div class="text-[10px] text-gray-400">Omzet / Saldo Kas</div>
+                            <span class="font-bold text-emerald-600 dark:text-emerald-400">${r(f.omset || f.total_masuk)}</span>
+                            <span class="text-gray-400 mx-1">/</span>
+                            <span class="font-bold text-gray-700 dark:text-gray-300">${r(f.saldo_laci || f.saldo)}</span>
+                        </div>
+                        <i id="arsipIcon_${p.id}" class="fa-solid fa-chevron-down text-gray-400 text-xs transition-transform duration-200"></i>
                     </div>
                 </div>
-                <div class="ku-arsip-nums">
-                    <span>Omzet: <b>${r(f.omset || f.total_masuk)}</b></span>
-                    <span>Keluar: <b>${r(f.total_keluar)}</b></span>
-                    <span>Saldo Laci: <b>${r(f.saldo_laci || f.saldo)}</b></span>
+
+                <!-- Bagian Data Rinci (Bisa Dibuka / Expanded) -->
+                <div id="${detId}" class="hidden p-3.5 border-t border-gray-200/60 dark:border-white/10 bg-white dark:bg-slate-900/60 space-y-3 text-xs">
+                    <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                        <div class="p-2 rounded-lg bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/50 dark:border-emerald-800/40">
+                            <span class="text-[10px] text-emerald-700 dark:text-emerald-400 block font-semibold">Omzet Servis</span>
+                            <span class="text-xs font-bold text-emerald-800 dark:text-emerald-200">${r(f.omset || 0)}</span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-amber-50/60 dark:bg-amber-950/20 border border-amber-200/50 dark:border-amber-800/40">
+                            <span class="text-[10px] text-amber-700 dark:text-amber-400 block font-semibold">Total Modal</span>
+                            <span class="text-xs font-bold text-amber-800 dark:text-amber-200">${r(f.total_modal || 0)}</span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-red-50/60 dark:bg-red-950/20 border border-red-200/50 dark:border-red-800/40">
+                            <span class="text-[10px] text-red-700 dark:text-red-400 block font-semibold">Total Beban</span>
+                            <span class="text-xs font-bold text-red-800 dark:text-red-200">${r(f.total_beban || 0)}</span>
+                        </div>
+                        <div class="p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/20 border border-blue-200/50 dark:border-blue-800/40">
+                            <span class="text-[10px] text-blue-700 dark:text-blue-400 block font-semibold">Laba Bersih</span>
+                            <span class="text-xs font-bold text-blue-800 dark:text-blue-200">${r(f.laba_bersih || 0)}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 dark:border-white/5 flex-wrap">
+                        <div class="text-[11px] text-gray-500 dark:text-gray-400 flex items-center gap-3">
+                            <span>Kas Masuk: <b>${r(f.total_masuk)}</b></span>
+                            <span>Kas Keluar: <b>${r(f.total_keluar)}</b></span>
+                            <span>Saldo Fisik: <b>${s.cash_counted !== null && s.cash_counted !== undefined ? r(s.cash_counted) : '-'}</b></span>
+                        </div>
+                        <button type="button" onclick="muatMutasiPeriodeArsip(${p.id}, '${mulai} - ${selesai}')" class="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs flex items-center gap-1.5 shadow-xs transition-colors">
+                            <i class="fa-solid fa-table-list"></i> Buka Rincian Mutasi Kas di Tabel
+                        </button>
+                    </div>
                 </div>
             </div>`;
         }).join('');
@@ -8244,6 +8286,20 @@ async function renderKuArsip() {
     }
 }
 
+function toggleArsipDetail(periodId) {
+    const el = document.getElementById('arsipDet_' + periodId);
+    const icon = document.getElementById('arsipIcon_' + periodId);
+    if (!el) return;
+    const isHidden = el.classList.contains('hidden');
+    if (isHidden) {
+        el.classList.remove('hidden');
+        if (icon) icon.style.transform = 'rotate(180deg)';
+    } else {
+        el.classList.add('hidden');
+        if (icon) icon.style.transform = 'rotate(0deg)';
+    }
+}
+
 function openModalArsipTutupKas() {
     renderKuArsip();
     const m = document.getElementById('modalArsipTutupKas');
@@ -8254,6 +8310,35 @@ function closeModalArsipTutupKas() {
     const m = document.getElementById('modalArsipTutupKas');
     if (m) m.classList.add('hidden');
 }
+
+function muatMutasiPeriodeArsip(periodId, periodLabel) {
+    closeModalArsipTutupKas();
+    _kuSelectedPeriod = String(periodId);
+    _kuPage = 1;
+    const banner = document.getElementById('kuArsipPeriodeBanner');
+    const bId = document.getElementById('kuArsipBannerPeriodId');
+    const bDate = document.getElementById('kuArsipBannerDate');
+    if (banner) banner.classList.remove('hidden');
+    if (bId) bId.textContent = periodId;
+    if (bDate) bDate.textContent = periodLabel || '';
+    renderRiwayat();
+    const view = document.getElementById('kuRiwayatView');
+    if (view) view.scrollIntoView({ behavior: 'smooth' });
+}
+
+function kembaliKePeriodeBerjalan() {
+    _kuSelectedPeriod = 'current';
+    _kuPage = 1;
+    const banner = document.getElementById('kuArsipPeriodeBanner');
+    if (banner) banner.classList.add('hidden');
+    renderRiwayat();
+}
+
+window.openModalArsipTutupKas = openModalArsipTutupKas;
+window.closeModalArsipTutupKas = closeModalArsipTutupKas;
+window.toggleArsipDetail = toggleArsipDetail;
+window.muatMutasiPeriodeArsip = muatMutasiPeriodeArsip;
+window.kembaliKePeriodeBerjalan = kembaliKePeriodeBerjalan;
 
 // Panel TITIPAN DP PELANGGAN — terpisah dari Kondisi Kas / Arus Kas.
 // 4 ringkasan + daftar mutasi (Tanggal, No Servis, Pelanggan/Unit, Jenis,
@@ -8806,7 +8891,7 @@ async function renderRiwayat() {
         // tabelnya menarik SELURUH riwayat, padahal Conditions Kas di atasnya
         // hanya merepresentasikan periode berjalan — saldo barisnya jadi tidak
         // cocok. Periode lama sudah ditangani oleh Arsip Periode Tertutup.
-        const params = new URLSearchParams({ period: 'current', page: String(_kuPage), limit: String(KU_PER_PAGE) });
+        const params = new URLSearchParams({ period: (_kuSelectedPeriod || 'current'), page: String(_kuPage), limit: String(KU_PER_PAGE) });
         if (_kuQuery.trim()) params.set('q', _kuQuery.trim());
         if (_kuJenis) params.set('jenis', _kuJenis);
         if (_kuDate) params.set('date', _kuDate);

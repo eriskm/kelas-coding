@@ -463,6 +463,13 @@ def _riwayat(db, page, limit, q, jenis, date, period):
     if period == "current":
         p = get_active_period(db)
         rows, opening = period_rows(db, *batas_periode(p), with_opening=True)
+    elif period.isdigit() or (period.startswith("kas_period:") and period.split(":")[1].isdigit()):
+        pid = int(period if period.isdigit() else period.split(":")[1])
+        p = db.query(KasPeriod).filter(KasPeriod.id == pid).first()
+        if p is not None:
+            rows, opening = period_rows(db, *batas_periode(p), with_opening=True)
+        else:
+            rows, opening = period_rows(db, datetime.min, datetime.max, with_opening=True)
     else:
         rows, opening = period_rows(db, datetime.min, datetime.max, with_opening=True)
 

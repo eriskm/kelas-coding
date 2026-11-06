@@ -2002,6 +2002,22 @@
                                     </div>
                                 </div>
 
+                                <!-- BANNER ARSIP PERIODE TERTUTUP (Muncul jika user membuka arsip dari modal) -->
+                                <div id="kuArsipPeriodeBanner" class="hidden p-3 rounded-xl bg-amber-50/90 dark:bg-amber-950/40 border border-amber-300/80 dark:border-amber-700/60 flex items-center justify-between gap-3 flex-wrap text-xs text-amber-900 dark:text-amber-200 mb-2 shadow-xs">
+                                    <div class="flex items-center gap-2 min-w-0">
+                                        <span class="w-7 h-7 rounded-lg bg-amber-200/70 dark:bg-amber-900/60 text-amber-800 dark:text-amber-300 flex items-center justify-center shrink-0">
+                                            <i class="fa-solid fa-box-archive"></i>
+                                        </span>
+                                        <div class="min-w-0">
+                                            <span class="font-bold">Menampilkan Arsip Mutasi Kas: Periode #<span id="kuArsipBannerPeriodId"></span></span>
+                                            <span class="text-amber-700 dark:text-amber-400 block text-[11px]" id="kuArsipBannerDate"></span>
+                                        </div>
+                                    </div>
+                                    <button type="button" onclick="kembaliKePeriodeBerjalan()" class="px-3 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold flex items-center gap-1.5 shadow-xs transition-colors shrink-0">
+                                        <i class="fa-solid fa-arrow-rotate-left"></i> Kembali ke Periode Berjalan
+                                    </button>
+                                </div>
+
                                 <!-- (1) RINGKASAN KAS LACI -->
                                 <section class="ku-block">
                                     <header class="ku-block-head">
@@ -3986,6 +4002,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=50"></script>
+<script src="/static/script.js?v=52"></script>
 </body>
 </html>
