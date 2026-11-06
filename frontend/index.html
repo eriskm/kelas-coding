@@ -10,7 +10,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css?v=48">
+    <link rel="stylesheet" href="/static/style.css?v=49">
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -1927,185 +1927,30 @@
                             </div>
                         </div><!-- /#kuTabPaneAset -->
 
-                        <!-- TAB 4: HUTANG BEBAN (MODEL A & WATERFALL CTS) -->
+                        <!-- TAB 4: HUTANG BEBAN (CANVAS BERSIH SIAP DIROMBAK) -->
                         <div id="kuTabPaneHutang" class="space-y-4 hidden">
-                            <div class="panel ku-hutang-panel">
-                                <div class="flex items-center gap-2 mb-2.5">
-                                    <h3 class="panel-title m-0"><i class="fa-solid fa-file-circle-exclamation"></i> Hutang Beban</h3>
-                                    <span class="ku-info-tip" tabindex="0" role="button" aria-label="Informasi Hutang Beban">
-                                        <i class="fa-solid fa-circle-question"></i>
-                                        <span class="ku-info-bubble">Terpisah dari Buku Kas &mdash; defisit beban yang tidak tertutup kas toko dicatat sebagai hutang (carry forward) dan dapat dilunasi dari Kas Aset.</span>
-                                    </span>
+                            <div class="panel ku-hutang-panel" id="kuHutangPanel">
+                                <div class="flex items-center justify-between mb-4 flex-wrap gap-2">
+                                    <div class="flex items-center gap-2">
+                                        <h3 class="panel-title m-0"><i class="fa-solid fa-file-circle-exclamation text-red-600"></i> Hutang Beban</h3>
+                                        <span class="ku-info-tip" tabindex="0" role="button" aria-label="Informasi Hutang Beban">
+                                            <i class="fa-solid fa-circle-question"></i>
+                                            <span class="ku-info-bubble">Terpisah dari Buku Kas &mdash; defisit beban yang tidak tertutup kas toko dicatat sebagai hutang (carry forward) dan dapat dilunasi dari Kas Aset.</span>
+                                        </span>
+                                    </div>
+                                    <div class="text-xs font-semibold text-gray-500 dark:text-gray-400 bg-gray-100 dark:bg-white/[0.04] px-2.5 py-1 rounded-md">
+                                        Canvas Bersih
+                                    </div>
                                 </div>
                                 
-                                <!-- Ringkasan & Status Kecukupan Dana -->
-                                <div class="ku-summary mt-0" id="kuDebtSummary"></div>
-                                <div id="kuDebtStatusBanner" class="mt-2.5"></div>
-                                
-                                <!-- Visualisasi Alur Akumulasi Hutang Usaha (Model A) -->
-                                <div id="kuDebtAccumFlow" class="mt-2.5 hidden"></div>
-
-                                <!-- BUKU MUTASI / KARTU HUTANG BERJALAN PER ENTITAS (FORMAT EXCEL SPREADSHEET) -->
-                                <div class="mt-3.5 pt-3 border-t border-gray-200/60 dark:border-white/10" id="kuKartuHutangSection">
-                                    <div class="flex items-center justify-between flex-wrap gap-2 mb-3">
-                                        <div class="flex items-center gap-2">
-                                            <span class="inline-flex items-center justify-center w-7 h-7 rounded-md bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 text-xs">
-                                                <i class="fa-solid fa-table-list"></i>
-                                            </span>
-                                            <div>
-                                                <h4 class="font-bold text-xs text-gray-800 dark:text-gray-100 m-0">Buku Mutasi Hutang Berjalan (Ledger Hutang per Entitas)</h4>
-                                                <p class="text-[11px] text-gray-500 dark:text-gray-400 m-0">Kartu mutasi hutang berjalan akumulatif per karyawan &amp; operasional (Format Spreadsheet Excel)</p>
-                                            </div>
-                                        </div>
-                                        <div class="flex items-center gap-1.5 flex-wrap" id="kuKartuHutangTabs"></div>
+                                <div id="kuHutangCleanCanvas" class="p-8 text-center border-2 border-dashed border-gray-200 dark:border-white/10 rounded-xl my-2">
+                                    <div class="inline-flex items-center justify-center w-12 h-12 rounded-full bg-red-50 dark:bg-red-950/40 text-red-600 dark:text-red-400 text-xl mb-3">
+                                        <i class="fa-solid fa-layer-group"></i>
                                     </div>
-                                    <div id="kuKartuHutangContent" class="space-y-4"></div>
-                                </div>
-
-                                <!-- Rincian Alokasi Beban (Collapsible Accordion) -->
-                                <div id="kuDebtBreakdownWrap" class="mt-3 rounded-lg border border-gray-200/60 dark:border-white/10 bg-gray-50/50 dark:bg-white/[0.01] overflow-hidden hidden">
-                                    <button type="button" onclick="kuDebtToggleBreakdown()" class="w-full flex items-center justify-between p-2.5 sm:px-3 text-left hover:bg-gray-100/50 dark:hover:bg-white/[0.03] transition-colors" aria-expanded="false" aria-controls="kuDebtBreakdownContent">
-                                        <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
-                                            <i class="fa-solid fa-layer-group text-blue-500"></i>
-                                            <span>Rincian Pos Komponen Beban (Audit Detail)</span>
-                                        </span>
-                                        <span class="text-[11px] text-blue-600 dark:text-blue-400 font-medium flex items-center gap-1.5">
-                                            <span id="kuDebtBreakdownToggleLabel">Lihat Detail Pos</span>
-                                            <i id="kuDebtBreakdownChevron" class="fa-solid fa-chevron-down text-[10px] transition-transform duration-200"></i>
-                                        </span>
-                                    </button>
-                                    <div id="kuDebtBreakdownContent" class="hidden p-2.5 sm:p-3 border-t border-gray-200/50 dark:border-white/5 space-y-2.5">
-                                        <div class="flex items-center justify-between flex-wrap gap-2">
-                                            <div class="flex items-center gap-2">
-                                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400">Pilih Periode:</span>
-                                                <select id="kuDebtPeriodSelect" onchange="kuDebtChangePeriod(this.value)" class="receive-input text-xs py-1 px-2 border rounded-md" aria-label="Pilih Periode Waterfall">
-                                                </select>
-                                            </div>
-                                            <span class="text-[11px] text-gray-400">Waterfall CTS: Gaji didahulukan 100% sebelum operasional</span>
-                                        </div>
-                                        <div id="kuDebtWaterfallCard" class="hidden"></div>
-                                        <div class="overflow-x-auto ku-mutasi-scroll">
-                                            <table class="tx-table w-full text-xs">
-                                                <thead>
-                                                    <tr>
-                                                        <th>Nama / Komponen Beban</th>
-                                                        <th class="numeric-r">Beban</th>
-                                                        <th class="numeric-r">Terbayar</th>
-                                                        <th class="numeric-r">Sisa Hutang</th>
-                                                        <th class="text-center" style="width: 90px;">Status</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody id="kuDebtBreakdownBody"></tbody>
-                                            </table>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <!-- Tabel Riwayat Periode Hutang -->
-                                <div class="overflow-x-auto mt-3 ku-mutasi-scroll">
-                                    <table class="tx-table w-full text-sm">
-                                        <thead>
-                                            <tr>
-                                                <th>Periode Kas</th>
-                                                <th class="numeric-r">Defisit Periode</th>
-                                                <th class="numeric-r">Hutang Lalu (Awal)</th>
-                                                <th class="numeric-r">Hutang Baru (+)</th>
-                                                <th class="numeric-r">Total Akumulasi (=)</th>
-                                                <th class="text-center" style="width: 105px;">Status</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody id="kuDebtBody"></tbody>
-                                    </table>
-                                </div>
-
-                                <!-- Area Tindakan (Admin / EXPENSE_DEBT_WRITE) -->
-                                <div class="mt-3 pt-3 border-t border-gray-100 dark:border-white/5 space-y-3" data-cap="EXPENSE_DEBT_WRITE">
-                                    
-                                    <!-- SUB-BLOK 1: PELUNASAN DARI KAS ASET (NOMINAL FLEKSIBEL) -->
-                                    <div class="bg-gray-50/70 dark:bg-white/[0.02] p-3 sm:p-4 rounded-lg border border-gray-200/60 dark:border-white/10" id="kuDebtLunasCard">
-                                        <div class="flex items-center justify-between mb-2.5">
-                                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                                                <i class="fa-solid fa-hand-holding-dollar text-emerald-500"></i> Pelunasan / Cicil Hutang dari Kas Aset
-                                            </span>
-                                            <span class="text-[11px] text-gray-400">Khusus Owner &amp; Developer</span>
-                                        </div>
-
-                                        <!-- RINCIAN POSISI HUTANG PER ENTITAS (Karyawan A, Karyawan B, Operasional) -->
-                                        <div class="mb-3" id="kuDebtEntitasWrap">
-                                            <div class="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5 font-medium flex items-center justify-between">
-                                                <span>Rincian Sisa Tanggungan per Entitas:</span>
-                                                <span class="text-[10px] text-gray-400">Klik kartu untuk isi nominal otomatis</span>
-                                            </div>
-                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2" id="kuDebtEntitasGrid"></div>
-                                        </div>
-
-                                        <!-- QUICK-FILL CHIPS + NOMINAL INPUT & SUBMIT ACTION -->
-                                        <div class="pt-2.5 border-t border-gray-100 dark:border-white/5 space-y-2">
-                                            <div class="flex items-center justify-between flex-wrap gap-1.5">
-                                                <span class="text-[11px] font-medium text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                                                    <i class="fa-solid fa-wand-magic-sparkles text-blue-500 text-[10px]"></i> Pilihan Nominal Cepat:
-                                                </span>
-                                                <div class="flex items-center gap-1.5 flex-wrap">
-                                                    <button type="button" onclick="kuDebtSetNominal('gaji')" id="kuDebtBtnGaji" class="ku-chip-btn ku-chip-amber" title="Isi nominal sebesar seluruh hak gaji yang tertunggak">
-                                                        <i class="fa-solid fa-users text-[10px]"></i> Seluruh Gaji
-                                                    </button>
-                                                    <button type="button" onclick="kuDebtSetNominal('aset')" id="kuDebtBtnAset" class="ku-chip-btn ku-chip-blue" title="Isi nominal sebesar saldo Kas Aset yang tersedia">
-                                                        <i class="fa-solid fa-vault text-[10px]"></i> Sesuai Kas Aset
-                                                    </button>
-                                                    <button type="button" onclick="kuDebtSetNominal('semua')" id="kuDebtBtnSemua" class="ku-chip-btn ku-chip-gray" title="Isi nominal sebesar total sisa hutang toko">
-                                                        <i class="fa-solid fa-check-double text-[10px]"></i> Total Hutang
-                                                    </button>
-                                                </div>
-                                            </div>
-
-                                            <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                                                <div class="sm:col-span-7 relative">
-                                                    <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                    <input id="kuDebtNominalInput" type="number" min="0" step="1" oninput="kuDebtSimulasiCicil(this.value)" class="receive-input pl-9 w-full text-xs font-semibold" placeholder="Nominal bayar / cicil">
-                                                </div>
-                                                <div class="sm:col-span-5">
-                                                    <button type="button" onclick="kuDebtLunas()" id="kuDebtLunasBtn" class="receive-submit-btn w-full text-xs py-2 px-3 justify-center shadow-xs whitespace-nowrap">
-                                                        <i class="fa-solid fa-hand-holding-dollar"></i> Bayar dari Kas Aset
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <!-- PREVIEW SIMULASI ALOKASI CICILAN REAL-TIME -->
-                                        <div id="kuDebtSimulasiWrap" class="hidden mt-2.5 p-2.5 rounded-lg bg-blue-50/70 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 text-xs">
-                                            <div class="font-semibold text-blue-800 dark:text-blue-300 flex items-center justify-between mb-1.5">
-                                                <span class="flex items-center gap-1.5"><i class="fa-solid fa-calculator text-blue-500"></i> Simulasi Alokasi Pembayaran Cicilan:</span>
-                                                <span id="kuDebtSimulasiTotal" class="font-bold"></span>
-                                            </div>
-                                            <div id="kuDebtSimulasiList" class="space-y-1 text-gray-700 dark:text-gray-300"></div>
-                                        </div>
-
-                                        <p class="ku-sub mt-2 text-xs" id="kuDebtLunasHint"></p>
-                                    </div>
-
-                                    <!-- SUB-BLOK 2: PENCATATAN DEFISIT PERIODE INI (OD-LOCK-12) -->
-                                    <div id="kuHutangManualWrap" class="bg-gray-50/70 dark:bg-white/[0.02] p-3 rounded-lg border border-gray-200/60 dark:border-white/10 space-y-2">
-                                        <div class="flex items-center justify-between">
-                                            <span class="text-xs font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-1.5">
-                                                <i class="fa-solid fa-pen-to-square text-amber-500"></i> Pembukuan Sisa Beban Periode
-                                            </span>
-                                            <span class="text-[11px] text-gray-400">Catat minus operasional ke Hutang Beban</span>
-                                        </div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-12 gap-2 items-center">
-                                            <div class="sm:col-span-7 relative">
-                                                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
-                                                <input id="kuHutangInput" type="number" min="0" step="1" class="receive-input pl-9 w-full text-xs font-semibold" placeholder="Nominal Sisa Beban (Rp)">
-                                            </div>
-                                            <div class="sm:col-span-5">
-                                                <button type="button" onclick="kuHutangCatat()" id="kuHutangBtn" class="receive-submit-btn w-full text-xs py-2 px-3 justify-center whitespace-nowrap">
-                                                    <i class="fa-solid fa-file-circle-plus"></i> Catat Hutang Beban
-                                                </button>
-                                            </div>
-                                        </div>
-                                        <p class="ku-sub mt-1 text-xs" id="kuHutangHint"></p>
-                                    </div>
-
-                                    <div id="kuDebtFeedback" class="hidden receive-feedback mt-2"></div>
+                                    <h4 class="text-sm font-bold text-gray-800 dark:text-gray-100 mb-1">Halaman Hutang Beban Telah Dikosongkan</h4>
+                                    <p class="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto">
+                                        Tampilan frontend lama telah dihapus sesuai instruksi. Siap dirombak total dari awal agar mudah dibaca dan dipahami.
+                                    </p>
                                 </div>
                             </div>
                         </div><!-- /#kuTabPaneHutang -->
@@ -3965,6 +3810,6 @@
         </div>
     </div>
 
-<script src="/static/script.js?v=48"></script>
+<script src="/static/script.js?v=49"></script>
 </body>
 </html>

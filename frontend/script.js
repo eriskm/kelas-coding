@@ -7159,6 +7159,18 @@ async function kuAsetTransfer() {
 let _kuDebtData = null;
 
 async function loadKuDebt() {
+    let d = null;
+    try { d = await apiGet('/beban-hutang'); } catch (_) {}
+    _kuDebtData = d;
+    const hutang = (d && Number(d.saldo_hutang)) || 0;
+    const aset = (d && Number(d.saldo_kas_aset)) || 0;
+    const bd = (d && d.breakdown) || {};
+
+    const hutangBadge = document.getElementById('kuTabHutangBadge');
+    if (hutangBadge) {
+        hutangBadge.classList.toggle('hidden', hutang <= 0);
+    }
+
     const sum = document.getElementById('kuDebtSummary');
     const banner = document.getElementById('kuDebtStatusBanner');
     const body = document.getElementById('kuDebtBody');
@@ -7169,23 +7181,12 @@ async function loadKuDebt() {
     const bdBody = document.getElementById('kuDebtBreakdownBody');
 
     if (!sum && !body) return;
-    let d = null;
-    try { d = await apiGet('/beban-hutang'); } catch (_) {}
-    _kuDebtData = d;
-    const hutang = (d && Number(d.saldo_hutang)) || 0;
-    const aset = (d && Number(d.saldo_kas_aset)) || 0;
-    const bd = (d && d.breakdown) || {};
     let hutangGaji = 0;
     let hutangOps = 0;
     if (hutang > 0) {
         const rawGaji = Number(bd.hutang_gaji || 0);
         hutangGaji = Math.min(hutang, rawGaji);
         hutangOps = Math.max(0, hutang - hutangGaji);
-    }
-
-    const hutangBadge = document.getElementById('kuTabHutangBadge');
-    if (hutangBadge) {
-        hutangBadge.classList.toggle('hidden', hutang <= 0);
     }
 
     // 1. Ringkasan 4 Kartu: Total Hutang, Hutang Gaji CTS, Hutang Operasional, Kas Aset
