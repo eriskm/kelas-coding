@@ -1053,6 +1053,24 @@ Owner: *"ketika Buka Kas Beban tetap Hadir, jika tdk ada yg hadir tinggal di uba
 - `tests/test_beban_opsi_b.py::test_buka_kas_auto_inits_attendance_and_beban`
 - `tests/test_beban_opsi_b.py::test_ubah_manual_absensi_mengubah_beban_secara_otomatis`
 
+## OD-LOCK-17 — Isolasi Mutasi Kas dari Data Garansi Historis & Transaksi Lampau
+
+> **Status: TERKUNCI (Owner, 2026-11-06).**
+
+### 17.1 Pemisahan Domain Data Garansi vs Arus Kas
+- Seluruh data transaksi garansi historis (`GR-*` / `SF_WEB`) adalah data arsip untuk keperluan klaim purna jual pelanggan dan **TIDAK BOLEH mengotori buku Mutasi Kas**, saldo awal (*opening*), maupun saldo berjalan kas toko aktif.
+- Transaksi pelunasan lampau sebelum live sistem aktif (sebelum `2026-10-31 16:00:00` / `KasPeriod #0`) diabaikan dari buku kas berjalan.
+
+### 17.2 Hak Titipan DP Menyeberang
+- Uang DP titipan pada mutasi kas hanya mengakomodasi order antrean bengkel yang masih aktif di toko (`unit_status == 'DI TOKO'`).
+- DP dari unit yang statusnya sudah selesai atau batal lampau (`CANCEL`, `FAILED`, atau unit status `DIAMBIL`) tidak boleh dihitung ke saldo kas aktif.
+- Saldo Awal Mutasi Kas periode aktif murni mencerminkan rupiah fisik riil toko:
+  $$\text{Saldo Kas Laci Milik Toko} + \text{Saldo Titipan DP Aktif}$$
+
+### Pengujian (Wajib Jadi Test)
+- `tests/test_isolasi_garansi_kas.py::test_transaksi_garansi_historis_tidak_mengotori_mutasi_kas`
+- `tests/test_isolasi_garansi_kas.py::test_dp_order_selesai_atau_cancel_tidak_mengotori_mutasi_kas`
+
 ---
 
 # Ketidaksesuaian Implementasi
@@ -1122,6 +1140,7 @@ Seluruh keputusan Owner sudah sejalan dengan kode.
 | OD-LOCK-14 | `backend/expense_debt.py` (`hitung_breakdown_hutang`, `pelunasan_kas_aset_fleksibel`) — prioritas waterfall CTS gaji 100% sebelum CTO operasional, pelunasan fleksibel dari kas aset |
 | OD-LOCK-15 | `backend/routers/orders.py` (`_bayar_beban_periode_di_cash`) & `backend/beban_bayar.py` — cicil beban per transaksi dari laba unit, Tutup Kas menyerap sisa laba kotor |
 | OD-LOCK-16 | `backend/routers/attendance.py` (`init_period_attendance`, `toggle_attendance`) & `backend/closing.py` — inisialisasi default Hadir saat Buka Kas dan sinkronisasi real-time |
+| OD-LOCK-17 | `backend/routers/kas.py` (`period_rows`) — isolasi total data garansi `GR-*`, nota lampau, dan DP cancel dari mutasi kas & opening saldo |
 ---
 
 # Aturan Penggunaan Dokumen Ini

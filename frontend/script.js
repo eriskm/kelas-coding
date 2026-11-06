@@ -7080,7 +7080,7 @@ async function kuAsetMasuk() {
     if (!can('KAS_ASET_INJEKSI')) { toast('Aksi ditolak: hanya Admin.'); return; }
     const nominal = Number(document.getElementById('kuAsetNominal').value || 0);
     const keterangan = (document.getElementById('kuAsetKeterangan').value || '').trim();
-    const posisi = (document.getElementById('kuAsetPosisi') || {}).value || 'LACI';
+    const posisi = (document.getElementById('kuAsetPosisi') || {}).value || 'KAS_ASET';
     if (!nominal || !keterangan) { _kuFb('kuAsetFeedback', 'Nominal dan keterangan wajib diisi.', 'error'); return; }
     const btnKey = newIdemKey();
     try {
@@ -7558,6 +7558,330 @@ async function kuDebtLunas() {
         _kuFb('kuDebtFeedback', err.message || 'Gagal melunasi Hutang Beban.', 'error');
     }
 }
+
+// =====================================================================
+// MODAL CATAT DEFISIT KE HUTANG BEBAN (OD-LOCK-12 & PEMBAGIAN EDITABLE)
+// =====================================================================
+let _modalDefisitData = null;
+
+async function kuOpenModalCatatDefisit() {
+    if (!can('KAS_CLOSE')) {
+        toast('Aksi ditolak: hanya Admin / Super Admin (OD-LOCK-12).', 'error');
+        return;
+    }
+    const modal = document.getElementById('modalCatatDefisitHutang');
+    if (!modal) return;
+
+    const nomTxt = document.getElementById('modalDefisitNominalText');
+    const perTxt = document.getElementById('modalDefisitPeriodeText');
+    const allocList = document.getElementById('modalDefisitAllocList');
+    const fb = document.getElementById('modalDefisitFeedback');
+    const catatanIn = document.getElementById('modalDefisitCatatan');
+    if (fb) { fb.classList.add('hidden'); fb.textContent = ''; }
+    if (catatanIn) catatanIn.value = '';
+
+    modal.classList.remove('hidden');
+
+    try {
+        let bd = null;
+        try { bd = await apiGet('/beban-hutang/breakdown'); } catch (_) {}
+        if (!bd) {
+            toast('Gagal memuat rincian breakdown defisit.', 'error');
+            kuCloseModalCatatDefisit();
+            return;
+        }
+        _modalDefisitData = bd;
+
+        const totHutang = Number(bd.total_hutang || 0);
+        if (nomTxt) nomTxt.textContent = kuRupiah(totHutang);
+        if (perTxt) perTxt.textContent = bd.periode || ('kas_period:' + (bd.kas_period_id || ''));
+
+        const gajiItems = bd.gaji_items || [];
+        const totOps = Number(bd.hutang_ops || 0);
+
+        let itemsHtml = '';
+        // 1. Baris Karyawan (Gaji)
+        gajiItems.forEach((g, idx) => {
+            const rawName = g.nama || ('Karyawan ' + (idx + 1));
+            const cleanName = rawName.replace('Gaji:', '').trim();
+            const hVal = Math.round(Number(g.hutang || 0));
+            itemsHtml += `
+            <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-gray-50 dark:bg-white/[0.02] border border-gray-200/60 dark:border-white/10">
+                <div class="flex items-center gap-2 min-w-0 flex-1">
+                    <span class="w-6 h-6 rounded bg-red-100 dark:bg-red-950/50 text-red-600 dark:text-red-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                        <i class="fa-solid fa-user"></i>
+                    </span>
+                    <div class="truncate">
+                        <div class="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">${escapeHtml(cleanName)}</div>
+                        <div class="text-[10px] text-gray-400">Hak Gaji (CTS)</div>
+                    </div>
+                </div>
+                <div class="w-36 relative flex-shrink-0">
+                    <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                    <input type="number" min="0" step="1" data-entitas="${escapeHtml(cleanName)}" data-tipe="gaji" value="${hVal}" oninput="kuRecalcModalDefisitBalance()" class="ku-modal-alloc-input receive-input pl-8 py-1 w-full text-xs font-semibold text-right">
+                </div>
+            </div>`;
+        });
+
+        // 2. Baris Operasional Toko
+        itemsHtml += `
+        <div class="flex items-center justify-between gap-2 p-2 rounded-lg bg-gray-50 dark:bg-white/[0.02] border border-gray-200/60 dark:border-white/10">
+            <div class="flex items-center gap-2 min-w-0 flex-1">
+                <span class="w-6 h-6 rounded bg-blue-100 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 flex items-center justify-center text-xs font-bold flex-shrink-0">
+                    <i class="fa-solid fa-store"></i>
+                </span>
+                <div class="truncate">
+                    <div class="text-xs font-semibold text-gray-800 dark:text-gray-200 truncate">Operasional Toko</div>
+                    <div class="text-[10px] text-gray-400">Sewa, Listrik, Internet, dll (CTO)</div>
+                </div>
+            </div>
+            <div class="w-36 relative flex-shrink-0">
+                <span class="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400">Rp</span>
+                <input type="number" min="0" step="1" data-entitas="Operasional" data-tipe="ops" value="${Math.round(totOps)}" oninput="kuRecalcModalDefisitBalance()" class="ku-modal-alloc-input receive-input pl-8 py-1 w-full text-xs font-semibold text-right">
+            </div>
+        </div>`;
+
+        if (allocList) allocList.innerHTML = itemsHtml;
+        kuRecalcModalDefisitBalance();
+    } catch (err) {
+        toast('Gagal menyiapkan form defisit: ' + err.message, 'error');
+        kuCloseModalCatatDefisit();
+    }
+}
+window.kuOpenModalCatatDefisit = kuOpenModalCatatDefisit;
+
+function kuCloseModalCatatDefisit() {
+    const modal = document.getElementById('modalCatatDefisitHutang');
+    if (modal) modal.classList.add('hidden');
+}
+window.kuCloseModalCatatDefisit = kuCloseModalCatatDefisit;
+
+function kuRecalcModalDefisitBalance() {
+    if (!_modalDefisitData) return;
+    const totHutang = Number(_modalDefisitData.total_hutang || 0);
+    const inputs = document.querySelectorAll('.ku-modal-alloc-input');
+    let sumVal = 0;
+    inputs.forEach(inp => { sumVal += Number(inp.value || 0); });
+
+    const badge = document.getElementById('modalDefisitBalanceBadge');
+    const btn = document.getElementById('modalDefisitSubmitBtn');
+    const isMatch = Math.round(sumVal) === Math.round(totHutang);
+
+    if (badge) {
+        if (isMatch) {
+            badge.className = 'text-[11px] px-2 py-0.5 rounded font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300';
+            badge.innerHTML = `<i class="fa-solid fa-check mr-1"></i> Seimbang: ${kuRupiah(sumVal)}`;
+        } else {
+            const diff = sumVal - totHutang;
+            const diffStr = (diff > 0 ? '+' : '') + kuRupiah(diff);
+            badge.className = 'text-[11px] px-2 py-0.5 rounded font-bold bg-rose-100 text-rose-800 dark:bg-rose-950/50 dark:text-rose-300';
+            badge.innerHTML = `<i class="fa-solid fa-triangle-exclamation mr-1"></i> Selisih: ${diffStr} (Total ${kuRupiah(sumVal)} / ${kuRupiah(totHutang)})`;
+        }
+    }
+    if (btn) {
+        btn.disabled = !isMatch && totHutang > 0;
+        btn.classList.toggle('opacity-50', !isMatch && totHutang > 0);
+        btn.classList.toggle('cursor-not-allowed', !isMatch && totHutang > 0);
+    }
+}
+window.kuRecalcModalDefisitBalance = kuRecalcModalDefisitBalance;
+
+async function kuSubmitCatatDefisit(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!_modalDefisitData) return;
+
+    const totHutang = Number(_modalDefisitData.total_hutang || 0);
+    const pid = _modalDefisitData.kas_period_id;
+    const catatan = (document.getElementById('modalDefisitCatatan') || {}).value || '';
+    const fb = document.getElementById('modalDefisitFeedback');
+
+    const inputs = document.querySelectorAll('.ku-modal-alloc-input');
+    const allocMap = {};
+    let sumVal = 0;
+    inputs.forEach(inp => {
+        const ent = inp.getAttribute('data-entitas');
+        const v = Number(inp.value || 0);
+        if (ent) allocMap[ent] = v;
+        sumVal += v;
+    });
+
+    if (totHutang > 0 && Math.round(sumVal) !== Math.round(totHutang)) {
+        if (fb) {
+            fb.className = 'receive-feedback error';
+            fb.textContent = 'Total rincian (' + kuRupiah(sumVal) + ') harus sama persis dengan total defisit (' + kuRupiah(totHutang) + ').';
+            fb.classList.remove('hidden');
+        }
+        return;
+    }
+
+    try {
+        const payload = {
+            kas_period_id: pid,
+            nominal: totHutang,
+            catatan: catatan,
+            alokasi_entitas: allocMap
+        };
+        const res = await apiPost('/beban-hutang/catat', payload, { idempotencyKey: newIdemKey() });
+        toast('Defisit ' + kuRupiah(res.hutang_baru) + ' berhasil dibukukan ke Hutang Beban.', 'success');
+        kuCloseModalCatatDefisit();
+        await loadKuDebt();
+        await loadKuFinance();
+    } catch (err) {
+        if (fb) {
+            fb.className = 'receive-feedback error';
+            fb.textContent = err.message || 'Gagal mencatat hutang beban.';
+            fb.classList.remove('hidden');
+        }
+    }
+}
+window.kuSubmitCatatDefisit = kuSubmitCatatDefisit;
+
+
+// =====================================================================
+// MODAL PELUNASAN / CICILAN HUTANG DARI KAS ASET (OD-LOCK-14)
+// =====================================================================
+async function kuOpenModalLunasHutang() {
+    if (!can('EXPENSE_DEBT_WRITE')) {
+        toast('Aksi ditolak: hanya Owner / Developer (OD-LOCK-14).', 'error');
+        return;
+    }
+    const modal = document.getElementById('modalLunasHutang');
+    if (!modal) return;
+
+    const d = _kuDebtData || {};
+    const hutang = Number(d.saldo_hutang) || 0;
+    const aset = Number(d.saldo_kas_aset) || 0;
+
+    const txtHutang = document.getElementById('modalLunasTotalHutang');
+    const txtAset = document.getElementById('modalLunasSaldoAset');
+    const inputNom = document.getElementById('modalLunasNominalInput');
+    const fb = document.getElementById('modalLunasFeedback');
+    if (fb) { fb.classList.add('hidden'); fb.textContent = ''; }
+
+    if (txtHutang) txtHutang.textContent = kuRupiah(hutang);
+    if (txtAset) txtAset.textContent = kuRupiah(aset);
+
+    const defaultVal = Math.min(aset, hutang);
+    if (inputNom) inputNom.value = defaultVal > 0 ? defaultVal : (hutang > 0 ? hutang : '');
+
+    modal.classList.remove('hidden');
+    kuSimulasiModalLunas((inputNom && inputNom.value) || 0);
+}
+window.kuOpenModalLunasHutang = kuOpenModalLunasHutang;
+
+function kuCloseModalLunasHutang() {
+    const modal = document.getElementById('modalLunasHutang');
+    if (modal) modal.classList.add('hidden');
+}
+window.kuCloseModalLunasHutang = kuCloseModalLunasHutang;
+
+function kuLunasQuickSet(type) {
+    const d = _kuDebtData || {};
+    const hutang = Number(d.saldo_hutang) || 0;
+    const aset = Number(d.saldo_kas_aset) || 0;
+    const input = document.getElementById('modalLunasNominalInput');
+    if (!input) return;
+
+    if (type === 'aset') {
+        input.value = Math.min(aset, hutang);
+    } else if (type === 'total') {
+        input.value = hutang;
+    }
+    kuSimulasiModalLunas(input.value);
+}
+window.kuLunasQuickSet = kuLunasQuickSet;
+
+function kuSimulasiModalLunas(val) {
+    const d = _kuDebtData || {};
+    const hutang = Number(d.saldo_hutang) || 0;
+    const aset = Number(d.saldo_kas_aset) || 0;
+    const bd = d.breakdown || {};
+    const totGaji = Number(bd.hutang_gaji || 0);
+    const totOps = Number(bd.hutang_ops || 0);
+
+    const nom = Number(val || 0);
+    const simList = document.getElementById('modalLunasSimulasiList');
+    const simTotal = document.getElementById('modalLunasSimulasiTotal');
+    const btn = document.getElementById('modalLunasSubmitBtn');
+
+    if (simTotal) simTotal.textContent = kuRupiah(nom);
+
+    const alokGaji = Math.min(nom, totGaji);
+    const sisaSetelahGaji = Math.max(0, nom - alokGaji);
+    const alokOps = Math.min(sisaSetelahGaji, totOps);
+    const sisaHutangAkhir = Math.max(0, hutang - nom);
+
+    let html = '';
+    html += `
+        <div class="flex items-center justify-between py-0.5">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-users text-amber-500 text-[10px]"></i> Hak Gaji Karyawan (Prioritas 1):</span>
+            <span class="font-bold font-mono text-gray-800 dark:text-gray-200">${kuRupiah(alokGaji)} ${alokGaji >= totGaji && totGaji > 0 ? '<span class="text-emerald-600 font-bold ml-1">(Lunas)</span>' : ''}</span>
+        </div>
+        <div class="flex items-center justify-between py-0.5">
+            <span class="flex items-center gap-1.5"><i class="fa-solid fa-store text-blue-500 text-[10px]"></i> Operasional Toko (Prioritas 2):</span>
+            <span class="font-bold font-mono text-gray-800 dark:text-gray-200">${kuRupiah(alokOps)}</span>
+        </div>
+        <div class="flex items-center justify-between pt-1 border-t border-blue-200/50 dark:border-blue-900/40 text-blue-900 dark:text-blue-200 font-semibold">
+            <span>Sisa Hutang Toko Setelah Pembayaran:</span>
+            <span class="font-bold font-mono ${sisaHutangAkhir === 0 ? 'text-emerald-600' : 'text-red-600'}">${kuRupiah(sisaHutangAkhir)}</span>
+        </div>`;
+
+    if (simList) simList.innerHTML = html;
+
+    const isValid = nom > 0 && nom <= hutang && (aset >= nom || aset > 0);
+    if (btn) {
+        btn.disabled = !isValid;
+        btn.classList.toggle('opacity-50', !isValid);
+        btn.classList.toggle('cursor-not-allowed', !isValid);
+    }
+}
+window.kuSimulasiModalLunas = kuSimulasiModalLunas;
+
+async function kuSubmitLunasHutang(e) {
+    if (e && e.preventDefault) e.preventDefault();
+    if (!can('EXPENSE_DEBT_WRITE')) { toast('Aksi ditolak: hanya Owner / Developer.'); return; }
+
+    const input = document.getElementById('modalLunasNominalInput');
+    const nominal = Number((input && input.value) || 0);
+    const fb = document.getElementById('modalLunasFeedback');
+
+    const d = _kuDebtData || {};
+    const hutang = Number(d.saldo_hutang) || 0;
+    const aset = Number(d.saldo_kas_aset) || 0;
+
+    if (nominal <= 0) {
+        if (fb) { fb.textContent = 'Nominal pembayaran harus lebih besar dari nol.'; fb.className = 'receive-feedback error'; fb.classList.remove('hidden'); }
+        return;
+    }
+    if (nominal > aset) {
+        if (fb) { fb.textContent = 'Nominal melebihi saldo Kas Aset yang tersedia (' + kuRupiah(aset) + ').'; fb.className = 'receive-feedback error'; fb.classList.remove('hidden'); }
+        return;
+    }
+    if (nominal > hutang) {
+        if (fb) { fb.textContent = 'Nominal melebihi sisa Hutang Beban (' + kuRupiah(hutang) + ').'; fb.className = 'receive-feedback error'; fb.classList.remove('hidden'); }
+        return;
+    }
+
+    try {
+        const res = await apiPost('/beban-hutang/lunas', { nominal: nominal }, { idempotencyKey: newIdemKey() });
+        const nomLunas = Number(res.nominal || nominal);
+        try {
+            await apiPost('/kas/aset/keluar', { nominal: nomLunas, keterangan: 'Pelunasan Hutang Beban' }, { idempotencyKey: newIdemKey() });
+        } catch (_) {}
+
+        toast('Pembayaran cicilan ' + kuRupiah(nomLunas) + ' berhasil dibukukan.', 'success');
+        kuCloseModalLunasHutang();
+        await loadKuDebt();
+        await loadKuFinance();
+    } catch (err) {
+        if (fb) {
+            fb.textContent = err.message || 'Gagal memproses pelunasan hutang.';
+            fb.className = 'receive-feedback error';
+            fb.classList.remove('hidden');
+        }
+    }
+}
+window.kuSubmitLunasHutang = kuSubmitLunasHutang;
 
 // Notifikasi (P2-13): log read-only + status provider.
 // Di UI hanya sebuah ICON lonceng (badge jumlah antrean) + popover 10 terbaru.
@@ -13531,7 +13855,7 @@ async function kuDebtChangePeriod(periodVal) {
 window.kuDebtChangePeriod = kuDebtChangePeriod;
 
 let _kuKartuHutangData = null;
-let _kuKartuHutangFilter = 'all';
+let _kuKartuHutangFilter = 'total';
 
 function renderKuKartuHutang(khData) {
     _kuKartuHutangData = khData;
@@ -13545,15 +13869,28 @@ function renderKuKartuHutang(khData) {
         return;
     }
 
+    const totalEnt = khData.entities.find(e => e.key === 'total');
+    const gajiEnts = khData.entities.filter(e => e.tipe === 'GAJI');
+    const opsEnt = khData.entities.find(e => e.tipe === 'OPS');
+
+    const ordered = [];
+    if (totalEnt) ordered.push(totalEnt);
+    ordered.push(...gajiEnts);
+    if (opsEnt) ordered.push(opsEnt);
+
+    if (_kuKartuHutangFilter !== 'all' && !khData.entities.some(e => e.key === _kuKartuHutangFilter)) {
+        _kuKartuHutangFilter = totalEnt ? 'total' : 'all';
+    }
+
     const filterOptions = [
-        { key: 'all', label: 'Semua (Berdampingan)', icon: 'fa-table-columns' },
-        ...khData.entities.map(e => ({
+        ...ordered.map(e => ({
             key: e.key,
             label: e.short_name || e.nama,
             icon: e.tipe === 'GAJI' ? 'fa-user' : (e.tipe === 'OPS' ? 'fa-store' : 'fa-calculator'),
             saldo: e.saldo,
             color: e.color
-        }))
+        })),
+        { key: 'all', label: 'Semua (Berdampingan)', icon: 'fa-table-columns' }
     ];
 
     tabs.innerHTML = filterOptions.map(opt => {

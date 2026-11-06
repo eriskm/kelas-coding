@@ -152,6 +152,7 @@ class _HutangManualIn(BaseModel):
     kas_period_id: int
     nominal: Optional[float] = None
     catatan: Optional[str] = None
+    alokasi_entitas: Optional[dict] = None
 
 
 @router.post("/catat")
@@ -215,7 +216,8 @@ def catat_hutang_beban_manual(data: _HutangManualIn,
         res = debt_mod.catat_hutang_manual(
             db, key, nominal, kas_period_id=p.id,
             oleh=(user.display_name or user.username),
-            kondisi_kas_akhir=kka, catatan=data.catatan)
+            kondisi_kas_akhir=kka, catatan=data.catatan,
+            alokasi_entitas=data.alokasi_entitas)
     except debt_mod.DebtError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     db.commit()

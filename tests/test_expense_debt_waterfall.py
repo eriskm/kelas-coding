@@ -41,6 +41,8 @@ def _setup_periode_dengan_beban(db: Session, omzet_val, modal_val, kas_aset_val=
     db.query(m.ExpensePeriod).filter(m.ExpensePeriod.periode == p_key).delete()
     db.query(m.ExpenseDebtEntry).delete()
     db.query(m.ExpenseDebtPeriod).delete()
+    db.query(m.Payment).delete()
+    db.query(m.ServiceOrder).delete()
     db.flush()
     
     # 2. Users (Karyawan)
@@ -86,8 +88,9 @@ def _setup_periode_dengan_beban(db: Session, omzet_val, modal_val, kas_aset_val=
         db.add(cust)
         db.flush()
         
+        import uuid
         so = m.ServiceOrder(
-            no_servis="SO-TEST-1",
+            no_servis=f"SO-TEST-{uuid.uuid4().hex[:8]}",
             customer_id=cust.id,
             device="Smartphone Test",
             status="CASH",
@@ -334,4 +337,69 @@ def test_api_endpoints_waterfall_dan_lunas_fleksibel(client, db):
     lunas_data = r_lunas.json()
     assert Decimal(str(lunas_data["saldo_hutang"])) == Decimal("50000")
     assert Decimal(str(lunas_data["saldo_kas_aset"])) == aset_terekam
+
+
+def test_alokasi_editable_dan_kartu_hutang_reconcile(db):
+    """Test persetujuan Owner:
+    1. Default pembagian minus gaji dibagi rata (Dana 25rb, Reza 25rb).
+    2. Admin dapat mengedit porsi alokasi sebelum dicatat (misal Dana 30rb, Reza 20rb, Ops 205rb).
+    3. Buku mutasi kartu hutang berjalan mencatat angka sesuai alokasi kustom yang diedit.
+    4. Cicilan berikutnya memprioritaskan gaji dulu, baru operasional.
+    """
+    ctx = _setup_periode_dengan_beban(db, omzet_val=496250, modal_val=146250) # Omzet - Modal = 350.000
+    kp = ctx["kp"]
+    p_key = ctx["p_key"]
+
+    bd = debt_mod.hitung_breakdown_hutang(db, kas_period_id=kp.id)
+    assert bd["laba_kotor"] == Decimal("350000")
+    assert bd["total_beban"] == Decimal("605000")
+    assert bd["total_hutang"] == Decimal("255000")
+    assert bd["hutang_gaji"] == Decimal("50000")
+    assert bd["hutang_ops"] == Decimal("205000")
+
+    # Default pembagian minus gaji: dibagi rata (Dana 25rb, Reza 25rb)
+    for g in bd["gaji_items"]:
+        assert g["hutang"] == Decimal("25000")
+
+    # Admin mengedit alokasi (misal Dana minta porsi 30.000, Reza 20.000, Ops 205.000)
+    alok_edit = {
+        "Ahmad Dana": 30000,
+        "Muhammad Reza": 20000,
+        "Operasional": 205000
+    }
+    res = debt_mod.catat_hutang_manual(
+        db, p_key, nominal=255000, kas_period_id=kp.id, oleh="Admin Test",
+        kondisi_kas_akhir=-255000, catatan="Defisit periode 12 diedit porsinya",
+        alokasi_entitas=alok_edit
+    )
+    db.commit()
+
+    # Cek kartu hutang berjalan Excel
+    kh = debt_mod.hitung_kartu_hutang(db)
+    assert kh["saldo_total"] == 255000.0
+
+    ent_map = {e["key"]: e for e in kh["entities"]}
+    assert ent_map["ahmad_dana"]["saldo"] == 30000.0
+    assert ent_map["muhammad_reza"]["saldo"] == 20000.0
+    assert ent_map["ops"]["saldo"] == 205000.0
+    assert ent_map["total"]["saldo"] == 255000.0
+
+    # Simulasikan cicilan 200.000 (prioritas gaji dulu, baru ops)
+    e_lunas = m.ExpenseDebtEntry(
+        tipe='LUNAS_KAS_ASET',
+        nominal=to_decimal(200000),
+        saldo_setelah=to_decimal(55000),
+        periode=p_key,
+        oleh='Admin Test'
+    )
+    db.add(e_lunas)
+    db.commit()
+
+    kh_after = debt_mod.hitung_kartu_hutang(db)
+    ent_after = {e["key"]: e for e in kh_after["entities"]}
+    assert ent_after["ahmad_dana"]["saldo"] == 0.0
+    assert ent_after["muhammad_reza"]["saldo"] == 0.0
+    assert ent_after["ops"]["saldo"] == 55000.0
+    assert ent_after["total"]["saldo"] == 55000.0
+
 

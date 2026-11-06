@@ -122,6 +122,14 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
         if m is None:
             continue
         o = p.service_order
+        # Isolasi Data Garansi Historis (OD-LOCK): data arsip garansi lama (SF_WEB / GR-*)
+        # adalah data masa lalu untuk klaim servis, bukan arus kas toko aktif.
+        # Jangan sampai mengotori buku Mutasi Kas & saldo berjalan kas toko aktif.
+        if '(SF_WEB)' in (getattr(p, 'note', '') or ''):
+            continue
+        if o and (o.no_servis or '').startswith('GR-'):
+            continue
+
         kind = (p.kind or "PELUNASAN").strip().upper()
         # DP = UANG TITIPAN yang benar-benar diterima kasir, jadi tetap menjadi
         # baris Masuk (uangnya ada di laci & wajib direkonsiliasi). Yang berbeda
@@ -135,6 +143,9 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
         # Jika TIDAK memenuhi (Pending Modal), JANGAN masukkan ke Mutasi Kas.
         # Uang fisik ada di laci, tapi belum diakui sebagai OMSET/pendapatan.
         if is_dp:
+            # DP titipan: abaikan bila order sudah selesai/batal lampau (CANCEL/FAILED atau sudah DIAMBIL)
+            if o and (o.status in ('CANCEL', 'FAILED') or o.unit_status == 'DIAMBIL'):
+                continue
             kategori = KATEGORI_DP
             ket = ("DP / Uang Titipan (bukan Omzet) — %s • %s"
                    % ((o.device if o else None) or "-",
@@ -150,8 +161,8 @@ def period_rows(db: Session, start: datetime, end: datetime, with_opening: bool 
                 "ref_id": p.id,
             })
         else:
-            # Non-DP (PELUNASAN): abaikan data impor arsip garansi historis (SF_WEB)
-            if '(SF_WEB)' in (getattr(p, 'note', '') or ''):
+            # Non-DP (PELUNASAN): abaikan transaksi historis sebelum periode toko aktif (sebelum 2026-10-31 16:00:00)
+            if m < datetime(2026, 10, 31, 16, 0, 0):
                 continue
             # PELUNASAN: hanya masuk Mutasi Kalau OMSET-eligible
             if o and _boleh_masuk_omzet(o):

@@ -137,23 +137,24 @@ def proses_defisit(db: Session, start, end, kas_period_id=None, oleh: str = None
 
 def catat_hutang_manual(db: Session, periode_key: str, nominal,
                        kas_period_id=None, oleh: str = None,
-                       kondisi_kas_akhir=None, catatan: str = None) -> dict:
+                       kondisi_kas_akhir=None, catatan: str = None,
+                       alokasi_entitas: dict = None) -> dict:
     """OD-LOCK-12 (Owner): Admin mencatat Hutang Beban secara MANUAL.
 
     Berbeda total dengan `proses_defisit` versi lama:
 
       - TIDAK ada pemicu otomatis. Ini hanya jalan kalau Admin memanggilnya.
       - Besarnya TIDAK dihitung dari `Beban - Laba Kotor`. Besarnya adalah
-        nilai yang di-input Admin, yangynch diasumsikan sama dengan nilai
+        nilai yang di-input Admin, yang diasumsikan sama dengan nilai
         minus di akhir tabel "Kondisi Kas Operasional".
       - SATU KALI per periode. `expense_debt_periods.periode` UNIQUE jadi
-        penaganya, dan pengecekan di bawah memberi pesan 400 yang jelas.
+        penjaganya, dan pengecekan di bawah memberi pesan 400 yang jelas.
 
     Nominal tidak boleh melebihi nilai minus yang diukur, karena itu berarti
     Admin salah baca angka. Nominal lebih kecil tetap boleh (Admin boleh
     mencatat sebagian).
 
-    `catatan` disimpan ke journal, bukan ke baris periode: tabel
+    `catatan` & `alokasi_entitas` disimpan ke journal, bukan ke baris periode: tabel
     `expense_debt_periods` tidak punya kolom teks dan sengaja tidak ditambah
     supaya tidak perlu migrasi skema produksi.
     """
@@ -196,16 +197,22 @@ def catat_hutang_manual(db: Session, periode_key: str, nominal,
         kas_entry_id=None, oleh=oleh)
     db.add(entry)
     db.flush()
+    details_rec = {
+        "hutang_baru": str(n), "hutang_awal": str(hutang_awal),
+        "hutang_akhir": str(hutang_akhir),
+        "kondisi_kas_akhir": (None if kondisi_kas_akhir is None
+                              else str(kondisi_kas_akhir)),
+        "sumber": "input manual Admin saat Tutup Kas (OD-LOCK-12)",
+        "catatan": catatan
+    }
+    if alokasi_entitas:
+        details_rec["alokasi_entitas"] = alokasi_entitas
+
     journal.record(
         db, journal.DOMAIN_FINANCE, EVENT_DEFSIT,
         entity_type="expense_debt_period", entity_id=row.id,
         amount=n, actor=oleh, ref_type="periode", ref_code=periode_key,
-        details={"hutang_baru": str(n), "hutang_awal": str(hutang_awal),
-                 "hutang_akhir": str(hutang_akhir),
-                 "kondisi_kas_akhir": (None if kondisi_kas_akhir is None
-                                       else str(kondisi_kas_akhir)),
-                 "sumber": "input manual Admin saat Tutup Kas (OD-LOCK-12)",
-                 "catatan": catatan})
+        details=details_rec)
     return {"periode_row": row, "entry": entry, "hutang_baru": n,
             "hutang_awal": hutang_awal, "hutang_akhir": hutang_akhir}
 
@@ -356,15 +363,20 @@ def hitung_breakdown_hutang(db: Session, kas_period_id: int = None, periode_key:
     sisa_hutang_ops = quantize(hutang_ops_awal - lunas_ke_ops)
     total_sisa_hutang = quantize(sisa_hutang_gaji + sisa_hutang_ops)
 
-    # Detail item gaji
+    # Detail item gaji (dibagi rata untuk porsi kekurangan gaji sesuai keputusan Owner)
     gaji_items = []
-    total_terbayar_gaji = quantize(gaji_tercover + lunas_ke_gaji)
-    for r in gaji_rows:
+    n_gaji = len(gaji_rows)
+    rata_hutang_gaji = quantize(sisa_hutang_gaji / Decimal(n_gaji)) if n_gaji > 0 else ZERO
+    accum_h = ZERO
+    for idx, r in enumerate(gaji_rows):
         val = quantize(to_decimal(r.nilai))
-        if total_gaji > ZERO:
-            porsi = val / total_gaji
-            terbayar_item = quantize(total_terbayar_gaji * porsi)
-            hutang_item = quantize(max(ZERO, val - terbayar_item))
+        if sisa_hutang_gaji > ZERO:
+            if idx == n_gaji - 1:
+                hutang_item = max(ZERO, sisa_hutang_gaji - accum_h)
+            else:
+                hutang_item = min(val, rata_hutang_gaji)
+                accum_h += hutang_item
+            terbayar_item = quantize(max(ZERO, val - hutang_item))
         else:
             terbayar_item = val
             hutang_item = ZERO
@@ -486,18 +498,44 @@ def hitung_kartu_hutang(db: Session) -> dict:
             if not p:
                 p = db.query(ExpenseDebtPeriod).filter(ExpenseDebtPeriod.periode == e.periode).first()
 
-            bd = hitung_breakdown_hutang(db, kas_period_id=(p.kas_period_id if p else None))
-            gaji_map = {g["nama"].replace("Gaji:", "").strip(): to_decimal(g["hutang"]) for g in bd.get("gaji_items", [])}
-            ops_h = to_decimal(bd.get("hutang_ops", ZERO))
+            custom_alok = None
+            if p:
+                from models import JournalEntry
+                je = (db.query(JournalEntry)
+                      .filter(JournalEntry.entity_type == "expense_debt_period",
+                              JournalEntry.entity_id == p.id)
+                      .order_by(JournalEntry.id.desc()).first())
+                if je and je.details and isinstance(je.details, dict) and "alokasi_entitas" in je.details:
+                    custom_alok = je.details.get("alokasi_entitas")
 
-            tot_bd = sum(gaji_map.values()) + ops_h
-            if tot_bd > ZERO and tot_bd != nom:
-                ratio = nom / tot_bd
-                for k in gaji_map:
-                    gaji_map[k] = quantize(gaji_map[k] * ratio)
-                ops_h = quantize(nom - sum(gaji_map.values()))
-            elif tot_bd == ZERO:
-                ops_h = nom
+            if custom_alok and isinstance(custom_alok, dict):
+                norm_custom = {str(k).lower().strip(): to_decimal(v) for k, v in custom_alok.items()}
+                gaji_map = {}
+                for emp_name in emp_map.keys():
+                    val_c = ZERO
+                    for ck, cv in norm_custom.items():
+                        if ck in emp_name.lower() or emp_name.lower() in ck:
+                            val_c = cv
+                            break
+                    gaji_map[emp_name] = quantize(val_c)
+                ops_h = ZERO
+                for ck, cv in norm_custom.items():
+                    if "ops" in ck or "operasional" in ck:
+                        ops_h = quantize(cv)
+                        break
+            else:
+                bd = hitung_breakdown_hutang(db, kas_period_id=(p.kas_period_id if p else None))
+                gaji_map = {g["nama"].replace("Gaji:", "").strip(): to_decimal(g["hutang"]) for g in bd.get("gaji_items", [])}
+                ops_h = to_decimal(bd.get("hutang_ops", ZERO))
+
+                tot_bd = sum(gaji_map.values()) + ops_h
+                if tot_bd > ZERO and tot_bd != nom:
+                    ratio = nom / tot_bd
+                    for k in gaji_map:
+                        gaji_map[k] = quantize(gaji_map[k] * ratio)
+                    ops_h = quantize(nom - sum(gaji_map.values()))
+                elif tot_bd == ZERO:
+                    ops_h = nom
 
             for emp_name, emp_obj in emp_map.items():
                 h_emp = gaji_map.get(emp_name, ZERO)
@@ -531,7 +569,7 @@ def hitung_kartu_hutang(db: Session) -> dict:
                 "saldo": float(total_entity["saldo"])
             })
 
-        elif e.tipe == "LUNAS_KAS_ASET":
+        elif e.tipe in ("PELUNASAN", "LUNAS_KAS_ASET"):
             # Pelunasan Model A Waterfall: Gaji first, then Ops
             tot_gaji_debt = sum(emp["saldo"] for emp in emp_map.values())
             alok_gaji = min(nom, tot_gaji_debt)
