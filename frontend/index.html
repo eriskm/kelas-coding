@@ -1991,9 +1991,15 @@
                                         <h3 class="panel-title"><i class="fa-solid fa-list-ul"></i> Riwayat Transaksi &mdash; Kas Laci</h3>
                                         <p class="ku-sub">Bukti rinci setiap perpindahan uang di laci. Saldo akhir di sini sama dengan Saldo Kas (Laci) di Conditions Kas.</p>
                                     </div>
-                                    <button type="button" onclick="renderRiwayat(); renderKuArsip();" class="receive-back-btn text-xs py-1.5 px-3" title="Muat ulang mutasi kas">
-                                        <i class="fa-solid fa-rotate"></i> Muat Ulang
-                                    </button>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" onclick="openModalArsipTutupKas()" class="receive-back-btn text-xs py-1.5 px-2.5 text-amber-700 bg-amber-50 hover:bg-amber-100 dark:text-amber-300 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-300 dark:border-amber-700/60 font-semibold shadow-xs transition-all flex items-center gap-1.5" title="Buka Arsip Tutup Kas (Periode Lampau)">
+                                            <i class="fa-solid fa-box-archive text-amber-600 dark:text-amber-400"></i>
+                                            <span>Arsip Tutup Kas</span>
+                                        </button>
+                                        <button type="button" onclick="renderRiwayat();" class="receive-back-btn text-xs py-1.5 px-3" title="Muat ulang mutasi kas">
+                                            <i class="fa-solid fa-rotate"></i> Muat Ulang
+                                        </button>
+                                    </div>
                                 </div>
 
                                 <!-- (1) RINGKASAN KAS LACI -->
@@ -2061,18 +2067,8 @@
                                     <div class="ku-note-muted" id="kuRekonsiliasiNote"></div>
                                 </section>
 
-                                <!-- (4) ARSIP TUTUP KAS
-                                     Dulu `kuArsip` menempel di bawah tabel Mutasi Kas, tanpa
-                                     judul sendiri, sehingga terlihat seperti bagian dari
-                                    tabel periode BERJALAN padahal isinya periode yang sudah
-                                     DITUTUP. Sekarang jadi blok terpisah, setelah
-                                     Rekonsiliasi -- urutannya sama dengan alurnya:
-                                     mutasi -> rekonsiliasi -> arsip. -->
-                                <section class="ku-block" id="kuArsipBlock" hidden>
-                                    <header class="ku-block-head">
-                                        <h4 class="ku-block-title"><i class="fa-solid fa-box-archive"></i> Arsip Tutup Kas</h4>
-                                        <p class="ku-block-sub">Periode kas yang sudah ditutup &mdash; angkanya sudah tersimpan permanen di sini dan tidak lagi termasuk Mutasi Kas periode berjalan.</p>
-                                    </header>
+                                <!-- (4) ARSIP TUTUP KAS — Disediakan via Icon & Modal Pop-up di Pojok Kanan Atas Mutasi & Rekonsiliasi -->
+                                <section class="ku-block hidden" id="kuArsipBlock">
                                     <div id="kuArsip" class="space-y-2"></div>
                                 </section>
                             </div>
@@ -3948,6 +3944,45 @@
                     </button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- ===== MODAL ARSIP TUTUP KAS (POJOK KANAN ATAS MUTASI & REKONSILIASI) ===== -->
+    <div id="modalArsipTutupKas" class="fixed inset-0 z-[9800] bg-black/60 backdrop-blur-xs hidden flex items-center justify-center p-3 sm:p-4" role="dialog" aria-modal="true" aria-labelledby="modalArsipTitle">
+        <div class="bg-white dark:bg-slate-900 border border-gray-200 dark:border-white/10 rounded-2xl w-full max-w-2xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <!-- Modal Header -->
+            <div class="flex items-center justify-between px-5 py-3.5 border-b border-gray-100 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 flex items-center justify-center text-sm shadow-xs">
+                        <i class="fa-solid fa-box-archive"></i>
+                    </span>
+                    <div>
+                        <h3 id="modalArsipTitle" class="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-1.5">
+                            Arsip Tutup Kas
+                            <span class="text-[10px] font-normal px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300">Periode Selesai</span>
+                        </h3>
+                        <p class="text-[11px] text-gray-500 dark:text-gray-400">Histori periode kas yang sudah ditutup permanen beserta rekonsiliasi saldonya.</p>
+                    </div>
+                </div>
+                <button type="button" onclick="closeModalArsipTutupKas()" class="w-8 h-8 rounded-lg text-gray-400 hover:text-gray-600 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-white/10 flex items-center justify-center transition-colors" title="Tutup">
+                    <i class="fa-solid fa-xmark text-sm"></i>
+                </button>
+            </div>
+            <!-- Modal Body: Daftar Arsip -->
+            <div class="p-5 overflow-y-auto space-y-3 flex-1 min-h-[160px]" id="modalArsipBody">
+                <div id="kuArsipModalList" class="space-y-2.5"></div>
+                <div id="modalArsipEmpty" class="hidden text-center py-12 text-sm text-gray-400">
+                    <i class="fa-solid fa-box-archive text-3xl mb-2 block opacity-30 text-amber-500"></i>
+                    Belum ada arsip periode kas yang ditutup.
+                </div>
+            </div>
+            <!-- Modal Footer -->
+            <div class="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-white/5 bg-slate-50/60 dark:bg-slate-800/40 text-xs text-gray-500">
+                <span><i class="fa-solid fa-info-circle text-blue-500 mr-1"></i> Data periode tertutup tersimpan permanen & final.</span>
+                <button type="button" onclick="closeModalArsipTutupKas()" class="receive-back-btn text-xs py-1.5 px-4 font-semibold">
+                    Tutup
+                </button>
+            </div>
         </div>
     </div>
 

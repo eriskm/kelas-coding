@@ -8182,11 +8182,13 @@ async function kuTutupKas() {
     }
 }
 
-// Arsip periode yang sudah ditutup (snapshot dari server).
+// Arsip periode yang sudah ditutup (snapshot dari server) — ditampilkan via Modal Arsip Tutup Kas.
 async function renderKuArsip() {
+    const modalList = document.getElementById('kuArsipModalList');
     const el = document.getElementById('kuArsip');
+    const emptyEl = document.getElementById('modalArsipEmpty');
     const block = document.getElementById('kuArsipBlock');
-    if (!el) return;
+    if (!modalList && !el) return;
     try {
         const periods = await apiGet('/kas/periods');
         const closed = (periods || []).filter(p => p && p.status === 'CLOSED' && p.snapshot);
@@ -8194,16 +8196,16 @@ async function renderKuArsip() {
             try { return { p, s: JSON.parse(p.snapshot) }; } catch (_) { return null; }
         }).filter(x => x && x.s);
         if (!snaps.length) {
-            el.innerHTML = '';
-            if (block) block.hidden = true;
+            if (modalList) modalList.innerHTML = '';
+            if (el) el.innerHTML = '';
+            if (emptyEl) emptyEl.classList.remove('hidden');
+            if (block) block.classList.add('hidden');
             return;
         }
-        // Panel-nya sendiri sudah ada di HTML (blok 4 "Arsip Tutup Kas"), jadi di
-        // sini cukup baris-barisnya -- tidak perlu membuat `.panel` baru yang
-        // membuat blok ini terlihat seperti panel asing di dalam halaman.
-        if (block) block.hidden = false;
+        if (emptyEl) emptyEl.classList.add('hidden');
+        if (block) block.classList.add('hidden');
         const r = v => 'Rp ' + (Number(v) || 0).toLocaleString('id-ID');
-        el.innerHTML = snaps.map(({ p, s }) => {
+        const html = snaps.map(({ p, s }) => {
             const f = (s && s.finance) || {};
             const mulai = String(((s || {}).period || {}).start_at || '').slice(0, 16).replace('T', ' ');
             const selesai = String(((s || {}).period || {}).end_at || '').slice(0, 16).replace('T', ' ');
@@ -8216,26 +8218,41 @@ async function renderKuArsip() {
             return `<div class="ku-arsip-row">
                 <div class="ku-arsip-main">
                     <div class="ku-arsip-title">
-                        <span class="al-dot" style="background:#64748b"></span>
-                        Periode ${escapeHtml(mulai)} &ndash; ${escapeHtml(selesai)}
+                        <span class="al-dot" style="background:#f59e0b"></span>
+                        Periode #${p.id}: ${escapeHtml(mulai)} &ndash; ${escapeHtml(selesai)}
                         ${badge}
                     </div>
                     <div class="ku-arsip-meta">
                         Ditutup ${escapeHtml(String(p.closed_at || '').slice(0, 16).replace('T', ' '))}
-                        oleh ${escapeHtml(p.closed_by || '-')}
+                        oleh <b>${escapeHtml(p.closed_by || '-')}</b>
                     </div>
                 </div>
                 <div class="ku-arsip-nums">
-                    <span>Masuk <b>${r(f.total_masuk)}</b></span>
-                    <span>Keluar <b>${r(f.total_keluar)}</b></span>
-                    <span>Saldo <b>${r(f.saldo)}</b></span>
+                    <span>Omzet: <b>${r(f.omset || f.total_masuk)}</b></span>
+                    <span>Keluar: <b>${r(f.total_keluar)}</b></span>
+                    <span>Saldo Laci: <b>${r(f.saldo_laci || f.saldo)}</b></span>
                 </div>
             </div>`;
         }).join('');
-} catch (_) {
-        el.innerHTML = '';
-        if (block) block.hidden = true;
+        if (modalList) modalList.innerHTML = html;
+        if (el) el.innerHTML = html;
+    } catch (_) {
+        if (modalList) modalList.innerHTML = '';
+        if (el) el.innerHTML = '';
+        if (emptyEl) emptyEl.classList.remove('hidden');
+        if (block) block.classList.add('hidden');
     }
+}
+
+function openModalArsipTutupKas() {
+    renderKuArsip();
+    const m = document.getElementById('modalArsipTutupKas');
+    if (m) m.classList.remove('hidden');
+}
+
+function closeModalArsipTutupKas() {
+    const m = document.getElementById('modalArsipTutupKas');
+    if (m) m.classList.add('hidden');
 }
 
 // Panel TITIPAN DP PELANGGAN — terpisah dari Kondisi Kas / Arus Kas.
