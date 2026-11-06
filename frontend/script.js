@@ -14048,23 +14048,24 @@ function renderKuKartuHutang(khData) {
         ...ordered.map(e => ({
             key: e.key,
             label: e.short_name || e.nama,
-            icon: e.tipe === 'GAJI' ? 'fa-user' : (e.tipe === 'OPS' ? 'fa-store' : 'fa-calculator'),
+            icon: e.tipe === 'GAJI' ? 'fa-user-tag' : (e.tipe === 'OPS' ? 'fa-store' : 'fa-calculator'),
             saldo: e.saldo,
             color: e.color
         })),
-        { key: 'all', label: 'Semua (Berdampingan)', icon: 'fa-table-columns' }
+        { key: 'all', label: 'Semua Lembar', icon: 'fa-table-columns' }
     ];
 
+    tabs.className = "inline-flex items-center gap-1.5 p-1 bg-slate-100/90 dark:bg-slate-800/60 rounded-xl border border-slate-200/60 dark:border-white/5 flex-wrap";
     tabs.innerHTML = filterOptions.map(opt => {
         const isActive = _kuKartuHutangFilter === opt.key;
         const saldoBadge = opt.saldo !== undefined && opt.saldo > 0
-            ? `<span class="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isActive ? 'bg-white/20 text-white' : 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300'}">${kuRupiah(opt.saldo)}</span>`
+            ? `<span class="ml-1 text-[10px] px-1.5 py-0.2 rounded-full font-bold ${isActive ? 'bg-rose-100 text-rose-800 dark:bg-rose-900/60 dark:text-rose-200' : 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300'}">${kuRupiah(opt.saldo)}</span>`
             : '';
         const activeCls = isActive
-            ? 'bg-red-600 text-white border-red-600 shadow-xs'
-            : 'bg-white dark:bg-white/[0.03] text-gray-700 dark:text-gray-300 border-gray-200 dark:border-white/10 hover:bg-gray-100 dark:hover:bg-white/[0.06]';
-        return `<button type="button" onclick="kuKartuHutangSetFilter('${escapeHtml(opt.key)}')" class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-semibold rounded-md border transition-all ${activeCls}">
-            <i class="fa-solid ${opt.icon} text-[10px]"></i>
+            ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white border-slate-200/80 dark:border-white/10 shadow-xs font-bold ring-1 ring-black/5'
+            : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-white/50 dark:hover:bg-white/[0.04] border-transparent font-medium';
+        return `<button type="button" onclick="kuKartuHutangSetFilter('${escapeHtml(opt.key)}')" class="inline-flex items-center gap-1.5 px-3 py-1 text-xs rounded-lg border transition-all ${activeCls}">
+            <i class="fa-solid ${opt.icon} text-[10px] ${isActive ? 'text-brand-600 dark:text-brand-400' : 'opacity-70'}"></i>
             <span>${escapeHtml(opt.label)}</span>
             ${saldoBadge}
         </button>`;
@@ -14097,99 +14098,102 @@ function renderKuKartuHutangContent() {
         ? 'grid grid-cols-1 xl:grid-cols-2 gap-4'
         : 'space-y-4';
 
-    const colorConfig = {
-        red: {
-            bgTab: 'bg-red-600',
-            bgTh: 'bg-red-600',
-            border: 'border-red-200 dark:border-red-900/40',
-            badge: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300'
-        },
-        amber: {
-            bgTab: 'bg-amber-500',
-            bgTh: 'bg-amber-500',
-            border: 'border-amber-200 dark:border-amber-900/40',
-            badge: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300'
-        },
-        blue: {
-            bgTab: 'bg-blue-600',
-            bgTh: 'bg-blue-600',
-            border: 'border-blue-200 dark:border-blue-900/40',
-            badge: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300'
-        },
-        slate: {
-            bgTab: 'bg-slate-800',
-            bgTh: 'bg-slate-800',
-            border: 'border-slate-200 dark:border-slate-700',
-            badge: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200'
-        }
-    };
-
     content.className = containerCls;
     content.innerHTML = targetEntities.map(ent => {
-        const cfg = colorConfig[ent.color] || colorConfig.slate;
         const rows = ent.rows || [];
         const hasRows = rows.length > 0;
 
+        let entIconBg = 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300';
+        let entIcon = 'fa-calculator';
+        let entTagBg = 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700';
+        let entTagLabel = 'Konsolidasi Hutang Toko';
+
+        if (ent.tipe === 'GAJI') {
+            entIconBg = 'bg-amber-100 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400';
+            entIcon = 'fa-user-tag';
+            entTagBg = 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200/60 dark:border-amber-800/40';
+            entTagLabel = 'Prioritas 1: Hak Gaji (CTS)';
+        } else if (ent.tipe === 'OPS') {
+            entIconBg = 'bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400';
+            entIcon = 'fa-store';
+            entTagBg = 'bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 border border-blue-200/60 dark:border-blue-800/40';
+            entTagLabel = 'Prioritas 2: Operasional (CTO)';
+        }
+
+        const saldoBadgeCls = ent.saldo > 0
+            ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 border border-rose-200/80 dark:border-rose-800/50'
+            : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/50';
+
         const tableRowsHtml = hasRows ? rows.map(r => {
-            const isFirst = r.no === 1;
-            const tglCls = isFirst ? 'text-red-600 dark:text-red-400 font-bold' : 'text-gray-700 dark:text-gray-300 font-medium';
             const minusHtml = r.minus > 0
-                ? `<span class="font-semibold text-gray-900 dark:text-gray-100">${kuRupiah(r.minus)}</span>`
-                : `<span class="text-gray-400">-</span>`;
+                ? `<span class="font-mono font-bold text-rose-600 dark:text-rose-400">+${kuRupiah(r.minus)}</span>`
+                : `<span class="text-slate-400">-</span>`;
             const bayarHtml = r.bayar > 0
-                ? `<span class="ku-excel-bayar-red font-bold">-${kuRupiah(r.bayar)}</span>`
-                : (r.minus > 0 ? `<span class="text-gray-400">0</span>` : `<span class="text-gray-400">-</span>`);
-            const saldoHtml = `<span class="font-bold text-gray-900 dark:text-gray-100">${kuRupiah(r.saldo)}</span>`;
+                ? `<span class="font-mono font-bold text-blue-600 dark:text-blue-400">-${kuRupiah(r.bayar)}</span>`
+                : `<span class="text-slate-400">-</span>`;
+            const saldoHtml = `<span class="font-mono font-bold text-slate-900 dark:text-white">${kuRupiah(r.saldo)}</span>`;
 
-            return `<tr class="hover:bg-blue-50/20 dark:hover:bg-white/[0.02] transition-colors">
-                <td class="text-center font-bold text-gray-600 dark:text-gray-400 font-mono text-xs">${r.no}</td>
-                <td class="text-center ${tglCls} text-xs">${escapeHtml(r.tgl || '-')}</td>
-                <td class="numeric-r font-mono text-xs">${minusHtml}</td>
-                <td class="numeric-r font-mono text-xs">${bayarHtml}</td>
-                <td class="numeric-r font-mono text-xs">${saldoHtml}</td>
+            return `<tr class="hover:bg-slate-50/80 dark:hover:bg-white/[0.02] transition-colors">
+                <td class="py-2.5 px-3 text-center text-slate-400 font-mono text-[11px] font-semibold">${String(r.no).padStart(2, '0')}</td>
+                <td class="py-2.5 px-3 font-medium text-slate-800 dark:text-slate-200">
+                    <div class="flex items-center gap-1.5">
+                        <i class="fa-solid fa-calendar-day text-[10px] text-slate-400"></i>
+                        <span>${escapeHtml(r.tgl || '-')}</span>
+                    </div>
+                </td>
+                <td class="py-2.5 px-3 text-right">${minusHtml}</td>
+                <td class="py-2.5 px-3 text-right">${bayarHtml}</td>
+                <td class="py-2.5 px-3 text-right">${saldoHtml}</td>
             </tr>`;
-        }).join('') : `<tr><td colspan="5" class="text-center text-xs text-gray-400 py-4">Belum ada catatan mutasi.</td></tr>`;
-
-        const iconTab = ent.tipe === 'GAJI' ? 'fa-user' : (ent.tipe === 'OPS' ? 'fa-store' : 'fa-calculator');
+        }).join('') : `<tr><td colspan="5" class="py-6 text-center text-xs text-slate-400">Belum ada catatan mutasi untuk entitas ini.</td></tr>`;
 
         return `
-        <div class="ku-excel-wrap border border-gray-200/80 dark:border-white/10 rounded-lg overflow-hidden bg-white dark:bg-white/[0.02] shadow-xs">
-            <!-- EXCEL TAB HEADER (MODEL USER SCREENSHOT) -->
-            <div class="px-2 pt-2 bg-gray-100/70 dark:bg-white/[0.03] border-b border-gray-200 dark:border-white/5 flex items-center justify-between">
-                <div class="inline-flex items-center gap-1.5 px-3 py-1.5 ${cfg.bgTab} text-white font-bold text-xs rounded-t-md shadow-xs">
-                    <i class="fa-solid ${iconTab} text-[10px]"></i>
-                    <span>${escapeHtml(ent.short_name || ent.nama)}</span>
-                    <i class="fa-solid fa-chevron-down text-[9px] opacity-75"></i>
+        <div class="border border-slate-200/80 dark:border-white/10 rounded-xl overflow-hidden bg-white dark:bg-slate-900/40 shadow-xs">
+            <!-- MODERN LEDGER HEADER -->
+            <div class="px-4 py-3 bg-slate-50/80 dark:bg-slate-800/40 border-b border-slate-200/70 dark:border-white/10 flex items-center justify-between flex-wrap gap-2">
+                <div class="flex items-center gap-2.5">
+                    <span class="w-8 h-8 rounded-lg ${entIconBg} flex items-center justify-center text-xs font-bold shadow-xs">
+                        <i class="fa-solid ${entIcon}"></i>
+                    </span>
+                    <div>
+                        <div class="flex items-center gap-2">
+                            <h4 class="text-xs font-bold text-slate-900 dark:text-white m-0">${escapeHtml(ent.short_name || ent.nama)}</h4>
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${entTagBg}">
+                                ${entTagLabel}
+                            </span>
+                        </div>
+                        <p class="text-[11px] text-slate-500 dark:text-slate-400 m-0">${escapeHtml(ent.nama)}</p>
+                    </div>
                 </div>
-                <div class="flex items-center gap-2 pb-1.5">
-                    <span class="text-[11px] text-gray-500 dark:text-gray-400 font-medium">${escapeHtml(ent.nama)}</span>
-                    <span class="text-[11px] font-bold px-2 py-0.5 rounded ${cfg.badge}">
-                        Saldo: ${kuRupiah(ent.saldo || 0)}
+                <div class="flex items-center gap-2">
+                    <span class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">Sisa Kewajiban:</span>
+                    <span class="text-xs font-mono font-bold px-2.5 py-1 rounded-lg ${saldoBadgeCls}">
+                        ${kuRupiah(ent.saldo || 0)}
                     </span>
                 </div>
             </div>
 
-            <!-- EXCEL TABLE SPREADSHEET -->
+            <!-- MODERN LEDGER TABLE -->
             <div class="overflow-x-auto ku-mutasi-scroll">
-                <table class="ku-excel-table w-full">
+                <table class="w-full text-xs text-left border-collapse">
                     <thead>
-                        <tr class="${cfg.bgTh} text-white">
-                            <th class="text-center" style="width: 44px;">No <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
-                            <th class="text-center" style="width: 95px;">TGL <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
-                            <th class="numeric-r"># Minus <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
-                            <th class="numeric-r"># Bayar <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
-                            <th class="numeric-r">Saldo <i class="fa-solid fa-chevron-down text-[8px] opacity-60"></i></th>
+                        <tr class="border-b border-slate-200/80 dark:border-white/10 bg-slate-50/50 dark:bg-white/[0.01] text-slate-500 dark:text-slate-400 font-semibold text-[11px] uppercase tracking-wider">
+                            <th class="py-2.5 px-3 text-center w-12 font-medium">No</th>
+                            <th class="py-2.5 px-3 font-medium">Periode / Tanggal</th>
+                            <th class="py-2.5 px-3 text-right font-medium text-rose-600 dark:text-rose-400">Timbul Hutang (+)</th>
+                            <th class="py-2.5 px-3 text-right font-medium text-blue-600 dark:text-blue-400">Pembayaran / Cicil (-)</th>
+                            <th class="py-2.5 px-3 text-right font-medium text-slate-700 dark:text-slate-300">Sisa Saldo</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody class="divide-y divide-slate-100 dark:divide-white/5">
                         ${tableRowsHtml}
                     </tbody>
                     <tfoot>
-                        <tr class="bg-gray-50 dark:bg-white/[0.02] font-semibold text-xs border-t border-gray-200 dark:border-white/10">
-                            <td colspan="4" class="text-right text-gray-600 dark:text-gray-400 py-2">
-                                Sisa Hutang (${escapeHtml(ent.short_name || ent.nama)}):
+                        <tr class="bg-slate-50/70 dark:bg-white/[0.02] border-t-2 border-slate-200/80 dark:border-white/10 text-xs font-semibold">
+                            <td colspan="4" class="py-3 px-3 text-right text-slate-500 dark:text-slate-400">
+                                Sisa Kewajiban (${escapeHtml(ent.short_name || ent.nama)}):
                             </td>
-                            <td class="numeric-r font-mono font-bold text-xs ${ent.saldo > 0 ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'} py-2">
+                            <td class="py-3 px-3 text-right font-mono font-bold ${ent.saldo > 0 ? 'text-rose-600 dark:text-rose-400 text-sm' : 'text-emerald-600 dark:text-emerald-400 text-sm'}">
                                 ${kuRupiah(ent.saldo || 0)}
                             </td>
                         </tr>
